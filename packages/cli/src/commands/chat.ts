@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { appendFileSync } from "node:fs";
 import { userInfo } from "node:os";
 import { createInterface } from "node:readline/promises";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
@@ -11,15 +12,25 @@ export type ChatOptions = {
   readonly name?: string;
 };
 
-const HELP = `Commands: /steer <text> joins the running answer, /stop stops it, /quit leaves.`;
+const HELP =
+  "Commands: /steer <text> joins the running answer, /stop stops it, " +
+  "/private <value> keeps a value from the model, /quit leaves.";
 
 export async function chat(options: ChatOptions): Promise<void> {
   const context = BACKGROUND_CONTEXT;
   const config = await loadConfig(options.config);
   const assistant = findAssistant(config, options.assistant);
+  // NUDGE_DEBUG_REQUESTS=1 appends every request, exactly as the provider gets it, next to the database.
+  const dump = process.env.NUDGE_DEBUG_REQUESTS
+    ? `${assistant.database}.requests.jsonl`
+    : undefined;
   const nudge = await openAssistant(config, assistant, context, {
     onReport: (error) => console.error(error),
+    privacy: dump
+      ? { onRequest: (request) => appendFileSync(dump, `${JSON.stringify(request)}\n`) }
+      : undefined,
   });
+  if (dump !== undefined) console.log(`Writing requests to ${dump}`);
   const assistantName = assistant.displayName ?? assistant.name;
   const clientId = `cli-${randomUUID()}`;
   const author: Author = {
@@ -75,6 +86,12 @@ export async function chat(options: ChatOptions): Promise<void> {
     }
     if (line === "/stop") {
       await (await nudge.harness.conversation(roomId, context))?.abort(context);
+      rl.prompt();
+      continue;
+    }
+    if (line.startsWith("/private ")) {
+      const placeholder = await nudge.protect(line.slice("/private ".length));
+      console.log(`  The model will see ${placeholder} instead.`);
       rl.prompt();
       continue;
     }

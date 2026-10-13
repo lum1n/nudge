@@ -2,7 +2,7 @@ import type { Context } from "@earendil-works/chord";
 import type { Models } from "@earendil-works/pi-ai";
 import { type AssistantConfig, ConfigError, DEFAULT_MODEL, type NudgeConfig } from "./config.ts";
 import { buildModels } from "./models/providers.ts";
-import { Nudge, type NudgeOptions } from "./nudge.ts";
+import { Nudge, type NudgeOptions, type PrivacyOptions } from "./nudge.ts";
 
 export {
   type AssistantConfig,
@@ -23,7 +23,15 @@ export {
   type MessageEntryData,
 } from "./host-api.ts";
 export { buildModels } from "./models/providers.ts";
-export { Nudge, type NudgeOptions };
+export { RedactingModels, type RedactionOptions } from "./models/redacting-models.ts";
+export {
+  builtinDetectors,
+  type PiiDetector,
+  regexDetector,
+  type Span,
+} from "./privacy/detectors.ts";
+export { Vault, type VaultEntry } from "./privacy/vault.ts";
+export { Nudge, type NudgeOptions, type PrivacyOptions };
 
 export function createNudge(options: NudgeOptions, context: Context): Promise<Nudge> {
   return Nudge.open(options, context);

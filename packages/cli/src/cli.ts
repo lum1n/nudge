@@ -8,7 +8,8 @@ const USAGE = `Usage: nudge <command> [options]
 Commands:
   init               Write a nudge.json in this directory
   chat               Chat with an assistant in this terminal
-  doctor [--ping]    Check Node, config, storage and model credentials
+  doctor             Check Node, config, storage and model credentials;
+                     --ping sends one request, --privacy tests redaction
 
 Options:
   -c, --config <file>      Config file (default: nudge.json)
@@ -25,6 +26,7 @@ async function main(argv: string[]): Promise<number> {
       assistant: { type: "string", short: "a" },
       name: { type: "string", short: "n" },
       ping: { type: "boolean", default: false },
+      privacy: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
     },
   });
@@ -41,7 +43,9 @@ async function main(argv: string[]): Promise<number> {
       await chat({ config: values.config, assistant: values.assistant, name: values.name });
       return 0;
     case "doctor":
-      return (await doctor({ config: values.config, ping: values.ping })) ? 0 : 1;
+      return (await doctor({ config: values.config, ping: values.ping, privacy: values.privacy }))
+        ? 0
+        : 1;
     default:
       process.stderr.write(`Unknown command "${command}".\n\n${USAGE}`);
       return 1;

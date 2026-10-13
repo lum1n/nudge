@@ -1,12 +1,14 @@
 import { constants } from "node:fs";
 import { access, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
-import { buildModels, DEFAULT_MODEL, loadConfig } from "@nudge/core";
+import { buildModels, builtinDetectors, DEFAULT_MODEL, loadConfig, Vault } from "@nudge/core";
 
 export type DoctorOptions = {
   readonly config: string;
   /** Send one tiny request to each assistant's model. */
   readonly ping?: boolean;
+  /** Check that the built-in detectors catch a sample of personal data. */
+  readonly privacy?: boolean;
 };
 
 /** Checks what `nudge chat` needs, printing one line per check. Returns false when something failed. */
@@ -22,6 +24,18 @@ export async function doctor(options: DoctorOptions): Promise<boolean> {
     major > 22 || (major === 22 && minor >= 19),
     `Node ${process.versions.node} (needs ≥ 22.19)`,
   );
+
+  if (options.privacy) {
+    for (const [kind, value] of PRIVACY_SAMPLES) {
+      const vault = new Vault();
+      const redacted = vault.redact(`value: ${value}.`, builtinDetectors);
+      const caught = !redacted.includes(value) && vault.rehydrate(redacted) === `value: ${value}.`;
+      check(
+        caught,
+        `privacy: ${kind} ${caught ? "redacted and restored" : `leaks as "${redacted}"`}`,
+      );
+    }
+  }
 
   let config;
   try {
@@ -60,3 +74,13 @@ export async function doctor(options: DoctorOptions): Promise<boolean> {
   }
   return ok;
 }
+
+const PRIVACY_SAMPLES: readonly (readonly [string, string])[] = [
+  ["email", "kari.nordmann@example.no"],
+  ["phone", "+47 912 34 567"],
+  ["phone", "912 34 567"],
+  ["IBAN", "NO93 8601 1117 947"],
+  ["card", "4111 1111 1111 1111"],
+  ["fødselsnummer", "15059012387"],
+  ["account", "8601.11.17947"],
+];

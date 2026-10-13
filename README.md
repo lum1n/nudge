@@ -35,6 +35,16 @@ Anthropic is the default provider and reads `ANTHROPIC_API_KEY`. Any OpenAI-comp
 }
 ```
 
+## Privacy
+
+The model provider never sees personal data. Before a request leaves, Nudge replaces e-mail addresses, phone numbers, IBANs, card numbers, Norwegian national identity and account numbers, and the names of the people chatting with placeholders such as `⟦EMAIL1⟧`; when the answer comes back, it puts the values back. This covers every request, including tool rounds and the summaries made when a long conversation is compacted. A value keeps its placeholder for the life of the assistant.
+
+- `/private <value>` in chat (or `nudge.protect(value)` in code) keeps any other value from the model, such as an address.
+- `nudge doctor --privacy` checks the detectors against sample data.
+- `NUDGE_DEBUG_REQUESTS=1 nudge chat` writes every request, exactly as the provider receives it, to `<database>.requests.jsonl`.
+
+The transcript and the placeholder vault are stored unredacted in the assistant's SQLite file on your host. Images and thinking blocks are passed through unchanged.
+
 Each assistant keeps its data in one SQLite file, by default `data/<name>.sqlite` next to the config.
 
 ## Develop
