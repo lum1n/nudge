@@ -4,6 +4,7 @@ import type { Context } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { Models } from "@earendil-works/pi-ai";
 import {
+  type AgentChange,
   type AgentEventStream,
   type Conversation,
   type ConversationId,
@@ -19,10 +20,14 @@ import {
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { createBuiltinExtension } from "./extensions/builtin.ts";
 import { attach, type MessageDraft, submitMessage } from "./host-api.ts";
+import { DirectoryDoc, type Room } from "./identity/directory.ts";
+import { Players } from "./identity/players.ts";
+import { Rooms } from "./identity/rooms.ts";
 import { RedactingModels, type RedactionOptions } from "./models/redacting-models.ts";
 import { builtinDetectors, type PiiDetector } from "./privacy/detectors.ts";
 import { Vault } from "./privacy/vault.ts";
 import { VaultDoc } from "./privacy/vault-doc.ts";
+import { lockDatabase } from "./storage-lock.ts";
 
 export type PrivacyOptions = {
   /** Detectors to run instead of the built-in ones. Names are protected separately. */
@@ -54,12 +59,21 @@ export type NudgeOptions = {
 
 /** One assistant: one storage, one Harness, one registry. */
 export class Nudge {
+  readonly players: Players;
+  readonly rooms: Rooms;
+
   private constructor(
     readonly harness: Harness,
-    private readonly lobby: Conversation,
+    /** What the assistant calls itself. */
+    readonly displayName: string,
     private readonly models: RedactingModels,
+    agent: AgentChange,
     private readonly now: () => number,
-  ) {}
+    private readonly unlock: () => Promise<void>,
+  ) {
+    this.players = new Players(harness, (name) => this.protect(name, "NAME").then(() => {}), now);
+    this.rooms = new Rooms(harness, () => agent, now);
+  }
 
   static async open(options: NudgeOptions, context: Context): Promise<Nudge> {
     const now = options.now ?? Date.now;
@@ -76,18 +90,27 @@ export class Nudge {
       detectors: options.privacy?.detectors ?? builtinDetectors,
       onRequest: options.privacy?.onRequest,
     });
-    const storage = await openStorage(options.database);
-    const harness = await Harness.open(
-      storage,
-      {
-        models,
-        registry,
-        settings: options.settings,
-        now: options.now,
-        onReport: options.onReport,
-      },
-      context,
-    );
+    if (options.database !== ":memory:")
+      await mkdir(dirname(options.database), { recursive: true });
+    const unlock =
+      options.database === ":memory:" ? async () => {} : await lockDatabase(options.database);
+    let harness: Harness;
+    try {
+      harness = await Harness.open(
+        await openStorage(options.database),
+        {
+          models,
+          registry,
+          settings: options.settings,
+          now: options.now,
+          onReport: options.onReport,
+        },
+        context,
+      );
+    } catch (error) {
+      await unlock();
+      throw error;
+    }
     try {
       const saved = await harness.snapshot(VaultDoc, context);
       models.bind(new Vault(saved?.entries ?? []), (entries) =>
@@ -95,31 +118,62 @@ export class Nudge {
           (await tx.doc(VaultDoc)).entries.push(...entries.map((entry) => ({ ...entry })));
         }, BACKGROUND_CONTEXT),
       );
-      const lobby = await harness.root(context, {
-        agent: { model: options.model, instructions: options.instructions ?? null },
-      });
-      await followConfig(lobby, options, context);
+      const agent: AgentChange = {
+        model: options.model,
+        instructions: options.instructions ?? null,
+      };
+      const lobby = await harness.root(context, { agent });
+      const nudge = new Nudge(harness, options.displayName ?? "Nudge", models, agent, now, unlock);
+      await nudge.rooms.adoptLobby(lobby.id, context);
+      const directory = await harness.snapshot(DirectoryDoc, context);
+      // Names stored before redaction existed, or before a vault was lost, go back in.
+      for (const player of Object.values(directory?.players ?? {}))
+        models.vault.protect(player.displayName, "NAME");
+      await models.flush();
+      for (const room of Object.values(directory?.rooms ?? {})) {
+        const conversation = await harness.conversation(
+          room.conversationId as ConversationId,
+          context,
+        );
+        if (conversation !== undefined) await followConfig(conversation, options, context);
+      }
       harness.resume();
-      return new Nudge(harness, lobby, models, now);
+      return nudge;
     } catch (error) {
       await harness.close(context);
+      await unlock();
       throw error;
     }
   }
 
-  /** The assistant's root conversation, which every player shares until rooms exist. */
-  get lobbyId(): ConversationId {
-    return this.lobby.id;
+  /** The room's conversation, for what the room API does not cover. */
+  async conversation(roomId: string, context: Context): Promise<Conversation> {
+    const room = await this.room(roomId, context);
+    const conversation = await this.harness.conversation(
+      room.conversationId as ConversationId,
+      context,
+    );
+    if (conversation === undefined) throw new Error(`Room "${roomId}" has no conversation`);
+    return conversation;
   }
 
-  submit(
-    conversationId: ConversationId,
-    draft: MessageDraft,
-    context: Context,
-  ): Promise<Submission> {
+  /** Posts a message to a room. Checking that the author may use the room is the host's job. */
+  async submit(roomId: string, draft: MessageDraft, context: Context): Promise<Submission> {
+    const room = await this.room(roomId, context);
     // The model sees "<name>: <text>"; the name is personal, so it goes to the vault first.
     if (draft.author !== undefined) this.models.vault.protect(draft.author.displayName, "NAME");
-    return submitMessage(this.harness, conversationId, draft, this.now(), context);
+    return submitMessage(
+      this.harness,
+      room.conversationId as ConversationId,
+      draft,
+      this.now(),
+      context,
+    );
+  }
+
+  /** Stops the answer in progress in a room, and drops its queued messages. */
+  async abort(roomId: string, context: Context): Promise<void> {
+    await (await this.conversation(roomId, context)).abort(context);
   }
 
   /**
@@ -137,12 +191,30 @@ export class Nudge {
     return this.models.vault.redact(text, this.models.detectors);
   }
 
-  attach(conversationId: ConversationId, context: Context): Promise<AgentEventStream> {
-    return attach(this.harness, conversationId, context);
+  async attach(roomId: string, context: Context): Promise<AgentEventStream> {
+    const room = await this.room(roomId, context);
+    return attach(this.harness, room.conversationId as ConversationId, context);
+  }
+
+  private async room(roomId: string, context: Context): Promise<Room> {
+    const room = await this.rooms.get(roomId, context);
+    if (room === undefined) throw new RoomNotFound(roomId);
+    return room;
   }
 
   async close(context: Context): Promise<void> {
-    await this.harness.close(context);
+    try {
+      await this.harness.close(context);
+    } finally {
+      await this.unlock();
+    }
+  }
+}
+
+export class RoomNotFound extends Error {
+  override name = "RoomNotFound";
+  constructor(readonly roomId: string) {
+    super(`No room "${roomId}"`);
   }
 }
 
@@ -166,6 +238,5 @@ async function followConfig(
 
 async function openStorage(database: string): Promise<Storage> {
   if (database === ":memory:") return new MemoryStorage();
-  await mkdir(dirname(database), { recursive: true });
   return openNodeSqliteStorage(database);
 }

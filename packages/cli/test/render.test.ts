@@ -1,7 +1,7 @@
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
-import { createNudge } from "@nudge/core";
+import { createNudge, LOBBY } from "@nudge/core";
 import { describe, expect, it } from "vitest";
 import { ChatRenderer } from "../src/render.ts";
 
@@ -28,14 +28,14 @@ describe("ChatRenderer", () => {
     );
     let out = "";
     const renderer = new ChatRenderer((text) => (out += text), "Nudge", "mine");
-    const stream = await nudge.attach(nudge.lobbyId, context);
+    const stream = await nudge.attach(LOBBY, context);
     renderer.history(stream.snapshot);
     stream.start(async (events) => events.forEach((event) => renderer.event(event)));
 
     const ann = { playerId: "ann", displayName: "Ann", clientId: "mine" };
     const bo = { playerId: "bo", displayName: "Bo", clientId: "theirs" };
-    await (await nudge.submit(nudge.lobbyId, { text: "hi", author: ann }, context)).wait(context);
-    await (await nudge.submit(nudge.lobbyId, { text: "help?", author: bo }, context)).wait(context);
+    await (await nudge.submit(LOBBY, { text: "hi", author: ann }, context)).wait(context);
+    await (await nudge.submit(LOBBY, { text: "help?", author: bo }, context)).wait(context);
     await nudge.harness.waitForIdle(context);
     await stream.stop();
     await nudge.close(context);
@@ -62,14 +62,14 @@ describe("ChatRenderer", () => {
     let out = "";
     let updates = 0;
     const renderer = new ChatRenderer((chunk) => (out += chunk), "Nudge", "mine");
-    const stream = await nudge.attach(nudge.lobbyId, context);
+    const stream = await nudge.attach(LOBBY, context);
     stream.start(async (events) =>
       events.forEach((event) => {
         if (event.type === "message_update") updates++;
         renderer.event(event);
       }),
     );
-    await (await nudge.submit(nudge.lobbyId, { text: "count" }, context)).wait(context);
+    await (await nudge.submit(LOBBY, { text: "count" }, context)).wait(context);
     await nudge.harness.waitForIdle(context);
     await stream.stop();
     await nudge.close(context);

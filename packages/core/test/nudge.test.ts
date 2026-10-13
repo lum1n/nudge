@@ -6,7 +6,7 @@ import type { Context as ModelContext } from "@earendil-works/pi-ai";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createNudge, MESSAGE_ENTRY, type NudgeOptions } from "../src/index.ts";
+import { createNudge, LOBBY, MESSAGE_ENTRY, type NudgeOptions } from "../src/index.ts";
 
 const context = BACKGROUND_CONTEXT;
 
@@ -48,9 +48,10 @@ describe("Nudge", () => {
     };
 
     const nudge = await createNudge(options, context);
-    const submission = await nudge.submit(nudge.lobbyId, { text: "Capital of France?" }, context);
+    const submission = await nudge.submit(LOBBY, { text: "Capital of France?" }, context);
     expect((await submission.wait(context)).status).toBe("done");
-    const lobbyId = nudge.lobbyId;
+    const lobbyId = (await nudge.rooms.get(LOBBY, context))?.conversationId;
+    expect(lobbyId).toBe((await nudge.harness.root(context)).id);
     await nudge.close(context);
 
     expect(requests[0]?.systemPrompt ?? JSON.stringify(requests[0]?.messages)).toContain(
@@ -58,9 +59,8 @@ describe("Nudge", () => {
     );
 
     const reopened = await createNudge(options, context);
-    expect(reopened.lobbyId).toBe(lobbyId);
-    const lobby = await reopened.harness.conversation(lobbyId, context);
-    const view = await lobby!.context(context);
+    expect((await reopened.rooms.get(LOBBY, context))?.conversationId).toBe(lobbyId);
+    const view = await (await reopened.conversation(LOBBY, context)).context(context);
     expect(view.messages.map((m) => m.role)).toEqual(expect.arrayContaining(["user", "assistant"]));
     await reopened.close(context);
   });
@@ -71,13 +71,13 @@ describe("Nudge", () => {
     const nudge = await createNudge({ database: ":memory:", models, model }, context);
     const author = { playerId: "p1", displayName: "Ann", clientId: "c1" };
     await (
-      await nudge.submit(nudge.lobbyId, { text: "hello", author, requestId: "r1" }, context)
+      await nudge.submit(LOBBY, { text: "hello", author, requestId: "r1" }, context)
     ).wait(context);
 
     const users = requests[0]!.messages.filter((m) => m.role === "user");
     expect(JSON.stringify(users.at(-1))).toContain("⟦NAME1⟧: hello");
-    const lobby = await nudge.harness.conversation(nudge.lobbyId, context);
-    const entries = (await lobby!.entries({}, 50, undefined, context)).items;
+    const lobby = await nudge.conversation(LOBBY, context);
+    const entries = (await lobby.entries({}, 50, undefined, context)).items;
     const message = entries.find((entry) => entry.kind === MESSAGE_ENTRY);
     expect(message?.data).toMatchObject({
       text: "hello",
@@ -98,7 +98,7 @@ describe("Nudge", () => {
       { database, models, model: other, instructions: "Speak Norwegian." },
       context,
     );
-    const agent = await (await nudge.harness.conversation(nudge.lobbyId, context))!.agent(context);
+    const agent = await (await nudge.conversation(LOBBY, context)).agent(context);
     expect(agent.model).toEqual(other);
     expect(agent.instructions).toBe("Speak Norwegian.");
     await nudge.close(context);

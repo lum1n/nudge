@@ -2,7 +2,7 @@ import type { Context } from "@earendil-works/chord";
 import type { Models } from "@earendil-works/pi-ai";
 import { type AssistantConfig, ConfigError, DEFAULT_MODEL, type NudgeConfig } from "./config.ts";
 import { buildModels } from "./models/providers.ts";
-import { Nudge, type NudgeOptions, type PrivacyOptions } from "./nudge.ts";
+import { Nudge, type NudgeOptions, type PrivacyOptions, RoomNotFound } from "./nudge.ts";
 
 export {
   type AssistantConfig,
@@ -15,13 +15,24 @@ export {
   type NudgeConfig,
   parseConfig,
 } from "./config.ts";
-export { formatHour } from "./extensions/builtin.ts";
+export { describeRoom, formatHour } from "./extensions/builtin.ts";
 export {
   type Author,
   MESSAGE_ENTRY,
   type MessageDraft,
   type MessageEntryData,
 } from "./host-api.ts";
+export {
+  canUse,
+  DirectoryDoc,
+  type DirectoryState,
+  LOBBY,
+  type Player,
+  type Room,
+  type RoomKind,
+} from "./identity/directory.ts";
+export { type Credential, type Invitation, Players } from "./identity/players.ts";
+export { Rooms, type SharedRoomDraft } from "./identity/rooms.ts";
 export { buildModels } from "./models/providers.ts";
 export { RedactingModels, type RedactionOptions } from "./models/redacting-models.ts";
 export {
@@ -31,7 +42,8 @@ export {
   type Span,
 } from "./privacy/detectors.ts";
 export { Vault, type VaultEntry } from "./privacy/vault.ts";
-export { Nudge, type NudgeOptions, type PrivacyOptions };
+export { DatabaseInUse } from "./storage-lock.ts";
+export { Nudge, type NudgeOptions, type PrivacyOptions, RoomNotFound };
 
 export function createNudge(options: NudgeOptions, context: Context): Promise<Nudge> {
   return Nudge.open(options, context);

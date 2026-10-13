@@ -12,7 +12,7 @@ import {
 } from "@earendil-works/pi-ai/providers/faux";
 import { AssistantEntry, defineExtension, defineTool } from "@earendil-works/pi-durable";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { builtinDetectors, createNudge, type NudgeOptions, Vault } from "../src/index.ts";
+import { builtinDetectors, createNudge, LOBBY, type NudgeOptions, Vault } from "../src/index.ts";
 import { withoutPartialPlaceholder } from "../src/privacy/vault.ts";
 
 const context = BACKGROUND_CONTEXT;
@@ -127,7 +127,7 @@ describe("redaction in a running assistant", () => {
     await withTool.protect("Kari", "NAME");
     const author = { playerId: "p1", displayName: "Vegard", clientId: "c1" };
     const submission = await withTool.submit(
-      withTool.lobbyId,
+      LOBBY,
       { text: `Find ${EMAIL}. My IBAN is ${IBAN}, card ${CARD}, fnr ${FNR}.`, author },
       context,
     );
@@ -135,7 +135,7 @@ describe("redaction in a running assistant", () => {
     expect(settled.status).toBe("done");
     if (settled.status !== "done" || settled.type !== "input") throw new Error("unanswered");
 
-    const lobby = (await withTool.harness.conversation(withTool.lobbyId, context))!;
+    const lobby = await withTool.conversation(LOBBY, context);
     const answer = await lobby.commit((tx) => tx.entry(AssistantEntry, settled.answer), context);
     const answerText = JSON.stringify(answer?.model);
     expect(answerText).toContain(`Vegard, I found Kari at ${PHONE}. Your IBAN is ${IBAN}.`);
@@ -159,7 +159,7 @@ describe("redaction in a running assistant", () => {
     const first = await createNudge(options, context);
     expect(await first.protect("Oslo Gate 1", "ADDRESS")).toBe("⟦ADDRESS1⟧");
     expect(first.redact(`mail ${EMAIL}`)).toBe("mail ⟦EMAIL1⟧");
-    await (await first.submit(first.lobbyId, { text: "hi" }, context)).wait(context);
+    await (await first.submit(LOBBY, { text: "hi" }, context)).wait(context);
     await first.close(context);
 
     const second = await createNudge(options, context);
@@ -174,7 +174,7 @@ describe("redaction in a running assistant", () => {
       { ...options, settings: { progress: { partialIntervalMs: 1 } } },
       context,
     );
-    const stream = await nudge.attach(nudge.lobbyId, context);
+    const stream = await nudge.attach(LOBBY, context);
     const partials: string[] = [];
     stream.start(async (events) => {
       for (const event of events) {
@@ -186,7 +186,7 @@ describe("redaction in a running assistant", () => {
     });
     await nudge.protect(EMAIL, "EMAIL");
     const author = { playerId: "p1", displayName: "Vegard" };
-    await (await nudge.submit(nudge.lobbyId, { text: "status?", author }, context)).wait(context);
+    await (await nudge.submit(LOBBY, { text: "status?", author }, context)).wait(context);
     await nudge.harness.waitForIdle(context);
     await stream.stop();
     await nudge.close(context);

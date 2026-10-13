@@ -1,0 +1,31 @@
+{
+  "name": "@nudge/server",
+  "version": "0.0.0",
+  "private": true,
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "@nudge/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@earendil-works/chord": "1.2.0",
+    "@earendil-works/pi-durable": "1.2.0",
+    "@hono/node-server": "2.1.5",
+    "@nudge/core": "workspace:*",
+    "hono": "4.13.13",
+    "ws": "8.22.0"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "1.2.0",
+    "@types/ws": "8.18.2"
+  }
+}
