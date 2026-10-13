@@ -13,6 +13,7 @@
     "packages/*/test",
     "extensions/*/src",
     "extensions/*/test",
+    "extensions/*/eval",
     "vitest.config.ts"
   ]
 }

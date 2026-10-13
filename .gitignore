@@ -5,3 +5,4 @@ dist/
 data/
 *.sqlite
 *.sqlite-*
+extensions/browser/.eval/
