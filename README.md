@@ -69,6 +69,14 @@ One process owns an assistant's database at a time, so stop `nudge serve` before
 
 `GET /a` lists the assistants without a token. The API, with `Authorization: Bearer <token>`, under `/a/<assistant>`: `GET /me`, `GET|POST /rooms`, `POST /rooms/personal`, `GET /rooms/<room>`, `POST /rooms/<room>/messages`, `POST /rooms/<room>/abort`, `GET /rooms/<room>/transcript`, `POST /protect`, `GET /nudges`, `DELETE /nudges/<id>`, `GET|POST /rooms/<room>/memory`, `DELETE /rooms/<room>/memory/<id>`. `GET /rooms/<room>/stream` is a WebSocket: send `{"type":"hello","token":…}` first, then get a snapshot and one batch of agent events per commit; send `submit` and `abort` frames. With `?format=view` it sends the room's conversation view instead, then its [Chord](https://github.com/earendil-works/pi/tree/main/packages/chord) ops per commit, for clients that mirror it (the web UI does). The types are in `packages/server/src/protocol.ts`.
 
+## Web UI
+
+Sign in at `/login` with a token, or the link `nudge invite` prints (`/login#token=…`, which never reaches the server or its logs). The token lives in that browser tab's `sessionStorage` only; opening another tab or browser needs its own sign-in.
+
+A room page shows the same conversation the CLI and the API see, live, for everyone in it: each message with who sent it, the assistant's answer streaming in with its tool calls, and fired nudges, rendered as markdown. Send a follow-up or steer while it's still answering — it queues the same way a second CLI client's would — or stop it; "Load earlier" fetches older history past what first loaded. A room's Memory and Nudges panels list, add, forget and cancel the same things `/memory` and `/nudges` do in the terminal. "Open my room" and "New shared room" on the room list open the same rooms `nudge chat me` and `nudge room` do.
+
+No mobile app or notifications: a fired nudge only shows up in a tab that already has that room open.
+
 ## Privacy
 
 The model provider never sees personal data. Before a request leaves, Nudge replaces e-mail addresses, phone numbers, IBANs, card numbers, Norwegian national identity and account numbers, and the names of the people chatting with placeholders such as `⟦EMAIL1⟧`; when the answer comes back, it puts the values back. This covers every request, including tool rounds and the summaries made when a long conversation is compacted. A value keeps its placeholder for the life of the assistant.
