@@ -12,7 +12,7 @@ import {
 } from "@assistant-ui/react";
 import { MarkdownTextPrimitive } from "@assistant-ui/react-markdown";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   appendText,
@@ -56,11 +56,20 @@ function Room() {
 
   return (
     <section className="flex flex-col gap-4">
-      <div>
-        <h2 className="text-lg font-medium">{info.name}</h2>
-        <p className="text-sm text-stone-600">
-          {members.map((member) => member.displayName).join(", ")}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-medium">{info.name}</h2>
+          <p className="text-sm text-stone-600">
+            {members.map((member) => member.displayName).join(", ")}
+          </p>
+        </div>
+        <Link
+          to="/$assistant/$room/browser"
+          params={{ assistant, room }}
+          className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
+        >
+          Browser
+        </Link>
       </div>
       {socket === undefined ? (
         <p className="text-stone-500">Connecting…</p>

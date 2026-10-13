@@ -1,10 +1,14 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { chromium, type BrowserContext, type Locator, type Page, type Request } from "patchright";
+import type { SavedLogin } from "./logins.ts";
 import { compactSnapshot, findLines } from "./snapshot.ts";
 
 // Page-side globals for the functions passed to `evaluate`; this package compiles without the DOM lib.
-declare const document: { querySelector(selector: string): unknown };
+declare const document: {
+  querySelector(selector: string): unknown;
+  querySelectorAll(selector: string): ArrayLike<{ value: string }>;
+};
 declare const window: { scrollY: number };
 declare const MutationObserver: new (callback: () => void) => {
   observe(target: unknown, options: Record<string, boolean>): void;
@@ -37,6 +41,13 @@ export class BrowserSession {
   private inflight = new Set<Request>();
   private lastLines: string[] = [];
   private notes: string[] = [];
+  /** Saved logins this session may fill in, by host. */
+  private findLogin: (host: string) => SavedLogin | undefined = () => undefined;
+  /** Credential values never shown to the model, wherever they appear. */
+  private scrubbed = new Set<string>();
+  /** What the user typed into login forms in the live view, by host, not yet saved. */
+  private captured = new Map<string, { username?: string; password?: string }>();
+  private pageListeners = new Set<(page: Page) => void>();
   /** Query parameter names seen per host, in visited URLs and in links on observed pages. */
   private seenParams = new Map<string, Set<string>>();
 
@@ -56,7 +67,7 @@ export class BrowserSession {
     for (const page of context.pages()) this.track(page);
     context.on("page", (page) => {
       this.track(page);
-      this.current = page;
+      this.setCurrent(page);
       this.notes.push("A new tab opened and is now the current tab.");
     });
   }
@@ -93,7 +104,7 @@ export class BrowserSession {
     page.on("requestfailed", done);
     page.on("close", () => {
       const open = this.context.pages();
-      if (this.current === page && open.length) this.current = open[open.length - 1]!;
+      if (this.current === page && open.length) this.setCurrent(open[open.length - 1]!);
     });
   }
 
@@ -140,7 +151,10 @@ export class BrowserSession {
 
   /** The page as compacted text, with URL, title and tabs on top. */
   async observe(page = 1): Promise<string> {
-    const raw = await this.current.ariaSnapshot({ mode: "ai" });
+    const raw = scrub(
+      hideSecrets(await this.current.ariaSnapshot({ mode: "ai" }), await this.secretValues()),
+      this.scrubbed,
+    );
     const snapshot = compactSnapshot(raw, { budget: this.options.budget ?? 24_000, page });
     this.lastLines = snapshot.lines;
     this.learnParams(this.current.url());
@@ -157,6 +171,109 @@ export class BrowserSession {
         : undefined,
     ].filter(Boolean);
     return [...header, "", snapshot.text].join("\n");
+  }
+
+  private setCurrent(page: Page): void {
+    this.current = page;
+    for (const listener of this.pageListeners) listener(page);
+  }
+
+  /** Calls `listener` whenever another tab becomes the current one. */
+  onPageChange(listener: (page: Page) => void): () => void {
+    this.pageListeners.add(listener);
+    return () => this.pageListeners.delete(listener);
+  }
+
+  /** Where saved logins come from, and the values to keep from the model from now on. */
+  useLogins(find: (host: string) => SavedLogin | undefined, secrets: readonly string[]): void {
+    this.findLogin = find;
+    for (const value of secrets) if (value) this.scrubbed.add(value);
+  }
+
+  /** Reads the login fields of every frame and keeps what the user typed, per host. */
+  async captureLogin(): Promise<void> {
+    for (const frame of this.current.frames()) {
+      const fields = (await frame.evaluate(LOGIN_FIELDS).catch(() => undefined)) as
+        | { host: string; username: string; password: string }
+        | undefined;
+      if (!fields?.host || (!fields.username && !fields.password)) continue;
+      const entry = this.captured.get(fields.host) ?? {};
+      if (fields.username) entry.username = fields.username;
+      if (fields.password) entry.password = fields.password;
+      this.captured.set(fields.host, entry);
+    }
+  }
+
+  /** Logins typed in the live view since the last call: a password, and the username if seen. */
+  takeCaptured(): { host: string; username?: string; password: string }[] {
+    const logins = [...this.captured].flatMap(([host, { username, password }]) => {
+      if (!password) return [];
+      // A two-step login asks for the username on one host and the password on another.
+      const user = username ?? [...this.captured.values()].find((c) => c.username)?.username;
+      return [{ host, password, ...(user ? { username: user } : {}) }];
+    });
+    this.captured.clear();
+    for (const login of logins) {
+      this.scrubbed.add(login.password);
+      if (login.username) this.scrubbed.add(login.username);
+    }
+    return logins;
+  }
+
+  /** Fills a saved login into the login form of the frame whose host it was saved for. */
+  async login(): Promise<string> {
+    const hosts: string[] = [];
+    for (const frame of this.current.frames()) {
+      let host: string;
+      try {
+        host = new URL(frame.url()).hostname;
+      } catch {
+        continue;
+      }
+      const password = frame.locator("input[type=password]:visible").first();
+      const username = frame.locator(USERNAME_FIELDS).first();
+      const hasPassword = (await password.count()) > 0;
+      const hasUsername = (await username.count()) > 0;
+      if (!hasPassword && !hasUsername) continue;
+      hosts.push(host);
+      const saved = this.findLogin(host);
+      if (saved === undefined) continue;
+      if (saved.username) this.scrubbed.add(saved.username);
+      this.scrubbed.add(saved.password);
+      if (hasPassword) {
+        if (saved.username && hasUsername && (await username.inputValue()) !== saved.username)
+          await username.fill(saved.username, { timeout: 4_000 });
+        await password.fill(saved.password, { timeout: 4_000 });
+        await password.press("Enter");
+        return `Filled in the saved login for ${host} and submitted it.`;
+      }
+      if (saved.username && hasUsername) {
+        await username.fill(saved.username, { timeout: 4_000 });
+        await username.press("Enter");
+        return `Filled in the saved username and went on. Call browser_login again when the password field shows.`;
+      }
+    }
+    if (!hosts.length) throw new ActionError("There is no login form on this page.");
+    throw new ActionError(
+      `There is no saved login for ${[...new Set(hosts)].join(", ")}. Call browser_request_login so the user can log in.`,
+    );
+  }
+
+  /** What password, one-time-code and card fields hold now, in every frame. */
+  private async secretValues(): Promise<string[]> {
+    const values = await Promise.all(
+      this.current
+        .frames()
+        .map((frame) =>
+          frame
+            .evaluate(
+              (selector) => Array.from(document.querySelectorAll(selector), (input) => input.value),
+              SECRET_FIELDS,
+            )
+            .catch(() => [] as string[]),
+        ),
+    );
+    return values.flat().filter(Boolean);
   }
 
   async find(query: string): Promise<string> {
@@ -298,7 +415,7 @@ export class BrowserSession {
       const page = pages[(index ?? 0) - 1];
       if (!page) throw new ActionError(`No tab ${index}; there are ${pages.length}.`);
       if (action === "switch") {
-        this.current = page;
+        this.setCurrent(page);
         await page.bringToFront();
       } else await page.close();
     }
@@ -356,6 +473,62 @@ export class BrowserSession {
   }
 }
 
+const USERNAME_FIELDS = [
+  'input[autocomplete~="username"]',
+  "input[type=email]",
+  'input[name*="user" i]',
+  'input[name*="email" i]',
+  'input[name*="login" i]',
+  'input[name*="brukernavn" i]',
+  'input[id*="user" i]',
+  'input[id*="email" i]',
+]
+  .map((selector) => `${selector}:visible`)
+  .join(", ");
+
+/** Runs in a frame: the visible login fields' values. A string, so it compiles without the DOM lib. */
+const LOGIN_FIELDS = `(() => {
+  const visible = (el) => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+  const password = [...document.querySelectorAll("input[type=password]")].find(visible);
+  const scope = (password && password.form) || document;
+  const selectors = ${JSON.stringify(USERNAME_FIELDS.replaceAll(":visible", ""))};
+  const user = [...scope.querySelectorAll(selectors)].find(visible)
+    || (password ? [...scope.querySelectorAll("input[type=text]")].find(visible) : undefined);
+  return { host: location.hostname, username: user ? user.value : "", password: password ? password.value : "" };
+})()`;
+
+/** Replaces saved credential values anywhere in a snapshot. */
+function scrub(raw: string, values: ReadonlySet<string>): string {
+  let out = raw;
+  for (const value of values) if (value.length >= 3) out = out.split(value).join("[hidden]");
+  return out;
+}
+
+const SECRET_FIELDS = [
+  "input[type=password]",
+  'input[autocomplete~="one-time-code"]',
+  'input[autocomplete~="current-password"]',
+  'input[autocomplete~="new-password"]',
+  'input[autocomplete~="cc-number"]',
+  'input[autocomplete~="cc-csc"]',
+].join(",");
+
+/**
+ * The accessibility snapshot shows what fields hold, passwords included. Values of secret fields
+ * become `[hidden]` on textbox lines, whatever their length.
+ */
+export function hideSecrets(raw: string, secrets: readonly string[]): string {
+  if (!secrets.length) return raw;
+  const hidden = new Set(secrets.flatMap((value) => [value, JSON.stringify(value)]));
+  return raw
+    .split("\n")
+    .map((line) => {
+      const match = /^(\s*- (?:textbox|searchbox|combobox|spinbutton)\b[^:]*?): (.*)$/.exec(line);
+      return match && hidden.has(match[2]!) ? `${match[1]}: [hidden]` : line;
+    })
+    .join("\n");
+}
+
 /** A visually hidden checkbox or radio is usually operated through its label. */
 async function labelFor(locator: Locator): Promise<Locator | "self" | undefined> {
   const id = await locator
@@ -388,7 +561,10 @@ async function startXvfb(viewport?: {
       if (child.exitCode !== null) break;
       await sleep(100);
     }
-    if (existsSync(`/tmp/.X11-unix/X${n}`)) return { display, process: child };
+    if (existsSync(`/tmp/.X11-unix/X${n}`)) {
+      process.once("exit", () => child.kill());
+      return { display, process: child };
+    }
     child.kill();
   }
   throw new Error("Could not start Xvfb. Install xvfb, or run headless.");

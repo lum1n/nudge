@@ -1,0 +1,122 @@
+import type { Context as ModelContext } from "@earendil-works/pi-ai";
+import { createModels } from "@earendil-works/pi-ai/models";
+import {
+  fauxAssistantMessage,
+  fauxProvider,
+  fauxText,
+  fauxToolCall,
+} from "@earendil-works/pi-ai/providers/faux";
+import { describe, expect, it } from "vitest";
+import { type BrowserStep, runBrowserAgent } from "../src/agent.ts";
+import { fakeBrowser } from "./fake-browser.ts";
+
+function setup(steps: ReturnType<typeof fauxAssistantMessage>[]) {
+  const faux = fauxProvider();
+  const models = createModels();
+  models.setProvider(faux.provider);
+  const requests: ModelContext[] = [];
+  faux.setResponses(
+    steps.map((step) => (request: ModelContext) => {
+      requests.push(structuredClone(request));
+      return step;
+    }),
+  );
+  return { models, model: faux.getModel(), requests };
+}
+
+const text = (request: ModelContext | undefined) => JSON.stringify(request?.messages ?? []);
+
+describe("runBrowserAgent", () => {
+  it("acts through the tools until the model answers, ending each turn on the page", async () => {
+    const { models, model, requests } = setup([
+      fauxAssistantMessage(
+        [
+          fauxToolCall("browser_navigate", { url: "https://example.no/search" }, { id: "a" }),
+          fauxToolCall("browser_click", { ref: "e7" }, { id: "b" }),
+        ],
+        { stopReason: "toolUse" },
+      ),
+      fauxAssistantMessage([fauxText("Found it: https://example.no/2")]),
+    ]);
+    const { browser, calls } = fakeBrowser();
+    const steps: BrowserStep[] = [];
+    const result = await runBrowserAgent({
+      models,
+      model,
+      browser,
+      task: "Find the thing",
+      onStep: (step) => steps.push(step),
+    });
+    expect(result).toMatchObject({
+      outcome: "answered",
+      answer: "Found it: https://example.no/2",
+      steps: 2,
+      actions: 2,
+      actionErrors: 0,
+    });
+    expect(calls).toEqual(["navigate https://example.no/search", "click e7"]);
+    // Only the last call of the batch carries the page.
+    expect(text(requests[1])).toContain("Clicked e7.\\n\\nURL: https://example.no/2");
+    expect(text(requests[1])).not.toContain("Opened https://example.no/search.\\n\\nURL");
+    expect(
+      steps.filter((s) => s.type === "action").map((s) => s.type === "action" && s.tool),
+    ).toEqual(["browser_navigate", "browser_click"]);
+    // pi-ai folds the prompt and the tools into the leading system message.
+    expect(text(requests[0])).toContain("You operate a web browser");
+    expect(text(requests[0])).toContain('"name":"browser_find"');
+  });
+
+  it("stops a batch at the first failure and tells the model", async () => {
+    const { models, model, requests } = setup([
+      fauxAssistantMessage(
+        [
+          fauxToolCall("browser_click", { ref: "e404" }, { id: "a" }),
+          fauxToolCall("browser_type", { ref: "e5", text: "x" }, { id: "b" }),
+        ],
+        { stopReason: "toolUse" },
+      ),
+      fauxAssistantMessage([fauxText("Could not do it.")]),
+    ]);
+    const { browser, calls } = fakeBrowser();
+    const result = await runBrowserAgent({ models, model, browser, task: "Click" });
+    expect(calls).toEqual(["click e404"]);
+    expect(result.actionErrors).toBe(2);
+    expect(text(requests[1])).toContain("e404 is no longer on the page.");
+    expect(text(requests[1])).toContain("Not run: an earlier action in this turn failed.");
+  });
+
+  it("drops older page views from later requests", async () => {
+    const { models, model, requests } = setup([
+      fauxAssistantMessage([fauxToolCall("browser_click", { ref: "e1" }, { id: "a" })], {
+        stopReason: "toolUse",
+      }),
+      fauxAssistantMessage([fauxToolCall("browser_click", { ref: "e2" }, { id: "b" })], {
+        stopReason: "toolUse",
+      }),
+      fauxAssistantMessage([fauxText("Done.")]),
+    ]);
+    const long = (n: number) =>
+      `URL: https://example.no/${n}\n\n${"- text: filler line\n".repeat(30)}- heading "Page ${n}"`;
+    const { browser } = fakeBrowser(long);
+    await runBrowserAgent({ models, model, browser, task: "Click twice" });
+    const third = text(requests[2]);
+    expect(third).toContain("(older page view omitted)");
+    expect(third).not.toContain('Page 1\\"');
+    expect(third).toContain('Page 2\\"');
+  });
+
+  it("gives up after maxSteps", async () => {
+    const loop = fauxAssistantMessage([fauxToolCall("browser_scroll", { direction: "down" })], {
+      stopReason: "toolUse",
+    });
+    const { models, model } = setup([loop, loop, loop]);
+    const result = await runBrowserAgent({
+      models,
+      model,
+      browser: fakeBrowser().browser,
+      task: "Scroll",
+      maxSteps: 2,
+    });
+    expect(result).toMatchObject({ outcome: "max-steps", steps: 2 });
+  });
+});

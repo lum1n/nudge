@@ -21,8 +21,9 @@ import {
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { createBuiltinExtension } from "./extensions/builtin.ts";
 import {
-  type ExtensionHost,
+  type HostBase,
   type ExtensionInput,
+  type RoomSocketHandler,
   type SetUpExtension,
   setUpExtension,
 } from "./extensions/define.ts";
@@ -77,7 +78,7 @@ type Parts = {
   readonly now: () => number;
   readonly unlock: () => Promise<void>;
   readonly registry: Registry;
-  readonly host: Omit<ExtensionHost<unknown>, "settings">;
+  readonly host: HostBase;
   readonly detectors: readonly PiiDetector[];
   readonly installed: readonly SetUpExtension[];
 };
@@ -136,6 +137,7 @@ export class Nudge {
       timeZone,
       now,
       protect: (value, kind) => whenOpen().protect(value, kind),
+      ...(options.database === ":memory:" ? {} : { dataRoot: `${options.database}.extensions` }),
     };
     // Extensions are in the registry before the Harness opens, so their tasks resume with it.
     const installed = await setUpAll(options.extensions ?? [], host);
@@ -241,6 +243,11 @@ export class Nudge {
     });
     this.reloading = reload.catch(() => {});
     return reload;
+  }
+
+  /** The room socket an installed extension serves, if any. */
+  roomSocket(extension: string): RoomSocketHandler | undefined {
+    return this.installed.find((installed) => installed.extension.name === extension)?.roomSocket;
   }
 
   /** The room's conversation, for what the room API does not cover. */

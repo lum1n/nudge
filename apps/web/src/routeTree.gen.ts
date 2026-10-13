@@ -14,6 +14,7 @@ import { Route as AssistantRouteRouteImport } from './routes/$assistant/route'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AssistantIndexRouteImport } from './routes/$assistant/index'
 import { Route as AssistantRoomRouteImport } from './routes/$assistant/$room'
+import { Route as AssistantRoomBrowserRouteImport } from './routes/$assistant/$room_.browser'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -40,6 +41,11 @@ const AssistantRoomRoute = AssistantRoomRouteImport.update({
   path: '/$room',
   getParentRoute: () => AssistantRouteRoute,
 } as any)
+const AssistantRoomBrowserRoute = AssistantRoomBrowserRouteImport.update({
+  id: '/$room_/browser',
+  path: '/$room/browser',
+  getParentRoute: () => AssistantRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -47,12 +53,14 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/$assistant/$room': typeof AssistantRoomRoute
   '/$assistant/': typeof AssistantIndexRoute
+  '/$assistant/$room/browser': typeof AssistantRoomBrowserRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/$assistant/$room': typeof AssistantRoomRoute
   '/$assistant': typeof AssistantIndexRoute
+  '/$assistant/$room/browser': typeof AssistantRoomBrowserRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -61,13 +69,24 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/$assistant/$room': typeof AssistantRoomRoute
   '/$assistant/': typeof AssistantIndexRoute
+  '/$assistant/$room_/browser': typeof AssistantRoomBrowserRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/$assistant' | '/login' | '/$assistant/$room' | '/$assistant/'
+    | '/'
+    | '/$assistant'
+    | '/login'
+    | '/$assistant/$room'
+    | '/$assistant/'
+    | '/$assistant/$room/browser'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/$assistant/$room' | '/$assistant'
+  to:
+    | '/'
+    | '/login'
+    | '/$assistant/$room'
+    | '/$assistant'
+    | '/$assistant/$room/browser'
   id:
     | '__root__'
     | '/'
@@ -75,6 +94,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/$assistant/$room'
     | '/$assistant/'
+    | '/$assistant/$room_/browser'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -120,17 +140,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AssistantRoomRouteImport
       parentRoute: typeof AssistantRouteRoute
     }
+    '/$assistant/$room_/browser': {
+      id: '/$assistant/$room_/browser'
+      path: '/$room/browser'
+      fullPath: '/$assistant/$room/browser'
+      preLoaderRoute: typeof AssistantRoomBrowserRouteImport
+      parentRoute: typeof AssistantRouteRoute
+    }
   }
 }
 
 interface AssistantRouteRouteChildren {
   AssistantRoomRoute: typeof AssistantRoomRoute
   AssistantIndexRoute: typeof AssistantIndexRoute
+  AssistantRoomBrowserRoute: typeof AssistantRoomBrowserRoute
 }
 
 const AssistantRouteRouteChildren: AssistantRouteRouteChildren = {
   AssistantRoomRoute: AssistantRoomRoute,
   AssistantIndexRoute: AssistantIndexRoute,
+  AssistantRoomBrowserRoute: AssistantRoomBrowserRoute,
 }
 
 const AssistantRouteRouteWithChildren = AssistantRouteRoute._addFileChildren(

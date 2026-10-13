@@ -6,7 +6,13 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { upgradeWebSocket } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
-import { canUse, type Credential, type Nudge, type Room } from "@nudge/core";
+import {
+  canUse,
+  type Credential,
+  type Nudge,
+  type Room,
+  type RoomSocketSession,
+} from "@nudge/core";
 import { type Context as HonoContext, Hono, type MiddlewareHandler } from "hono";
 import type { WSContext } from "hono/ws";
 import {
@@ -107,6 +113,25 @@ export function createApp(options: AppOptions): Hono<Env> {
         onMessage: (event, ws) => stream.receive(event.data, ws),
         onClose: () => stream.close(),
         onError: () => stream.close(),
+      };
+    }),
+  );
+
+  // An extension's own socket for a room; same hello-frame auth and room check as the stream.
+  app.get(
+    "/a/:assistant/rooms/:room/ext/:extension",
+    findAssistant,
+    upgradeWebSocket((c) => {
+      const socket = new ExtensionSocket(
+        c.var.nudge,
+        c.req.param("room") ?? "",
+        c.req.param("extension") ?? "",
+        report,
+      );
+      return {
+        onMessage: (event, ws) => socket.receive(String(event.data), ws),
+        onClose: () => socket.close(),
+        onError: () => socket.close(),
       };
     }),
   );
@@ -433,6 +458,78 @@ class RoomStream {
       stop: () => watch.stop(),
       closed: watch.closed,
     };
+  }
+}
+
+/** One client of an extension's room socket: hello, then frames to and from the extension. */
+class ExtensionSocket {
+  private session: RoomSocketSession | undefined;
+  private opening: Promise<void> | undefined;
+  private closed = false;
+
+  constructor(
+    private readonly nudge: Nudge,
+    private readonly roomId: string,
+    private readonly extension: string,
+    private readonly report: (error: unknown) => void,
+  ) {}
+
+  receive(data: string, ws: WSContext): void {
+    if (this.closed) return;
+    if (this.session !== undefined) {
+      this.session.receive(data);
+      return;
+    }
+    // Frames that arrive while the hello is checked are dropped; clients wait for "ready".
+    this.opening ??= this.hello(data, ws).catch((error: unknown) => {
+      this.report(error);
+      ws.close(1011, "Internal error");
+    });
+  }
+
+  close(): void {
+    if (this.closed) return;
+    this.closed = true;
+    this.session?.close();
+  }
+
+  private async hello(data: string, ws: WSContext): Promise<void> {
+    let frame: { type?: unknown; token?: unknown };
+    try {
+      frame = JSON.parse(data) as typeof frame;
+    } catch {
+      ws.close(CLOSE.badRequest, "Frames are JSON");
+      return;
+    }
+    const credential =
+      frame.type === "hello" && typeof frame.token === "string"
+        ? await this.nudge.players.authenticate(frame.token, context)
+        : undefined;
+    if (credential === undefined) {
+      ws.close(CLOSE.unauthorized, "Missing or unknown token");
+      return;
+    }
+    const room = await this.nudge.rooms.get(this.roomId, context);
+    const handler = this.nudge.roomSocket(this.extension);
+    if (room === undefined || !canUse(room, credential.player.id) || handler === undefined) {
+      ws.close(CLOSE.notFound, `No room "${this.roomId}" with extension "${this.extension}"`);
+      return;
+    }
+    const session = await handler(
+      { room, player: credential.player },
+      {
+        send: (text) => {
+          if (ws.readyState === 1) ws.send(text);
+        },
+        close: (code, reason) => ws.close(code, reason),
+      },
+    );
+    if (this.closed) {
+      session.close();
+      return;
+    }
+    this.session = session;
+    if (ws.readyState === 1) ws.send(JSON.stringify({ type: "ready" }));
   }
 }
 

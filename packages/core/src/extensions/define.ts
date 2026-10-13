@@ -1,7 +1,9 @@
+import { join } from "node:path";
 import type { Extension } from "@earendil-works/pi-durable";
 import type { Static, TSchema } from "typebox";
 import { Value } from "typebox/value";
 import { ConfigError } from "../config.ts";
+import type { Player, Room } from "../identity/directory.ts";
 import type { PiiDetector } from "../privacy/detectors.ts";
 
 /** What an extension's `setup` gets from the assistant it is installed in. */
@@ -14,12 +16,45 @@ export type ExtensionHost<Settings> = {
   readonly now: () => number;
   /** Keeps a value from the model from now on; see `Nudge.protect`. Usable once the assistant is open. */
   readonly protect: (value: string, kind?: string) => Promise<string>;
+  /** A directory of the extension's own next to the assistant's database; absent when nothing is persisted. */
+  readonly dataDir?: string;
 };
+
+/** What the assistant gives every extension; `setUpExtension` adds the settings and each one's `dataDir`. */
+export type HostBase = Omit<ExtensionHost<unknown>, "settings" | "dataDir"> & {
+  /** Parent of the extensions' data directories. */
+  readonly dataRoot?: string;
+};
+
+/** The server's side of one client connected to an extension's room socket. */
+export type RoomSocket = {
+  /** Sends one text frame to the client. */
+  send(data: string): void;
+  close(code?: number, reason?: string): void;
+};
+
+/** What a room socket does with the client's frames after the server has let it in. */
+export type RoomSocketSession = {
+  receive(data: string): void;
+  /** The client went away or the server is closing. */
+  close(): void;
+};
+
+/**
+ * Serves `WS /a/<assistant>/rooms/<room>/ext/<extension>`. The server has already checked the
+ * client's token and that the player may use the room.
+ */
+export type RoomSocketHandler = (
+  client: { readonly room: Room; readonly player: Player },
+  socket: RoomSocket,
+) => RoomSocketSession | Promise<RoomSocketSession>;
 
 /** What `setup` returns: a Pi Durable extension without its name, and detectors for redaction. */
 export type ExtensionParts = Omit<Extension, "name"> & {
   /** Personal data the extension knows how to find; they run after the assistant's own. */
   readonly detectors?: readonly PiiDetector[];
+  /** A WebSocket per room for the extension's own client UI. */
+  readonly roomSocket?: RoomSocketHandler;
 };
 
 export type NudgeExtension<S extends TSchema = TSchema> = {
@@ -72,12 +107,13 @@ export type SetUpExtension = {
   readonly extension: Extension;
   readonly version?: string;
   readonly detectors: readonly PiiDetector[];
+  readonly roomSocket?: RoomSocketHandler;
 };
 
 /** Checks the settings and runs `setup`. A plain extension passes through. */
 export async function setUpExtension(
   input: ExtensionInput,
-  host: Omit<ExtensionHost<unknown>, "settings">,
+  host: HostBase,
 ): Promise<SetUpExtension> {
   const use: ExtensionUse | undefined = isNudgeExtension(input)
     ? { extension: input }
@@ -92,11 +128,22 @@ export async function setUpExtension(
   }
   const { extension: definition } = use;
   const settings = checkSettings(definition, use.settings);
-  const { detectors = [], ...parts } = await definition.setup({ ...host, settings });
+  const { dataRoot, ...base } = host;
+  const dataDir = dataRoot === undefined ? undefined : join(dataRoot, definition.name);
+  const {
+    detectors = [],
+    roomSocket,
+    ...parts
+  } = await definition.setup({
+    ...base,
+    settings,
+    ...(dataDir === undefined ? {} : { dataDir }),
+  });
   return {
     extension: { ...parts, name: definition.name },
     version: definition.version,
     detectors,
+    ...(roomSocket === undefined ? {} : { roomSocket }),
   };
 }
 

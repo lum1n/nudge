@@ -31,6 +31,9 @@ export {
   type ExtensionParts,
   type ExtensionUse,
   type NudgeExtension,
+  type RoomSocket,
+  type RoomSocketHandler,
+  type RoomSocketSession,
 } from "./extensions/define.ts";
 export { checkExtensions, type LoadOptions, loadExtensions } from "./extensions/loader.ts";
 // What an extension needs to build tools and sections, so it can depend on @nudge/core alone.
@@ -50,6 +53,7 @@ export {
   type Player,
   type Room,
   type RoomKind,
+  roomOf,
 } from "./identity/directory.ts";
 export { type Credential, type Invitation, Players } from "./identity/players.ts";
 export {

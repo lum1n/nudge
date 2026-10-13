@@ -7,13 +7,17 @@ import {
 } from "@earendil-works/pi-ai";
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
 import { createModels } from "@earendil-works/pi-ai/models";
-import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
+import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
 import type { LocalProviderConfig } from "../config.ts";
 
-/** Anthropic (reads `ANTHROPIC_API_KEY`) plus the configured OpenAI-compatible servers. */
+/**
+ * Every provider pi-ai knows (Anthropic, OpenAI, xAI, Google, OpenRouter, …; each reads its own key
+ * from the environment, such as `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`), plus the configured
+ * OpenAI-compatible servers, which replace a built-in provider with the same id.
+ */
 export function buildModels(providers: readonly LocalProviderConfig[] = []): MutableModels {
   const models = createModels();
-  models.setProvider(anthropicProvider());
+  for (const provider of builtinProviders()) models.setProvider(provider);
   for (const provider of providers) models.setProvider(localProvider(provider));
   return models;
 }

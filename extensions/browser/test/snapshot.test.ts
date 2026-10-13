@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { hideSecrets } from "../src/browser.ts";
 import { compactSnapshot, findLines } from "../src/snapshot.ts";
 
 const page = (body: string) => body.replace(/^\n/, "");
@@ -137,5 +138,24 @@ describe("findLines", () => {
     ];
     expect(findLines(lines, "oslo")).toHaveLength(2);
     expect(findLines(lines, "OSLO checkbox")).toEqual(['- checkbox "Oslo (36)" [e1]']);
+  });
+});
+
+describe("hideSecrets", () => {
+  it("hides what password and one-time-code fields hold, and nothing else", () => {
+    const raw = [
+      '- textbox "E-post" [ref=e4]: ola@example.no',
+      '- textbox "Passord" [ref=e6]: Hemmelig123!',
+      '- textbox "Engangskode" [active] [ref=e7]: "482913"',
+      "- text: Hemmelig123! is not a field",
+      '- textbox "Kort" [ref=e8]: 1',
+    ].join("\n");
+    expect(hideSecrets(raw, ["Hemmelig123!", "482913", "1"]).split("\n")).toEqual([
+      '- textbox "E-post" [ref=e4]: ola@example.no',
+      '- textbox "Passord" [ref=e6]: [hidden]',
+      '- textbox "Engangskode" [active] [ref=e7]: [hidden]',
+      "- text: Hemmelig123! is not a field",
+      '- textbox "Kort" [ref=e8]: [hidden]',
+    ]);
   });
 });

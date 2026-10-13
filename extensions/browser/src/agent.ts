@@ -1,0 +1,199 @@
+import type {
+  Api,
+  AssistantMessage,
+  Context,
+  Message,
+  Model,
+  Models,
+  ThinkingLevel,
+  ToolResultMessage,
+  Usage,
+} from "@earendil-works/pi-ai";
+import { browserTools, type Browser, runBatch } from "./tools.ts";
+
+/** What the browser agent runs on unless configured otherwise. */
+export const DEFAULT_BROWSER_MODEL = "anthropic/claude-haiku-5-5";
+
+export interface BrowserAgentOptions {
+  /** Every request goes through these; in Nudge they redact personal data. */
+  models: Models;
+  model: Model<Api>;
+  browser: Browser;
+  task: string;
+  reasoning?: ThinkingLevel;
+  maxSteps?: number;
+  timeZone?: string;
+  now?: () => number;
+  signal?: AbortSignal;
+  onStep?: (step: BrowserStep) => void;
+}
+
+export type BrowserStep =
+  | { type: "note"; step: number; text: string }
+  | { type: "action"; step: number; tool: string; args: unknown; ok: boolean; result: string };
+
+export interface BrowserAgentResult {
+  outcome: "answered" | "needs-login" | "max-steps" | "error" | "aborted";
+  answer: string;
+  error?: string;
+  steps: number;
+  actions: number;
+  actionErrors: number;
+  usage: Usage;
+}
+
+export function browserSystemPrompt(now: Date, timeZone: string): string {
+  const today = now.toLocaleDateString("en-GB", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    timeZone,
+  });
+  return `You operate a web browser for the user. Today is ${today} (time zone ${timeZone}).
+
+You see pages as text: open dialogs first, then the page with controls marked by refs like [e12]. Lists of results are shown as one "item:" line each. Act with the browser tools, using refs from the latest observation.
+
+- Handle anything under OPEN DIALOGS before the page. For cookie banners, reject optional cookies if that is easy, otherwise accept.
+- Prefer the fastest route: the site's own search box and filters, or a URL with parameters you have actually seen on that site in this session. Never guess URL parameters.
+- After searching or filtering, check that the filters took effect (the URL, the hit count, and that the results really have the requested properties). If results look unfiltered, empty or odd, go back to the site's own search box and filters.
+- You may send several tool calls in one turn; they run in order and stop at the first failure. After your last call you see the page again.
+- If the page is long, use browser_find or read the next page instead of scrolling repeatedly.
+- Check that the results really match every part of the request before answering. If something cannot be found, say so.
+- Do not buy, send messages or submit personal data. To log in, use browser_login (the user's saved login for the site; you never see it). If there is none, or the site asks for a code or BankID, call browser_request_login.
+- State only what you saw on the pages in this session, not what you believe from elsewhere.
+- Your last message is the answer to the task: brief, with links, and without notes about your process.`;
+}
+
+const tools = browserTools.map(({ name, description, parameters }) => ({
+  name,
+  description,
+  parameters,
+}));
+
+/** Older page snapshots are dropped from the request; their first line (what happened) stays. */
+function forRequest(messages: Message[]): Message[] {
+  const lastAssistant = messages.findLastIndex((m) => m.role === "assistant");
+  return messages.map((m, i) => {
+    if (m.role !== "toolResult" || i > lastAssistant) return m;
+    const text = m.content.map((c) => (c.type === "text" ? c.text : "")).join("\n");
+    const head = text.split("\n")[0] ?? "";
+    return text.length > head.length + 200
+      ? { ...m, content: [{ type: "text", text: `${head}\n(older page view omitted)` }] }
+      : m;
+  });
+}
+
+/** Runs one browsing task to an answer: the model acts through the browser tools until it replies without one. */
+export async function runBrowserAgent(options: BrowserAgentOptions): Promise<BrowserAgentResult> {
+  const now = options.now ?? Date.now;
+  const systemPrompt = browserSystemPrompt(
+    new Date(now()),
+    options.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+  );
+  const messages: Message[] = [{ role: "user", content: options.task, timestamp: now() }];
+  const usage: Usage = {
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    totalTokens: 0,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+  };
+  const result: BrowserAgentResult = {
+    outcome: "max-steps",
+    answer: "",
+    steps: 0,
+    actions: 0,
+    actionErrors: 0,
+    usage,
+  };
+  const maxSteps = options.maxSteps ?? 30;
+  while (result.steps < maxSteps) {
+    if (options.signal?.aborted) {
+      result.outcome = "aborted";
+      break;
+    }
+    const context: Context = { systemPrompt, messages: forRequest(messages), tools };
+    const message: AssistantMessage = await options.models
+      .streamSimple(options.model, context, {
+        reasoning: options.reasoning ?? "low",
+        maxTokens: 8_000,
+        ...(options.signal ? { signal: options.signal } : {}),
+      })
+      .result();
+    result.steps++;
+    messages.push(message);
+    addUsage(usage, message.usage);
+    if (message.stopReason === "aborted") {
+      result.outcome = "aborted";
+      break;
+    }
+    if (message.stopReason === "error") {
+      result.outcome = "error";
+      result.error = message.errorMessage ?? "the model request failed";
+      break;
+    }
+    const text = message.content
+      .map((c) => (c.type === "text" ? c.text : ""))
+      .join("")
+      .trim();
+    const calls = message.content.filter((c) => c.type === "toolCall");
+    if (text) options.onStep?.({ type: "note", step: result.steps, text });
+    if (!calls.length) {
+      result.answer = text;
+      result.outcome = "answered";
+      break;
+    }
+    const outputs = await runBatch(
+      options.browser,
+      calls.map((c) => ({
+        id: c.id,
+        name: c.name,
+        arguments: c.arguments as Record<string, unknown>,
+      })),
+    );
+    for (const output of outputs) {
+      result.actions++;
+      if (output.isError) result.actionErrors++;
+      const call = calls.find((c) => c.id === output.id)!;
+      options.onStep?.({
+        type: "action",
+        step: result.steps,
+        tool: output.name,
+        args: call.arguments,
+        ok: !output.isError,
+        result: output.text.split("\n")[0] ?? "",
+      });
+      const toolResult: ToolResultMessage = {
+        role: "toolResult",
+        toolCallId: output.id,
+        toolName: output.name,
+        content: [{ type: "text", text: output.text }],
+        isError: output.isError,
+        timestamp: now(),
+      };
+      messages.push(toolResult);
+    }
+    const ended = outputs.find((output) => output.ends);
+    if (ended) {
+      result.outcome = "needs-login";
+      result.answer = ended.text;
+      break;
+    }
+  }
+  return result;
+}
+
+function addUsage(total: Usage, add: Usage): void {
+  total.input += add.input;
+  total.output += add.output;
+  total.cacheRead += add.cacheRead;
+  total.cacheWrite += add.cacheWrite;
+  total.totalTokens += add.totalTokens;
+  total.cost.input += add.cost.input;
+  total.cost.output += add.cost.output;
+  total.cost.cacheRead += add.cost.cacheRead;
+  total.cost.cacheWrite += add.cost.cacheWrite;
+  total.cost.total += add.cost.total;
+}

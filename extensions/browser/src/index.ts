@@ -1,4 +1,14 @@
+export { default } from "./extension.ts";
+export {
+  DEFAULT_BROWSER_MODEL,
+  browserSystemPrompt,
+  runBrowserAgent,
+  type BrowserAgentOptions,
+  type BrowserAgentResult,
+  type BrowserStep,
+} from "./agent.ts";
 export { ActionError, BrowserSession, type BrowserOptions } from "./browser.ts";
+export { closeAllBrowsers, closeBrowser, withBrowser } from "./pool.ts";
 export {
   compactSnapshot,
   findLines,
@@ -9,6 +19,7 @@ export {
 export {
   browserTools,
   runBatch,
+  type Browser,
   type BrowserTool,
   type ToolCallInput,
   type ToolCallOutput,

@@ -11,6 +11,7 @@ An extendable, multiplayer personal assistant that keeps personal data away from
 - `@nudge/cli`: the `nudge` command.
 - `@nudge/web`: the web UI (`apps/web`), served by `nudge serve`.
 - `@nudge/ext-hello`: a sample extension (`extensions/hello`).
+- `@nudge/ext-browser`: lets the assistant use the web (`extensions/browser`).
 
 ## Use
 
@@ -27,7 +28,9 @@ In `nudge chat`, `/steer <text>` joins the answer in progress, `/stop` or Ctrl-C
 
 Ask the assistant to remind you of something ("remind me in 20 minutes to check the oven", "every morning at 8, ask me what I plan to do today") and it schedules a nudge with its `schedule_nudge` tool; `list_nudges` and `cancel_nudge` cover the rest. When a nudge is due, the assistant says it in the room it was set in, without anyone writing first. Times without an offset are read in the assistant's `timeZone`. Nudges survive restarts: one that fell due while the host was down fires when it starts again, and a repeating one then skips the repeats it missed. `nudge nudges` lists every pending nudge.
 
-Anthropic is the default provider and reads `ANTHROPIC_API_KEY`. Any OpenAI-compatible server works too:
+## Models
+
+Anthropic is the default provider. Any provider [pi-ai](https://www.npmjs.com/package/@earendil-works/pi-ai) knows works by name, such as `{ "provider": "openai", "modelId": "gpt-5-mini" }`, `xai`, `google` or `openrouter`; each reads its key from the environment (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `XAI_API_KEY`, …), and `nudge doctor` says whether it found one. Any OpenAI-compatible server works too:
 
 ```json
 {
@@ -105,6 +108,22 @@ An extension adds tools, prompt sections, hooks, tasks and PII detectors to an a
 ```
 
 `nudge doctor` loads them and checks their settings. After editing an extension or the list, `nudge reload` makes the running `nudge serve` (or an in-process `nudge chat`) install them again without a restart; if one fails, the old ones stay.
+
+### Browse the web
+
+`extensions/browser` gives the assistant a `browse` tool. The room's model hands it a task ("find a 2027 Mercedes GLC for sale in Oslo on finn.no"), and a browser agent on its own model works a real browser until it has the answer:
+
+```json
+{ "from": "./extensions/browser", "settings": { "model": "anthropic/claude-haiku-5-5" } }
+```
+
+- `model` is `provider/model` and defaults to `anthropic/claude-haiku-5-5`, which did best in our tests at a fraction of the cost of larger models. Without an Anthropic key, pick one from your provider, such as `openai/gpt-5-mini`. Weak models struggle with multi-step browsing.
+- The model never sees the screen. It reads each page as compact text (open dialogs first, one line per search result) and acts on element refs, so any tool-calling model can drive it and every page passes through the same redaction as the rest of Nudge.
+- The browser is headed, because many sites block headless ones, and runs on its own virtual display (needs `Xvfb`). Each room keeps its own browser profile under `<database>.extensions/browser/profiles`, so cookies and consents stick; a room's browser closes after `idleMinutes` (default 10).
+- It does not buy or send messages. It logs in with your help: the first time a site needs a login, `browse` stops and asks you to open the room's **Browser** page in the web UI, a live view of that room's browser. Log in there yourself (password, BankID, a code, whatever the site asks) and press **Done**. With "Remember logins I type here" ticked, the username and password you typed are saved, and next time the agent's `browser_login` tool fills them in on that same host by itself. The model never sees them: password and one-time-code fields always read `[hidden]` in its view of a page, saved values are hidden wherever they appear, and the tools never return them.
+- Saved logins are kept per room in `<database>.extensions/browser/logins/logins.enc`, encrypted (AES-256-GCM) under the key file next to it, both readable by their owner only. The key protects copies of the database and backups; anyone who can read the key file can read the logins.
+- Install its browser once with `pnpm -C extensions/browser exec patchright install chromium`.
+- `pnpm -C extensions/browser eval -- --model anthropic/claude-haiku-5-5,openai/gpt-5-mini` runs a set of everyday tasks against each model and writes results to `extensions/browser/.eval/`. Keys come only from your environment.
 
 ### Write an extension
 

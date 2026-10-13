@@ -1,13 +1,33 @@
 import { Type, type Static, type TSchema } from "typebox";
 import { ActionError, type BrowserSession } from "./browser.ts";
 
+/** The part of a browser session the tools use; tests pass a fake. */
+export type Browser = Pick<
+  BrowserSession,
+  | "observe"
+  | "find"
+  | "navigate"
+  | "click"
+  | "type"
+  | "check"
+  | "select"
+  | "press"
+  | "scroll"
+  | "tabs"
+  | "settle"
+  | "takeNotes"
+  | "login"
+>;
+
 export interface BrowserTool<T extends TSchema = TSchema> {
   name: string;
   description: string;
   parameters: T;
   /** Observations return the page themselves; actions get a fresh snapshot appended by the batch. */
   observes?: boolean;
-  run(session: BrowserSession, args: Static<T>): Promise<string>;
+  /** Ends the browsing task: the user has to do something first. */
+  ends?: boolean;
+  run(session: Browser, args: Static<T>): Promise<string>;
 }
 
 const Ref = Type.String({
@@ -89,6 +109,25 @@ export const browserTools: BrowserTool[] = [
     run: (s, a) => s.scroll(a.direction, a.ref),
   }),
   tool({
+    name: "browser_login",
+    description:
+      "Log in with the login the user saved for this site: fills in the username and password on the login form and submits. You never see them. If none is saved, or a code or BankID is asked for, use browser_request_login.",
+    parameters: Type.Object({}),
+    run: (s) => s.login(),
+  }),
+  tool({
+    name: "browser_request_login",
+    description:
+      "Stop and ask the user to log in themselves in the live view of this browser, when a site needs a login you cannot do with browser_login. Ends the task; the user will ask again once logged in.",
+    parameters: Type.Object({
+      site: Type.String({ description: "The site that needs the login, like finn.no" }),
+      reason: Type.String({ description: "What the login is needed for" }),
+    }),
+    observes: true,
+    ends: true,
+    run: async (_s, a) => `Login needed on ${a.site}: ${a.reason}`,
+  }),
+  tool({
     name: "browser_tabs",
     description: "List the open tabs, switch to one, or close one (tabs are numbered from 1).",
     parameters: Type.Object({
@@ -110,6 +149,8 @@ export interface ToolCallOutput {
   name: string;
   text: string;
   isError: boolean;
+  /** The task has to stop here; see `BrowserTool.ends`. */
+  ends?: boolean;
 }
 
 /**
@@ -117,7 +158,7 @@ export interface ToolCallOutput {
  * that ran gets a fresh observation appended, so the model always ends the turn looking at the page.
  */
 export async function runBatch(
-  session: BrowserSession,
+  session: Browser,
   calls: readonly ToolCallInput[],
 ): Promise<ToolCallOutput[]> {
   const out: ToolCallOutput[] = [];
@@ -129,7 +170,9 @@ export async function runBatch(
       out.push({
         id: call.id,
         name: call.name,
-        text: "Not run: an earlier action in this turn failed.",
+        text: out.some((o) => o.ends)
+          ? "Not run: the task stopped for a login."
+          : "Not run: an earlier action in this turn failed.",
         isError: true,
       });
       continue;
@@ -142,8 +185,15 @@ export async function runBatch(
     try {
       const text = await definition.run(session, call.arguments as never);
       if (!definition.observes) await session.settle();
-      out.push({ id: call.id, name: call.name, text, isError: false });
+      out.push({
+        id: call.id,
+        name: call.name,
+        text,
+        isError: false,
+        ...(definition.ends ? { ends: true } : {}),
+      });
       lastObserved = Boolean(definition.observes);
+      if (definition.ends) failed = true;
     } catch (error) {
       failed = true;
       const text =
