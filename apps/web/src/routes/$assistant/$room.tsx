@@ -10,20 +10,25 @@ import {
   type ToolCallMessagePartProps,
   useExternalStoreRuntime,
 } from "@assistant-ui/react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   appendText,
   buildQueueAdapter,
   type PendingSend,
   toThreadMessageLike,
 } from "../../assistant-runtime.ts";
-import { forgetToken } from "../../api.ts";
+import { cancelNudge, forget, forgetToken, remember } from "../../api.ts";
 import { useEarlierHistory } from "../../earlier.ts";
-import { meQuery, roomQuery } from "../../queries.ts";
+import { memoryQuery, meQuery, nudgesQuery, roomQuery } from "../../queries.ts";
 import { type RoomSocket, useRoomSocket, useRoomState } from "../../room-socket.ts";
 import { type RoomStatus, ThreadReader } from "../../thread.ts";
+import { newlyDoneToolCalls } from "../../tool-watch.ts";
+
+const MEMORY_TOOLS = new Set(["remember", "forget"]);
+const NUDGE_TOOLS = new Set(["schedule_nudge", "cancel_nudge"]);
+const WATCHED_TOOLS = new Set([...MEMORY_TOOLS, ...NUDGE_TOOLS]);
 
 export const Route = createFileRoute("/$assistant/$room")({ component: Room });
 
@@ -63,6 +68,8 @@ function Room() {
       ) : (
         <Chat socket={socket} />
       )}
+      <MemoryPanel assistant={assistant} room={room} />
+      <NudgesPanel assistant={assistant} room={room} />
     </section>
   );
 }
@@ -78,6 +85,21 @@ function Chat({ socket }: { socket: RoomSocket }) {
     [reader, state.view, me, earlier.entries],
   );
   const { pending, dispatch } = usePendingSends(socket);
+  const queryClient = useQueryClient();
+  const seenToolCalls = useMemo(() => new Set<string>(), [socket]);
+
+  // The only signal in the browser for "a remember/forget/nudge tool result landed": a completed
+  // tool call in the thread. Refetches the panel it affects instead of rendering from the call.
+  useEffect(() => {
+    if (thread === undefined) return;
+    const done = newlyDoneToolCalls(thread.messages, WATCHED_TOOLS, seenToolCalls);
+    if (done.length === 0) return;
+    for (const call of done) seenToolCalls.add(call.toolCallId);
+    if (done.some((call) => MEMORY_TOOLS.has(call.toolName)))
+      void queryClient.invalidateQueries({ queryKey: [assistant, "rooms", room, "memory"] });
+    if (done.some((call) => NUDGE_TOOLS.has(call.toolName)))
+      void queryClient.invalidateQueries({ queryKey: [assistant, "nudges"] });
+  }, [thread, seenToolCalls, queryClient, assistant, room]);
 
   const runtime = useExternalStoreRuntime({
     messages: thread?.messages ?? [],
@@ -248,4 +270,119 @@ function statusLabel(status: MessageStatus): string {
     case "complete":
       return "";
   }
+}
+
+function MemoryPanel({ assistant, room }: { assistant: string; room: string }) {
+  const query = useQuery(memoryQuery(assistant, room));
+  const queryClient = useQueryClient();
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: [assistant, "rooms", room, "memory"] });
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const value = text.trim();
+    if (value === "") return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      await remember(assistant, room, value);
+      setText("");
+      await invalidate();
+    } catch (caught) {
+      setError((caught as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onForget(id: string) {
+    try {
+      await forget(assistant, room, id);
+    } finally {
+      await invalidate();
+    }
+  }
+
+  return (
+    <section className="flex flex-col gap-2 rounded border border-stone-200 bg-white p-3">
+      <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">Memory</h3>
+      {query.data?.facts.length === 0 && (
+        <p className="text-sm text-stone-500">Nothing remembered yet.</p>
+      )}
+      <ul className="flex flex-col gap-1">
+        {query.data?.facts.map((fact) => (
+          <li key={fact.id} className="flex items-baseline justify-between gap-2 text-sm">
+            <span>{fact.text}</span>
+            <button
+              type="button"
+              onClick={() => void onForget(fact.id)}
+              className="shrink-0 text-stone-500 underline"
+            >
+              Forget
+            </button>
+          </li>
+        ))}
+      </ul>
+      <form onSubmit={(event) => void submit(event)} className="flex gap-2">
+        <input
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          placeholder="Remember something"
+          className="flex-1 rounded border border-stone-300 px-2 py-1 text-sm"
+        />
+        <button
+          type="submit"
+          disabled={busy || text.trim() === ""}
+          className="rounded border px-2 text-sm disabled:opacity-50"
+        >
+          Add
+        </button>
+      </form>
+      {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
+    </section>
+  );
+}
+
+function NudgesPanel({ assistant, room }: { assistant: string; room: string }) {
+  const query = useQuery(nudgesQuery(assistant));
+  const queryClient = useQueryClient();
+  const nudges = query.data?.nudges.filter((nudge) => nudge.roomId === room) ?? [];
+
+  async function onCancel(id: string) {
+    try {
+      await cancelNudge(assistant, id);
+    } finally {
+      await queryClient.invalidateQueries({ queryKey: [assistant, "nudges"] });
+    }
+  }
+
+  // Nudges can only be scheduled from chat, not this panel, so there's nothing to show for an
+  // empty list beyond the chat itself already being silent about it.
+  if (nudges.length === 0) return null;
+
+  return (
+    <section className="flex flex-col gap-2 rounded border border-stone-200 bg-white p-3">
+      <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">Nudges</h3>
+      <ul className="flex flex-col gap-1">
+        {nudges.map((nudge) => (
+          <li key={nudge.id} className="flex items-baseline justify-between gap-2 text-sm">
+            <span>
+              {new Date(nudge.fireAt).toLocaleString()} — {nudge.message}
+            </span>
+            <button
+              type="button"
+              onClick={() => void onCancel(nudge.id)}
+              className="shrink-0 text-stone-500 underline"
+            >
+              Cancel
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
 }

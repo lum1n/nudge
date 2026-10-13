@@ -2,11 +2,26 @@ import type {
   AssistantsResponse,
   ErrorResponse,
   MeResponse,
+  MemoryResponse,
+  NudgesResponse,
   RoomResponse,
   TranscriptResponse,
 } from "@nudge/server";
 
-export type { AssistantsResponse, MeResponse, RoomResponse, TranscriptResponse };
+export type {
+  AssistantsResponse,
+  MeResponse,
+  MemoryResponse,
+  NudgesResponse,
+  RoomResponse,
+  TranscriptResponse,
+};
+
+// `Room`, `Fact` and `ScheduledNudge` aren't re-exported by name from `@nudge/server`: read them
+// off a response type that already has one, same as `$assistant/index.tsx` does for `RoomKind`.
+export type Room = RoomResponse["room"];
+export type Fact = MemoryResponse["facts"][number];
+export type ScheduledNudge = NudgesResponse["nudges"][number];
 
 /** A non-2xx answer from the Nudge API. */
 export class ApiError extends Error {
@@ -83,6 +98,39 @@ export function transcript(
 ): Promise<TranscriptResponse> {
   const query = before === undefined ? "" : `?before=${encodeURIComponent(before)}`;
   return api(assistant, `/rooms/${encodeURIComponent(room)}/transcript${query}`);
+}
+
+export function createSharedRoom(
+  assistant: string,
+  name: string,
+  members: readonly string[] = [],
+): Promise<Room> {
+  return api(assistant, "/rooms", {
+    method: "POST",
+    body: JSON.stringify({ name, ...(members.length === 0 ? {} : { members }) }),
+  });
+}
+
+/** Creates the caller's own room with this assistant, or returns it if it already exists. */
+export function openPersonalRoom(assistant: string): Promise<Room> {
+  return api(assistant, "/rooms/personal", { method: "POST" });
+}
+
+export function remember(assistant: string, room: string, text: string): Promise<Fact> {
+  return api(assistant, `/rooms/${encodeURIComponent(room)}/memory`, {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  });
+}
+
+export function forget(assistant: string, room: string, id: string): Promise<void> {
+  return api(assistant, `/rooms/${encodeURIComponent(room)}/memory/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
+export function cancelNudge(assistant: string, id: string): Promise<void> {
+  return api(assistant, `/nudges/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 /**
