@@ -1,11 +1,15 @@
 import type { Context } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { AgentEventStream, Cursor } from "@earendil-works/pi-durable";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { upgradeWebSocket } from "@hono/node-server";
+import { serveStatic } from "@hono/node-server/serve-static";
 import { canUse, type Credential, type Nudge, type Room } from "@nudge/core";
 import { type Context as HonoContext, Hono, type MiddlewareHandler } from "hono";
 import type { WSContext } from "hono/ws";
 import {
+  type AssistantsResponse,
   CLOSE,
   type ClientFrame,
   type CreateRoomRequest,
@@ -26,6 +30,8 @@ import {
 export type AppOptions = {
   /** By URL name: `/a/<name>/…`. */
   readonly assistants: ReadonlyMap<string, Nudge>;
+  /** A built web UI (a directory with `index.html`) to serve at every path outside `/a`. */
+  readonly web?: string;
   readonly onError?: (error: unknown) => void;
 };
 
@@ -78,6 +84,15 @@ export function createApp(options: AppOptions): Hono<Env> {
     c.set("credential", credential);
     await next();
   };
+
+  app.get("/a", (c) =>
+    c.json({
+      assistants: [...options.assistants].map(([name, nudge]) => ({
+        name,
+        displayName: nudge.displayName,
+      })),
+    } satisfies AssistantsResponse),
+  );
 
   // The stream authenticates with its first frame: browsers cannot set headers on a WebSocket.
   app.get(
@@ -230,7 +245,20 @@ export function createApp(options: AppOptions): Hono<Env> {
   });
 
   app.route("/a/:assistant", api);
+  if (options.web !== undefined) serveWeb(app, options.web);
   return app;
+}
+
+/** Files from the build, and `index.html` for every other page so the browser's router takes over. */
+function serveWeb(app: Hono<Env>, root: string): void {
+  const outsideApi: MiddlewareHandler<Env> = async (c, next) => {
+    if (c.req.path === "/a" || c.req.path.startsWith("/a/")) return c.notFound();
+    await next();
+  };
+  app.get("*", outsideApi, serveStatic({ root }), async (c) => {
+    const page = await readFile(join(root, "index.html"), "utf8").catch(() => undefined);
+    return page === undefined ? c.notFound() : c.html(page);
+  });
 }
 
 /** The room in the path, if the caller may use it. Rooms they may not use do not exist for them. */

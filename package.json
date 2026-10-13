@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "pnpm -r build",
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && pnpm -C apps/web typecheck",
     "test": "vitest run",
     "lint": "oxlint .",
     "format": "oxfmt .",

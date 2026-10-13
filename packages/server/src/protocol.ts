@@ -1,6 +1,11 @@
 import type { AgentEvent, EntryRecord, SnapshotEvent } from "@earendil-works/pi-durable";
 import type { Fact, Player, Room, ScheduledNudge } from "@nudge/core";
 
+/** GET /a, without a token: which assistants this server hosts. The web UI signs in with it. */
+export type AssistantsResponse = {
+  readonly assistants: readonly { readonly name: string; readonly displayName: string }[];
+};
+
 // HTTP, under /a/<assistant>, with `Authorization: Bearer <token>`.
 
 /** GET /me */

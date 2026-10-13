@@ -32,6 +32,8 @@ Options:
   -t, --token <token>      Token for --url (default: $NUDGE_TOKEN)
       --port <port>        serve: port (default: 8787)
       --host <host>        serve: interface (default: 127.0.0.1)
+      --web <dir>          serve: web UI to host (default: the bundled one, if built;
+                           "none" to serve only the API)
 `;
 
 async function main(argv: string[]): Promise<number> {
@@ -48,6 +50,7 @@ async function main(argv: string[]): Promise<number> {
       token: { type: "string", short: "t", default: process.env.NUDGE_TOKEN },
       port: { type: "string", default: "8787" },
       host: { type: "string", default: "127.0.0.1" },
+      web: { type: "string" },
       ping: { type: "boolean", default: false },
       privacy: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
@@ -70,12 +73,16 @@ async function main(argv: string[]): Promise<number> {
       const port = Number(values.port);
       if (!Number.isInteger(port) || port < 0 || port > 65535)
         throw new UsageError(`--port ${values.port} is not a port`);
-      await serve({ config: values.config, port, host: values.host });
+      await serve({ config: values.config, port, host: values.host, web: values.web });
       return 0;
     }
     case "invite":
       if (argument === undefined) throw new UsageError("invite needs a name: nudge invite <name>");
-      await invite({ ...admin, name: argument });
+      await invite({
+        ...admin,
+        name: argument,
+        server: values.url ?? `http://${values.host}:${values.port}`,
+      });
       return 0;
     case "room": {
       const members = values.members

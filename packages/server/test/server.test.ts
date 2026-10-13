@@ -1,3 +1,6 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
@@ -5,6 +8,8 @@ import type { AgentEvent, SnapshotEvent } from "@earendil-works/pi-durable";
 import { createNudge, MESSAGE_ENTRY, type Nudge } from "@nudge/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  type AssistantsResponse,
+  createApp,
   type MeResponse,
   type MemoryResponse,
   type MessageResponse,
@@ -238,5 +243,40 @@ describe("server", () => {
     expect((await call("DELETE", "/rooms/trip/memory/m1", tokens.Bo!)).status).toBe(204);
     expect((await call("DELETE", "/rooms/trip/memory/m1", tokens.Bo!)).status).toBe(404);
     expect(await facts(tokens.Ann!)).toEqual([]);
+  });
+
+  it("serves the web UI outside /a, with index.html for the browser's routes", async () => {
+    const web = await mkdtemp(join(tmpdir(), "nudge-web-"));
+    try {
+      await mkdir(join(web, "assets"));
+      await writeFile(join(web, "index.html"), "<!doctype html><title>Nudge</title>");
+      await writeFile(join(web, "assets", "app.js"), "console.log(1);");
+      const app = createApp({ assistants: new Map([["robin", nudge]]), web });
+
+      const assistants = (await (await app.request("/a")).json()) as AssistantsResponse;
+      expect(assistants).toEqual({ assistants: [{ name: "robin", displayName: "Nudge" }] });
+
+      for (const page of ["/", "/login", "/robin/trip"]) {
+        const response = await app.request(page);
+        expect(response.status).toBe(200);
+        expect(await response.text()).toContain("<title>Nudge</title>");
+      }
+      const script = await app.request("/assets/app.js");
+      expect(await script.text()).toBe("console.log(1);");
+
+      // The API keeps its JSON answers; it is never shadowed by the page.
+      expect((await app.request("/a/robin/me")).status).toBe(401);
+      const missing = await app.request("/a/robin/nothing-here", {
+        headers: { authorization: `Bearer ${tokens.Ann}` },
+      });
+      expect(missing.status).toBe(404);
+      expect(await missing.json()).toEqual({ error: "Not found" });
+
+      // Without a web UI, pages are 404s.
+      const apiOnly = createApp({ assistants: new Map([["robin", nudge]]) });
+      expect((await apiOnly.request("/login")).status).toBe(404);
+    } finally {
+      await rm(web, { recursive: true, force: true });
+    }
   });
 });

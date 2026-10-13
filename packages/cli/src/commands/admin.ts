@@ -10,13 +10,16 @@ export type AdminOptions = {
 
 const context = BACKGROUND_CONTEXT;
 
-/** Adds a player and prints their token, once. */
-export async function invite(options: AdminOptions & { readonly name: string }): Promise<void> {
+/** Adds a player and prints their token, once, with a sign-in link for the web UI on `server`. */
+export async function invite(
+  options: AdminOptions & { readonly name: string; readonly server: string },
+): Promise<void> {
   await withAssistant(options, async (nudge) => {
     const { player, token } = await nudge.players.invite(options.name, context);
     console.log(`Invited ${player.displayName} as "${player.id}". Their token, shown only now:\n`);
     console.log(`  ${token}\n`);
-    console.log("They connect with: NUDGE_TOKEN=<token> nudge chat --url <server>/a/<assistant>");
+    console.log(`In a browser: ${new URL("/login", options.server).href}#token=${token}`);
+    console.log("In a terminal: NUDGE_TOKEN=<token> nudge chat --url <server>/a/<assistant>");
   });
 }
 

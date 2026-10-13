@@ -9,6 +9,7 @@ An extendable, multiplayer personal assistant that keeps personal data away from
 - `@nudge/core`: the embeddable library. One `Nudge` is one assistant: one storage, one Harness, one registry.
 - `@nudge/server`: an HTTP and WebSocket API over one or more assistants.
 - `@nudge/cli`: the `nudge` command.
+- `@nudge/web`: the web UI (`apps/web`), served by `nudge serve`.
 - `@nudge/ext-hello`: a sample extension (`extensions/hello`).
 
 ## Use
@@ -53,10 +54,12 @@ Each person is a player with their own token. Everyone shares the lobby; a perso
 nudge invite Ann                      # prints Ann's token, once
 nudge invite Bo
 nudge room Trip --members ann,bo      # a shared room "trip"; `nudge room` lists them
-nudge serve                           # http://127.0.0.1:8787/a/<assistant>
+nudge serve                           # web UI at http://127.0.0.1:8787, API under /a/<assistant>
 ```
 
-Then each person connects from their own terminal, and all of them see the same conversation live:
+`nudge invite` also prints a sign-in link for the web UI (`/login#token=…`; pass `--port` or `--url` if the server isn't on 127.0.0.1:8787). The web UI keeps the token for the browser tab only. `nudge serve --web <dir>` serves another build, `--web none` only the API.
+
+Or each person connects from their own terminal, and all of them see the same conversation live:
 
 ```bash
 NUDGE_TOKEN=nudge_… nudge chat trip --url http://127.0.0.1:8787/a/nudge
@@ -64,7 +67,7 @@ NUDGE_TOKEN=nudge_… nudge chat trip --url http://127.0.0.1:8787/a/nudge
 
 One process owns an assistant's database at a time, so stop `nudge serve` before `nudge invite`, `nudge room` or `nudge nudges`. `serve` listens on 127.0.0.1; put a TLS proxy in front before exposing it.
 
-The API, with `Authorization: Bearer <token>`, under `/a/<assistant>`: `GET /me`, `GET|POST /rooms`, `POST /rooms/personal`, `GET /rooms/<room>`, `POST /rooms/<room>/messages`, `POST /rooms/<room>/abort`, `GET /rooms/<room>/transcript`, `POST /protect`, `GET /nudges`, `DELETE /nudges/<id>`, `GET|POST /rooms/<room>/memory`, `DELETE /rooms/<room>/memory/<id>`. `GET /rooms/<room>/stream` is a WebSocket: send `{"type":"hello","token":…}` first, then get a snapshot and one batch of agent events per commit; send `submit` and `abort` frames. The types are in `packages/server/src/protocol.ts`.
+`GET /a` lists the assistants without a token. The API, with `Authorization: Bearer <token>`, under `/a/<assistant>`: `GET /me`, `GET|POST /rooms`, `POST /rooms/personal`, `GET /rooms/<room>`, `POST /rooms/<room>/messages`, `POST /rooms/<room>/abort`, `GET /rooms/<room>/transcript`, `POST /protect`, `GET /nudges`, `DELETE /nudges/<id>`, `GET|POST /rooms/<room>/memory`, `DELETE /rooms/<room>/memory/<id>`. `GET /rooms/<room>/stream` is a WebSocket: send `{"type":"hello","token":…}` first, then get a snapshot and one batch of agent events per commit; send `submit` and `abort` frames. The types are in `packages/server/src/protocol.ts`.
 
 ## Privacy
 
@@ -147,4 +150,7 @@ Requires Node ≥ 22.19 and pnpm.
 ```bash
 pnpm install
 pnpm check   # typecheck, lint, test
+pnpm build   # every package, and the web UI into apps/web/dist
 ```
+
+For the web UI with hot reload, run `nudge serve` and then `pnpm -C apps/web dev`: Vite proxies `/a` (HTTP and WebSocket) to `127.0.0.1:8787`, or to `$NUDGE_SERVER`.
