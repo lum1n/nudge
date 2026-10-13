@@ -10,6 +10,7 @@ import {
   type ToolCallMessagePartProps,
   useExternalStoreRuntime,
 } from "@assistant-ui/react";
+import { MarkdownTextPrimitive } from "@assistant-ui/react-markdown";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
@@ -38,7 +39,7 @@ const UNAUTHORIZED = 4401;
 function Room() {
   const { assistant, room } = Route.useParams();
   const query = useQuery(roomQuery(assistant, room));
-  const socket = useRoomSocket(assistant, room);
+  const { socket, retrying } = useRoomSocket(assistant, room);
   const state = useRoomState(socket);
   const navigate = useNavigate();
 
@@ -64,7 +65,11 @@ function Room() {
       {socket === undefined ? (
         <p className="text-stone-500">Connecting…</p>
       ) : state.status === "closed" ? (
-        <p className="text-red-700">Disconnected{state.error ? `: ${state.error}` : ""}.</p>
+        retrying ? (
+          <p className="text-stone-500">Reconnecting…</p>
+        ) : (
+          <p className="text-red-700">Disconnected{state.error ? `: ${state.error}` : ""}.</p>
+        )
       ) : (
         <Chat socket={socket} />
       )}
@@ -220,7 +225,7 @@ function AssistantMessage({ message }: { message: Extract<MessageState, { role: 
       <div className="rounded bg-stone-100 px-3 py-2">
         <MessagePrimitive.Parts
           components={{
-            Text: TextPart,
+            Text: MarkdownText,
             Reasoning: ReasoningPart,
             tools: { Fallback: ToolCallPart },
           }}
@@ -245,6 +250,21 @@ function SystemMessage({ message }: { message: MessageState }) {
 
 function TextPart() {
   return <MessagePartPrimitive.Text component="p" />;
+}
+
+// No `@tailwindcss/typography`: everything else in this app is hand-rolled utility classes (see
+// the plan's Decisions), so markdown elements get the same treatment instead of a `prose` class.
+function MarkdownText() {
+  return (
+    <MarkdownTextPrimitive
+      className="[&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-stone-300
+        [&_blockquote]:pl-2 [&_blockquote]:text-stone-600 [&_code]:rounded [&_code]:bg-stone-200
+        [&_code]:px-1 [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold
+        [&_h3]:font-semibold [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1 [&_pre]:my-1
+        [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-stone-200 [&_pre]:p-2
+        [&_pre_code]:bg-transparent [&_pre_code]:px-0 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5"
+    />
+  );
 }
 
 function ReasoningPart() {

@@ -105,20 +105,61 @@ export class RoomSocket {
   }
 }
 
-/** Opens the room's stream while the component is mounted; undefined without a token. */
-export function useRoomSocket(assistant: string, room: string): RoomSocket | undefined {
+/** Close codes worth giving up on instead of reconnecting: the token or the room is simply bad. */
+const NO_RETRY = new Set([4401, 4404]);
+const BACKOFF_START_MS = 1000;
+const BACKOFF_MAX_MS = 30_000;
+
+/**
+ * Opens the room's stream while the component is mounted; undefined without a token. A close that
+ * isn't `NO_RETRY` reopens a fresh socket (a fresh mirror, same as any reconnect) after a backoff
+ * that doubles on each consecutive failure, reset once a socket reaches `open`.
+ */
+export function useRoomSocket(
+  assistant: string,
+  room: string,
+): { readonly socket?: RoomSocket; readonly retrying: boolean } {
   const [socket, setSocket] = useState<RoomSocket>();
+  const [retrying, setRetrying] = useState(false);
+
   useEffect(() => {
     const token = tokenFor(assistant);
     if (token === undefined) return;
-    const opened = new RoomSocket(assistant, room, token);
-    setSocket(opened);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let attempt = 0;
+    let stopped = false;
+
+    const connect = () => {
+      setRetrying(false);
+      const opened = new RoomSocket(assistant, room, token);
+      setSocket(opened);
+      const onChange = () => {
+        const current = opened.getState();
+        if (current.status === "open") {
+          attempt = 0;
+          return;
+        }
+        if (current.status !== "closed" || stopped || NO_RETRY.has(current.closeCode ?? -1)) return;
+        unsubscribe();
+        setRetrying(true);
+        timer = setTimeout(connect, Math.min(BACKOFF_START_MS * 2 ** attempt, BACKOFF_MAX_MS));
+        attempt += 1;
+      };
+      const unsubscribe = opened.subscribe(onChange);
+    };
+    connect();
+
     return () => {
-      opened.close();
-      setSocket(undefined);
+      stopped = true;
+      if (timer !== undefined) clearTimeout(timer);
+      setSocket((current) => {
+        current?.close();
+        return undefined;
+      });
     };
   }, [assistant, room]);
-  return socket;
+
+  return { socket, retrying };
 }
 
 const CONNECTING: RoomState = { status: "connecting" };
