@@ -5,7 +5,8 @@
     "declaration": false,
     "declarationMap": false,
     "noEmit": true,
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "customConditions": ["@nudge/source"]
   },
   "include": [
     "packages/*/src",

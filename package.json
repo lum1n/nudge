@@ -8,7 +8,8 @@
     "test": "vitest run",
     "lint": "oxlint .",
     "format": "oxfmt .",
-    "check": "pnpm typecheck && pnpm lint && pnpm test"
+    "check": "pnpm typecheck && pnpm lint && pnpm test",
+    "nudge": "node packages/cli/dist/main.js"
   },
   "devDependencies": {
     "@types/node": "^22.19.0",

@@ -1,0 +1,21 @@
+{
+  "name": "@nudge/cli",
+  "version": "0.0.0",
+  "private": true,
+  "bin": {
+    "nudge": "./dist/main.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@earendil-works/chord": "1.2.0",
+    "@earendil-works/pi-ai": "1.2.0",
+    "@earendil-works/pi-durable": "1.2.0",
+    "@nudge/core": "workspace:*"
+  }
+}
