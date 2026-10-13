@@ -1,7 +1,7 @@
 import { userInfo } from "node:os";
 import { createInterface } from "node:readline/promises";
 import { UsageError } from "../errors.ts";
-import { ChatRenderer } from "../render.ts";
+import { ChatRenderer, describeNudge } from "../render.ts";
 import { type ChatSession, openLocal, openRemote } from "../session.ts";
 
 export type ChatOptions = {
@@ -19,7 +19,8 @@ export type ChatOptions = {
 
 const HELP =
   "Commands: /steer <text> joins the running answer, /stop stops it, " +
-  "/private <value> keeps a value from the model, /who lists who can read along, /quit leaves.";
+  "/private <value> keeps a value from the model, /who lists who can read along, " +
+  "/nudges lists scheduled nudges, /nudges cancel <id> cancels one, /quit leaves.";
 
 export async function chat(options: ChatOptions): Promise<void> {
   let rl: ReturnType<typeof createInterface> | undefined;
@@ -80,6 +81,15 @@ export async function chat(options: ChatOptions): Promise<void> {
         await session.abort();
       } else if (line === "/who") {
         console.log(`  ${(await session.members()).join(", ")}`);
+      } else if (line === "/nudges") {
+        const nudges = await session.nudges();
+        if (nudges.length === 0) console.log("  No nudges scheduled here.");
+        for (const nudge of nudges) console.log(`  ${describeNudge(nudge)}`);
+      } else if (line.startsWith("/nudges ")) {
+        const id = /^\/nudges cancel\s+(\S+)$/.exec(line)?.[1];
+        if (id === undefined) console.log("  Usage: /nudges cancel <id>");
+        else
+          console.log((await session.cancelNudge(id)) ? "  Cancelled." : `  No nudge ${id} here.`);
       } else if (line.startsWith("/private ")) {
         const placeholder = await session.protect(line.slice("/private ".length));
         console.log(`  The model will see ${placeholder} instead.`);

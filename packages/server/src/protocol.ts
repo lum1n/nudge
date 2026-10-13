@@ -1,5 +1,5 @@
 import type { AgentEvent, EntryRecord, SnapshotEvent } from "@earendil-works/pi-durable";
-import type { Player, Room } from "@nudge/core";
+import type { Player, Room, ScheduledNudge } from "@nudge/core";
 
 // HTTP, under /a/<assistant>, with `Authorization: Bearer <token>`.
 
@@ -41,6 +41,11 @@ export type TranscriptResponse = {
 /** POST /protect */
 export type ProtectRequest = { readonly value: string; readonly kind?: string };
 export type ProtectResponse = { readonly placeholder: string };
+
+/** GET /nudges: pending nudges of the rooms the caller may use, soonest first. */
+export type NudgesResponse = { readonly nudges: readonly ScheduledNudge[] };
+
+// DELETE /nudges/<id> cancels one: 204, or 404 when it is not pending in a room the caller may use.
 
 export type ErrorResponse = { readonly error: string };
 

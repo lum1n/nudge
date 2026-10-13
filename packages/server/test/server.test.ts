@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   type MeResponse,
   type MessageResponse,
+  type NudgesResponse,
   type RoomResponse,
   type RunningServer,
   type ServerFrame,
@@ -187,5 +188,29 @@ describe("server", () => {
     });
     expect(created.status).toBe(201);
     expect(await created.json()).toMatchObject({ id: "book-club", members: ["cy", "ann"] });
+  });
+
+  it("lists and cancels only the nudges of rooms the caller may use", async () => {
+    const later = Date.now() + 3_600_000;
+    const trip = await nudge.nudges.schedule("trip", { message: "Pack", fireAt: later }, context);
+    const lobby = await nudge.nudges.schedule(
+      "lobby",
+      { message: "Hi", fireAt: later + 1 },
+      context,
+    );
+    const ids = async (token: string) =>
+      ((await (await get("/nudges", token)).json()) as NudgesResponse).nudges.map((n) => n.id);
+    expect(await ids(tokens.Ann!)).toEqual([trip.id, lobby.id]);
+    expect(await ids(tokens.Cy!)).toEqual([lobby.id]);
+
+    const remove = (id: string, token: string) =>
+      fetch(`${base}/nudges/${id}`, {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${token}` },
+      });
+    expect((await remove(trip.id, tokens.Cy!)).status).toBe(404);
+    expect((await remove(trip.id, tokens.Bo!)).status).toBe(204);
+    expect((await remove(trip.id, tokens.Bo!)).status).toBe(404);
+    expect(await ids(tokens.Ann!)).toEqual([lobby.id]);
   });
 });

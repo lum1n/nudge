@@ -33,6 +33,9 @@ export {
 } from "./identity/directory.ts";
 export { type Credential, type Invitation, Players } from "./identity/players.ts";
 export { Rooms, type SharedRoomDraft } from "./identity/rooms.ts";
+export { type NudgeDraft, Nudges } from "./nudges/nudges.ts";
+export { formatTime, parseTime, ScheduleDoc, type ScheduledNudge } from "./nudges/schedule.ts";
+export { FIRE_ENTRY, type FireEntryData, NudgeTimer } from "./nudges/timer-task.ts";
 export { buildModels } from "./models/providers.ts";
 export { RedactingModels, type RedactionOptions } from "./models/redacting-models.ts";
 export {

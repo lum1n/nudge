@@ -12,6 +12,7 @@ import {
   type MeResponse,
   type MessageRequest,
   type MessageResponse,
+  type NudgesResponse,
   type ProtectRequest,
   type ProtectResponse,
   type RoomResponse,
@@ -168,6 +169,26 @@ export function createApp(options: AppOptions): Hono<Env> {
         ? {}
         : { next: Buffer.from(JSON.stringify(page.next)).toString("base64url") }),
     } satisfies TranscriptResponse);
+  });
+
+  api.get("/nudges", async (c) => {
+    const rooms = await c.var.nudge.rooms.list(context, c.var.credential.player.id);
+    const nudges = await c.var.nudge.nudges.list(
+      context,
+      rooms.map((room) => room.id),
+    );
+    return c.json({ nudges } satisfies NudgesResponse);
+  });
+
+  api.delete("/nudges/:id", async (c) => {
+    const id = c.req.param("id");
+    const nudge = await c.var.nudge.nudges.get(id, context);
+    const room =
+      nudge === undefined ? undefined : await c.var.nudge.rooms.get(nudge.roomId, context);
+    if (room === undefined || !canUse(room, c.var.credential.player.id))
+      throw new HttpError(404, `No nudge "${id}"`);
+    await c.var.nudge.nudges.cancel(id, context);
+    return c.body(null, 204);
   });
 
   api.post("/protect", async (c) => {

@@ -19,7 +19,11 @@ nudge doctor    # checks Node, config, storage and credentials; --ping sends one
 nudge chat      # chat in this terminal; the conversation survives restarts
 ```
 
-In `nudge chat`, `/steer <text>` joins the answer in progress, `/stop` or Ctrl-C stops it, `/who` lists who can read along, `/quit` leaves. `nudge chat me` opens your personal room; `nudge chat <room>` any other room you are in.
+In `nudge chat`, `/steer <text>` joins the answer in progress, `/stop` or Ctrl-C stops it, `/who` lists who can read along, `/nudges` lists the room's scheduled nudges and `/nudges cancel <id>` cancels one, `/quit` leaves. `nudge chat me` opens your personal room; `nudge chat <room>` any other room you are in.
+
+## Nudges
+
+Ask the assistant to remind you of something ("remind me in 20 minutes to check the oven", "every morning at 8, ask me what I plan to do today") and it schedules a nudge with its `schedule_nudge` tool; `list_nudges` and `cancel_nudge` cover the rest. When a nudge is due, the assistant says it in the room it was set in, without anyone writing first. Times without an offset are read in the assistant's `timeZone`. Nudges survive restarts: one that fell due while the host was down fires when it starts again, and a repeating one then skips the repeats it missed. `nudge nudges` lists every pending nudge.
 
 Anthropic is the default provider and reads `ANTHROPIC_API_KEY`. Any OpenAI-compatible server works too:
 
@@ -53,9 +57,9 @@ Then each person connects from their own terminal, and all of them see the same 
 NUDGE_TOKEN=nudge_… nudge chat trip --url http://127.0.0.1:8787/a/nudge
 ```
 
-One process owns an assistant's database at a time, so stop `nudge serve` before `nudge invite` or `nudge room`. `serve` listens on 127.0.0.1; put a TLS proxy in front before exposing it.
+One process owns an assistant's database at a time, so stop `nudge serve` before `nudge invite`, `nudge room` or `nudge nudges`. `serve` listens on 127.0.0.1; put a TLS proxy in front before exposing it.
 
-The API, with `Authorization: Bearer <token>`, under `/a/<assistant>`: `GET /me`, `GET|POST /rooms`, `POST /rooms/personal`, `GET /rooms/<room>`, `POST /rooms/<room>/messages`, `POST /rooms/<room>/abort`, `GET /rooms/<room>/transcript`, `POST /protect`. `GET /rooms/<room>/stream` is a WebSocket: send `{"type":"hello","token":…}` first, then get a snapshot and one batch of agent events per commit; send `submit` and `abort` frames. The types are in `packages/server/src/protocol.ts`.
+The API, with `Authorization: Bearer <token>`, under `/a/<assistant>`: `GET /me`, `GET|POST /rooms`, `POST /rooms/personal`, `GET /rooms/<room>`, `POST /rooms/<room>/messages`, `POST /rooms/<room>/abort`, `GET /rooms/<room>/transcript`, `POST /protect`, `GET /nudges`, `DELETE /nudges/<id>`. `GET /rooms/<room>/stream` is a WebSocket: send `{"type":"hello","token":…}` first, then get a snapshot and one batch of agent events per commit; send `submit` and `abort` frames. The types are in `packages/server/src/protocol.ts`.
 
 ## Privacy
 

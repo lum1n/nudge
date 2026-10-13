@@ -1,5 +1,5 @@
 import { parseArgs } from "node:util";
-import { invite, room } from "./commands/admin.ts";
+import { invite, nudges, room } from "./commands/admin.ts";
 import { chat } from "./commands/chat.ts";
 import { doctor } from "./commands/doctor.ts";
 import { init } from "./commands/init.ts";
@@ -15,10 +15,11 @@ Commands:
   serve              Run every assistant behind an HTTP and WebSocket server
   invite <name>      Add a player and print their token
   room [name]        Create a shared room with --members, or list the rooms
+  nudges             List the scheduled nudges of every room
   doctor             Check Node, config, storage and model credentials;
                      --ping sends one request, --privacy tests redaction
 
-invite and room open the assistant's database, so stop "nudge serve" first.
+invite, room and nudges open the assistant's database, so stop "nudge serve" first.
 
 Options:
   -c, --config <file>      Config file (default: nudge.json)
@@ -83,6 +84,9 @@ async function main(argv: string[]): Promise<number> {
       await room({ ...admin, name: argument, members });
       return 0;
     }
+    case "nudges":
+      await nudges(admin);
+      return 0;
     case "doctor":
       return (await doctor({ config: values.config, ping: values.ping, privacy: values.privacy }))
         ? 0

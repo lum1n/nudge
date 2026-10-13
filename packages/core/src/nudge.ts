@@ -23,6 +23,7 @@ import { attach, type MessageDraft, submitMessage } from "./host-api.ts";
 import { DirectoryDoc, type Room } from "./identity/directory.ts";
 import { Players } from "./identity/players.ts";
 import { Rooms } from "./identity/rooms.ts";
+import { Nudges } from "./nudges/nudges.ts";
 import { RedactingModels, type RedactionOptions } from "./models/redacting-models.ts";
 import { builtinDetectors, type PiiDetector } from "./privacy/detectors.ts";
 import { Vault } from "./privacy/vault.ts";
@@ -61,6 +62,7 @@ export type NudgeOptions = {
 export class Nudge {
   readonly players: Players;
   readonly rooms: Rooms;
+  readonly nudges: Nudges;
 
   private constructor(
     readonly harness: Harness,
@@ -73,16 +75,22 @@ export class Nudge {
   ) {
     this.players = new Players(harness, (name) => this.protect(name, "NAME").then(() => {}), now);
     this.rooms = new Rooms(harness, () => agent, now);
+    this.nudges = new Nudges(harness, this.rooms, now);
   }
 
   static async open(options: NudgeOptions, context: Context): Promise<Nudge> {
     const now = options.now ?? Date.now;
     const registry = createRegistry();
+    let opened: Nudge | undefined;
     registry.install(
       createBuiltinExtension({
         displayName: options.displayName ?? "Nudge",
         timeZone: options.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
         now,
+        nudges: () => {
+          if (opened === undefined) throw new Error("The assistant is not open yet");
+          return opened.nudges;
+        },
       }),
     );
     for (const extension of options.extensions ?? []) registry.install(extension);
@@ -137,6 +145,9 @@ export class Nudge {
         );
         if (conversation !== undefined) await followConfig(conversation, options, context);
       }
+      await nudge.nudges.reconcile(context);
+      opened = nudge;
+      // Pending nudge timers rearm here; those whose time passed while the host was down fire now.
       harness.resume();
       return nudge;
     } catch (error) {

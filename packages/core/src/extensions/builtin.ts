@@ -1,16 +1,26 @@
 import { defineExtension, type Extension, section } from "@earendil-works/pi-durable";
 import { DirectoryDoc, type DirectoryState } from "../identity/directory.ts";
+import type { Nudges } from "../nudges/nudges.ts";
+import { NudgeTimer } from "../nudges/timer-task.ts";
+import { createNudgeTools } from "../nudges/tools.ts";
 
 export type BuiltinOptions = {
   readonly displayName: string;
   readonly timeZone: string;
   readonly now: () => number;
+  /** Resolved at call time: the extension is installed before the assistant opens. */
+  readonly nudges: () => Nudges;
 };
 
-/** The always-on `nudge` extension: who the assistant is, who is in the room, and what time it is. */
+/**
+ * The always-on `nudge` extension: who the assistant is, who is in the room, what time it is, and
+ * the nudge timer with its tools.
+ */
 export function createBuiltinExtension(options: BuiltinOptions): Extension {
   return defineExtension({
     name: "nudge",
+    tasks: [NudgeTimer],
+    tools: createNudgeTools(options),
     sections: [
       section(
         "identity",

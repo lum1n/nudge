@@ -1,5 +1,6 @@
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { findAssistant, loadConfig, type Nudge, openAssistant } from "@nudge/core";
+import { describeNudge } from "../render.ts";
 
 export type AdminOptions = {
   readonly config: string;
@@ -35,6 +36,16 @@ export async function room(
       context,
     );
     console.log(`Created room "${created.id}" for ${created.members.join(", ")}.`);
+  });
+}
+
+/** Lists every pending nudge, with its room. */
+export async function nudges(options: AdminOptions): Promise<void> {
+  await withAssistant(options, async (nudge) => {
+    const pending = await nudge.nudges.list(context);
+    if (pending.length === 0) console.log("No nudges scheduled.");
+    for (const scheduled of pending)
+      console.log(`${scheduled.roomId}\t${describeNudge(scheduled)}`);
   });
 }
 

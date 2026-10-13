@@ -1,6 +1,12 @@
 import type { Message } from "@earendil-works/pi-ai";
 import type { AgentEvent, EntryRecord, SnapshotEvent } from "@earendil-works/pi-durable";
-import { MESSAGE_ENTRY, type MessageEntryData } from "@nudge/core";
+import {
+  FIRE_ENTRY,
+  type FireEntryData,
+  MESSAGE_ENTRY,
+  type MessageEntryData,
+  type ScheduledNudge,
+} from "@nudge/core";
 
 export type Line = { readonly who: string; readonly text: string };
 
@@ -13,6 +19,8 @@ export function entryLine(entry: EntryRecord, assistantName: string): Line | und
     const data = entry.data as MessageEntryData;
     return { who: data.displayName, text: data.text };
   }
+  if (entry.kind === FIRE_ENTRY)
+    return { who: "nudge", text: (entry.data as FireEntryData).message };
   const message = entry.model?.[0];
   if (message === undefined) return undefined;
   if (entry.kind === "pi.user") return { who: "you", text: messageText(message).trim() };
@@ -21,6 +29,19 @@ export function entryLine(entry: EntryRecord, assistantName: string): Line | und
     return text === "" ? undefined : { who: assistantName, text };
   }
   return undefined;
+}
+
+/** `12  Tue 13 Oct, 14:30, every 60 min  Water the plants`, in this machine's time zone. */
+export function describeNudge(nudge: ScheduledNudge): string {
+  const when = new Date(nudge.fireAt).toLocaleString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const every = nudge.every === undefined ? "" : `, every ${Math.round(nudge.every / 60_000)} min`;
+  return `${nudge.id}\t${when}${every}\t${nudge.message}`;
 }
 
 export function messageText(message: Message): string {
@@ -107,6 +128,11 @@ export class ChatRenderer {
         this.show(text);
       }
       this.endAnswer();
+      return;
+    }
+    if (entry.kind === FIRE_ENTRY) {
+      this.endAnswer();
+      this.write(dim(`  · nudge: ${(entry.data as FireEntryData).message}\n`));
       return;
     }
     if (entry.kind !== MESSAGE_ENTRY) return;

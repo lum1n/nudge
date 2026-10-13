@@ -9,10 +9,12 @@ import {
   type Nudge,
   openAssistant,
   type Room,
+  type ScheduledNudge,
 } from "@nudge/core";
 import type {
   ClientFrame,
   MeResponse,
+  NudgesResponse,
   ProtectResponse,
   RoomResponse,
   ServerFrame,
@@ -31,6 +33,10 @@ export interface ChatSession {
   abort(): Promise<void>;
   protect(value: string): Promise<string>;
   members(): Promise<string[]>;
+  /** Pending nudges of this room, soonest first. */
+  nudges(): Promise<ScheduledNudge[]>;
+  /** False when this room has no pending nudge with that id. */
+  cancelNudge(id: string): Promise<boolean>;
   close(): Promise<void>;
 }
 
@@ -141,6 +147,16 @@ class LocalSession implements ChatSession {
     return (await this.nudge.rooms.members(this.room.id, context)).map((p) => p.displayName);
   }
 
+  nudges(): Promise<ScheduledNudge[]> {
+    return this.nudge.nudges.list(context, [this.room.id]);
+  }
+
+  async cancelNudge(id: string): Promise<boolean> {
+    const nudge = await this.nudge.nudges.get(id, context);
+    if (nudge?.roomId !== this.room.id) return false;
+    return this.nudge.nudges.cancel(id, context);
+  }
+
   async close(): Promise<void> {
     await this.stream?.stop();
     await this.nudge.close(context);
@@ -231,6 +247,17 @@ class RemoteSession implements ChatSession {
   async members(): Promise<string[]> {
     const { members } = await this.call<RoomResponse>(`/rooms/${encodeURIComponent(this.room.id)}`);
     return members.map((p) => p.displayName);
+  }
+
+  async nudges(): Promise<ScheduledNudge[]> {
+    const { nudges } = await this.call<NudgesResponse>("/nudges");
+    return nudges.filter((nudge) => nudge.roomId === this.room.id);
+  }
+
+  async cancelNudge(id: string): Promise<boolean> {
+    if (!(await this.nudges()).some((nudge) => nudge.id === id)) return false;
+    await this.call(`/nudges/${encodeURIComponent(id)}`, { method: "DELETE" });
+    return true;
   }
 
   async close(): Promise<void> {
