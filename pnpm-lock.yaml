@@ -26,6 +26,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@earendil-works/chord':
+        specifier: 1.2.0
+        version: 1.2.0
       '@tanstack/react-query':
         specifier: 5.104.2
         version: 5.104.2(react@19.3.0)
@@ -39,6 +42,9 @@ importers:
         specifier: 19.3.0
         version: 19.3.0(react@19.3.0)
     devDependencies:
+      '@earendil-works/pi-durable':
+        specifier: 1.2.0
+        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@4.6.6)
       '@nudge/server':
         specifier: workspace:*
         version: link:../../packages/server

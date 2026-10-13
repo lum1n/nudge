@@ -1,6 +1,7 @@
 import type { Context } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { AgentEventStream, Cursor } from "@earendil-works/pi-durable";
+import { encoder } from "@earendil-works/chord/delta";
+import type { Cursor } from "@earendil-works/pi-durable";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { upgradeWebSocket } from "@hono/node-server";
@@ -26,6 +27,7 @@ import {
   type TranscriptResponse,
   type WhenBusy,
 } from "./protocol.ts";
+import { publicOps, publicView } from "./view.ts";
 
 export type AppOptions = {
   /** By URL name: `/a/<name>/…`. */
@@ -99,7 +101,8 @@ export function createApp(options: AppOptions): Hono<Env> {
     "/a/:assistant/rooms/:room/stream",
     findAssistant,
     upgradeWebSocket((c) => {
-      const stream = new RoomStream(c.var.nudge, c.req.param("room") ?? "", report);
+      const format = c.req.query("format") === "view" ? "view" : "events";
+      const stream = new RoomStream(c.var.nudge, c.req.param("room") ?? "", format, report);
       return {
         onMessage: (event, ws) => stream.receive(event.data, ws),
         onClose: () => stream.close(),
@@ -309,11 +312,11 @@ async function submit(
   return submission.id;
 }
 
-/** One WebSocket client of one room: hello, then events out and submits in. */
+/** One WebSocket client of one room: hello, then events or the view out, and submits in. */
 class RoomStream {
   private credential: Credential | undefined;
   private room: Room | undefined;
-  private events: AgentEventStream | undefined;
+  private stop: (() => Promise<unknown>) | undefined;
   private closed = false;
   /** Frames are handled one at a time, in order. */
   private queue: Promise<void> = Promise.resolve();
@@ -321,6 +324,7 @@ class RoomStream {
   constructor(
     private readonly nudge: Nudge,
     private readonly roomId: string,
+    private readonly format: "events" | "view",
     private readonly report: (error: unknown) => void,
   ) {}
 
@@ -336,7 +340,7 @@ class RoomStream {
   close(): void {
     if (this.closed) return;
     this.closed = true;
-    void this.events?.stop();
+    void this.stop?.();
   }
 
   private async handle(data: unknown, ws: WSContext): Promise<void> {
@@ -389,19 +393,55 @@ class RoomStream {
     }
     this.credential = credential;
     this.room = room;
-    const events = await this.nudge.attach(room.id, context);
+    const watch =
+      this.format === "view" ? await this.watchView(room, ws) : await this.watchEvents(room, ws);
     if (this.closed) {
-      await events.stop();
+      await watch.stop();
       return;
     }
-    this.events = events;
-    send(ws, events.snapshot);
-    events.start(async (batch) => send(ws, { type: "events", events: batch }));
-    void events.closed.then((end) => {
+    this.stop = watch.stop;
+    watch.start();
+    void watch.closed.then((end) => {
       if (end.reason !== "stopped" && !this.closed) ws.close(CLOSE.goingAway, end.reason);
     });
   }
+
+  private async watchEvents(room: Room, ws: WSContext): Promise<Watch> {
+    const events = await this.nudge.attach(room.id, context);
+    return {
+      start: () => {
+        send(ws, events.snapshot);
+        events.start(async (batch) => send(ws, { type: "events", events: batch }));
+      },
+      stop: () => events.stop(),
+      closed: events.closed,
+    };
+  }
+
+  private async watchView(room: Room, ws: WSContext): Promise<Watch> {
+    const watch = await this.nudge.watchRoom(room.id, context);
+    // Paths are interned per socket, so the client needs every encoded frame, in order.
+    const ops = encoder();
+    return {
+      start: () => {
+        send(ws, { type: "view", value: publicView(watch.value) });
+        watch.start(async (_value, batch) => {
+          const visible = publicOps(batch);
+          if (visible.length > 0) send(ws, { type: "ops", ops: ops.encode(visible) });
+        });
+      },
+      stop: () => watch.stop(),
+      closed: watch.closed,
+    };
+  }
 }
+
+/** A started stream of one of the two formats. */
+type Watch = {
+  readonly start: () => void;
+  readonly stop: () => Promise<unknown>;
+  readonly closed: Promise<{ readonly reason: string }>;
+};
 
 function send(ws: WSContext, frame: ServerFrame): void {
   if (ws.readyState === 1) ws.send(JSON.stringify(frame));

@@ -1,5 +1,14 @@
-import type { AgentEvent, EntryRecord, SnapshotEvent } from "@earendil-works/pi-durable";
+import type { WireOp } from "@earendil-works/chord/delta";
+import type {
+  AgentEvent,
+  ConversationView,
+  EntryRecord,
+  SnapshotEvent,
+} from "@earendil-works/pi-durable";
 import type { Fact, Player, Room, ScheduledNudge } from "@nudge/core";
+
+/** What the view's `nudge.message` and `nudge.fire` entries hold, for clients that render them. */
+export type { FireEntryData, MessageEntryData } from "@nudge/core";
 
 /** GET /a, without a token: which assistants this server hosts. The web UI signs in with it. */
 export type AssistantsResponse = {
@@ -62,7 +71,9 @@ export type RememberRequest = { readonly text: string };
 
 export type ErrorResponse = { readonly error: string };
 
-// WebSocket, GET /a/<assistant>/rooms/<room>/stream. The first client frame is `hello`.
+// WebSocket, GET /a/<assistant>/rooms/<room>/stream[?format=view]. The first client frame is `hello`.
+// By default the server sends agent events (`snapshot`, then `events`). With `?format=view` it sends
+// the room's conversation view instead (`view`, then `ops`), for clients that mirror it.
 
 export type ClientFrame =
   | { readonly type: "hello"; readonly token: string }
@@ -74,6 +85,14 @@ export type ServerFrame =
   | SnapshotEvent
   /** One batch per commit; a slow client may get a fresh `snapshot` inside. */
   | { readonly type: "events"; readonly events: readonly AgentEvent[] }
+  /** `?format=view`: first frame after a good hello, the view as JSON, without `pi.provider`. */
+  | { readonly type: "view"; readonly value: ConversationView }
+  /**
+   * `?format=view`: one per commit that changes the view. Chord ops from one `encoder()` per socket,
+   * so decode them with one `decoder()` per socket, in order. A slow client may get `["r", view]`,
+   * which replaces the whole view.
+   */
+  | { readonly type: "ops"; readonly ops: readonly WireOp[] }
   | { readonly type: "submitted"; readonly requestId?: string; readonly submissionId: number }
   | { readonly type: "error"; readonly message: string; readonly requestId?: string };
 

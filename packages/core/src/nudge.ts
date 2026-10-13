@@ -8,6 +8,7 @@ import {
   type AgentEventStream,
   type Conversation,
   type ConversationId,
+  type ConversationWatch,
   createRegistry,
   Harness,
   type HarnessSettings,
@@ -290,6 +291,14 @@ export class Nudge {
   async attach(roomId: string, context: Context): Promise<AgentEventStream> {
     const room = await this.room(roomId, context);
     return attach(this.harness, room.conversationId as ConversationId, context);
+  }
+
+  /**
+   * The room's conversation view: its transcript and live state now, then the Chord ops of every
+   * commit that changes it. Holds raw entries and every built-in document, `pi.provider` included.
+   */
+  async watchRoom(roomId: string, context: Context): Promise<ConversationWatch> {
+    return (await this.conversation(roomId, context)).watch(context);
   }
 
   private async room(roomId: string, context: Context): Promise<Room> {

@@ -15,12 +15,14 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@earendil-works/chord": "1.2.0",
     "@tanstack/react-query": "5.104.2",
     "@tanstack/react-router": "1.170.42",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
   "devDependencies": {
+    "@earendil-works/pi-durable": "1.2.0",
     "@nudge/server": "workspace:*",
     "@tailwindcss/vite": "4.3.3",
     "@tanstack/router-plugin": "1.168.43",
