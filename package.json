@@ -1,0 +1,24 @@
+{
+  "name": "nudge",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "lint": "oxlint .",
+    "format": "oxfmt .",
+    "check": "pnpm typecheck && pnpm lint && pnpm test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "oxfmt": "0.72.0",
+    "oxlint": "1.87.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "packageManager": "pnpm@11.5.1"
+}
