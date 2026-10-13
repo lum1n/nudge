@@ -128,4 +128,29 @@ describe("ThreadReader", () => {
     ]);
     expect(thread.messages[4]).toMatchObject({ error: "Overloaded" });
   });
+
+  it("puts earlier history before the view's own entries", () => {
+    const base = views.at(-1)!;
+    const view = {
+      ...base,
+      entries: [
+        { id: 10, conversationId: 1, kind: "pi.user", model: [{ role: "user", content: "later" }] },
+      ],
+    } as unknown as ConversationView;
+    const earlier = [
+      { id: 1, conversationId: 1, kind: "pi.compaction", data: {} },
+      {
+        id: 2,
+        conversationId: 1,
+        kind: "pi.user",
+        model: [{ role: "user", content: "earlier" }],
+      },
+    ] as unknown as ConversationView["entries"];
+    const thread = new ThreadReader().read(view, "ann", earlier);
+    expect(thread.messages.map(summary)).toEqual([
+      "marker: compacted",
+      "undefined: earlier",
+      "undefined: later",
+    ]);
+  });
 });

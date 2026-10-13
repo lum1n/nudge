@@ -1,6 +1,12 @@
-import type { AssistantsResponse, ErrorResponse, MeResponse, RoomResponse } from "@nudge/server";
+import type {
+  AssistantsResponse,
+  ErrorResponse,
+  MeResponse,
+  RoomResponse,
+  TranscriptResponse,
+} from "@nudge/server";
 
-export type { AssistantsResponse, MeResponse, RoomResponse };
+export type { AssistantsResponse, MeResponse, RoomResponse, TranscriptResponse };
 
 /** A non-2xx answer from the Nudge API. */
 export class ApiError extends Error {
@@ -67,6 +73,16 @@ export function api<T>(
   headers.set("authorization", `Bearer ${token}`);
   if (rest.body !== undefined) headers.set("content-type", "application/json");
   return request(`/a/${encodeURIComponent(assistant)}${path}`, { ...rest, headers });
+}
+
+/** A page of a room's transcript, newest first; `before` continues from a page's `next`. */
+export function transcript(
+  assistant: string,
+  room: string,
+  before?: string,
+): Promise<TranscriptResponse> {
+  const query = before === undefined ? "" : `?before=${encodeURIComponent(before)}`;
+  return api(assistant, `/rooms/${encodeURIComponent(room)}/transcript${query}`);
 }
 
 /**

@@ -20,6 +20,7 @@ import {
   toThreadMessageLike,
 } from "../../assistant-runtime.ts";
 import { forgetToken } from "../../api.ts";
+import { useEarlierHistory } from "../../earlier.ts";
 import { meQuery, roomQuery } from "../../queries.ts";
 import { type RoomSocket, useRoomSocket, useRoomState } from "../../room-socket.ts";
 import { type RoomStatus, ThreadReader } from "../../thread.ts";
@@ -67,13 +68,14 @@ function Room() {
 }
 
 function Chat({ socket }: { socket: RoomSocket }) {
-  const { assistant } = Route.useParams();
+  const { assistant, room } = Route.useParams();
   const me = useQuery(meQuery(assistant)).data?.player.id ?? "";
   const state = useRoomState(socket);
   const reader = useMemo(() => new ThreadReader(), [socket]);
+  const earlier = useEarlierHistory(assistant, room, state.view);
   const thread = useMemo(
-    () => (state.view === undefined ? undefined : reader.read(state.view, me)),
-    [reader, state.view, me],
+    () => (state.view === undefined ? undefined : reader.read(state.view, me, earlier.entries)),
+    [reader, state.view, me, earlier.entries],
   );
   const { pending, dispatch } = usePendingSends(socket);
 
@@ -81,6 +83,8 @@ function Chat({ socket }: { socket: RoomSocket }) {
     messages: thread?.messages ?? [],
     convertMessage: toThreadMessageLike,
     isRunning: thread?.isRunning ?? false,
+    hasEarlier: earlier.hasEarlier,
+    onLoadEarlier: earlier.loadEarlier,
     onNew: async (message) => dispatch(message, message.steer ? "steer" : "queue"),
     onCancel: async () => socket.abort(),
     queue: buildQueueAdapter(thread?.queue ?? [], pending, dispatch),
@@ -93,6 +97,9 @@ function Chat({ socket }: { socket: RoomSocket }) {
       <div className="flex flex-col gap-3">
         <StatusLine status={thread.status} />
         <ThreadPrimitive.Viewport className="flex flex-col gap-2">
+          <ThreadPrimitive.LoadEarlier className="self-center text-sm text-stone-500 underline disabled:text-stone-300 disabled:no-underline">
+            Load earlier
+          </ThreadPrimitive.LoadEarlier>
           <ThreadPrimitive.Messages>
             {({ message }) => <MessageRow message={message} />}
           </ThreadPrimitive.Messages>

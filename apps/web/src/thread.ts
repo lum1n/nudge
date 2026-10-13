@@ -96,12 +96,17 @@ type Content = AssistantMessage["content"][number];
 export class ThreadReader {
   private previous = new Map<string, { sources: readonly unknown[]; message: ThreadMessage }>();
 
-  read(view: ConversationView, me: string): Thread {
+  /**
+   * `earlier` is history loaded by `onLoadEarlier`: entries that precede `view.entries`, oldest
+   * first, not already part of the view.
+   */
+  read(view: ConversationView, me: string, earlier: readonly EntryRecord[] = []): Thread {
     const live = view.docs["pi.live"] as LiveState | undefined;
     const inbox = view.docs["pi.inbox"] as InboxState | undefined;
     const isRunning = live?.run !== undefined;
+    const entries = earlier.length === 0 ? view.entries : [...earlier, ...view.entries];
     const results = new Map<string, EntryRecord>();
-    for (const entry of view.entries)
+    for (const entry of entries)
       if (entry.kind === "pi.tool-result") {
         const id = toolResult(entry)?.toolCallId;
         if (id !== undefined) results.set(id, entry);
@@ -135,7 +140,7 @@ export class ThreadReader {
       answer = [];
     };
 
-    for (const entry of view.entries) {
+    for (const entry of entries) {
       switch (entry.kind) {
         case "pi.assistant":
           answer.push(entry);
