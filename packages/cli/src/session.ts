@@ -4,6 +4,7 @@ import type { AgentEvent, SnapshotEvent } from "@earendil-works/pi-durable";
 import {
   type Author,
   canUse,
+  type Fact,
   findAssistant,
   loadConfig,
   type Nudge,
@@ -13,6 +14,7 @@ import {
 } from "@nudge/core";
 import type {
   ClientFrame,
+  MemoryResponse,
   MeResponse,
   NudgesResponse,
   ProtectResponse,
@@ -20,7 +22,7 @@ import type {
   ServerFrame,
 } from "@nudge/server";
 import { UsageError } from "./errors.ts";
-import { hostOptions } from "./host.ts";
+import { hostOptions, reloadOnHangup } from "./host.ts";
 
 /** One client in one room, in this process or over the network. */
 export interface ChatSession {
@@ -37,6 +39,11 @@ export interface ChatSession {
   nudges(): Promise<ScheduledNudge[]>;
   /** False when this room has no pending nudge with that id. */
   cancelNudge(id: string): Promise<boolean>;
+  /** What the assistant remembers in this room, oldest first. */
+  memory(): Promise<Fact[]>;
+  remember(text: string): Promise<Fact>;
+  /** False when this room remembers no fact with that id. */
+  forget(id: string): Promise<boolean>;
   close(): Promise<void>;
 }
 
@@ -80,12 +87,19 @@ export async function openLocal(target: LocalTarget): Promise<ChatSession> {
         ? await nudge.players.ensure(playerId, target.name ?? target.defaultName, context)
         : known;
     const room = await resolveLocalRoom(nudge, player.id, target.room);
+    // `nudge reload` signals whoever holds the database: here, this process.
+    const stopReloading = reloadOnHangup(
+      target.config,
+      new Map([[assistant.name, nudge]]),
+      target.onProblem,
+    );
     return new LocalSession(
       nudge,
       nudge.displayName,
       { playerId: player.id, displayName: player.displayName, clientId: `cli-${randomUUID()}` },
       room,
       target.onProblem,
+      stopReloading,
     );
   } catch (error) {
     await nudge.close(context);
@@ -110,6 +124,7 @@ class LocalSession implements ChatSession {
     private readonly author: Author & { clientId: string },
     readonly room: Room,
     private readonly onProblem: (message: string) => void,
+    private readonly stopReloading: () => void,
   ) {
     this.clientId = author.clientId;
   }
@@ -157,7 +172,20 @@ class LocalSession implements ChatSession {
     return this.nudge.nudges.cancel(id, context);
   }
 
+  memory(): Promise<Fact[]> {
+    return this.nudge.memory.list(this.room.id, context);
+  }
+
+  remember(text: string): Promise<Fact> {
+    return this.nudge.memory.remember(this.room.id, text, context);
+  }
+
+  forget(id: string): Promise<boolean> {
+    return this.nudge.memory.forget(this.room.id, id, context);
+  }
+
   async close(): Promise<void> {
+    this.stopReloading();
     await this.stream?.stop();
     await this.nudge.close(context);
   }
@@ -258,6 +286,25 @@ class RemoteSession implements ChatSession {
     if (!(await this.nudges()).some((nudge) => nudge.id === id)) return false;
     await this.call(`/nudges/${encodeURIComponent(id)}`, { method: "DELETE" });
     return true;
+  }
+
+  async memory(): Promise<Fact[]> {
+    return [...(await this.call<MemoryResponse>(`${this.roomPath}/memory`)).facts];
+  }
+
+  remember(text: string): Promise<Fact> {
+    const body = JSON.stringify({ text });
+    return this.call<Fact>(`${this.roomPath}/memory`, { method: "POST", body });
+  }
+
+  async forget(id: string): Promise<boolean> {
+    if (!(await this.memory()).some((fact) => fact.id === id)) return false;
+    await this.call(`${this.roomPath}/memory/${encodeURIComponent(id)}`, { method: "DELETE" });
+    return true;
+  }
+
+  private get roomPath(): string {
+    return `/rooms/${encodeURIComponent(this.room.id)}`;
   }
 
   async close(): Promise<void> {

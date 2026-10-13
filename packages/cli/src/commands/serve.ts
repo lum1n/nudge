@@ -1,7 +1,7 @@
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { buildModels, loadConfig, type Nudge, openAssistant } from "@nudge/core";
 import { serveNudge } from "@nudge/server";
-import { hostOptions } from "../host.ts";
+import { hostOptions, reloadOnHangup } from "../host.ts";
 
 export type ServeOptions = {
   readonly config: string;
@@ -26,10 +26,12 @@ export async function serve(options: ServeOptions): Promise<void> {
     const server = await serveNudge({ assistants, port: options.port, hostname: options.host });
     for (const name of assistants.keys()) console.log(`${name}: ${server.url}/a/${name}`);
     console.log("Connect with: NUDGE_TOKEN=… nudge chat --url <url above>");
+    const stopReloading = reloadOnHangup(options.config, assistants);
     await new Promise<void>((resolve) => {
       process.once("SIGINT", resolve);
       process.once("SIGTERM", resolve);
     });
+    stopReloading();
     console.log("Stopping…");
     await server.close();
   } finally {

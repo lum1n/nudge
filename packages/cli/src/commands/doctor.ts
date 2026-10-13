@@ -1,7 +1,14 @@
 import { constants } from "node:fs";
 import { access, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
-import { buildModels, builtinDetectors, DEFAULT_MODEL, loadConfig, Vault } from "@nudge/core";
+import {
+  buildModels,
+  builtinDetectors,
+  checkExtensions,
+  DEFAULT_MODEL,
+  loadConfig,
+  Vault,
+} from "@nudge/core";
 
 export type DoctorOptions = {
   readonly config: string;
@@ -57,6 +64,15 @@ export async function doctor(options: DoctorOptions): Promise<boolean> {
       check(true, `${assistant.name}: storage ${database}`);
     } catch (error) {
       check(false, `${assistant.name}: storage ${database}: ${(error as Error).message}`);
+    }
+    if (assistant.extensions !== undefined) {
+      try {
+        const installed = await checkExtensions(assistant.extensions);
+        const names = installed.map((e) => `${e.name}${e.version ? ` ${e.version}` : ""}`);
+        check(true, `${assistant.name}: extensions ${names.join(", ") || "none enabled"}`);
+      } catch (error) {
+        check(false, `${assistant.name}: extensions: ${(error as Error).message}`);
+      }
     }
     const model = models.getModel(ref.provider, ref.modelId);
     if (model === undefined) {

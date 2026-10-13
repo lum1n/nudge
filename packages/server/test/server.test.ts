@@ -6,6 +6,7 @@ import { createNudge, MESSAGE_ENTRY, type Nudge } from "@nudge/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   type MeResponse,
+  type MemoryResponse,
   type MessageResponse,
   type NudgesResponse,
   type RoomResponse,
@@ -212,5 +213,30 @@ describe("server", () => {
     expect((await remove(trip.id, tokens.Bo!)).status).toBe(204);
     expect((await remove(trip.id, tokens.Bo!)).status).toBe(404);
     expect(await ids(tokens.Ann!)).toEqual([lobby.id]);
+  });
+
+  it("shows, adds and forgets a room's memory only for its members", async () => {
+    const call = (method: string, path: string, token: string, body?: object) =>
+      fetch(`${base}${path}`, {
+        method,
+        headers: {
+          authorization: `Bearer ${token}`,
+          ...(body === undefined ? {} : { "content-type": "application/json" }),
+        },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+    const added = await call("POST", "/rooms/trip/memory", tokens.Ann!, { text: "Leave at 7" });
+    expect(added.status).toBe(201);
+    expect(await added.json()).toMatchObject({ id: "m1", text: "Leave at 7" });
+    expect((await call("POST", "/rooms/trip/memory", tokens.Ann!, { text: " " })).status).toBe(400);
+
+    const facts = async (token: string) =>
+      ((await (await call("GET", "/rooms/trip/memory", token)).json()) as MemoryResponse).facts;
+    expect((await facts(tokens.Bo!)).map((f) => f.text)).toEqual(["Leave at 7"]);
+    expect((await call("GET", "/rooms/trip/memory", tokens.Cy!)).status).toBe(404);
+    expect((await call("DELETE", "/rooms/trip/memory/m1", tokens.Cy!)).status).toBe(404);
+    expect((await call("DELETE", "/rooms/trip/memory/m1", tokens.Bo!)).status).toBe(204);
+    expect((await call("DELETE", "/rooms/trip/memory/m1", tokens.Bo!)).status).toBe(404);
+    expect(await facts(tokens.Ann!)).toEqual([]);
   });
 });

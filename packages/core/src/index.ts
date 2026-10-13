@@ -1,14 +1,22 @@
 import type { Context } from "@earendil-works/chord";
 import type { Models } from "@earendil-works/pi-ai";
 import { type AssistantConfig, ConfigError, DEFAULT_MODEL, type NudgeConfig } from "./config.ts";
+import { loadExtensions } from "./extensions/loader.ts";
 import { buildModels } from "./models/providers.ts";
-import { Nudge, type NudgeOptions, type PrivacyOptions, RoomNotFound } from "./nudge.ts";
+import {
+  type InstalledExtension,
+  Nudge,
+  type NudgeOptions,
+  type PrivacyOptions,
+  RoomNotFound,
+} from "./nudge.ts";
 
 export {
   type AssistantConfig,
   ConfigError,
   DEFAULT_CONFIG,
   DEFAULT_MODEL,
+  type ExtensionConfig,
   type LocalProviderConfig,
   loadConfig,
   type ModelChoice,
@@ -16,6 +24,18 @@ export {
   parseConfig,
 } from "./config.ts";
 export { describeRoom, formatHour } from "./extensions/builtin.ts";
+export {
+  defineNudgeExtension,
+  type ExtensionHost,
+  type ExtensionInput,
+  type ExtensionParts,
+  type ExtensionUse,
+  type NudgeExtension,
+} from "./extensions/define.ts";
+export { checkExtensions, type LoadOptions, loadExtensions } from "./extensions/loader.ts";
+// What an extension needs to build tools and sections, so it can depend on @nudge/core alone.
+export { Type } from "@earendil-works/pi-ai";
+export { defineTool, hook, section } from "@earendil-works/pi-durable";
 export {
   type Author,
   MESSAGE_ENTRY,
@@ -32,6 +52,14 @@ export {
   type RoomKind,
 } from "./identity/directory.ts";
 export { type Credential, type Invitation, Players } from "./identity/players.ts";
+export {
+  type Fact,
+  MAX_FACT_LENGTH,
+  MAX_FACTS,
+  Memory,
+  MemoryDoc,
+  MemoryFull,
+} from "./memory/memory.ts";
 export { Rooms, type SharedRoomDraft } from "./identity/rooms.ts";
 export { type NudgeDraft, Nudges } from "./nudges/nudges.ts";
 export { formatTime, parseTime, ScheduleDoc, type ScheduledNudge } from "./nudges/schedule.ts";
@@ -46,7 +74,7 @@ export {
 } from "./privacy/detectors.ts";
 export { Vault, type VaultEntry } from "./privacy/vault.ts";
 export { DatabaseInUse } from "./storage-lock.ts";
-export { Nudge, type NudgeOptions, type PrivacyOptions, RoomNotFound };
+export { type InstalledExtension, Nudge, type NudgeOptions, type PrivacyOptions, RoomNotFound };
 
 export function createNudge(options: NudgeOptions, context: Context): Promise<Nudge> {
   return Nudge.open(options, context);
@@ -60,8 +88,11 @@ export function findAssistant(config: NudgeConfig, name?: string): AssistantConf
   return assistant;
 }
 
-/** Opens one configured assistant. Pass `models` to share one catalog between assistants. */
-export function openAssistant(
+/**
+ * Opens one configured assistant with its extensions. Pass `models` to share one catalog between
+ * assistants.
+ */
+export async function openAssistant(
   config: NudgeConfig,
   assistant: AssistantConfig,
   context: Context,
@@ -75,6 +106,7 @@ export function openAssistant(
       displayName: assistant.displayName ?? capitalize(assistant.name),
       timeZone: assistant.timeZone,
       instructions: assistant.instructions,
+      extensions: await loadExtensions(assistant.extensions ?? []),
       ...overrides,
     },
     context,

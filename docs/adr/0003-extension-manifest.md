@@ -1,0 +1,7 @@
+# 3. Extensions are Pi Durable extensions with a small manifest
+
+Nudge grows through extensions, so writing one should need nothing beyond Pi Durable's own `Extension` (tools, prompt sections, hooks, wraps, tasks). An extension made with `defineNudgeExtension` adds only what Nudge needs around it: a `name`, a `version`, an optional TypeBox `settings` schema, and a `setup(host)` that returns the Pi Durable parts plus optional PII `detectors`. `setup` takes the place of an install hook: it runs once per assistant when it opens and again on every reload, gets its settings checked and defaulted from the config, and closes over them in its tools and sections. A plain Pi Durable extension works too, without settings or detectors.
+
+Extensions are installed into the assistant's registry before the Harness opens, so their tasks resume with it. Every conversation selects every installed extension (Pi Durable's default), so the config decides what the assistant can do, not each room. Reloading (`nudge reload`, SIGHUP) sets every extension up first and only then swaps them into the registry by name, so one that fails changes nothing; conversations pick the change up at their next turn. Only the entry module is imported again on reload; what it imports stays in Node's module cache.
+
+Detectors from extensions run after the built-in ones, in the same `Models` wrapper (ADR 0002), so nothing an extension adds can bypass redaction.

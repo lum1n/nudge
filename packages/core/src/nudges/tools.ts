@@ -1,7 +1,6 @@
-import type { Context } from "@earendil-works/chord";
 import { Type } from "@earendil-works/pi-ai";
-import { type DocumentReader, defineTool, type ToolRegistration } from "@earendil-works/pi-durable";
-import { DirectoryDoc, type Room } from "../identity/directory.ts";
+import { defineTool, type ToolRegistration } from "@earendil-works/pi-durable";
+import { roomOf } from "../identity/directory.ts";
 import type { Nudges } from "./nudges.ts";
 import { formatTime, parseTime, type ScheduledNudge } from "./schedule.ts";
 
@@ -98,19 +97,6 @@ export function createNudgeTools(options: NudgeToolOptions): ToolRegistration[] 
   });
 
   return [schedule, list, cancel] as ToolRegistration[];
-}
-
-async function roomOf(
-  read: DocumentReader,
-  conversationId: number,
-  context: Context,
-): Promise<Room> {
-  const directory = await read.snapshot(DirectoryDoc, context);
-  const room = Object.values(directory?.rooms ?? {}).find(
-    (r) => r.conversationId === conversationId,
-  );
-  if (room === undefined) throw new Error(`Conversation ${conversationId} is not a room`);
-  return room;
 }
 
 function minutes(ms: number): string {

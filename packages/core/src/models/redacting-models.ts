@@ -48,19 +48,19 @@ type Bound = {
 export class RedactingModels implements Models {
   private bound: Bound | undefined;
   private saving: Promise<void> = Promise.resolve();
+  /** The assistant's detectors, then its extensions'; replaced when extensions reload. */
+  detectors: readonly PiiDetector[];
 
   constructor(
     private readonly inner: Models,
     private readonly options: RedactionOptions,
-  ) {}
+  ) {
+    this.detectors = options.detectors;
+  }
 
   /** Connects the vault once its storage is open. Requests before this fail. */
   bind(vault: Vault, save: (entries: readonly VaultEntry[]) => Promise<void>): void {
     this.bound = { vault, save };
-  }
-
-  get detectors(): readonly PiiDetector[] {
-    return this.options.detectors;
   }
 
   get vault(): Vault {
@@ -122,7 +122,7 @@ export class RedactingModels implements Models {
     context: ClassifierContext,
     options?: ModelsClassifierOptions,
   ): Promise<ClassifierResult> {
-    const redact = (text: string) => this.vault.redact(text, this.options.detectors);
+    const redact = (text: string) => this.vault.redact(text, this.detectors);
     const redacted: ClassifierContext = {
       ...context,
       state: mapStrings(context.state, redact),
@@ -149,7 +149,7 @@ export class RedactingModels implements Models {
     const redacted: ImagesContext = {
       input: context.input.map((block) =>
         block.type === "text"
-          ? { ...block, text: this.vault.redact(block.text, this.options.detectors) }
+          ? { ...block, text: this.vault.redact(block.text, this.detectors) }
           : block,
       ),
     };
@@ -207,7 +207,7 @@ export class RedactingModels implements Models {
     this.inner.cancelDeferred(model, handle, options);
 
   private async prepare(model: Model<Api>, context: Context): Promise<Context> {
-    const redacted = redactContext(context, this.vault, this.options.detectors);
+    const redacted = redactContext(context, this.vault, this.detectors);
     await this.flush();
     this.options.onRequest?.({ model: `${model.provider}/${model.id}`, context: redacted });
     return redacted;

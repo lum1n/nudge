@@ -1,0 +1,23 @@
+{
+  "name": "@nudge/ext-hello",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A sample Nudge extension: a greeting section, a dice tool and a licence plate detector",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "@nudge/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@nudge/core": "workspace:*"
+  }
+}

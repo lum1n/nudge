@@ -1,5 +1,5 @@
 import { parseArgs } from "node:util";
-import { invite, nudges, room } from "./commands/admin.ts";
+import { invite, nudges, reload, room } from "./commands/admin.ts";
 import { chat } from "./commands/chat.ts";
 import { doctor } from "./commands/doctor.ts";
 import { init } from "./commands/init.ts";
@@ -16,6 +16,7 @@ Commands:
   invite <name>      Add a player and print their token
   room [name]        Create a shared room with --members, or list the rooms
   nudges             List the scheduled nudges of every room
+  reload             Reinstall extensions from the config in the running assistant
   doctor             Check Node, config, storage and model credentials;
                      --ping sends one request, --privacy tests redaction
 
@@ -87,6 +88,8 @@ async function main(argv: string[]): Promise<number> {
     case "nudges":
       await nudges(admin);
       return 0;
+    case "reload":
+      return (await reload(admin)) ? 0 : 1;
     case "doctor":
       return (await doctor({ config: values.config, ping: values.ping, privacy: values.privacy }))
         ? 0

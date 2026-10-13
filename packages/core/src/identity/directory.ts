@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
-import { defineDoc } from "@earendil-works/pi-durable";
+import type { Context } from "@earendil-works/chord";
+import { type DocumentReader, defineDoc } from "@earendil-works/pi-durable";
 
 // Stored in a document, so plain JSON: no readonly arrays.
 export type Player = {
@@ -79,4 +80,18 @@ export function freeId(base: string, taken: (id: string) => boolean): string {
 
 export function canUse(room: Room, playerId: string): boolean {
   return room.kind === LOBBY || room.members.includes(playerId);
+}
+
+/** The room a conversation is, for tools and sections, which only know the conversation. */
+export async function roomOf(
+  read: DocumentReader,
+  conversationId: number,
+  context: Context,
+): Promise<Room> {
+  const directory = await read.snapshot(DirectoryDoc, context);
+  const room = Object.values(directory?.rooms ?? {}).find(
+    (r) => r.conversationId === conversationId,
+  );
+  if (room === undefined) throw new Error(`Conversation ${conversationId} is not a room`);
+  return room;
 }

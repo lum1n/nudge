@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { findAssistant, loadConfig, type Nudge, openAssistant } from "@nudge/core";
 import { describeNudge } from "../render.ts";
@@ -47,6 +48,38 @@ export async function nudges(options: AdminOptions): Promise<void> {
     for (const scheduled of pending)
       console.log(`${scheduled.roomId}\t${describeNudge(scheduled)}`);
   });
+}
+
+/**
+ * Asks the process that has each assistant open (`nudge serve`, or an in-process `nudge chat`) to
+ * reinstall its extensions from the config. False when none is running.
+ */
+export async function reload(options: AdminOptions): Promise<boolean> {
+  const config = await loadConfig(options.config);
+  const assistants =
+    options.assistant === undefined
+      ? config.assistants
+      : [findAssistant(config, options.assistant)];
+  const signalled = new Set<number>();
+  for (const assistant of assistants) {
+    const lock = `${assistant.database}.lock`;
+    const pid = Number((await readFile(lock, "utf8").catch(() => "")).trim());
+    if (!Number.isInteger(pid) || pid <= 0) {
+      console.log(`${assistant.name}: not running`);
+      continue;
+    }
+    if (!signalled.has(pid)) {
+      try {
+        process.kill(pid, "SIGHUP");
+      } catch (error) {
+        console.log(`${assistant.name}: process ${pid} is gone (${(error as Error).message})`);
+        continue;
+      }
+      signalled.add(pid);
+    }
+    console.log(`${assistant.name}: asked process ${pid} to reload; it prints the result`);
+  }
+  return signalled.size > 0;
 }
 
 async function withAssistant(

@@ -10,11 +10,13 @@ import {
   type ClientFrame,
   type CreateRoomRequest,
   type MeResponse,
+  type MemoryResponse,
   type MessageRequest,
   type MessageResponse,
   type NudgesResponse,
   type ProtectRequest,
   type ProtectResponse,
+  type RememberRequest,
   type RoomResponse,
   type ServerFrame,
   type TranscriptResponse,
@@ -169,6 +171,32 @@ export function createApp(options: AppOptions): Hono<Env> {
         ? {}
         : { next: Buffer.from(JSON.stringify(page.next)).toString("base64url") }),
     } satisfies TranscriptResponse);
+  });
+
+  api.get("/rooms/:room/memory", async (c) => {
+    const room = await usableRoom(c);
+    const facts = await c.var.nudge.memory.list(room.id, context);
+    return c.json({ facts } satisfies MemoryResponse);
+  });
+
+  api.post("/rooms/:room/memory", async (c) => {
+    const room = await usableRoom(c);
+    const body = await readJson<RememberRequest>(c);
+    if (typeof body.text !== "string" || body.text.trim() === "")
+      throw new HttpError(400, "A fact needs text");
+    try {
+      return c.json(await c.var.nudge.memory.remember(room.id, body.text, context), 201);
+    } catch (error) {
+      throw new HttpError(400, (error as Error).message);
+    }
+  });
+
+  api.delete("/rooms/:room/memory/:id", async (c) => {
+    const room = await usableRoom(c);
+    const id = c.req.param("id");
+    if (!(await c.var.nudge.memory.forget(room.id, id, context)))
+      throw new HttpError(404, `No fact "${id}"`);
+    return c.body(null, 204);
   });
 
   api.get("/nudges", async (c) => {

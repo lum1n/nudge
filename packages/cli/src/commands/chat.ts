@@ -20,7 +20,9 @@ export type ChatOptions = {
 const HELP =
   "Commands: /steer <text> joins the running answer, /stop stops it, " +
   "/private <value> keeps a value from the model, /who lists who can read along, " +
-  "/nudges lists scheduled nudges, /nudges cancel <id> cancels one, /quit leaves.";
+  "/nudges lists scheduled nudges, /nudges cancel <id> cancels one, " +
+  "/memory lists what the assistant remembers here, /memory add <text> and /memory forget <id> " +
+  "change it, /quit leaves.";
 
 export async function chat(options: ChatOptions): Promise<void> {
   let rl: ReturnType<typeof createInterface> | undefined;
@@ -90,6 +92,18 @@ export async function chat(options: ChatOptions): Promise<void> {
         if (id === undefined) console.log("  Usage: /nudges cancel <id>");
         else
           console.log((await session.cancelNudge(id)) ? "  Cancelled." : `  No nudge ${id} here.`);
+      } else if (line === "/memory") {
+        const facts = await session.memory();
+        if (facts.length === 0) console.log("  Nothing remembered here.");
+        for (const fact of facts) console.log(`  ${fact.id}: ${fact.text}`);
+      } else if (line.startsWith("/memory ")) {
+        const [, verb, rest] = /^\/memory\s+(add|forget)\s+(.+)$/.exec(line) ?? [];
+        if (verb === "add") console.log(`  Remembered ${(await session.remember(rest!)).id}.`);
+        else if (verb === "forget")
+          console.log(
+            (await session.forget(rest!.trim())) ? "  Forgotten." : `  No fact ${rest} here.`,
+          );
+        else console.log("  Usage: /memory add <text> | /memory forget <id>");
       } else if (line.startsWith("/private ")) {
         const placeholder = await session.protect(line.slice("/private ".length));
         console.log(`  The model will see ${placeholder} instead.`);

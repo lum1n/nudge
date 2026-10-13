@@ -9,20 +9,27 @@ import {
   type Conversation,
   type ConversationId,
   createRegistry,
-  type Extension,
   Harness,
   type HarnessSettings,
   MemoryStorage,
   type ModelRef,
+  type Registry,
   type Storage,
   type Submission,
 } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { createBuiltinExtension } from "./extensions/builtin.ts";
+import {
+  type ExtensionHost,
+  type ExtensionInput,
+  type SetUpExtension,
+  setUpExtension,
+} from "./extensions/define.ts";
 import { attach, type MessageDraft, submitMessage } from "./host-api.ts";
 import { DirectoryDoc, type Room } from "./identity/directory.ts";
 import { Players } from "./identity/players.ts";
 import { Rooms } from "./identity/rooms.ts";
+import { Memory } from "./memory/memory.ts";
 import { Nudges } from "./nudges/nudges.ts";
 import { RedactingModels, type RedactionOptions } from "./models/redacting-models.ts";
 import { builtinDetectors, type PiiDetector } from "./privacy/detectors.ts";
@@ -50,7 +57,7 @@ export type NudgeOptions = {
   /** Extra instructions, rendered last in the system prompt. */
   readonly instructions?: string;
   /** Extensions installed after the built-in one, in order. */
-  readonly extensions?: readonly Extension[];
+  readonly extensions?: readonly ExtensionInput[];
   readonly settings?: HarnessSettings;
   readonly privacy?: PrivacyOptions;
   /** Clock for timestamps and timers; tests inject a fake one. */
@@ -58,44 +65,83 @@ export type NudgeOptions = {
   readonly onReport?: (error: unknown) => void;
 };
 
+/** An installed extension, as `Nudge.extensions` lists it. */
+export type InstalledExtension = { readonly name: string; readonly version?: string };
+
+type Parts = {
+  readonly harness: Harness;
+  readonly displayName: string;
+  readonly models: RedactingModels;
+  readonly agent: AgentChange;
+  readonly now: () => number;
+  readonly unlock: () => Promise<void>;
+  readonly registry: Registry;
+  readonly host: Omit<ExtensionHost<unknown>, "settings">;
+  readonly detectors: readonly PiiDetector[];
+  readonly installed: readonly SetUpExtension[];
+};
+
 /** One assistant: one storage, one Harness, one registry. */
 export class Nudge {
+  readonly harness: Harness;
+  /** What the assistant calls itself. */
+  readonly displayName: string;
   readonly players: Players;
   readonly rooms: Rooms;
   readonly nudges: Nudges;
+  readonly memory: Memory;
+  private readonly models: RedactingModels;
+  private readonly now: () => number;
+  private readonly unlock: () => Promise<void>;
+  private readonly registry: Registry;
+  private readonly host: Parts["host"];
+  /** The assistant's own detectors, without its extensions'. */
+  private readonly detectors: readonly PiiDetector[];
+  private installed: readonly SetUpExtension[];
+  private reloading: Promise<unknown> = Promise.resolve();
 
-  private constructor(
-    readonly harness: Harness,
-    /** What the assistant calls itself. */
-    readonly displayName: string,
-    private readonly models: RedactingModels,
-    agent: AgentChange,
-    private readonly now: () => number,
-    private readonly unlock: () => Promise<void>,
-  ) {
+  private constructor(parts: Parts) {
+    const { harness, agent, now } = parts;
+    this.harness = harness;
+    this.displayName = parts.displayName;
+    this.models = parts.models;
+    this.now = now;
+    this.unlock = parts.unlock;
+    this.registry = parts.registry;
+    this.host = parts.host;
+    this.detectors = parts.detectors;
+    this.installed = parts.installed;
     this.players = new Players(harness, (name) => this.protect(name, "NAME").then(() => {}), now);
     this.rooms = new Rooms(harness, () => agent, now);
     this.nudges = new Nudges(harness, this.rooms, now);
+    this.memory = new Memory(harness, this.rooms, now);
   }
 
   static async open(options: NudgeOptions, context: Context): Promise<Nudge> {
     const now = options.now ?? Date.now;
+    const displayName = options.displayName ?? "Nudge";
+    const timeZone = options.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
     const registry = createRegistry();
     let opened: Nudge | undefined;
+    const whenOpen = () => {
+      if (opened === undefined) throw new Error("The assistant is not open yet");
+      return opened;
+    };
     registry.install(
-      createBuiltinExtension({
-        displayName: options.displayName ?? "Nudge",
-        timeZone: options.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
-        now,
-        nudges: () => {
-          if (opened === undefined) throw new Error("The assistant is not open yet");
-          return opened.nudges;
-        },
-      }),
+      createBuiltinExtension({ displayName, timeZone, now, nudges: () => whenOpen().nudges }),
     );
-    for (const extension of options.extensions ?? []) registry.install(extension);
+    const host: Parts["host"] = {
+      displayName,
+      timeZone,
+      now,
+      protect: (value, kind) => whenOpen().protect(value, kind),
+    };
+    // Extensions are in the registry before the Harness opens, so their tasks resume with it.
+    const installed = await setUpAll(options.extensions ?? [], host);
+    for (const { extension } of installed) registry.install(extension);
+    const detectors = options.privacy?.detectors ?? builtinDetectors;
     const models = new RedactingModels(options.models, {
-      detectors: options.privacy?.detectors ?? builtinDetectors,
+      detectors: withExtensionDetectors(detectors, installed),
       onRequest: options.privacy?.onRequest,
     });
     if (options.database !== ":memory:")
@@ -131,7 +177,18 @@ export class Nudge {
         instructions: options.instructions ?? null,
       };
       const lobby = await harness.root(context, { agent });
-      const nudge = new Nudge(harness, options.displayName ?? "Nudge", models, agent, now, unlock);
+      const nudge = new Nudge({
+        harness,
+        displayName,
+        models,
+        agent,
+        now,
+        unlock,
+        registry,
+        host,
+        detectors,
+        installed,
+      });
       await nudge.rooms.adoptLobby(lobby.id, context);
       const directory = await harness.snapshot(DirectoryDoc, context);
       // Names stored before redaction existed, or before a vault was lost, go back in.
@@ -155,6 +212,34 @@ export class Nudge {
       await unlock();
       throw error;
     }
+  }
+
+  /** The extensions installed after the built-in one, in order. */
+  extensions(): InstalledExtension[] {
+    return this.installed.map(({ extension, version }) => ({
+      name: extension.name,
+      ...(version === undefined ? {} : { version }),
+    }));
+  }
+
+  /**
+   * Installs `extensions` in place of the current ones: same names are replaced, new ones added,
+   * missing ones removed. Every extension is set up first, so one that fails changes nothing.
+   * Conversations pick the change up at their next turn.
+   */
+  reloadExtensions(extensions: readonly ExtensionInput[]): Promise<InstalledExtension[]> {
+    const reload = this.reloading.then(async () => {
+      const next = await setUpAll(extensions, this.host);
+      const names = new Set(next.map(({ extension }) => extension.name));
+      for (const { extension } of this.installed)
+        if (!names.has(extension.name)) this.registry.uninstall(extension);
+      for (const { extension } of next) this.registry.install(extension);
+      this.models.detectors = withExtensionDetectors(this.detectors, next);
+      this.installed = next;
+      return this.extensions();
+    });
+    this.reloading = reload.catch(() => {});
+    return reload;
   }
 
   /** The room's conversation, for what the room API does not cover. */
@@ -227,6 +312,27 @@ export class RoomNotFound extends Error {
   constructor(readonly roomId: string) {
     super(`No room "${roomId}"`);
   }
+}
+
+async function setUpAll(
+  inputs: readonly ExtensionInput[],
+  host: Parts["host"],
+): Promise<SetUpExtension[]> {
+  const installed: SetUpExtension[] = [];
+  for (const input of inputs) {
+    const setUp = await setUpExtension(input, host);
+    if (installed.some(({ extension }) => extension.name === setUp.extension.name))
+      throw new Error(`Extension "${setUp.extension.name}" is installed twice`);
+    installed.push(setUp);
+  }
+  return installed;
+}
+
+function withExtensionDetectors(
+  own: readonly PiiDetector[],
+  installed: readonly SetUpExtension[],
+): PiiDetector[] {
+  return [...own, ...installed.flatMap(({ detectors }) => detectors)];
 }
 
 /** The config file is the source of truth: carry a changed model or instructions into the stored agent. */

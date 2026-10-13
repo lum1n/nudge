@@ -1,5 +1,5 @@
 import type { AgentEvent, EntryRecord, SnapshotEvent } from "@earendil-works/pi-durable";
-import type { Player, Room, ScheduledNudge } from "@nudge/core";
+import type { Fact, Player, Room, ScheduledNudge } from "@nudge/core";
 
 // HTTP, under /a/<assistant>, with `Authorization: Bearer <token>`.
 
@@ -46,6 +46,14 @@ export type ProtectResponse = { readonly placeholder: string };
 export type NudgesResponse = { readonly nudges: readonly ScheduledNudge[] };
 
 // DELETE /nudges/<id> cancels one: 204, or 404 when it is not pending in a room the caller may use.
+
+/** GET /rooms/<room>/memory: what the assistant remembers in the room, oldest first. */
+export type MemoryResponse = { readonly facts: readonly Fact[] };
+
+/** POST /rooms/<room>/memory → 201 with the new `Fact`. */
+export type RememberRequest = { readonly text: string };
+
+// DELETE /rooms/<room>/memory/<id> forgets one: 204, or 404 when the room has no such fact.
 
 export type ErrorResponse = { readonly error: string };
 

@@ -1,8 +1,10 @@
 import { defineExtension, type Extension, section } from "@earendil-works/pi-durable";
 import { DirectoryDoc, type DirectoryState } from "../identity/directory.ts";
+import { createMemoryTools, memorySection } from "../memory/memory.ts";
 import type { Nudges } from "../nudges/nudges.ts";
 import { NudgeTimer } from "../nudges/timer-task.ts";
 import { createNudgeTools } from "../nudges/tools.ts";
+import { BUILTIN_NAME } from "./define.ts";
 
 export type BuiltinOptions = {
   readonly displayName: string;
@@ -13,14 +15,14 @@ export type BuiltinOptions = {
 };
 
 /**
- * The always-on `nudge` extension: who the assistant is, who is in the room, what time it is, and
- * the nudge timer with its tools.
+ * The always-on `nudge` extension: who the assistant is, who is in the room, what it remembers there,
+ * what time it is, and the nudge timer with its tools.
  */
 export function createBuiltinExtension(options: BuiltinOptions): Extension {
   return defineExtension({
-    name: "nudge",
+    name: BUILTIN_NAME,
     tasks: [NudgeTimer],
-    tools: createNudgeTools(options),
+    tools: [...createNudgeTools(options), ...createMemoryTools(options.now)],
     sections: [
       section(
         "identity",
@@ -32,6 +34,7 @@ export function createBuiltinExtension(options: BuiltinOptions): Extension {
       section("members", async (input, context) =>
         describeRoom(await input.read.snapshot(DirectoryDoc, context), input.conversationId),
       ),
+      memorySection(),
       // Rendered to the hour: a section that changes on every request defeats prompt caching.
       section("time", () => formatHour(options.now(), options.timeZone)),
     ],
