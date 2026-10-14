@@ -183,6 +183,7 @@ export class Nudge {
       now,
       protect: (value, kind) => whenOpen().protect(value, kind),
       documents: () => whenOpen().harness,
+      assistant: whenOpen,
       ...(options.database === ":memory:" ? {} : { dataRoot: `${options.database}.extensions` }),
     };
     if (options.database !== ":memory:")

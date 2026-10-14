@@ -7,6 +7,7 @@ import { ConfigError } from "../config.ts";
 import type { Player, Room, RoomKind } from "../identity/directory.ts";
 import type { PiiDetector } from "../privacy/detectors.ts";
 import type { RoomEvent } from "../room-events.ts";
+import type { Nudge } from "../nudge.ts";
 import { SecretStore } from "../secrets.ts";
 
 /** What an extension's `setup` gets from the assistant it is installed in. */
@@ -28,6 +29,12 @@ export type ExtensionHost<Settings> = {
    * Throws until the assistant is open.
    */
   readonly documents: () => ExtensionDocuments;
+  /**
+   * The assistant itself, for what documents don't cover, such as posting a message as a player
+   * or deciding an approval for one. Checking that the player may use the room is the caller's
+   * job. Throws until the assistant is open.
+   */
+  readonly assistant: () => Nudge;
 };
 
 /** Reading, watching and changing the assistant's documents. */

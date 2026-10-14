@@ -62,6 +62,9 @@ export async function checkExtensions(
     documents: () => {
       throw new Error("No assistant is open while checking");
     },
+    assistant: () => {
+      throw new Error("No assistant is open while checking");
+    },
   };
   const checked: Awaited<ReturnType<typeof checkExtensions>> = [];
   for (const input of await loadExtensions(entries)) {

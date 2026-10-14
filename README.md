@@ -200,6 +200,17 @@ An entry's `rooms` lists the kinds of room it is on in by default (`"lobby"`, `"
 - API keys, the local network and read paths are set by people, never by the model: on the room's **Connectors** page in the web UI, or with `/connectors` and `/connector-key <id>` in `nudge chat` (the key isn't echoed). Keys are stored encrypted and scrubbed from what the model sees.
 - A connector belongs to the room it was added in. The owner can share one without a key with every room: `nudge connector share <id> [room]`, and `unshare` to move it back. `nudge connectors [room]` lists a room's.
 
+### Telegram
+
+`extensions/telegram` lets people talk to the assistant from Telegram. Make a bot with @BotFather, put its token in `TELEGRAM_BOT_TOKEN` (or set `token` in the extension's settings, `${NAME}` taking it from the environment), and install the extension. It long-polls Telegram, so the host needs no open port.
+
+- **Link an account:** an admin runs `nudge pair <player>`, and the person sends `/link <code>` to the bot in a direct chat. The link is a token like any client's: `nudge tokens` lists it, and `nudge revoke <clientId>` unlinks Telegram.
+- **Direct chats** talk to the player's own room. `/rooms` lists the others and `/room <id>` switches. In a group, a linked member picks the room with `/room <id>`; messages from people who aren't linked are ignored. For the bot to see ordinary group messages, turn off its privacy mode in @BotFather.
+- **What comes back:** the room's answers, also those to fired nudges and to approvals, wherever they were asked. Approvals come with Approve and Deny buttons, which only members of the room can use. `/approve <id>`, `/deny <id>` and `/stop` work too.
+- **Privacy:** what goes through the bot is readable by Telegram. Placeholders protect what the model sees, not what the chat service sees. Turn the extension off in rooms that shouldn't reach Telegram (`/extensions off telegram`).
+
+The shared parts (links, chats to rooms, commands, relaying) live in `packages/bridge` for other chat services.
+
 ### Write an extension
 
 `extensions/hello/src/index.ts` is a whole one:

@@ -1,0 +1,28 @@
+{
+  "name": "@nudge/ext-telegram",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Talk to the assistant from Telegram: a bot that links accounts to players and chats to rooms",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "@nudge/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@nudge/bridge": "workspace:*",
+    "@nudge/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@earendil-works/chord": "1.2.0",
+    "@earendil-works/pi-ai": "1.2.0"
+  }
+}
