@@ -92,6 +92,13 @@ function Room() {
               Connectors
             </Link>
             <Link
+              to="/$assistant/$room/lists"
+              params={{ assistant, room }}
+              className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
+            >
+              Lists
+            </Link>
+            <Link
               to="/$assistant/$room/model"
               params={{ assistant, room }}
               title="What the model sees of this room"

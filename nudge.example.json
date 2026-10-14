@@ -23,6 +23,10 @@
           "rooms": ["personal", "shared"]
         },
         {
+          "$comment": "Shared lists per room (shopping, packing), for the model and on the room's Lists page.",
+          "from": "./extensions/lists"
+        },
+        {
           "$comment": "Watches: the assistant checks something on a schedule with its tools and tells the room only what is new. Each check is a model run, so minMinutes caps how often.",
           "from": "./extensions/watches",
           "settings": { "minMinutes": 30, "maxPerRoom": 10 }

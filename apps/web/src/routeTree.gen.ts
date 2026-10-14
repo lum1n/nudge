@@ -16,6 +16,7 @@ import { Route as AssistantIndexRouteImport } from './routes/$assistant/index'
 import { Route as AssistantRoomRouteImport } from './routes/$assistant/$room'
 import { Route as AssistantRoomBrowserRouteImport } from './routes/$assistant/$room_.browser'
 import { Route as AssistantRoomConnectorsRouteImport } from './routes/$assistant/$room_.connectors'
+import { Route as AssistantRoomListsRouteImport } from './routes/$assistant/$room_.lists'
 import { Route as AssistantRoomModelRouteImport } from './routes/$assistant/$room_.model'
 
 const IndexRoute = IndexRouteImport.update({
@@ -53,6 +54,11 @@ const AssistantRoomConnectorsRoute = AssistantRoomConnectorsRouteImport.update({
   path: '/$room/connectors',
   getParentRoute: () => AssistantRouteRoute,
 } as any)
+const AssistantRoomListsRoute = AssistantRoomListsRouteImport.update({
+  id: '/$room_/lists',
+  path: '/$room/lists',
+  getParentRoute: () => AssistantRouteRoute,
+} as any)
 const AssistantRoomModelRoute = AssistantRoomModelRouteImport.update({
   id: '/$room_/model',
   path: '/$room/model',
@@ -67,6 +73,7 @@ export interface FileRoutesByFullPath {
   '/$assistant/': typeof AssistantIndexRoute
   '/$assistant/$room/browser': typeof AssistantRoomBrowserRoute
   '/$assistant/$room/connectors': typeof AssistantRoomConnectorsRoute
+  '/$assistant/$room/lists': typeof AssistantRoomListsRoute
   '/$assistant/$room/model': typeof AssistantRoomModelRoute
 }
 export interface FileRoutesByTo {
@@ -76,6 +83,7 @@ export interface FileRoutesByTo {
   '/$assistant': typeof AssistantIndexRoute
   '/$assistant/$room/browser': typeof AssistantRoomBrowserRoute
   '/$assistant/$room/connectors': typeof AssistantRoomConnectorsRoute
+  '/$assistant/$room/lists': typeof AssistantRoomListsRoute
   '/$assistant/$room/model': typeof AssistantRoomModelRoute
 }
 export interface FileRoutesById {
@@ -87,6 +95,7 @@ export interface FileRoutesById {
   '/$assistant/': typeof AssistantIndexRoute
   '/$assistant/$room_/browser': typeof AssistantRoomBrowserRoute
   '/$assistant/$room_/connectors': typeof AssistantRoomConnectorsRoute
+  '/$assistant/$room_/lists': typeof AssistantRoomListsRoute
   '/$assistant/$room_/model': typeof AssistantRoomModelRoute
 }
 export interface FileRouteTypes {
@@ -99,6 +108,7 @@ export interface FileRouteTypes {
     | '/$assistant/'
     | '/$assistant/$room/browser'
     | '/$assistant/$room/connectors'
+    | '/$assistant/$room/lists'
     | '/$assistant/$room/model'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -108,6 +118,7 @@ export interface FileRouteTypes {
     | '/$assistant'
     | '/$assistant/$room/browser'
     | '/$assistant/$room/connectors'
+    | '/$assistant/$room/lists'
     | '/$assistant/$room/model'
   id:
     | '__root__'
@@ -118,6 +129,7 @@ export interface FileRouteTypes {
     | '/$assistant/'
     | '/$assistant/$room_/browser'
     | '/$assistant/$room_/connectors'
+    | '/$assistant/$room_/lists'
     | '/$assistant/$room_/model'
   fileRoutesById: FileRoutesById
 }
@@ -178,6 +190,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AssistantRoomConnectorsRouteImport
       parentRoute: typeof AssistantRouteRoute
     }
+    '/$assistant/$room_/lists': {
+      id: '/$assistant/$room_/lists'
+      path: '/$room/lists'
+      fullPath: '/$assistant/$room/lists'
+      preLoaderRoute: typeof AssistantRoomListsRouteImport
+      parentRoute: typeof AssistantRouteRoute
+    }
     '/$assistant/$room_/model': {
       id: '/$assistant/$room_/model'
       path: '/$room/model'
@@ -193,6 +212,7 @@ interface AssistantRouteRouteChildren {
   AssistantIndexRoute: typeof AssistantIndexRoute
   AssistantRoomBrowserRoute: typeof AssistantRoomBrowserRoute
   AssistantRoomConnectorsRoute: typeof AssistantRoomConnectorsRoute
+  AssistantRoomListsRoute: typeof AssistantRoomListsRoute
   AssistantRoomModelRoute: typeof AssistantRoomModelRoute
 }
 
@@ -201,6 +221,7 @@ const AssistantRouteRouteChildren: AssistantRouteRouteChildren = {
   AssistantIndexRoute: AssistantIndexRoute,
   AssistantRoomBrowserRoute: AssistantRoomBrowserRoute,
   AssistantRoomConnectorsRoute: AssistantRoomConnectorsRoute,
+  AssistantRoomListsRoute: AssistantRoomListsRoute,
   AssistantRoomModelRoute: AssistantRoomModelRoute,
 }
 

@@ -251,6 +251,10 @@ An entry's `rooms` lists the kinds of room it is on in by default (`"lobby"`, `"
 - The room hears only about items it hasn't seen before. That arrives like a fired nudge, so push and chat bridges deliver it too.
 - Every check is a model run with tools, so it costs: `minMinutes` (default 30) caps how often, and `maxPerRoom` (default 10) how many.
 
+### Lists
+
+`extensions/lists` gives each room shared lists, such as shopping or packing. The model keeps them with `list_add`, `list_show`, `list_check`, `list_remove` and `list_clear`, and does not add an item twice. People see and change the same lists on the room's **Lists** page in the web UI, live: tick off, add, remove, clear what's done.
+
 ### Telegram
 
 `extensions/telegram` lets people talk to the assistant from Telegram. Make a bot with @BotFather, put its token in `TELEGRAM_BOT_TOKEN` (or set `token` in the extension's settings, `${NAME}` taking it from the environment), and install the extension. It long-polls Telegram, so the host needs no open port.
