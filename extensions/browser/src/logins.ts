@@ -15,8 +15,9 @@ type Stored = Record<string, SavedLogin[]>;
 
 /**
  * Saved logins, per scope (a room), encrypted at rest with AES-256-GCM under a key file next to
- * them. That keeps them out of database copies and backups; whoever can read the key file can
- * read the logins. Without a directory, logins live in memory only.
+ * them, or under `NUDGE_BROWSER_KEY` (base64, 32 bytes) when that is set. That keeps them out of
+ * database copies and backups; whoever has the key can read the logins. Without a directory,
+ * logins live in memory only.
  */
 export class LoginStore {
   private readonly file: string | undefined;
@@ -85,6 +86,12 @@ export class LoginStore {
   }
 
   private key(): Buffer {
+    const fromEnv = process.env.NUDGE_BROWSER_KEY;
+    if (fromEnv) {
+      const key = Buffer.from(fromEnv.trim(), "base64");
+      if (key.length !== 32) throw new Error("NUDGE_BROWSER_KEY is not a base64 32-byte key");
+      return key;
+    }
     const file = this.keyFile!;
     if (!existsSync(file)) {
       try {

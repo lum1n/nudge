@@ -5,9 +5,10 @@ import type { Api, Model, ThinkingLevel } from "@earendil-works/pi-ai";
 import { defineNudgeExtension, defineTool, Type } from "@nudge/core";
 import { DEFAULT_BROWSER_MODEL, runBrowserAgent } from "./agent.ts";
 import type { BrowserSession } from "./browser.ts";
-import { startLiveView } from "./live.ts";
+import { type LiveInput, type LiveOutput, startLiveView } from "./live.ts";
 import { LoginStore } from "./logins.ts";
 import { holdBrowser, withBrowser } from "./pool.ts";
+import { type Viewer, viewersOf } from "./viewers.ts";
 
 /**
  * Lets the assistant use the web. The room's model delegates a task to `browse`; a browser agent on
@@ -30,19 +31,25 @@ export default defineNudgeExtension({
     headless: Type.Boolean({ default: false }),
     /** Close a room's browser after this many minutes without a task. */
     idleMinutes: Type.Number({ default: 10, minimum: 1 }),
+    /** Let the browser reach localhost and the local network (routers, NAS, intranet). */
+    allowPrivateNetwork: Type.Boolean({ default: false }),
   }),
   setup: ({ settings, dataDir, timeZone, now }) => {
-    const profiles = dataDir
-      ? join(dataDir, "profiles")
-      : mkdtempSync(join(tmpdir(), "nudge-browser-"));
+    // Without a data directory (an in-memory assistant), profiles go to a temp dir made on first use.
+    let temp: string | undefined;
+    const profiles = () =>
+      dataDir
+        ? join(dataDir, "profiles")
+        : (temp ??= mkdtempSync(join(tmpdir(), "nudge-browser-")));
     const logins = new LoginStore(dataDir ? join(dataDir, "logins") : undefined);
     const [provider, ...id] = settings.model.split("/");
     const idleMs = settings.idleMinutes * 60_000;
     // One browser profile and one set of saved logins per room.
     const scopeOf = (conversationId: number) => `conversation-${conversationId}`;
     const optionsFor = (conversationId: number) => ({
-      profileDir: join(profiles, scopeOf(conversationId)),
+      profileDir: join(profiles(), scopeOf(conversationId)),
       headless: settings.headless,
+      blockPrivateNetwork: !settings.allowPrivateNetwork,
     });
     const useLogins = (session: BrowserSession, scope: string) =>
       session.useLogins(
@@ -50,6 +57,7 @@ export default defineNudgeExtension({
         logins.list(scope).flatMap((login) => [login.username ?? "", login.password]),
       );
     return {
+      models: [{ provider: provider!, modelId: id.join("/") }],
       tools: [
         defineTool({
           name: "browse",
@@ -117,25 +125,54 @@ export default defineNudgeExtension({
         }),
       ],
       // The room's browser, live, for the people in the room: watch it, take over, log in.
-      roomSocket: async ({ room }, socket) => {
+      // The room's browser, live, for the people in the room: watch it, take over, log in.
+      roomSocket: async ({ room, player }, socket) => {
         const scope = scopeOf(room.conversationId);
         const { session, release } = await holdBrowser(optionsFor(room.conversationId), idleMs);
         useLogins(session, scope);
+        const viewers = viewersOf(scope);
+        const viewer: Viewer = {
+          name: player.displayName,
+          send: (output) => socket.send(JSON.stringify(output)),
+        };
+        const savedLogins = (): LiveOutput => ({
+          type: "logins",
+          logins: logins.list(scope).map(({ host, username, savedAt }) => ({
+            host,
+            ...(username === undefined ? {} : { username }),
+            savedAt,
+          })),
+        });
         try {
-          const live = await startLiveView(
-            session,
-            (output) => socket.send(JSON.stringify(output)),
-            (remember) => {
-              const captured = session.takeCaptured();
-              if (!remember) return [];
-              for (const login of captured) logins.save(scope, { ...login, savedAt: now() });
-              useLogins(session, scope);
-              return captured.map((login) => login.host);
-            },
-          );
+          const live = await startLiveView(session, viewer.send, (remember) => {
+            const captured = session.takeCaptured();
+            if (!remember) return [];
+            for (const login of captured) logins.save(scope, { ...login, savedAt: now() });
+            useLogins(session, scope);
+            viewers.broadcast(savedLogins());
+            return captured.map((login) => login.host);
+          });
+          viewers.join(viewer);
+          viewer.send(savedLogins());
           return {
-            receive: (data) => live.receive(data),
+            receive: (data) => {
+              const input = JSON.parse(data) as LiveInput;
+              if (input.type === "take") return viewers.take(viewer);
+              if (input.type === "forget") {
+                logins.forget(scope, input.host);
+                useLogins(session, scope);
+                return viewers.broadcast(savedLogins());
+              }
+              // Only the one in control drives the browser; the others watch.
+              if (viewers.holder !== viewer)
+                return viewer.send({
+                  type: "error",
+                  message: `${viewers.holder?.name ?? "Someone"} is using the browser. Take control to use it.`,
+                });
+              live.receive(data);
+            },
             close: () => {
+              viewers.leave(viewer);
               live.close();
               release();
             },

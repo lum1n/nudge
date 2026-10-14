@@ -9,13 +9,21 @@ export type LiveInput =
   | { type: "key"; key: string }
   | { type: "text"; text: string }
   | { type: "navigate"; url: string }
-  | { type: "done"; remember: boolean };
+  | { type: "done"; remember: boolean }
+  /** Handled by the extension: become the one who controls the browser. */
+  | { type: "take" }
+  /** Handled by the extension: drop a saved login. */
+  | { type: "forget"; host: string };
 
 /** What the live view sends: JPEG frames of the current tab, and answers. */
 export type LiveOutput =
   | { type: "frame"; data: string; width: number; height: number; url: string }
   | { type: "done"; saved: string[] }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  /** Who controls the browser; only they can click and type. */
+  | { type: "control"; holder?: string; you: boolean }
+  /** The room's saved logins, without their passwords. */
+  | { type: "logins"; logins: { host: string; username?: string; savedAt: number }[] };
 
 export interface LiveView {
   receive(data: string): void;
@@ -96,6 +104,8 @@ export async function startLiveView(
       case "done":
         await session.captureLogin();
         send({ type: "done", saved: onDone(input.remember) });
+        return;
+      default:
         return;
     }
   };

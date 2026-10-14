@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -45,5 +45,20 @@ describe("LoginStore", () => {
     const store = new LoginStore(undefined);
     store.save("r", { host: "a.no", password: "p", savedAt: 1 });
     expect(store.find("r", "a.no")?.password).toBe("p");
+  });
+
+  it("uses NUDGE_BROWSER_KEY instead of a key file when it is set", () => {
+    const at = dir();
+    const key = Buffer.alloc(32, 3).toString("base64");
+    process.env.NUDGE_BROWSER_KEY = key;
+    try {
+      new LoginStore(at).save("r", { host: "a.no", password: "p", savedAt: 1 });
+      expect(existsSync(join(at, "key"))).toBe(false);
+      expect(new LoginStore(at).find("r", "a.no")?.password).toBe("p");
+      process.env.NUDGE_BROWSER_KEY = "short";
+      expect(() => new LoginStore(at).list("r")).toThrow(/32-byte/);
+    } finally {
+      delete process.env.NUDGE_BROWSER_KEY;
+    }
   });
 });

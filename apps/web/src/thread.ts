@@ -23,6 +23,8 @@ export type ToolCallPart = {
   /** The result's text, once there is one. */
   readonly result?: string;
   readonly isError?: boolean;
+  /** What the tool returned for UIs (its `details`), once it has a result. */
+  readonly details?: unknown;
   /** What the tool printed so far, while it runs. */
   readonly output?: string;
 };
@@ -263,6 +265,7 @@ function toPart(
         args: content.arguments,
         status: result !== undefined ? "done" : (slot?.status ?? "pending"),
         ...(result === undefined ? {} : { result: text(result.content), isError: result.isError }),
+        ...(result?.details === undefined ? {} : { details: result.details }),
         ...(slot?.output === undefined || result !== undefined ? {} : { output: slot.output }),
       };
     }

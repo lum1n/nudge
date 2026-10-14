@@ -280,7 +280,20 @@ function ReasoningPart() {
   return <MessagePartPrimitive.Text component="p" className="text-sm text-stone-500" />;
 }
 
-function ToolCallPart({ toolName, status, result, isError }: ToolCallMessagePartProps) {
+function ToolCallPart({ toolName, status, result, isError, artifact }: ToolCallMessagePartProps) {
+  const { assistant, room } = Route.useParams();
+  if (toolName === "browse" && (artifact as { needsLogin?: boolean } | undefined)?.needsLogin)
+    return (
+      <p className="my-1 text-sm">
+        <Link
+          to="/$assistant/$room/browser"
+          params={{ assistant, room }}
+          className="inline-block rounded bg-sky-700 px-3 py-1 text-white hover:bg-sky-600"
+        >
+          Open the room's browser to log in
+        </Link>
+      </p>
+    );
   return (
     <p className="text-sm text-stone-500">
       {toolName} — {result !== undefined ? (isError ? "failed" : "done") : status.type}

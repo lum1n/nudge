@@ -55,6 +55,8 @@ export type ExtensionParts = Omit<Extension, "name"> & {
   readonly detectors?: readonly PiiDetector[];
   /** A WebSocket per room for the extension's own client UI. */
   readonly roomSocket?: RoomSocketHandler;
+  /** Models the extension calls itself, so `nudge doctor` can check their credentials. */
+  readonly models?: readonly { readonly provider: string; readonly modelId: string }[];
 };
 
 export type NudgeExtension<S extends TSchema = TSchema> = {
@@ -108,6 +110,7 @@ export type SetUpExtension = {
   readonly version?: string;
   readonly detectors: readonly PiiDetector[];
   readonly roomSocket?: RoomSocketHandler;
+  readonly models: readonly { readonly provider: string; readonly modelId: string }[];
 };
 
 /** Checks the settings and runs `setup`. A plain extension passes through. */
@@ -124,7 +127,7 @@ export async function setUpExtension(
     const extension = input as Extension;
     if (extension.name === BUILTIN_NAME)
       throw new Error(`"${BUILTIN_NAME}" is the built-in extension`);
-    return { extension, detectors: [] };
+    return { extension, detectors: [], models: [] };
   }
   const { extension: definition } = use;
   const settings = checkSettings(definition, use.settings);
@@ -133,6 +136,7 @@ export async function setUpExtension(
   const {
     detectors = [],
     roomSocket,
+    models = [],
     ...parts
   } = await definition.setup({
     ...base,
@@ -143,6 +147,7 @@ export async function setUpExtension(
     extension: { ...parts, name: definition.name },
     version: definition.version,
     detectors,
+    models,
     ...(roomSocket === undefined ? {} : { roomSocket }),
   };
 }

@@ -27,6 +27,8 @@ export interface BrowserOptions {
   locale?: string;
   /** Character budget for one observation. */
   budget?: number;
+  /** Refuse localhost, private and link-local addresses and `.local` names, for pages and their requests. */
+  blockPrivateNetwork?: boolean;
 }
 
 /** A failure the model should read and recover from, not a crash. */
@@ -82,6 +84,12 @@ export class BrowserSession {
       locale: options.locale ?? "nb-NO",
       ...(xvfb ? { env: { ...process.env, DISPLAY: xvfb.display } } : {}),
     });
+    if (options.blockPrivateNetwork)
+      await context.route("**/*", (route) =>
+        isPrivateHost(hostOf(route.request().url()))
+          ? route.abort("blockedbyclient")
+          : route.continue(),
+      );
     if (!context.pages().length) await context.newPage();
     return new BrowserSession(context, options, xvfb?.process);
   }
@@ -394,6 +402,10 @@ export class BrowserSession {
       const url = new URL(/^[a-z][a-z0-9+.-]*:/i.test(target) ? target : `https://${target}`);
       if (url.protocol !== "https:" && url.protocol !== "http:")
         throw new ActionError(`Only http and https URLs are allowed.`);
+      if (this.options.blockPrivateNetwork && isPrivateHost(url.hostname))
+        throw new ActionError(
+          `${url.hostname} is on a local or private network, which this browser may not reach.`,
+        );
       const seen = this.seenParams.get(url.host);
       guessed = [...new Set(url.searchParams.keys())].filter((key) => !seen?.has(key));
       await this.current
@@ -568,6 +580,48 @@ async function startXvfb(viewport?: {
     child.kill();
   }
   throw new Error("Could not start Xvfb. Install xvfb, or run headless.");
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Hosts on this machine or the local network, by name or address literal. Names that resolve to
+ * private addresses are not caught here.
+ */
+export function isPrivateHost(host: string): boolean {
+  const name = host
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "")
+    .replace(/\.$/, "");
+  if (!name) return false;
+  if (name === "localhost" || /\.(localhost|local|internal|lan|home\.arpa)$/.test(name))
+    return true;
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(name);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 100 && b >= 64 && b <= 127)
+    );
+  }
+  if (name.includes(":")) {
+    if (name === "::1" || name === "::") return true;
+    if (/^(fc|fd)/.test(name) || /^fe[89ab]/.test(name)) return true;
+    const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(name);
+    return mapped ? isPrivateHost(mapped[1]!) : false;
+  }
+  return false;
 }
 
 function firstLine(error: unknown): string {

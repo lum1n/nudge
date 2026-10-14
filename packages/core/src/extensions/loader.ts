@@ -46,17 +46,19 @@ export async function loadExtensions(
  */
 export async function checkExtensions(
   entries: readonly ExtensionConfig[],
-): Promise<{ name: string; version?: string }[]> {
+): Promise<
+  { name: string; version?: string; models: readonly { provider: string; modelId: string }[] }[]
+> {
   const host = {
     displayName: "Nudge",
     timeZone: "UTC",
     now: Date.now,
     protect: () => Promise.reject(new Error("No assistant is open while checking")),
   };
-  const checked: { name: string; version?: string }[] = [];
+  const checked: Awaited<ReturnType<typeof checkExtensions>> = [];
   for (const input of await loadExtensions(entries)) {
-    const { extension, version } = await setUpExtension(input, host);
-    checked.push({ name: extension.name, ...(version === undefined ? {} : { version }) });
+    const { extension, version, models } = await setUpExtension(input, host);
+    checked.push({ name: extension.name, ...(version === undefined ? {} : { version }), models });
   }
   return checked;
 }

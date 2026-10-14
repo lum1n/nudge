@@ -64,6 +64,7 @@ function toPart(part: AssistantPart) {
         argsText: JSON.stringify(part.args),
         ...(part.result === undefined ? {} : { result: part.result }),
         ...(part.isError === undefined ? {} : { isError: part.isError }),
+        ...(part.details === undefined ? {} : { artifact: part.details }),
       };
   }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hideSecrets } from "../src/browser.ts";
+import { hideSecrets, isPrivateHost } from "../src/browser.ts";
 import { compactSnapshot, findLines } from "../src/snapshot.ts";
 
 const page = (body: string) => body.replace(/^\n/, "");
@@ -157,5 +157,40 @@ describe("hideSecrets", () => {
       "- text: Hemmelig123! is not a field",
       '- textbox "Kort" [ref=e8]: [hidden]',
     ]);
+  });
+});
+
+describe("isPrivateHost", () => {
+  it("knows this machine and local networks by name and address", () => {
+    for (const host of [
+      "localhost",
+      "app.localhost",
+      "nas.local",
+      "router.lan",
+      "printer.home.arpa",
+      "127.0.0.1",
+      "10.1.2.3",
+      "172.16.0.1",
+      "172.31.255.255",
+      "192.168.1.1",
+      "169.254.169.254",
+      "100.64.0.1",
+      "0.0.0.0",
+      "[::1]",
+      "fd12::1",
+      "fe80::1",
+      "::ffff:192.168.0.1",
+    ])
+      expect(isPrivateHost(host), host).toBe(true);
+    for (const host of [
+      "finn.no",
+      "8.8.8.8",
+      "172.32.0.1",
+      "192.169.0.1",
+      "localhost.example.com",
+      "2001:4860::8888",
+      "",
+    ])
+      expect(isPrivateHost(host), host).toBe(false);
   });
 });

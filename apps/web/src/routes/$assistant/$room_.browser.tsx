@@ -1,7 +1,14 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { forgetToken } from "../../api.ts";
-import { keyInput, type LiveSocket, useLiveState, useLiveView } from "../../live-view.ts";
+import {
+  keyInput,
+  type LiveInput,
+  type LiveSocket,
+  type SavedLogin,
+  useLiveState,
+  useLiveView,
+} from "../../live-view.ts";
 
 export const Route = createFileRoute("/$assistant/$room_/browser")({ component: Browser });
 
@@ -58,6 +65,13 @@ function Live({ socket }: { socket: LiveSocket }) {
   const [address, setAddress] = useState("");
   const [remember, setRemember] = useState(true);
   const frame = state.frame;
+  const inControl = state.control?.you ?? false;
+  // Watchers send nothing that drives the page; the server refuses it anyway.
+  const controlRef = useRef(inControl);
+  controlRef.current = inControl;
+  const drive = (input: LiveInput) => {
+    if (controlRef.current) socket.send(input);
+  };
 
   useEffect(() => {
     if (frame === undefined || canvas.current === null) return;
@@ -81,8 +95,9 @@ function Live({ socket }: { socket: LiveSocket }) {
     if (element === null) return;
     const wheel = (event: WheelEvent) => {
       event.preventDefault();
+      if (!controlRef.current) return;
       const { x, y } = toPage(element, event);
-      socket.send({ type: "wheel", x, y, dx: event.deltaX, dy: event.deltaY });
+      drive({ type: "wheel", x, y, dx: event.deltaX, dy: event.deltaY });
     };
     element.addEventListener("wheel", wheel, { passive: false });
     return () => element.removeEventListener("wheel", wheel);
@@ -90,16 +105,27 @@ function Live({ socket }: { socket: LiveSocket }) {
 
   const go = (event: FormEvent) => {
     event.preventDefault();
-    if (address.trim()) socket.send({ type: "navigate", url: address.trim() });
+    if (address.trim()) drive({ type: "navigate", url: address.trim() });
   };
 
   return (
     // Wider than the page column, up to the remote page's own width, so it is drawn about life-size.
     <div className="relative left-1/2 flex w-[min(1282px,calc(100vw-2rem))] -translate-x-1/2 flex-col gap-2">
+      {state.control !== undefined && !inControl && (
+        <div className="flex items-center gap-3 rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          {state.control.holder ?? "Someone else"} is using the browser; you are watching.
+          <button
+            onClick={() => socket.send({ type: "take" })}
+            className="rounded border border-amber-700 px-2 py-0.5 hover:bg-amber-100"
+          >
+            Take control
+          </button>
+        </div>
+      )}
       <form onSubmit={go} className="flex gap-2">
         <button
           type="button"
-          onClick={() => socket.send({ type: "navigate", url: "back" })}
+          onClick={() => drive({ type: "navigate", url: "back" })}
           className="rounded border border-stone-300 px-2 text-sm"
         >
           ←
@@ -115,29 +141,30 @@ function Live({ socket }: { socket: LiveSocket }) {
       <canvas
         ref={canvas}
         tabIndex={0}
+        aria-disabled={!inControl}
         aria-label="The room's browser. Click to focus, then type."
-        className="w-full cursor-pointer rounded border border-stone-300 bg-white focus:outline-2 focus:outline-sky-600"
+        className={`w-full rounded border border-stone-300 bg-white focus:outline-2 focus:outline-sky-600 ${inControl ? "cursor-pointer" : "cursor-not-allowed opacity-90"}`}
         onClick={(event) => {
           event.currentTarget.focus();
-          socket.send({ type: "click", ...toPage(event.currentTarget, event) });
+          drive({ type: "click", ...toPage(event.currentTarget, event) });
         }}
         onDoubleClick={(event) =>
-          socket.send({ type: "click", double: true, ...toPage(event.currentTarget, event) })
+          drive({ type: "click", double: true, ...toPage(event.currentTarget, event) })
         }
         onContextMenu={(event) => {
           event.preventDefault();
-          socket.send({ type: "click", button: "right", ...toPage(event.currentTarget, event) });
+          drive({ type: "click", button: "right", ...toPage(event.currentTarget, event) });
         }}
         onKeyDown={(event) => {
           const input = keyInput(event);
           if (input === undefined) return;
           event.preventDefault();
-          socket.send(input);
+          drive(input);
         }}
         onPaste={(event) => {
           event.preventDefault();
           const text = event.clipboardData.getData("text");
-          if (text) socket.send({ type: "text", text });
+          if (text) drive({ type: "text", text });
         }}
       />
       {frame === undefined && <p className="text-stone-500">Waiting for the page…</p>}
@@ -152,7 +179,8 @@ function Live({ socket }: { socket: LiveSocket }) {
         </label>
         <button
           onClick={() => socket.send({ type: "done", remember })}
-          className="rounded bg-stone-800 px-3 py-1 text-sm text-white hover:bg-stone-700"
+          disabled={!inControl}
+          className="rounded bg-stone-800 px-3 py-1 text-sm text-white hover:bg-stone-700 disabled:opacity-40"
         >
           Done
         </button>
@@ -166,6 +194,36 @@ function Live({ socket }: { socket: LiveSocket }) {
         )}
       </div>
       {state.error && <p className="text-sm text-red-700">{state.error}</p>}
+      <SavedLogins socket={socket} logins={state.logins ?? []} />
+    </div>
+  );
+}
+
+function SavedLogins({ socket, logins }: { socket: LiveSocket; logins: SavedLogin[] }) {
+  return (
+    <div className="mt-2 flex flex-col gap-1">
+      <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">Saved logins</h3>
+      {logins.length === 0 ? (
+        <p className="text-sm text-stone-500">None yet. Logins you remember here show up here.</p>
+      ) : (
+        <ul className="flex flex-col gap-1">
+          {logins.map((login) => (
+            <li key={login.host} className="flex items-center gap-3 text-sm">
+              <span className="font-medium">{login.host}</span>
+              {login.username && <span className="text-stone-600">{login.username}</span>}
+              <span className="text-stone-500">
+                saved {new Date(login.savedAt).toLocaleDateString()}
+              </span>
+              <button
+                onClick={() => socket.send({ type: "forget", host: login.host })}
+                className="rounded border border-stone-300 px-2 py-0.5 hover:bg-stone-100"
+              >
+                Forget
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

@@ -174,4 +174,20 @@ run("logging in: live view first, saved login after", () => {
     expect(await session.observe()).toContain("Velkommen");
     await session.close();
   });
+
+  it("keeps a blocked browser off localhost and the local network", async () => {
+    const session = await BrowserSession.open({
+      profileDir: mkdtempSync(join(tmpdir(), "nudge-login-")),
+      headless: true,
+      blockPrivateNetwork: true,
+    });
+    await expect(session.navigate(`${base()}/login`)).rejects.toThrow(/local or private network/);
+    // Requests a page makes are refused too, not only navigations by the agent.
+    await session.page.setContent("<h1>Outside</h1>");
+    const status = await session.page.evaluate(
+      `fetch("${base()}/home").then(() => "reached", () => "refused")`,
+    );
+    expect(status).toBe("refused");
+    await session.close();
+  });
 });

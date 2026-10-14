@@ -153,4 +153,46 @@ describe("ThreadReader", () => {
       "undefined: later",
     ]);
   });
+
+  it("carries a tool result's details, for UIs such as the browser's login button", () => {
+    const base = views.at(-1)!;
+    const view = {
+      ...base,
+      entries: [
+        { id: 1, conversationId: 1, kind: "pi.user", model: [{ role: "user", content: "log in" }] },
+        {
+          id: 2,
+          conversationId: 1,
+          kind: "pi.assistant",
+          model: [
+            {
+              role: "assistant",
+              content: [{ type: "toolCall", id: "c1", name: "browse", arguments: { task: "x" } }],
+              stopReason: "toolUse",
+            },
+          ],
+        },
+        {
+          id: 3,
+          conversationId: 1,
+          kind: "pi.tool-result",
+          model: [
+            {
+              role: "toolResult",
+              toolCallId: "c1",
+              toolName: "browse",
+              content: [{ type: "text", text: "Login needed on finn.no" }],
+              details: { needsLogin: true },
+              isError: false,
+            },
+          ],
+        },
+      ],
+    } as unknown as ConversationView;
+    const answer = new ThreadReader().read(view, "ann").messages.at(-1);
+    expect(answer).toMatchObject({
+      role: "assistant",
+      parts: [{ type: "tool-call", toolName: "browse", details: { needsLogin: true } }],
+    });
+  });
 });

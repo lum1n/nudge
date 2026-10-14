@@ -70,6 +70,16 @@ export async function doctor(options: DoctorOptions): Promise<boolean> {
         const installed = await checkExtensions(assistant.extensions);
         const names = installed.map((e) => `${e.name}${e.version ? ` ${e.version}` : ""}`);
         check(true, `${assistant.name}: extensions ${names.join(", ") || "none enabled"}`);
+        for (const extension of installed)
+          for (const used of extension.models) {
+            const what = `${assistant.name}: ${extension.name} uses ${used.provider}/${used.modelId}`;
+            if (models.getModel(used.provider, used.modelId) === undefined) {
+              check(false, `${what}: no such model`);
+              continue;
+            }
+            const auth = await models.checkAuth(used.provider).catch(() => undefined);
+            check(auth !== undefined, `${what}: credentials ${auth?.source ?? "missing"}`);
+          }
       } catch (error) {
         check(false, `${assistant.name}: extensions: ${(error as Error).message}`);
       }

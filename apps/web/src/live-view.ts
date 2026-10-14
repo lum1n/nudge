@@ -6,7 +6,12 @@ export type LiveFrame =
   | { type: "ready" }
   | { type: "frame"; data: string; width: number; height: number; url: string }
   | { type: "done"; saved: string[] }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | { type: "control"; holder?: string; you: boolean }
+  | { type: "logins"; logins: SavedLogin[] };
+
+/** A login the browser keeps for this room; the password never leaves the server. */
+export type SavedLogin = { host: string; username?: string; savedAt: number };
 
 /** What it takes (`LiveInput`). Coordinates are page pixels. */
 export type LiveInput =
@@ -15,13 +20,18 @@ export type LiveInput =
   | { type: "key"; key: string }
   | { type: "text"; text: string }
   | { type: "navigate"; url: string }
-  | { type: "done"; remember: boolean };
+  | { type: "done"; remember: boolean }
+  | { type: "take" }
+  | { type: "forget"; host: string };
 
 export type LiveState = {
   readonly status: "connecting" | "open" | "closed";
   readonly frame?: { data: string; width: number; height: number; url: string };
   readonly saved?: string[];
   readonly error?: string;
+  /** Who drives the browser; the others watch. */
+  readonly control?: { holder?: string; you: boolean };
+  readonly logins?: SavedLogin[];
   /** 4401 bad token, 4404 no such room or no browser extension. */
   readonly closeCode?: number;
 };
@@ -78,6 +88,9 @@ export class LiveSocket {
       if (frame.type === "ready") this.update({ status: "open" });
       else if (frame.type === "frame") this.update({ frame });
       else if (frame.type === "done") this.update({ saved: frame.saved });
+      else if (frame.type === "control")
+        this.update({ control: { holder: frame.holder, you: frame.you }, error: undefined });
+      else if (frame.type === "logins") this.update({ logins: frame.logins });
       else this.update({ error: frame.message });
     });
     this.socket.addEventListener("close", (event) =>

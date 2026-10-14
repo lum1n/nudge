@@ -56,6 +56,7 @@ describe("toThreadMessageLike", () => {
           status: "done",
           result: "ok",
           isError: false,
+          details: { needsLogin: true },
         },
       ],
       status: "failed",
@@ -66,7 +67,14 @@ describe("toThreadMessageLike", () => {
       content: [
         { type: "reasoning", text: "thinking" },
         { type: "text", text: "hello" },
-        { type: "tool-call", toolCallId: "c1", toolName: "remember", result: "ok", isError: false },
+        {
+          type: "tool-call",
+          toolCallId: "c1",
+          toolName: "remember",
+          result: "ok",
+          isError: false,
+          artifact: { needsLogin: true },
+        },
       ],
       status: { type: "incomplete", reason: "error", error: "Overloaded" },
     });
