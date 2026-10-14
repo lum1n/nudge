@@ -18,7 +18,7 @@ import {
   type Storage,
   type Submission,
 } from "@earendil-works/pi-durable";
-import { Approvals } from "./approvals/approvals.ts";
+import { Approvals, ApprovalsDoc, type ApprovalsState } from "./approvals/approvals.ts";
 import { type Change, Changes } from "./changes.ts";
 import { createBuiltinExtension } from "./extensions/builtin.ts";
 import {
@@ -40,6 +40,7 @@ import { Vault } from "./privacy/vault.ts";
 import { VaultDoc } from "./privacy/vault-doc.ts";
 import { openDatabaseStorage } from "./encrypted-storage.ts";
 import { lockDatabase } from "./storage-lock.ts";
+import { type RoomEvent, RoomEvents } from "./room-events.ts";
 
 export type PrivacyOptions = {
   /** Detectors to run instead of the built-in ones. Names are protected separately. */
@@ -100,6 +101,7 @@ type Parts = {
   readonly detectors: readonly PiiDetector[];
   readonly installed: readonly SetUpExtension[];
   readonly report: (error: unknown) => void;
+  readonly events: RoomEvents;
 };
 
 /** One assistant: one storage, one Harness, one registry. */
@@ -114,6 +116,8 @@ export class Nudge {
   readonly approvals: Approvals;
   /** Changes to rooms, memory, nudges and approvals made through the members above. */
   readonly changes = new Changes();
+  /** Finished answers and new approvals in every room, for hosts that pass them on. */
+  readonly events: RoomEvents;
   private readonly models: RedactingModels;
   private readonly now: () => number;
   private readonly unlock: () => Promise<void>;
@@ -137,6 +141,8 @@ export class Nudge {
     this.detectors = parts.detectors;
     this.installed = parts.installed;
     this.report = parts.report;
+    this.events = parts.events;
+    this.events.subscribe((event) => this.deliver(event));
     this.players = new Players(harness, (name) => this.protect(name, "NAME").then(() => {}), now);
     const changed = (change: Change) => this.changes.emit(change);
     this.rooms = new Rooms(
@@ -228,6 +234,7 @@ export class Nudge {
         instructions: options.instructions ?? null,
       };
       const lobby = await harness.root(context, { agent });
+      const events = await openRoomEvents(harness, context, options.onReport ?? (() => {}));
       const nudge = new Nudge({
         harness,
         displayName,
@@ -240,6 +247,7 @@ export class Nudge {
         detectors,
         installed,
         report: options.onReport ?? (() => {}),
+        events,
       });
       await nudge.rooms.adoptLobby(lobby.id, context);
       const directory = await harness.snapshot(DirectoryDoc, context);
@@ -384,6 +392,22 @@ export class Nudge {
     await conversation.configure({ extensions: this.selection(room) }, context);
   }
 
+  /** Hands a room event to the extensions on in its room. */
+  private deliver(event: RoomEvent): void {
+    void (async () => {
+      const room = await this.rooms.get(event.roomId, BACKGROUND_CONTEXT);
+      if (room === undefined) return;
+      for (const installed of this.installed) {
+        if (installed.onRoomEvent === undefined || !enabledIn(room, installed)) continue;
+        try {
+          await installed.onRoomEvent(event);
+        } catch (error) {
+          this.report(error);
+        }
+      }
+    })().catch(this.report);
+  }
+
   /** The room socket an installed extension serves, if any. */
   roomSocket(extension: string): RoomSocketHandler | undefined {
     return this.installed.find((installed) => installed.extension.name === extension)?.roomSocket;
@@ -455,6 +479,7 @@ export class Nudge {
 
   async close(context: Context): Promise<void> {
     try {
+      this.events.close();
       await this.harness.close(context);
     } finally {
       await closeAll(this.installed, this.report);
@@ -468,6 +493,21 @@ export class RoomNotFound extends Error {
   constructor(readonly roomId: string) {
     super(`No room "${roomId}"`);
   }
+}
+
+/** Room events start from the approvals pending now, so only new ones are announced. */
+async function openRoomEvents(
+  harness: Harness,
+  context: Context,
+  report: (error: unknown) => void,
+): Promise<RoomEvents> {
+  const directory = await harness.snapshot(DirectoryDoc, context);
+  const approvals = new Map<string, ApprovalsState>();
+  for (const roomId of Object.keys(directory?.rooms ?? {})) {
+    const state = await harness.snapshot(ApprovalsDoc, roomId, context);
+    if (state !== undefined) approvals.set(roomId, state);
+  }
+  return new RoomEvents(harness, directory, approvals, report);
 }
 
 /** Sets up every extension, or none: when one fails, those set up before it are closed again. */

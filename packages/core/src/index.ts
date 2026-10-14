@@ -43,6 +43,12 @@ export {
   requestApproval,
 } from "./approvals/approvals.ts";
 export { type Change, type ChangeListener, Changes } from "./changes.ts";
+export {
+  type AnswerCause,
+  type RoomEvent,
+  type RoomEventListener,
+  RoomEvents,
+} from "./room-events.ts";
 export { describeRoom, formatHour } from "./extensions/builtin.ts";
 export {
   defineNudgeExtension,

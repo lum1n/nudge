@@ -6,6 +6,7 @@ import { Value } from "typebox/value";
 import { ConfigError } from "../config.ts";
 import type { Player, Room, RoomKind } from "../identity/directory.ts";
 import type { PiiDetector } from "../privacy/detectors.ts";
+import type { RoomEvent } from "../room-events.ts";
 import { SecretStore } from "../secrets.ts";
 
 /** What an extension's `setup` gets from the assistant it is installed in. */
@@ -83,6 +84,11 @@ export type ExtensionParts = Omit<Extension, "name"> & {
    */
   readonly approvals?: Readonly<Record<string, ApprovalHandler>>;
   /**
+   * Hears about answers and approvals in the rooms the extension is on in, after they are
+   * committed, such as to pass them on to a phone. Must not block; a throw or rejection is reported.
+   */
+  readonly onRoomEvent?: (event: RoomEvent) => void | Promise<void>;
+  /**
    * Releases what `setup` started, such as processes or connections, once a reload replaced the
    * extension or the assistant closed. Calls that already started may still be finishing.
    */
@@ -148,6 +154,7 @@ export type SetUpExtension = {
   readonly roomSocket?: RoomSocketHandler;
   readonly models: readonly { readonly provider: string; readonly modelId: string }[];
   readonly approvals: Readonly<Record<string, ApprovalHandler>>;
+  readonly onRoomEvent?: (event: RoomEvent) => void | Promise<void>;
   readonly close?: () => void | Promise<void>;
 };
 
@@ -182,6 +189,7 @@ export async function setUpExtension(
     roomSocket,
     models = [],
     approvals = {},
+    onRoomEvent,
     close,
     ...parts
   } = await definition.setup({
@@ -199,6 +207,7 @@ export async function setUpExtension(
     models,
     approvals,
     ...(roomSocket === undefined ? {} : { roomSocket }),
+    ...(onRoomEvent === undefined ? {} : { onRoomEvent }),
     ...(close === undefined ? {} : { close }),
   };
 }
