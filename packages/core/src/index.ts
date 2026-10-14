@@ -79,6 +79,7 @@ export {
   type DirectoryState,
   LOBBY,
   type PairingRecord,
+  type SideConversation,
   type Player,
   type Room,
   type RoomKind,

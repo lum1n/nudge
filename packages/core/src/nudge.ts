@@ -256,11 +256,12 @@ export class Nudge {
       for (const player of Object.values(directory?.players ?? {}))
         models.vault.protect(player.displayName, "NAME");
       await models.flush();
-      for (const room of Object.values(directory?.rooms ?? {})) {
-        const conversation = await harness.conversation(
-          room.conversationId as ConversationId,
-          context,
-        );
+      const conversationIds = [
+        ...Object.values(directory?.rooms ?? {}).map((room) => room.conversationId),
+        ...Object.keys(directory?.sides ?? {}).map(Number),
+      ];
+      for (const id of conversationIds) {
+        const conversation = await harness.conversation(id as ConversationId, context);
         if (conversation !== undefined) await followConfig(conversation, options, context);
       }
       await nudge.selectExtensions(context);
@@ -373,10 +374,16 @@ export class Nudge {
   }
 
   private async selectIn(room: Room, context: Context): Promise<void> {
-    const conversation = await this.harness.conversation(
-      room.conversationId as ConversationId,
-      context,
-    );
+    for (const id of [room.conversationId, ...(await this.rooms.sides(room.id, context))])
+      await this.selectInConversation(room, id, context);
+  }
+
+  private async selectInConversation(
+    room: Room,
+    conversationId: number,
+    context: Context,
+  ): Promise<void> {
+    const conversation = await this.harness.conversation(conversationId as ConversationId, context);
     if (conversation === undefined) return;
     const off = new Set(
       this.installed

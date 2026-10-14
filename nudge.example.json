@@ -17,6 +17,11 @@
           "rooms": ["personal", "shared"]
         },
         {
+          "$comment": "Watches: the assistant checks something on a schedule with its tools and tells the room only what is new. Each check is a model run, so minMinutes caps how often.",
+          "from": "./extensions/watches",
+          "settings": { "minMinutes": 30, "maxPerRoom": 10 }
+        },
+        {
           "$comment": "Talk to the assistant from Telegram. The bot token comes from TELEGRAM_BOT_TOKEN; people link with /link <code from nudge pair>. Off here (enabled: false) so the example works without a token.",
           "from": "./extensions/telegram",
           "enabled": false

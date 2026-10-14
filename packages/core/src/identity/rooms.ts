@@ -117,4 +117,45 @@ export class Rooms {
     this.changed({ kind: "rooms" });
     return created!;
   }
+
+  /**
+   * A new side conversation of the room: the room's model, instructions and extensions, its own
+   * transcript. Returns its conversation id.
+   */
+  async createSide(roomId: string, context: Context): Promise<number> {
+    const room = await this.get(roomId, context);
+    if (room === undefined) throw new Error(`No room "${roomId}"`);
+    let id: number | undefined;
+    await this.harness.createConversation(
+      {
+        ownership: { kind: "ownerless" },
+        agent: this.agent(room),
+        init: async (tx, conversationId) => {
+          const directory = await tx.doc(DirectoryDoc);
+          if (directory.rooms[roomId] === undefined) throw new Error(`No room "${roomId}"`);
+          // Assigned, then written through the document: `??=` would hand back the plain object.
+          directory.sides ??= {};
+          directory.sides[String(conversationId)] = { roomId, createdAt: this.now() };
+          id = conversationId;
+        },
+      },
+      context,
+    );
+    return id!;
+  }
+
+  /** Forgets a side conversation; its transcript stays in storage, unused. */
+  async dropSide(conversationId: number, context: Context): Promise<void> {
+    await this.harness.commit(async (tx) => {
+      delete (await tx.doc(DirectoryDoc)).sides?.[String(conversationId)];
+    }, context);
+  }
+
+  /** The room's side conversations' ids. */
+  async sides(roomId: string, context: Context): Promise<number[]> {
+    const directory = await this.harness.snapshot(DirectoryDoc, context);
+    return Object.entries(directory?.sides ?? {})
+      .filter(([, side]) => side.roomId === roomId)
+      .map(([id]) => Number(id));
+  }
 }

@@ -200,6 +200,14 @@ An entry's `rooms` lists the kinds of room it is on in by default (`"lobby"`, `"
 - API keys, the local network and read paths are set by people, never by the model: on the room's **Connectors** page in the web UI, or with `/connectors` and `/connector-key <id>` in `nudge chat` (the key isn't echoed). Keys are stored encrypted and scrubbed from what the model sees.
 - A connector belongs to the room it was added in. The owner can share one without a key with every room: `nudge connector share <id> [room]`, and `unshare` to move it back. `nudge connectors [room]` lists a room's.
 
+### Watches
+
+`extensions/watches` lets a room ask the assistant to keep an eye on something: "tell me when a 2027 GLC under 800 000 kr shows up on Finn", "when tomorrow's power price goes above 2 kr". The model adds a watch with `add_watch` (what to check, and how often), and `list_watches` and `remove_watch` show and stop them.
+
+- Each check runs in a side conversation of the room, out of the room's sight but with its tools, connectors, logins and memory. The model replies with the items that match, each with a stable key such as its URL.
+- The room hears only about items it hasn't seen before. That arrives like a fired nudge, so push and chat bridges deliver it too.
+- Every check is a model run with tools, so it costs: `minMinutes` (default 30) caps how often, and `maxPerRoom` (default 10) how many.
+
 ### Telegram
 
 `extensions/telegram` lets people talk to the assistant from Telegram. Make a bot with @BotFather, put its token in `TELEGRAM_BOT_TOKEN` (or set `token` in the extension's settings, `${NAME}` taking it from the environment), and install the extension. It long-polls Telegram, so the host needs no open port.

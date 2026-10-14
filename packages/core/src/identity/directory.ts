@@ -56,7 +56,14 @@ export type DirectoryState = {
   rooms: Record<string, Room>;
   /** Keyed by the code's SHA-256, hex. Absent in directories from before pairing. */
   pairing?: Record<string, PairingRecord>;
+  /**
+   * Side conversations by conversation id: work a room's assistant does out of the room's sight,
+   * such as a watch's checks. Tools and sections there see the room.
+   */
+  sides?: Record<string, SideConversation>;
 };
+
+export type SideConversation = { roomId: string; createdAt: number };
 
 /** Who uses the assistant and where: players, their tokens and the rooms index. One per storage. */
 export const DirectoryDoc = defineDoc<DirectoryState>({
@@ -113,16 +120,22 @@ export function canUse(room: Room, playerId: string): boolean {
   return room.kind === LOBBY || room.members.includes(playerId);
 }
 
-/** The room a conversation is, for tools and sections, which only know the conversation. */
+/**
+ * The room a conversation is, or works for as a side conversation, for tools and sections, which
+ * only know the conversation.
+ */
 export async function roomOf(
   read: DocumentReader,
   conversationId: number,
   context: Context,
 ): Promise<Room> {
   const directory = await read.snapshot(DirectoryDoc, context);
-  const room = Object.values(directory?.rooms ?? {}).find(
-    (r) => r.conversationId === conversationId,
-  );
+  const rooms = Object.values(directory?.rooms ?? {});
+  const side = directory?.sides?.[String(conversationId)];
+  const room =
+    side === undefined
+      ? rooms.find((r) => r.conversationId === conversationId)
+      : directory?.rooms[side.roomId];
   if (room === undefined) throw new Error(`Conversation ${conversationId} is not a room`);
   return room;
 }
