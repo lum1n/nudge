@@ -11,6 +11,7 @@ import {
   tokens,
   usage,
 } from "./commands/admin.ts";
+import { backup, restore } from "./commands/backup.ts";
 import { chat } from "./commands/chat.ts";
 import { connector } from "./commands/connector.ts";
 import { db } from "./commands/db.ts";
@@ -44,6 +45,9 @@ Commands:
                      Show whether each database is encrypted, or encrypt or decrypt it in
                      place (stop "nudge serve" first). The key is NUDGE_DB_KEY, or a
                      <database>.key file that "encrypt" writes
+  backup             Make an encrypted backup of every assistant now, into --to <dir> or
+                     the config's backup.dir; works while "nudge serve" runs
+  restore <file>     Unpack a backup into --to <dir> (--force overwrites files there)
   reload             Reinstall extensions from the config in the running assistant
   doctor             Check Node, config, storage and model credentials;
                      --ping sends one request, --privacy tests redaction
@@ -68,6 +72,8 @@ Options:
       --public-url <url>   serve: the address apps reach the server at, for pairing
                            links (default: each request's)
       --remove             admin: take the flag away
+      --to <dir>           backup, restore: where to
+      --force              restore: overwrite files that are there
 `;
 
 async function main(argv: string[]): Promise<number> {
@@ -89,6 +95,8 @@ async function main(argv: string[]): Promise<number> {
       ping: { type: "boolean", default: false },
       privacy: { type: "boolean", default: false },
       remove: { type: "boolean", default: false },
+      to: { type: "string" },
+      force: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
     },
   });
@@ -155,6 +163,20 @@ async function main(argv: string[]): Promise<number> {
     }
     case "nudges":
       await nudges(access);
+      return 0;
+    case "backup":
+      await backup({
+        config: values.config,
+        ...(values.to === undefined ? {} : { to: values.to }),
+      });
+      return 0;
+    case "restore":
+      await restore({
+        config: values.config,
+        ...(argument === undefined ? {} : { file: argument }),
+        ...(values.to === undefined ? {} : { to: values.to }),
+        force: values.force,
+      });
       return 0;
     case "usage":
       await usage(access);

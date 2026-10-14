@@ -15,11 +15,12 @@ import {
 type CipherDatabase = {
   pragma(source: string): unknown;
   prepare(sql: string): { get(...params: unknown[]): unknown };
+  exec(sql: string): unknown;
   close(): void;
 };
 const Database = createRequire(import.meta.url)("better-sqlite3-multiple-ciphers") as new (
   path: string,
-  options?: { timeout?: number },
+  options?: { timeout?: number; readonly?: boolean },
 ) => CipherDatabase;
 
 /** Every unencrypted SQLite file starts with these 16 bytes; an encrypted one doesn't. */
@@ -120,6 +121,39 @@ export async function decryptDatabase(database: string): Promise<void> {
   db.pragma(`hexkey='${key.key.toString("hex")}'`);
   rekey(db, undefined);
   if (key.source !== "NUDGE_DB_KEY") await unlink(key.source);
+}
+
+/**
+ * Copies a database, consistent as of one moment, to `target` (which must not exist), while the
+ * assistant may be writing to it: a reading connection of its own runs `VACUUM INTO`. An encrypted
+ * database's copy is encrypted under the same key.
+ */
+export async function snapshotDatabase(database: string, target: string): Promise<void> {
+  const state = await databaseEncryption(database);
+  if (state === "missing") throw new Error(`${database} doesn't exist`);
+  const into = `VACUUM INTO '${target.replace(/'/g, "''")}'`;
+  if (state === "plain") {
+    const { DatabaseSync } = await import("node:sqlite");
+    const db = new DatabaseSync(database, { readOnly: true, timeout: 5_000 });
+    try {
+      db.exec(into);
+    } finally {
+      db.close();
+    }
+    return;
+  }
+  const key = await databaseKey(database);
+  if (key === undefined)
+    throw new DatabaseKeyError(
+      `${database} is encrypted, but there is no key: set NUDGE_DB_KEY or restore ${keyFile(database)}`,
+    );
+  const db = new Database(database, { readonly: true, timeout: 5_000 });
+  try {
+    db.pragma(`hexkey='${key.key.toString("hex")}'`);
+    db.exec(into);
+  } finally {
+    db.close();
+  }
 }
 
 async function openEncrypted(database: string, key: DatabaseKey): Promise<NodeSqliteDatabase> {

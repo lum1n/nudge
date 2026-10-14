@@ -71,6 +71,12 @@
       "models": [{ "id": "qwen2.5-3b", "contextWindow": 8192, "maxTokens": 2048 }]
     }
   ],
+  "backup": {
+    "$comment": "Encrypted backups nudge serve makes on its own: everything needed to restore, into dir (relative to this file). The key is NUDGE_BACKUP_KEY or nudge-backup.key beside this file; keep a copy of it off the machine. nudge backup makes one now, nudge restore <file> --to <dir> unpacks one.",
+    "dir": "backups",
+    "everyHours": 24,
+    "keep": 14
+  },
   "push": {
     "$comment": "Browser notifications from nudge serve. preview: \"room\" (the default) names only the room; \"text\" adds the start of the message. subject: how push services reach you, a mailto: or https: address; default the --public-url when it is HTTPS.",
     "preview": "room",

@@ -45,6 +45,16 @@ export {
 } from "./approvals/approvals.ts";
 export { type Change, type ChangeListener, Changes } from "./changes.ts";
 export {
+  BACKUP_SUFFIX,
+  BackupError,
+  backupKey,
+  createBackup,
+  lastBackupAt,
+  pruneBackups,
+  readBackupManifest,
+  restoreBackup,
+} from "./backup.ts";
+export {
   type Budget,
   BudgetReached,
   type MonthSpend,
@@ -139,6 +149,7 @@ export {
   decryptDatabase,
   encryptDatabase,
   keyFile,
+  snapshotDatabase,
 } from "./encrypted-storage.ts";
 export { DatabaseInUse, lockDatabase } from "./storage-lock.ts";
 export {

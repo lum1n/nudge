@@ -117,6 +117,14 @@ Each assistant keeps its data in one SQLite file, by default `data/<name>.sqlite
 
 To encrypt that file, stop `nudge serve` and run `nudge db encrypt`. It encrypts the file in place (SQLite3 Multiple Ciphers) and writes a key to `<database>.key`, readable only by you, or uses `NUDGE_DB_KEY` (32 random bytes, base64: `openssl rand -base64 32`) when that is set. With `NUDGE_DB_KEY` set, a new database is created encrypted. `nudge db` shows each database's state and `nudge db decrypt` undoes it. Like the other keys, this protects copies of the database and backups, not a host where someone can also read the key. Losing the key loses the data, so keep a copy of the key somewhere other than the database's backups.
 
+### Backups
+
+`nudge backup --to <dir>` writes one encrypted file with every assistant's database, its key file, the extensions' data (their secrets included), the push keys and `nudge.json`. It is safe while `nudge serve` runs: each database is copied as of one moment, and an encrypted one stays encrypted. With `"backup": { "dir": "/mnt/usb/nudge", "everyHours": 24, "keep": 14 }` in `nudge.json`, `nudge serve` makes one on its own every day and keeps the last 14. `nudge backup` alone then writes there too.
+
+The backup key is `NUDGE_BACKUP_KEY` (32 random bytes, base64) or the file `nudge-backup.key` beside the config (`backup.keyFile` moves it). The first `nudge backup` makes the file if neither exists. That one key opens every backup, so keep a copy away from the machine and the backups.
+
+To restore, unpack into an empty directory and start Nudge there: `nudge restore <file> --to <dir>`, then `nudge serve -c <dir>/nudge.json`. Every file is checked against its hash, and a wrong key or a damaged file is refused. For copies off the machine, point `dir` at a synced folder or a mounted share, or copy the files with rclone; they are encrypted already.
+
 ## Extensions
 
 An extension adds tools, prompt sections, hooks, tasks and PII detectors to an assistant. List them per assistant in `nudge.json`; `from` is a file or package directory relative to the config, or an installed package name:

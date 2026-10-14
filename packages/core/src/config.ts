@@ -76,10 +76,23 @@ const PushSchema = Type.Object({
   subject: Type.Optional(Type.String({ pattern: "^(mailto|https):" })),
 });
 
+/** Encrypted backups `nudge serve` makes on its own; `nudge backup` makes one at any time. */
+const BackupSchema = Type.Object({
+  /** Where backups go, relative to the config file: a disk, a mounted share, a synced folder. */
+  dir: Type.String({ minLength: 1 }),
+  /** Hours between backups; default 24. */
+  everyHours: Type.Optional(Type.Number({ exclusiveMinimum: 0 })),
+  /** Backups kept; older ones are deleted. Default 14. */
+  keep: Type.Optional(Type.Integer({ minimum: 1 })),
+  /** The key, unless NUDGE_BACKUP_KEY is set; default nudge-backup.key beside the config. */
+  keyFile: Type.Optional(Type.String()),
+});
+
 export const NudgeConfigSchema = Type.Object({
   assistants: Type.Array(AssistantSchema, { minItems: 1 }),
   providers: Type.Optional(Type.Array(LocalProviderSchema)),
   push: Type.Optional(PushSchema),
+  backup: Type.Optional(BackupSchema),
 });
 
 export type NudgeConfig = Static<typeof NudgeConfigSchema>;
@@ -112,6 +125,17 @@ export function parseConfig(value: unknown, baseDir: string): NudgeConfig {
   }
   return {
     ...value,
+    ...(value.backup === undefined
+      ? {}
+      : {
+          backup: {
+            ...value.backup,
+            dir: resolve(baseDir, value.backup.dir),
+            ...(value.backup.keyFile === undefined
+              ? {}
+              : { keyFile: resolve(baseDir, value.backup.keyFile) }),
+          },
+        }),
     assistants: value.assistants.map((assistant) => ({
       ...assistant,
       database: resolve(baseDir, assistant.database ?? `data/${assistant.name}.sqlite`),
