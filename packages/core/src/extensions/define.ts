@@ -69,6 +69,11 @@ export type ExtensionParts = Omit<Extension, "name"> & {
    * under the extension's name.
    */
   readonly approvals?: Readonly<Record<string, ApprovalHandler>>;
+  /**
+   * Releases what `setup` started, such as processes or connections, once a reload replaced the
+   * extension or the assistant closed. Calls that already started may still be finishing.
+   */
+  readonly close?: () => void | Promise<void>;
 };
 
 export type NudgeExtension<S extends TSchema = TSchema> = {
@@ -130,6 +135,7 @@ export type SetUpExtension = {
   readonly roomSocket?: RoomSocketHandler;
   readonly models: readonly { readonly provider: string; readonly modelId: string }[];
   readonly approvals: Readonly<Record<string, ApprovalHandler>>;
+  readonly close?: () => void | Promise<void>;
 };
 
 /** Checks the settings and runs `setup`. A plain extension passes through. */
@@ -163,6 +169,7 @@ export async function setUpExtension(
     roomSocket,
     models = [],
     approvals = {},
+    close,
     ...parts
   } = await definition.setup({
     ...base,
@@ -179,6 +186,7 @@ export async function setUpExtension(
     models,
     approvals,
     ...(roomSocket === undefined ? {} : { roomSocket }),
+    ...(close === undefined ? {} : { close }),
   };
 }
 

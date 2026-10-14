@@ -230,6 +230,35 @@ describe("extensions", () => {
     await nudge.close(context);
   });
 
+  it("closes an extension when a reload replaces it, when one fails, and at close", async () => {
+    const closed: string[] = [];
+    let setups = 0;
+    const closing = (name: string) =>
+      defineNudgeExtension({
+        name,
+        version: "1",
+        setup: () => {
+          const n = ++setups;
+          return { close: () => void closed.push(`${name}#${n}`) };
+        },
+      });
+    const broken = defineNudgeExtension({
+      name: "broken",
+      version: "1",
+      setup: () => {
+        throw new Error("no");
+      },
+    });
+    const { options } = setup({ extensions: [closing("a")] });
+    const nudge = await createNudge(options, context);
+    await nudge.reloadExtensions([closing("a"), closing("b")]);
+    expect(closed).toEqual(["a#1"]);
+    await expect(nudge.reloadExtensions([closing("c"), broken])).rejects.toThrow("no");
+    expect(closed).toEqual(["a#1", "c#4"]);
+    await nudge.close(context);
+    expect(closed).toEqual(["a#1", "c#4", "a#2", "b#3"]);
+  });
+
   it("lets an extension protect values once the assistant is open", async () => {
     let protect: ((value: string, kind?: string) => Promise<string>) | undefined;
     const contacts = defineNudgeExtension({

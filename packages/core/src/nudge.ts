@@ -99,6 +99,7 @@ type Parts = {
   readonly host: HostBase;
   readonly detectors: readonly PiiDetector[];
   readonly installed: readonly SetUpExtension[];
+  readonly report: (error: unknown) => void;
 };
 
 /** One assistant: one storage, one Harness, one registry. */
@@ -121,6 +122,7 @@ export class Nudge {
   /** The assistant's own detectors, without its extensions'. */
   private readonly detectors: readonly PiiDetector[];
   private installed: readonly SetUpExtension[];
+  private readonly report: (error: unknown) => void;
   private reloading: Promise<unknown> = Promise.resolve();
 
   private constructor(parts: Parts) {
@@ -134,6 +136,7 @@ export class Nudge {
     this.host = parts.host;
     this.detectors = parts.detectors;
     this.installed = parts.installed;
+    this.report = parts.report;
     this.players = new Players(harness, (name) => this.protect(name, "NAME").then(() => {}), now);
     const changed = (change: Change) => this.changes.emit(change);
     this.rooms = new Rooms(
@@ -175,18 +178,25 @@ export class Nudge {
       protect: (value, kind) => whenOpen().protect(value, kind),
       ...(options.database === ":memory:" ? {} : { dataRoot: `${options.database}.extensions` }),
     };
+    if (options.database !== ":memory:")
+      await mkdir(dirname(options.database), { recursive: true });
+    // Locked first, so an assistant open elsewhere starts none of its extensions here.
+    const unlock =
+      options.database === ":memory:" ? async () => {} : await lockDatabase(options.database);
     // Extensions are in the registry before the Harness opens, so their tasks resume with it.
-    const installed = await setUpAll(options.extensions ?? [], host);
+    let installed: SetUpExtension[];
+    try {
+      installed = await setUpAll(options.extensions ?? [], host);
+    } catch (error) {
+      await unlock();
+      throw error;
+    }
     for (const { extension } of installed) registry.install(extension);
     const detectors = options.privacy?.detectors ?? builtinDetectors;
     const models = new RedactingModels(options.models, {
       detectors: withExtensionDetectors(detectors, installed),
       onRequest: options.privacy?.onRequest,
     });
-    if (options.database !== ":memory:")
-      await mkdir(dirname(options.database), { recursive: true });
-    const unlock =
-      options.database === ":memory:" ? async () => {} : await lockDatabase(options.database);
     let harness: Harness;
     try {
       harness = await Harness.open(
@@ -201,6 +211,7 @@ export class Nudge {
         context,
       );
     } catch (error) {
+      await closeAll(installed, () => {});
       await unlock();
       throw error;
     }
@@ -227,6 +238,7 @@ export class Nudge {
         host,
         detectors,
         installed,
+        report: options.onReport ?? (() => {}),
       });
       await nudge.rooms.adoptLobby(lobby.id, context);
       const directory = await harness.snapshot(DirectoryDoc, context);
@@ -250,6 +262,7 @@ export class Nudge {
       return nudge;
     } catch (error) {
       await harness.close(context);
+      await closeAll(installed, () => {});
       await unlock();
       throw error;
     }
@@ -276,7 +289,9 @@ export class Nudge {
         if (!names.has(extension.name)) this.registry.uninstall(extension);
       for (const { extension } of next) this.registry.install(extension);
       this.models.detectors = withExtensionDetectors(this.detectors, next);
+      const replaced = this.installed;
       this.installed = next;
+      await closeAll(replaced, this.report);
       await this.selectExtensions(BACKGROUND_CONTEXT);
       return this.extensions();
     });
@@ -441,6 +456,7 @@ export class Nudge {
     try {
       await this.harness.close(context);
     } finally {
+      await closeAll(this.installed, this.report);
       await this.unlock();
     }
   }
@@ -453,18 +469,37 @@ export class RoomNotFound extends Error {
   }
 }
 
+/** Sets up every extension, or none: when one fails, those set up before it are closed again. */
 async function setUpAll(
   inputs: readonly ExtensionInput[],
   host: Parts["host"],
 ): Promise<SetUpExtension[]> {
   const installed: SetUpExtension[] = [];
-  for (const input of inputs) {
-    const setUp = await setUpExtension(input, host);
-    if (installed.some(({ extension }) => extension.name === setUp.extension.name))
-      throw new Error(`Extension "${setUp.extension.name}" is installed twice`);
-    installed.push(setUp);
+  try {
+    for (const input of inputs) {
+      const setUp = await setUpExtension(input, host);
+      const twice = installed.some(({ extension }) => extension.name === setUp.extension.name);
+      installed.push(setUp);
+      if (twice) throw new Error(`Extension "${setUp.extension.name}" is installed twice`);
+    }
+  } catch (error) {
+    await closeAll(installed, () => {});
+    throw error;
   }
   return installed;
+}
+
+async function closeAll(
+  installed: readonly SetUpExtension[],
+  report: (error: unknown) => void,
+): Promise<void> {
+  for (const { close } of installed) {
+    try {
+      await close?.();
+    } catch (error) {
+      report(error);
+    }
+  }
 }
 
 function onByDefault(room: Pick<Room, "kind">, installed: SetUpExtension): boolean {
