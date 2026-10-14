@@ -144,6 +144,28 @@ importers:
         specifier: 0.1.3
         version: 0.1.3
 
+  packages/client:
+    dependencies:
+      '@nudge/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+    devDependencies:
+      '@earendil-works/chord':
+        specifier: 1.2.0
+        version: 1.2.0
+      '@earendil-works/pi-ai':
+        specifier: 1.2.0
+        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@4.6.6)
+      '@nudge/core':
+        specifier: workspace:*
+        version: link:../core
+      '@nudge/server':
+        specifier: workspace:*
+        version: link:../server
+      typebox:
+        specifier: 1.3.27
+        version: 1.3.27
+
   packages/core:
     dependencies:
       '@earendil-works/chord':

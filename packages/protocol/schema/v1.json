@@ -561,6 +561,12 @@
             }
           }
         },
+        "clientId": {
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        },
         "nudge": {
           "type": "boolean"
         }
@@ -1059,6 +1065,12 @@
                     "type": "string"
                   }
                 }
+              },
+              "clientId": {
+                "type": "string"
+              },
+              "requestId": {
+                "type": "string"
               },
               "nudge": {
                 "type": "boolean"
@@ -2023,6 +2035,12 @@
                                 "type": "string"
                               }
                             }
+                          },
+                          "clientId": {
+                            "type": "string"
+                          },
+                          "requestId": {
+                            "type": "string"
                           },
                           "nudge": {
                             "type": "boolean"

@@ -134,6 +134,9 @@ export const QueuedMessage = Type.Object({
   mode: Type.Union([Type.Literal("steer"), Type.Literal("followUp")]),
   text: Type.String(),
   author: Type.Optional(Player),
+  /** As on a user item: its sender can tell its own message from the queue. */
+  clientId: Type.Optional(Type.String()),
+  requestId: Type.Optional(Type.String()),
   /** A fired nudge or an ended approval rather than someone's message. */
   nudge: Type.Boolean(),
 });

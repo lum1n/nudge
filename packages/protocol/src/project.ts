@@ -391,6 +391,8 @@ function queued(item: InboxItem): QueuedMessage[] {
         ...base,
         text: data.text,
         author: { id: data.playerId, displayName: data.displayName },
+        ...(data.clientId === undefined ? {} : { clientId: data.clientId }),
+        ...(data.requestId === undefined ? {} : { requestId: data.requestId }),
         nudge: false,
       },
     ];

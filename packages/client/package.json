@@ -1,0 +1,30 @@
+{
+  "name": "@nudge/client",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A TypeScript client for Nudge's protocol v1: the socket with reconnects, room and home stores, and the HTTP commands",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "@nudge/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@nudge/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@earendil-works/chord": "1.2.0",
+    "@earendil-works/pi-ai": "1.2.0",
+    "@nudge/core": "workspace:*",
+    "@nudge/server": "workspace:*",
+    "typebox": "1.3.27"
+  }
+}
