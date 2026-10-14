@@ -119,4 +119,72 @@ describe("runBrowserAgent", () => {
     });
     expect(result).toMatchObject({ outcome: "max-steps", steps: 2 });
   });
+
+  it("shows a site's notes when a run first reaches it, and asks for new ones after", async () => {
+    const { models, model, requests } = setup([
+      fauxAssistantMessage(
+        [
+          fauxToolCall("browser_navigate", { url: "https://www.example.no/search" }, { id: "a" }),
+          fauxToolCall("browser_click", { ref: "e7" }, { id: "b" }),
+        ],
+        { stopReason: "toolUse" },
+      ),
+      fauxAssistantMessage([fauxToolCall("browser_click", { ref: "e9" }, { id: "c" })], {
+        stopReason: "toolUse",
+      }),
+      fauxAssistantMessage([fauxText("Found it: https://example.no/3")]),
+      fauxAssistantMessage([
+        fauxText(
+          'Here: {"www.example.no": "  Search box at the top; ?q= works.  ", "elsewhere.com": "x"}',
+        ),
+      ]),
+    ]);
+    const { browser } = fakeBrowser(
+      (n) => `URL: https://www.example.no/${n}\n\n- heading "Page ${n}"`,
+    );
+    const written: Record<string, string>[] = [];
+    const result = await runBrowserAgent({
+      models,
+      model,
+      browser,
+      task: "Find the thing",
+      siteNotes: {
+        read: (host) => (host === "example.no" ? "Reject cookies with Tilpass." : undefined),
+        write: (notes) => {
+          written.push({ ...notes });
+        },
+      },
+    });
+    expect(result.outcome).toBe("answered");
+    // Shown once, with the first page of the site.
+    expect(text(requests[1])).toContain(
+      "Your notes from earlier visits to example.no:\\nReject cookies with Tilpass.",
+    );
+    expect(text(requests[2]).split("Your notes from earlier visits").length).toBe(2);
+    // Asked for after the answer, about the sites visited only.
+    expect(text(requests[3])).toContain("write notes for your next visit to example.no");
+    expect(written).toEqual([{ "example.no": "Search box at the top; ?q= works." }]);
+  });
+
+  it("asks for no notes after a short run", async () => {
+    const { models, model, requests } = setup([
+      fauxAssistantMessage([fauxToolCall("browser_navigate", { url: "https://example.no/" })], {
+        stopReason: "toolUse",
+      }),
+      fauxAssistantMessage([fauxText("It's on the front page.")]),
+    ]);
+    const { browser } = fakeBrowser();
+    const write = (_notes: Record<string, string>) => {
+      throw new Error("no notes expected");
+    };
+    const result = await runBrowserAgent({
+      models,
+      model,
+      browser,
+      task: "Look",
+      siteNotes: { read: () => undefined, write },
+    });
+    expect(result.outcome).toBe("answered");
+    expect(requests).toHaveLength(2);
+  });
 });

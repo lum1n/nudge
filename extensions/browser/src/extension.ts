@@ -2,8 +2,20 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Api, Model, ThinkingLevel } from "@earendil-works/pi-ai";
+import { defineDoc } from "@earendil-works/pi-durable";
 import { defineNudgeExtension, defineTool, Type } from "@nudge/core";
 import { DEFAULT_BROWSER_MODEL, runBrowserAgent } from "./agent.ts";
+
+/** What the browser agent learned about using each site, by host; shared by every room. */
+export const SiteNotesDoc = defineDoc<{ sites: Record<string, { notes: string; at: number }> }>({
+  kind: "browser.sites",
+  version: 1,
+  scope: "session",
+  initial: () => ({ sites: {} }),
+});
+
+/** Sites whose notes are kept; the ones used longest ago go first. */
+const MAX_SITES = 300;
 import type { BrowserSession } from "./browser.ts";
 import { type LiveInput, type LiveOutput, startLiveView } from "./live.ts";
 import { LoginStore } from "./logins.ts";
@@ -33,6 +45,8 @@ export default defineNudgeExtension({
     idleMinutes: Type.Number({ default: 10, minimum: 1 }),
     /** Let the browser reach localhost and the local network (routers, NAS, intranet). */
     allowPrivateNetwork: Type.Boolean({ default: false }),
+    /** Keep short notes per site on how to use it, and show them on the next visit. */
+    siteNotes: Type.Boolean({ default: true }),
   }),
   setup: ({ settings, dataDir, timeZone, now }) => {
     // Without a data directory (an in-memory assistant), profiles go to a temp dir made on first use.
@@ -80,6 +94,22 @@ export default defineNudgeExtension({
               };
             }
             const scope = scopeOf(api.conversationId);
+            const known = settings.siteNotes
+              ? ((await api.snapshot(SiteNotesDoc, context))?.sites ?? {})
+              : {};
+            const siteNotes = settings.siteNotes
+              ? {
+                  read: (host: string) => known[host]?.notes,
+                  write: (notes: Readonly<Record<string, string>>) =>
+                    api.commit(async (tx) => {
+                      const doc = await tx.doc(SiteNotesDoc);
+                      for (const [host, text] of Object.entries(notes))
+                        doc.sites[host] = { notes: text, at: now() };
+                      const hosts = Object.entries(doc.sites).sort(([, a], [, b]) => b.at - a.at);
+                      for (const [host] of hosts.slice(MAX_SITES)) delete doc.sites[host];
+                    }, context),
+                }
+              : undefined;
             const result = await withBrowser(optionsFor(api.conversationId), idleMs, (browser) => {
               useLogins(browser, scope);
               return runBrowserAgent({
@@ -89,6 +119,7 @@ export default defineNudgeExtension({
                 task,
                 reasoning: settings.reasoning as ThinkingLevel,
                 maxSteps: settings.maxSteps,
+                ...(siteNotes === undefined ? {} : { siteNotes }),
                 timeZone,
                 now,
                 ...(context.abortSignal ? { signal: context.abortSignal } : {}),

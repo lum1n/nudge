@@ -26,6 +26,45 @@ export interface BrowserAgentOptions {
   now?: () => number;
   signal?: AbortSignal;
   onStep?: (step: BrowserStep) => void;
+  /**
+   * Notes kept per site from earlier runs: shown the first time a run reaches the site, and asked
+   * for again after a run that answered with at least `minActions` actions.
+   */
+  siteNotes?: SiteNotes;
+}
+
+export interface SiteNotes {
+  read(host: string): string | undefined;
+  /** New notes by host; a host left out keeps what it had. */
+  write(notes: Readonly<Record<string, string>>): void | Promise<void>;
+  /** Runs shorter than this teach little; default 3. */
+  minActions?: number;
+}
+
+/** Characters of notes kept per site. */
+export const MAX_SITE_NOTES = 1_200;
+
+/** The host a page observation is on, without `www.`, from its `URL:` line. */
+export function observedHost(text: string): string | undefined {
+  const url = /^URL: (\S+)/m.exec(text)?.[1];
+  if (url === undefined) return undefined;
+  try {
+    return new URL(url).hostname.replace(/^www\./, "") || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The request for notes at the end of a run. */
+export function notesRequest(hosts: readonly string[]): string {
+  return [
+    `Before you finish: write notes for your next visit to ${hosts.join(", ")}.`,
+    "Only how to use each site: where search and filters are, URL parameters you saw work, " +
+      "which button closes the cookie dialog, traps to avoid. Nothing about the user, this task " +
+      "or what you found. At most 6 short lines per site; keep what still holds from the notes " +
+      "you were shown.",
+    'Reply with only a JSON object from site to notes, like {"example.no": "…"}; leave out sites with nothing worth keeping.',
+  ].join("\n");
 }
 
 export type BrowserStep =
@@ -109,6 +148,7 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<Bro
     usage,
   };
   const maxSteps = options.maxSteps ?? 30;
+  const visited = new Set<string>();
   while (result.steps < maxSteps) {
     if (options.signal?.aborted) {
       result.outcome = "aborted";
@@ -154,6 +194,12 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<Bro
       })),
     );
     for (const output of outputs) {
+      const host = observedHost(output.text);
+      if (host !== undefined && !visited.has(host)) {
+        visited.add(host);
+        const notes = options.siteNotes?.read(host);
+        if (notes) output.text += `\n\nYour notes from earlier visits to ${host}:\n${notes}`;
+      }
       result.actions++;
       if (output.isError) result.actionErrors++;
       const call = calls.find((c) => c.id === output.id)!;
@@ -180,6 +226,48 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<Bro
       result.outcome = "needs-login";
       result.answer = ended.text;
       break;
+    }
+  }
+  const notes = options.siteNotes;
+  if (
+    notes !== undefined &&
+    result.outcome === "answered" &&
+    result.actions >= (notes.minActions ?? 3) &&
+    visited.size > 0 &&
+    !options.signal?.aborted
+  ) {
+    try {
+      const request: Context = {
+        systemPrompt,
+        messages: [
+          ...forRequest(messages),
+          { role: "user", content: notesRequest([...visited]), timestamp: now() },
+        ],
+        tools,
+      };
+      const reply = await options.models
+        .streamSimple(options.model, request, {
+          reasoning: "minimal",
+          maxTokens: 1_500,
+          ...(options.signal ? { signal: options.signal } : {}),
+        })
+        .result();
+      addUsage(usage, reply.usage);
+      const text = reply.content.map((c) => (c.type === "text" ? c.text : "")).join("");
+      const json = /\{[\s\S]*\}/.exec(text)?.[0];
+      const parsed = json === undefined ? {} : (JSON.parse(json) as Record<string, unknown>);
+      const kept = Object.fromEntries(
+        Object.entries(parsed)
+          .map(([host, value]) => [host.replace(/^www\./, ""), value] as const)
+          .filter(
+            (entry): entry is readonly [string, string] =>
+              visited.has(entry[0]) && typeof entry[1] === "string" && entry[1].trim() !== "",
+          )
+          .map(([host, value]) => [host, value.trim().slice(0, MAX_SITE_NOTES)]),
+      );
+      if (Object.keys(kept).length > 0) await notes.write(kept);
+    } catch {
+      // Notes are a help, not the task: a run that answered stays answered.
     }
   }
   return result;

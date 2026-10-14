@@ -1,8 +1,12 @@
-export { default } from "./extension.ts";
+export { default, SiteNotesDoc } from "./extension.ts";
 export {
   DEFAULT_BROWSER_MODEL,
   browserSystemPrompt,
+  MAX_SITE_NOTES,
+  notesRequest,
+  observedHost,
   runBrowserAgent,
+  type SiteNotes,
   type BrowserAgentOptions,
   type BrowserAgentResult,
   type BrowserStep,
