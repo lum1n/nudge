@@ -32,10 +32,15 @@ export async function loadExtensions(
   for (const entry of entries) {
     if (entry.enabled === false) continue;
     const extension = await importExtension(entry.from, fresh);
-    if (isNudgeExtension(extension)) loaded.push({ extension, settings: entry.settings });
+    if (isNudgeExtension(extension))
+      loaded.push({
+        extension,
+        settings: entry.settings,
+        ...(entry.rooms === undefined ? {} : { rooms: entry.rooms }),
+      });
     else if (entry.settings !== undefined)
       throw new ConfigError(`${entry.from} is a plain Pi Durable extension; it takes no settings`);
-    else loaded.push(extension);
+    else loaded.push(entry.rooms === undefined ? extension : { extension, rooms: entry.rooms });
   }
   return loaded;
 }

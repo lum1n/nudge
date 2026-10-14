@@ -1,4 +1,11 @@
-import type { Approval, RoomNudge, RoomView, Status, TimelineItem } from "@nudge/protocol";
+import type {
+  Approval,
+  RoomExtension,
+  RoomNudge,
+  RoomView,
+  Status,
+  TimelineItem,
+} from "@nudge/protocol";
 
 const dim = (text: string) => `\x1b[2m${text}\x1b[22m`;
 const bold = (text: string) => `\x1b[1m${text}\x1b[22m`;
@@ -21,6 +28,13 @@ export function describeNudge(nudge: RoomNudge): string {
   });
   const every = nudge.every === undefined ? "" : `, every ${Math.round(nudge.every / 60_000)} min`;
   return `${nudge.id}\t${when}${every}\t${nudge.message}`;
+}
+
+export function describeExtension(extension: RoomExtension): string {
+  const state = extension.enabled ? "on" : "off";
+  const chosen = extension.enabled === extension.byDefault ? "" : " (chosen here)";
+  const about = extension.description === undefined ? "" : ` — ${extension.description}`;
+  return `${extension.name}: ${state}${chosen}${about}`;
 }
 
 type Answer = Extract<TimelineItem, { type: "answer" }>;

@@ -37,6 +37,13 @@ const ExtensionSchema = Type.Object({
   settings: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
   /** Default true; false keeps the entry without installing it. */
   enabled: Type.Optional(Type.Boolean()),
+  /** The kinds of room it is on in unless a room turns it on or off; default every kind. */
+  rooms: Type.Optional(
+    Type.Array(
+      Type.Union([Type.Literal("lobby"), Type.Literal("personal"), Type.Literal("shared")]),
+      { uniqueItems: true },
+    ),
+  ),
 });
 
 const AssistantSchema = Type.Object({

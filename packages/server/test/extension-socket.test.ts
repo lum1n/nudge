@@ -96,4 +96,36 @@ describe("extension room sockets", () => {
     await eventually(() => lobby.frames.length > 0);
     lobby.close();
   });
+
+  it("lists a room's extensions and turns them off and on over HTTP", async () => {
+    const call = async (method: string, path: string, token: string, body?: unknown) => {
+      const response = await fetch(`${server.url}/v1/a/robin/rooms/${path}`, {
+        method,
+        headers: {
+          authorization: `Bearer ${token}`,
+          ...(body === undefined ? {} : { "content-type": "application/json" }),
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      return { status: response.status, json: (await response.json()) as any };
+    };
+    expect((await call("GET", "trip/extensions", tokens.Ann!)).json).toEqual({
+      extensions: [{ name: "echo", version: "1.0.0", enabled: true, byDefault: true }],
+    });
+    expect((await call("GET", "trip/extensions", tokens.Cy!)).status).toBe(404);
+    expect(
+      (await call("PUT", "trip/extensions/echo", tokens.Ann!, { enabled: false })).json,
+    ).toMatchObject({ enabled: false, byDefault: true });
+    expect(
+      (await call("PUT", "trip/extensions/nudge", tokens.Ann!, { enabled: false })).status,
+    ).toBe(404);
+    expect((await call("PUT", "trip/extensions/echo", tokens.Ann!, { on: 1 })).status).toBe(400);
+
+    // Its socket is gone from the room while it is off.
+    expect((await connect(`${base}/trip/ext/echo`, tokens.Ann!).closed).code).toBe(4404);
+    await call("PUT", "trip/extensions/echo", tokens.Ann!, { enabled: null });
+    const client = connect(`${base}/trip/ext/echo`, tokens.Ann!);
+    await eventually(() => client.frames.length > 0);
+    client.close();
+  });
 });

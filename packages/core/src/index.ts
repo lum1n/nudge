@@ -4,10 +4,12 @@ import { type AssistantConfig, ConfigError, DEFAULT_MODEL, type NudgeConfig } fr
 import { loadExtensions } from "./extensions/loader.ts";
 import { buildModels } from "./models/providers.ts";
 import {
+  ExtensionNotFound,
   type InstalledExtension,
   Nudge,
   type NudgeOptions,
   type PrivacyOptions,
+  type RoomExtension,
   RoomNotFound,
 } from "./nudge.ts";
 
@@ -107,7 +109,15 @@ export {
 } from "./privacy/detectors.ts";
 export { Vault, type VaultEntry } from "./privacy/vault.ts";
 export { DatabaseInUse } from "./storage-lock.ts";
-export { type InstalledExtension, Nudge, type NudgeOptions, type PrivacyOptions, RoomNotFound };
+export {
+  ExtensionNotFound,
+  type InstalledExtension,
+  Nudge,
+  type NudgeOptions,
+  type PrivacyOptions,
+  type RoomExtension,
+  RoomNotFound,
+};
 
 export function createNudge(options: NudgeOptions, context: Context): Promise<Nudge> {
   return Nudge.open(options, context);

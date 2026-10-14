@@ -367,6 +367,27 @@ export type RememberRequest = Static<typeof RememberRequest>;
 export const DecideRequest = Type.Object({ approve: Type.Boolean() });
 export type DecideRequest = Static<typeof DecideRequest>;
 
+/** An installed extension as one room has it. The built-in one is always on and not listed. */
+export const RoomExtension = Type.Object({
+  name: Type.String(),
+  version: Type.Optional(Type.String()),
+  description: Type.Optional(Type.String()),
+  /** Whether the room's conversation uses it. */
+  enabled: Type.Boolean(),
+  /** Whether it is on in rooms of this kind by default; `enabled` differs when the room chose. */
+  byDefault: Type.Boolean(),
+});
+export type RoomExtension = Static<typeof RoomExtension>;
+
+export const RoomExtensionsResponse = Type.Object({ extensions: Type.Array(RoomExtension) });
+export type RoomExtensionsResponse = Static<typeof RoomExtensionsResponse>;
+
+/** `null` goes back to the default for the room's kind. */
+export const SetRoomExtensionRequest = Type.Object({
+  enabled: Type.Union([Type.Boolean(), Type.Null()]),
+});
+export type SetRoomExtensionRequest = Static<typeof SetRoomExtensionRequest>;
+
 export const ProtectRequest = Type.Object({
   value: Type.String(),
   /** Upper-case letters, such as `NAME`; default `PRIVATE`. */
@@ -483,6 +504,9 @@ export const SCHEMAS = {
   TimelineResponse,
   RememberRequest,
   DecideRequest,
+  RoomExtension,
+  RoomExtensionsResponse,
+  SetRoomExtensionRequest,
   ProtectRequest,
   ProtectResponse,
   CreatePlayerRequest,

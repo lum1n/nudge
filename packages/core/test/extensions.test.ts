@@ -16,6 +16,7 @@ import hello from "../../../extensions/hello/src/index.ts";
 import {
   ConfigError,
   createNudge,
+  ExtensionNotFound,
   defineNudgeExtension,
   defineTool,
   LOBBY,
@@ -178,6 +179,57 @@ describe("extensions", () => {
     await nudge.close(context);
   });
 
+  it("turns extensions on and off per room, with defaults per room kind", async () => {
+    const { options, requests } = setup({ extensions: [{ extension: hello, rooms: ["shared"] }] });
+    const nudge = await createNudge(options, context);
+    await nudge.players.ensure("ann", "Ann", context);
+    await nudge.rooms.createShared({ id: "trip", name: "Trip", members: ["ann"] }, context);
+    const tools = () => current(requests.at(-1)).tools;
+
+    await say(nudge, "Hi");
+    expect(tools()).not.toContain("roll_dice");
+    expect(tools()).toContain("remember");
+    await say(nudge, "Hi", "trip");
+    expect(tools()).toContain("roll_dice");
+    expect(await nudge.roomExtensions(LOBBY, context)).toEqual([
+      expect.objectContaining({
+        name: "hello",
+        version: "0.1.0",
+        enabled: false,
+        byDefault: false,
+      }),
+    ]);
+
+    expect(await nudge.setRoomExtension(LOBBY, "hello", true, context)).toMatchObject({
+      enabled: true,
+      byDefault: false,
+    });
+    await say(nudge, "Hi");
+    expect(tools()).toContain("roll_dice");
+    await nudge.setRoomExtension("trip", "hello", false, context);
+    await say(nudge, "Hi", "trip");
+    expect(tools()).not.toContain("roll_dice");
+    await nudge.setRoomExtension("trip", "hello", undefined, context);
+    expect(await nudge.extensionEnabled("trip", "hello", context)).toBe(true);
+    expect((await nudge.rooms.get("trip", context))?.extensions).toBeUndefined();
+
+    // The built-in extension is always on; unknown ones can't be chosen.
+    await expect(nudge.setRoomExtension(LOBBY, "nudge", false, context)).rejects.toThrow(
+      ExtensionNotFound,
+    );
+    await expect(nudge.setRoomExtension(LOBBY, "zed", true, context)).rejects.toThrow(
+      ExtensionNotFound,
+    );
+
+    // A reload with other defaults reaches existing rooms; a room's own choice stays.
+    await nudge.reloadExtensions([{ extension: hello, rooms: ["personal"] }]);
+    await say(nudge, "Hi", "trip");
+    expect(tools()).not.toContain("roll_dice");
+    await say(nudge, "Hi");
+    expect(tools()).toContain("roll_dice");
+    await nudge.close(context);
+  });
+
   it("lets an extension protect values once the assistant is open", async () => {
     let protect: ((value: string, kind?: string) => Promise<string>) | undefined;
     const contacts = defineNudgeExtension({
@@ -309,6 +361,7 @@ describe("loading extensions", () => {
               { from: "./plain.mjs" },
               { from: HELLO, settings: { greeting: "Hoi" } },
               { from: "./plain.mjs", enabled: false },
+              { from: "./plain.mjs", rooms: ["personal"] },
             ],
           },
         ],
@@ -318,12 +371,13 @@ describe("loading extensions", () => {
     const entries = config.assistants[0]!.extensions!;
     expect(entries[0]!.from).toBe(join(dir, "plain.mjs"));
     const loaded = await loadExtensions(entries);
-    expect(loaded).toHaveLength(2);
+    expect(loaded).toHaveLength(3);
     expect(loaded[0]).toMatchObject({ name: "plain" });
     expect(loaded[1]).toMatchObject({
       extension: { kind: "nudge.extension", name: "hello" },
       settings: { greeting: "Hoi" },
     });
+    expect(loaded[2]).toMatchObject({ extension: { name: "plain" }, rooms: ["personal"] });
   });
 
   it("refuses missing files, modules without an extension, and settings for plain ones", async () => {

@@ -72,6 +72,22 @@ export type NudgeOptions = {
 /** An installed extension, as `Nudge.extensions` lists it. */
 export type InstalledExtension = { readonly name: string; readonly version?: string };
 
+/** An installed extension as one room has it. */
+export type RoomExtension = InstalledExtension & {
+  readonly description?: string;
+  /** Whether the room's conversation uses it. */
+  readonly enabled: boolean;
+  /** Whether it is on in rooms of this kind by default; `enabled` differs when the room chose. */
+  readonly byDefault: boolean;
+};
+
+export class ExtensionNotFound extends Error {
+  override name = "ExtensionNotFound";
+  constructor(readonly extension: string) {
+    super(`No extension "${extension}"`);
+  }
+}
+
 type Parts = {
   readonly harness: Harness;
   readonly displayName: string;
@@ -120,7 +136,12 @@ export class Nudge {
     this.installed = parts.installed;
     this.players = new Players(harness, (name) => this.protect(name, "NAME").then(() => {}), now);
     const changed = (change: Change) => this.changes.emit(change);
-    this.rooms = new Rooms(harness, () => agent, now, changed);
+    this.rooms = new Rooms(
+      harness,
+      (room) => ({ ...agent, extensions: this.selection(room) }),
+      now,
+      changed,
+    );
     this.nudges = new Nudges(harness, this.rooms, now, changed);
     this.memory = new Memory(harness, this.rooms, now, changed);
     // Looked up when an approval runs, so a reload's handlers take over.
@@ -220,6 +241,7 @@ export class Nudge {
         );
         if (conversation !== undefined) await followConfig(conversation, options, context);
       }
+      await nudge.selectExtensions(context);
       await nudge.nudges.reconcile(context);
       opened = nudge;
       // Pending nudge timers rearm here; those whose time passed while the host was down fire now.
@@ -255,10 +277,95 @@ export class Nudge {
       for (const { extension } of next) this.registry.install(extension);
       this.models.detectors = withExtensionDetectors(this.detectors, next);
       this.installed = next;
+      await this.selectExtensions(BACKGROUND_CONTEXT);
       return this.extensions();
     });
     this.reloading = reload.catch(() => {});
     return reload;
+  }
+
+  /** The installed extensions, each on or off in the room, in install order. */
+  async roomExtensions(roomId: string, context: Context): Promise<RoomExtension[]> {
+    const room = await this.room(roomId, context);
+    return this.installed.map((installed) => ({
+      name: installed.extension.name,
+      ...(installed.version === undefined ? {} : { version: installed.version }),
+      ...(installed.description === undefined ? {} : { description: installed.description }),
+      enabled: enabledIn(room, installed),
+      byDefault: onByDefault(room, installed),
+    }));
+  }
+
+  /**
+   * Turns an installed extension on or off in a room, or with `undefined` back to the config's
+   * default for the room's kind. The built-in extension is always on. The next turn uses it.
+   */
+  async setRoomExtension(
+    roomId: string,
+    name: string,
+    enabled: boolean | undefined,
+    context: Context,
+  ): Promise<RoomExtension> {
+    await this.room(roomId, context);
+    if (!this.installed.some(({ extension }) => extension.name === name))
+      throw new ExtensionNotFound(name);
+    const room = await this.harness.commit(async (tx) => {
+      const room = (await tx.doc(DirectoryDoc)).rooms[roomId];
+      if (room === undefined) throw new RoomNotFound(roomId);
+      const choices = { ...room.extensions };
+      if (enabled === undefined) delete choices[name];
+      else choices[name] = enabled;
+      if (Object.keys(choices).length === 0) delete room.extensions;
+      else room.extensions = choices;
+      return {
+        ...room,
+        members: [...room.members],
+        ...(room.extensions === undefined ? {} : { extensions: { ...room.extensions } }),
+      };
+    }, context);
+    await this.selectIn(room, context);
+    return (await this.roomExtensions(roomId, context)).find(
+      (extension) => extension.name === name,
+    )!;
+  }
+
+  /** Whether the room's conversation uses `name`; the built-in extension always. */
+  async extensionEnabled(roomId: string, name: string, context: Context): Promise<boolean> {
+    const room = await this.rooms.get(roomId, context);
+    const installed = this.installed.find(({ extension }) => extension.name === name);
+    return room !== undefined && installed !== undefined && enabledIn(room, installed);
+  }
+
+  /** The extensions a room's conversation leaves out, as a change to the host's selection. */
+  private selection(room: Pick<Room, "kind" | "extensions">): AgentChange["extensions"] {
+    const off = this.installed.filter((installed) => !enabledIn(room, installed));
+    return off.length === 0 ? null : { remove: off.map(({ extension }) => extension) };
+  }
+
+  /** Brings every room's conversation in line with the installed extensions and its choices. */
+  private async selectExtensions(context: Context): Promise<void> {
+    for (const room of await this.rooms.list(context)) await this.selectIn(room, context);
+  }
+
+  private async selectIn(room: Room, context: Context): Promise<void> {
+    const conversation = await this.harness.conversation(
+      room.conversationId as ConversationId,
+      context,
+    );
+    if (conversation === undefined) return;
+    const off = new Set(
+      this.installed
+        .filter((installed) => !enabledIn(room, installed))
+        .map(({ extension }) => extension.name),
+    );
+    const selected = (await conversation.agent(context)).extensions.map(({ name }) => name);
+    const wanted = this.registry
+      .snapshot()
+      .installed()
+      .map(({ name }) => name)
+      .filter((name) => !off.has(name));
+    if (selected.join("\n") === wanted.join("\n")) return;
+    await conversation.configure({ extensions: this.selection(room) }, context);
   }
 
   /** The room socket an installed extension serves, if any. */
@@ -358,6 +465,14 @@ async function setUpAll(
     installed.push(setUp);
   }
   return installed;
+}
+
+function onByDefault(room: Pick<Room, "kind">, installed: SetUpExtension): boolean {
+  return installed.rooms === undefined || installed.rooms.includes(room.kind);
+}
+
+function enabledIn(room: Pick<Room, "kind" | "extensions">, installed: SetUpExtension): boolean {
+  return room.extensions?.[installed.extension.name] ?? onByDefault(room, installed);
 }
 
 function withExtensionDetectors(

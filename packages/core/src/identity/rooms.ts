@@ -15,8 +15,8 @@ export type SharedRoomDraft = {
 export class Rooms {
   constructor(
     private readonly harness: Harness,
-    /** The model and instructions every new room starts with. */
-    private readonly agent: () => AgentChange,
+    /** The model, instructions and extensions a new room starts with. */
+    private readonly agent: (room: Pick<Room, "kind" | "extensions">) => AgentChange,
     private readonly now: () => number,
     private readonly changed: (change: Change) => void = () => {},
   ) {}
@@ -102,7 +102,7 @@ export class Rooms {
     await this.harness.createConversation(
       {
         ownership: { kind: "ownerless" },
-        agent: this.agent(),
+        agent: this.agent(room),
         // The conversation and its directory entry commit together, so neither exists alone.
         init: async (tx, conversationId) => {
           const directory = await tx.doc(DirectoryDoc);

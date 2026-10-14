@@ -1,7 +1,7 @@
 import { userInfo } from "node:os";
 import { createInterface } from "node:readline/promises";
 import { UsageError } from "../errors.ts";
-import { ChatRenderer, describeApproval, describeNudge } from "../render.ts";
+import { ChatRenderer, describeApproval, describeExtension, describeNudge } from "../render.ts";
 import type { RoomView } from "@nudge/protocol";
 import { type ChatSession, openLocal, openRemote } from "../session.ts";
 
@@ -24,7 +24,8 @@ const HELP =
   "/nudges lists scheduled nudges, /nudges cancel <id> cancels one, " +
   "/memory lists what the assistant remembers here, /memory add <text> and /memory forget <id> " +
   "change it, /approvals lists actions waiting for approval, /approve <id> and /deny <id> " +
-  "decide one, /quit leaves.";
+  "decide one, /extensions lists the extensions and whether they are on here, " +
+  "/extensions on|off|default <name> changes one, /quit leaves.";
 
 export async function chat(options: ChatOptions): Promise<void> {
   let rl: ReturnType<typeof createInterface> | undefined;
@@ -173,6 +174,17 @@ export async function chat(options: ChatOptions): Promise<void> {
             view.approvals.some((approval) => approval.id === id && approval.status !== "pending"),
           );
           console.log(`  ${describeApproval(decided)}`);
+        }
+      } else if (line === "/extensions") {
+        const extensions = await session.extensions();
+        if (extensions.length === 0) console.log("  No extensions installed.");
+        for (const extension of extensions) console.log(`  ${describeExtension(extension)}`);
+      } else if (line.startsWith("/extensions ")) {
+        const [, verb, name] = /^\/extensions\s+(on|off|default)\s+(\S+)$/.exec(line) ?? [];
+        if (name === undefined) console.log("  Usage: /extensions on|off|default <name>");
+        else {
+          const enabled = verb === "default" ? undefined : verb === "on";
+          console.log(`  ${describeExtension(await session.setExtension(name, enabled))}`);
         }
       } else if (line.startsWith("/private ")) {
         const placeholder = await session.protect(line.slice("/private ".length));

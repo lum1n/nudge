@@ -5,6 +5,7 @@ import {
   ApprovalNotFound,
   canUse,
   type Credential,
+  ExtensionNotFound,
   type Nudge,
   type Player as CorePlayer,
   type Room as CoreRoom,
@@ -34,8 +35,10 @@ import {
   type ProtectResponse,
   RememberRequest,
   type Room,
+  type RoomExtensionsResponse,
   type RoomsResponse,
   SetAdminRequest,
+  SetRoomExtensionRequest,
   type TimelineResponse,
   type TokenInfo,
   type TokensResponse,
@@ -257,6 +260,31 @@ export function restRoutes(options: RestOptions): Hono {
     if (!(await c.var.nudge.memory.forget(room.id, id, context)))
       throw new HttpError(404, `No fact "${id}"`);
     return c.body(null, 204);
+  });
+
+  api.get("/rooms/:room/extensions", async (c) => {
+    const room = await usableRoom(c);
+    const extensions = await c.var.nudge.roomExtensions(room.id, context);
+    return c.json({ extensions } satisfies RoomExtensionsResponse);
+  });
+
+  // Anyone in the room may change it, like its memory.
+  api.put("/rooms/:room/extensions/:extension", async (c) => {
+    const room = await usableRoom(c);
+    const body = await readBody(c, SetRoomExtensionRequest);
+    try {
+      return c.json(
+        await c.var.nudge.setRoomExtension(
+          room.id,
+          c.req.param("extension"),
+          body.enabled ?? undefined,
+          context,
+        ),
+      );
+    } catch (error) {
+      if (error instanceof ExtensionNotFound) throw new HttpError(404, error.message);
+      throw error;
+    }
   });
 
   api.post("/rooms/:room/approvals/:approval", async (c) => {

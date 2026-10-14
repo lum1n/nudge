@@ -60,7 +60,12 @@ export class ExtensionSocket {
     }
     const room = await this.nudge.rooms.get(this.roomId, context);
     const handler = this.nudge.roomSocket(this.extension);
-    if (room === undefined || !canUse(room, credential.player.id) || handler === undefined) {
+    if (
+      room === undefined ||
+      !canUse(room, credential.player.id) ||
+      handler === undefined ||
+      !(await this.nudge.extensionEnabled(room.id, this.extension, context))
+    ) {
       ws.close(CLOSE.notFound, `No room "${this.roomId}" with extension "${this.extension}"`);
       return;
     }

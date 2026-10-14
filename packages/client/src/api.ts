@@ -14,6 +14,8 @@ import type {
   PlayerResponse,
   ProtectResponse,
   Room,
+  RoomExtension,
+  RoomExtensionsResponse,
   TimelineResponse,
   TokenInfo,
   TokensResponse,
@@ -130,6 +132,22 @@ export class Api {
   decide(room: string, approval: string, approve: boolean): Promise<Approval> {
     return this.request("POST", `${roomPath(room)}/approvals/${encodeURIComponent(approval)}`, {
       approve,
+    });
+  }
+
+  async roomExtensions(room: string): Promise<RoomExtension[]> {
+    return (await this.request<RoomExtensionsResponse>("GET", `${roomPath(room)}/extensions`))
+      .extensions;
+  }
+
+  /** Turns an extension on or off in the room; `null` goes back to the default for its kind. */
+  setRoomExtension(
+    room: string,
+    extension: string,
+    enabled: boolean | null,
+  ): Promise<RoomExtension> {
+    return this.request("PUT", `${roomPath(room)}/extensions/${encodeURIComponent(extension)}`, {
+      enabled,
     });
   }
 

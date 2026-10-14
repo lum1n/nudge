@@ -11,9 +11,10 @@
       "instructions": "Answer in the language you are written to. Keep answers short.",
       "extensions": [
         {
-          "$comment": "from is a file or package directory relative to this file, or an installed package name. settings are checked against the extension's own schema. Set enabled to false to keep an entry without installing it.",
+          "$comment": "from is a file or package directory relative to this file, or an installed package name. settings are checked against the extension's own schema. rooms lists the kinds of room it is on in by default (lobby, personal, shared; default all); people can turn it on or off per room with /extensions. Set enabled to false to keep an entry without installing it.",
           "from": "./extensions/hello",
-          "settings": { "greeting": "Hei", "maxSides": 20 }
+          "settings": { "greeting": "Hei", "maxSides": 20 },
+          "rooms": ["personal", "shared"]
         }
       ]
     },

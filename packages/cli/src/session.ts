@@ -4,13 +4,14 @@ import { ApiError, listAssistants, memoryTokens, NudgeClient } from "@nudge/clie
 import {
   type Author,
   canUse,
+  ExtensionNotFound,
   findAssistant,
   loadConfig,
   type Nudge,
   openAssistant,
   type Room as CoreRoom,
 } from "@nudge/core";
-import type { Approval, Fact, RoomView } from "@nudge/protocol";
+import type { Approval, Fact, RoomExtension, RoomView } from "@nudge/protocol";
 import { toApproval, toFact } from "@nudge/protocol/project";
 import { Hubs } from "@nudge/server";
 import { UsageError } from "./errors.ts";
@@ -33,6 +34,9 @@ export interface ChatSession {
   forget(id: string): Promise<void>;
   /** Approves or denies one; an approved action runs before this resolves. */
   decide(id: string, approve: boolean): Promise<Approval>;
+  extensions(): Promise<RoomExtension[]>;
+  /** On, off, or with `undefined` back to the default for the room's kind. */
+  setExtension(name: string, enabled: boolean | undefined): Promise<RoomExtension>;
   close(): Promise<void>;
 }
 
@@ -182,6 +186,19 @@ class LocalSession implements ChatSession {
     return toApproval(
       await this.nudge.approvals.decide(this.room.id, id, { approve, by }, context),
     );
+  }
+
+  extensions(): Promise<RoomExtension[]> {
+    return this.nudge.roomExtensions(this.room.id, context);
+  }
+
+  async setExtension(name: string, enabled: boolean | undefined): Promise<RoomExtension> {
+    try {
+      return await this.nudge.setRoomExtension(this.room.id, name, enabled, context);
+    } catch (error) {
+      if (error instanceof ExtensionNotFound) throw new UsageError(error.message);
+      throw error;
+    }
   }
 
   async close(): Promise<void> {
@@ -335,6 +352,17 @@ class RemoteSession implements ChatSession {
 
   decide(id: string, approve: boolean): Promise<Approval> {
     return this.client.api.decide(this.room, id, approve);
+  }
+
+  extensions(): Promise<RoomExtension[]> {
+    return this.client.api.roomExtensions(this.room);
+  }
+
+  setExtension(name: string, enabled: boolean | undefined): Promise<RoomExtension> {
+    return this.notFound(
+      this.client.api.setRoomExtension(this.room, name, enabled ?? null),
+      `No extension "${name}"`,
+    );
   }
 
   async close(): Promise<void> {

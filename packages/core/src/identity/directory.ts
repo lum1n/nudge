@@ -45,6 +45,8 @@ export type Room = {
   /** Player ids; empty for the lobby, which everyone may use. */
   members: string[];
   createdAt: number;
+  /** Extensions turned on or off in this room, by name; the others follow the config. */
+  extensions?: Record<string, boolean>;
 };
 
 export type DirectoryState = {

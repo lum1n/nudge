@@ -4,7 +4,7 @@ import type { ApprovalHandler } from "../approvals/approvals.ts";
 import type { Static, TSchema } from "typebox";
 import { Value } from "typebox/value";
 import { ConfigError } from "../config.ts";
-import type { Player, Room } from "../identity/directory.ts";
+import type { Player, Room, RoomKind } from "../identity/directory.ts";
 import type { PiiDetector } from "../privacy/detectors.ts";
 import { SecretStore } from "../secrets.ts";
 
@@ -85,8 +85,11 @@ export type NudgeExtension<S extends TSchema = TSchema> = {
 
 /** An extension and its settings, as the config gives them. */
 export type ExtensionUse = {
-  readonly extension: NudgeExtension;
+  readonly extension: NudgeExtension | Extension;
+  /** Only for Nudge extensions. */
   readonly settings?: unknown;
+  /** The kinds of room it is on in unless a room says otherwise; default every kind. */
+  readonly rooms?: readonly RoomKind[];
 };
 
 /** What `NudgeOptions.extensions` takes: a plain Pi Durable extension, a Nudge one, or one with settings. */
@@ -120,6 +123,9 @@ export function isNudgeExtension(value: unknown): value is NudgeExtension {
 export type SetUpExtension = {
   readonly extension: Extension;
   readonly version?: string;
+  readonly description?: string;
+  /** Default every kind; see `ExtensionUse.rooms`. */
+  readonly rooms?: readonly RoomKind[];
   readonly detectors: readonly PiiDetector[];
   readonly roomSocket?: RoomSocketHandler;
   readonly models: readonly { readonly provider: string; readonly modelId: string }[];
@@ -131,18 +137,23 @@ export async function setUpExtension(
   input: ExtensionInput,
   host: HostBase,
 ): Promise<SetUpExtension> {
-  const use: ExtensionUse | undefined = isNudgeExtension(input)
+  const use: ExtensionUse = isNudgeExtension(input)
     ? { extension: input }
     : "extension" in input
       ? input
-      : undefined;
-  if (use === undefined) {
-    const extension = input as Extension;
+      : { extension: input };
+  const rooms = use.rooms === undefined ? {} : { rooms: use.rooms };
+  if (!isNudgeExtension(use.extension)) {
+    const extension = use.extension;
     if (extension.name === BUILTIN_NAME)
       throw new Error(`"${BUILTIN_NAME}" is the built-in extension`);
-    return { extension, detectors: [], models: [], approvals: {} };
+    if (use.settings !== undefined)
+      throw new ConfigError(
+        `${extension.name} is a plain Pi Durable extension; it takes no settings`,
+      );
+    return { extension, detectors: [], models: [], approvals: {}, ...rooms };
   }
-  const { extension: definition } = use;
+  const definition = use.extension;
   const settings = checkSettings(definition, use.settings);
   const { dataRoot, ...base } = host;
   const dataDir = dataRoot === undefined ? undefined : join(dataRoot, definition.name);
@@ -162,6 +173,8 @@ export async function setUpExtension(
   return {
     extension: { ...parts, name: definition.name },
     version: definition.version,
+    ...(definition.description === undefined ? {} : { description: definition.description }),
+    ...rooms,
     detectors,
     models,
     approvals,
