@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import type { Extension } from "@earendil-works/pi-durable";
+import type { Extension, Session } from "@earendil-works/pi-durable";
 import type { ApprovalHandler } from "../approvals/approvals.ts";
 import type { Static, TSchema } from "typebox";
 import { Value } from "typebox/value";
@@ -22,7 +22,15 @@ export type ExtensionHost<Settings> = {
   readonly dataDir?: string;
   /** Keys and passwords the extension keeps for itself, encrypted at rest; never reaches the model. */
   readonly secrets: SecretStore;
+  /**
+   * The assistant's documents, for work outside tools and approvals, such as a room socket.
+   * Throws until the assistant is open.
+   */
+  readonly documents: () => ExtensionDocuments;
 };
+
+/** Reading, watching and changing the assistant's documents. */
+export type ExtensionDocuments = Pick<Session, "snapshot" | "watchDoc" | "commit">;
 
 /**
  * What the assistant gives every extension; `setUpExtension` adds the settings and each one's
@@ -52,7 +60,12 @@ export type RoomSocketSession = {
  * client's token and that the player may use the room.
  */
 export type RoomSocketHandler = (
-  client: { readonly room: Room; readonly player: Player },
+  client: {
+    readonly room: Room;
+    readonly player: Player;
+    /** Whether the player may use the admin API. */
+    readonly admin: boolean;
+  },
   socket: RoomSocket,
 ) => RoomSocketSession | Promise<RoomSocketSession>;
 

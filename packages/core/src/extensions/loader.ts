@@ -59,6 +59,9 @@ export async function checkExtensions(
     timeZone: "UTC",
     now: Date.now,
     protect: () => Promise.reject(new Error("No assistant is open while checking")),
+    documents: () => {
+      throw new Error("No assistant is open while checking");
+    },
   };
   const checked: Awaited<ReturnType<typeof checkExtensions>> = [];
   for (const input of await loadExtensions(entries)) {

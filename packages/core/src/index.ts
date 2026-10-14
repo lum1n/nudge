@@ -46,6 +46,7 @@ export { type Change, type ChangeListener, Changes } from "./changes.ts";
 export { describeRoom, formatHour } from "./extensions/builtin.ts";
 export {
   defineNudgeExtension,
+  type ExtensionDocuments,
   type ExtensionHost,
   type ExtensionInput,
   type ExtensionParts,

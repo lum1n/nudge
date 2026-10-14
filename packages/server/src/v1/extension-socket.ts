@@ -70,7 +70,11 @@ export class ExtensionSocket {
       return;
     }
     const session = await handler(
-      { room, player: credential.player },
+      {
+        room,
+        player: credential.player,
+        admin: await this.nudge.players.isAdmin(credential.player.id, context),
+      },
       {
         send: (text) => {
           if (ws.readyState === 1) ws.send(text);
