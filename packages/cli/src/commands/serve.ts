@@ -13,6 +13,8 @@ export type ServeOptions = {
   readonly host: string;
   /** A built web UI; undefined for the bundled one, "none" for the API only. */
   readonly web?: string;
+  /** The address apps reach the server at, for pairing links; default each request's. */
+  readonly publicUrl?: string;
 };
 
 /** Runs every configured assistant behind one HTTP and WebSocket server until Ctrl-C. */
@@ -35,6 +37,7 @@ export async function serve(options: ServeOptions): Promise<void> {
       port: options.port,
       hostname: options.host,
       web,
+      publicUrl: options.publicUrl,
     });
     if (web !== undefined) console.log(`Web: ${server.url}`);
     for (const name of assistants.keys()) console.log(`${name}: ${server.url}/a/${name}`);

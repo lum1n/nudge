@@ -12,7 +12,9 @@ import {
   projectTimeline,
   RoomProjector,
   type RoomSources,
+  TimelinePager,
   TOOL_OUTPUT_LIMIT,
+  windowStart,
 } from "../src/project.ts";
 import { replay } from "./replay.ts";
 
@@ -375,6 +377,51 @@ describe("projectTimeline", () => {
     expect(
       projectTimeline(entries).some((item) => item.type === "answer" && item.status === "running"),
     ).toBe(false);
+  });
+});
+
+describe("TimelinePager", () => {
+  it("pages back from the room view's window to the start without gaps or repeats", () => {
+    const last = views.at(-1)!;
+    // The recorded run three times over, for more items than one page.
+    const span = last.entries.at(-1)!.id;
+    const entries = [0, 1, 2].flatMap((copy) =>
+      last.entries.map((entry) => ({ ...entry, id: entry.id + copy * span })),
+    ) as EntryRecord[];
+    const view = { ...last, entries } as ConversationView;
+    const whole = projectTimeline(entries);
+    expect(whole.length).toBe(18);
+
+    for (const window of [1, 2, 5, 18, 30])
+      for (const limit of [1, 2, 3, 10]) {
+        const shown = new RoomProjector(window).project(sources(view)).timeline;
+        const pages: TimelineItem[][] = [];
+        let before = windowStart(view, window);
+        while (before !== undefined) {
+          const pager = new TimelinePager(limit);
+          for (const entry of [...entries].reverse())
+            if (entry.id < before && !pager.add(entry)) break;
+          const page = pager.page();
+          expect(page.items.length).toBeLessThanOrEqual(limit + 1);
+          if (page.before !== undefined) expect(page.items.length).toBeGreaterThanOrEqual(limit);
+          pages.unshift(page.items);
+          before = page.before;
+        }
+        expect([...pages.flat(), ...shown]).toEqual(whole);
+      }
+  });
+
+  it("starts the window at the answer in flight's place", () => {
+    const view = views.find((view) => {
+      const live = view.docs["pi.live"] as { run?: unknown } | undefined;
+      return live?.run !== undefined;
+    })!;
+    const shown = new RoomProjector(2).project(sources(view)).timeline;
+    const start = windowStart(view, 2)!;
+    const older = projectTimeline(view.entries.filter((entry) => entry.id < start));
+    expect([...older, ...shown].map((item) => item.id)).toEqual(
+      new RoomProjector(1000).project(sources(view)).timeline.map((item) => item.id),
+    );
   });
 });
 

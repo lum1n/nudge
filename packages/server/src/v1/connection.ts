@@ -43,6 +43,7 @@ export class Connection {
   private credential: Credential | undefined;
   private readonly subscriptions = new Map<Target, Subscription>();
   private closed = false;
+  private stopWatchingToken: (() => void) | undefined;
   private readonly helloTimer: ReturnType<typeof setTimeout>;
   /** Frames are handled one at a time, in order. */
   private queue: Promise<void> = Promise.resolve();
@@ -71,6 +72,7 @@ export class Connection {
     if (this.closed) return;
     this.closed = true;
     clearTimeout(this.helloTimer);
+    this.stopWatchingToken?.();
     for (const subscription of this.subscriptions.values()) subscription.stop();
     this.subscriptions.clear();
   }
@@ -116,6 +118,11 @@ export class Connection {
     if (credential === undefined) return this.fail(CLOSE.unauthorized, "Unknown token");
     clearTimeout(this.helloTimer);
     this.credential = credential;
+    const stop = await this.options.hubs.watchToken(credential.clientId, () =>
+      this.fail(CLOSE.unauthorized, "Token revoked"),
+    );
+    if (this.closed) return stop();
+    this.stopWatchingToken = stop;
     this.send({
       type: "welcome",
       protocol: PROTOCOL_VERSION,

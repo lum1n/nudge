@@ -1,6 +1,15 @@
 import { readFile } from "node:fs/promises";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { findAssistant, loadConfig, type Nudge, openAssistant } from "@nudge/core";
+import { DatabaseInUse, findAssistant, loadConfig, type Nudge, openAssistant } from "@nudge/core";
+import type {
+  ErrorResponse,
+  PairingCodeResponse,
+  PlayerResponse,
+  TokenInfo,
+  TokensResponse,
+} from "@nudge/protocol";
+import { pairingLink } from "@nudge/server";
+import { renderUnicodeCompact } from "uqr";
 import { UsageError } from "../errors.ts";
 import { describeNudge } from "../render.ts";
 
@@ -11,16 +20,94 @@ export type AdminOptions = {
 
 const context = BACKGROUND_CONTEXT;
 
-/** Adds a player and prints their token, once, with a sign-in link for the web UI on `server`. */
+/**
+ * How admin commands reach an assistant whose database another process has open: through the
+ * server at `server` (only its origin counts), as the admin whose token is `token`.
+ */
+export type ServerAccess = {
+  readonly server: string;
+  readonly token?: string;
+};
+
+/**
+ * Adds a player and prints their token, once, with a sign-in link for the web UI on `server`.
+ * While the assistant runs, adds them through the server and prints a pairing code instead.
+ */
 export async function invite(
-  options: AdminOptions & { readonly name: string; readonly server: string },
+  options: AdminOptions & ServerAccess & { readonly name: string },
+): Promise<void> {
+  await withAssistantOrServer(
+    options,
+    async (nudge) => {
+      const { player, token } = await nudge.players.invite(options.name, context);
+      console.log(
+        `Invited ${player.displayName} as "${player.id}". Their token, shown only now:\n`,
+      );
+      console.log(`  ${token}\n`);
+      console.log(`In a browser: ${new URL("/login", options.server).href}#token=${token}`);
+      console.log("In a terminal: NUDGE_TOKEN=<token> nudge chat --url <server>/a/<assistant>");
+    },
+    async (server) => {
+      const { player } = await server.call<PlayerResponse>("POST", "/admin/players", {
+        displayName: options.name,
+      });
+      console.log(`Invited ${player.displayName} as "${player.id}".\n`);
+      printPairing(
+        await server.call<PairingCodeResponse>("POST", "/admin/pairing-codes", {
+          playerId: player.id,
+        }),
+      );
+    },
+  );
+}
+
+/** Prints a one-time code, as a link and a QR code, that signs a new app in as `player`. */
+export async function pair(
+  options: AdminOptions & ServerAccess & { readonly player: string },
+): Promise<void> {
+  await withAssistantOrServer(
+    options,
+    async (nudge, assistant) => {
+      await knownPlayer(nudge, options.player);
+      const { code, expiresAt } = await nudge.players.pairingCode(options.player, context);
+      printPairing({
+        code,
+        expiresAt,
+        link: pairingLink(new URL(options.server).origin, assistant, code),
+      });
+    },
+    async (server) =>
+      printPairing(
+        await server.call<PairingCodeResponse>("POST", "/admin/pairing-codes", {
+          playerId: options.player,
+        }),
+      ),
+  );
+}
+
+function printPairing({ code, link, expiresAt }: PairingCodeResponse): void {
+  console.log("Scan this with the Nudge app, or open the link on the device:\n");
+  console.log(renderUnicodeCompact(link, { border: 2 }));
+  console.log(`\n  ${link}\n`);
+  console.log(`Or type the code ${code} in the app.`);
+  console.log(`It works once, until ${new Date(expiresAt).toLocaleTimeString()}.`);
+}
+
+/** Marks a player as an admin, or with `remove` not; lists the admins without a player. */
+export async function admin(
+  options: AdminOptions & { readonly player?: string; readonly remove: boolean },
 ): Promise<void> {
   await withAssistant(options, async (nudge) => {
-    const { player, token } = await nudge.players.invite(options.name, context);
-    console.log(`Invited ${player.displayName} as "${player.id}". Their token, shown only now:\n`);
-    console.log(`  ${token}\n`);
-    console.log(`In a browser: ${new URL("/login", options.server).href}#token=${token}`);
-    console.log("In a terminal: NUDGE_TOKEN=<token> nudge chat --url <server>/a/<assistant>");
+    if (options.player !== undefined) {
+      await knownPlayer(nudge, options.player);
+      await nudge.players.setAdmin(options.player, !options.remove, context);
+    }
+    const admins: string[] = [];
+    for (const player of await nudge.players.list(context))
+      if (await nudge.players.isAdmin(player.id, context)) admins.push(player.id);
+    if (options.remove && options.player !== undefined && admins.includes(options.player))
+      console.log(`${options.player} is the first player, and stays an admin.`);
+    console.log(`Admins: ${admins.join(", ") || "none"}`);
   });
 }
 
@@ -41,27 +128,51 @@ export async function token(
 }
 
 /** Lists the tokens of one player, or of everyone, by client id and when they were issued. */
-export async function tokens(options: AdminOptions & { readonly player?: string }): Promise<void> {
-  await withAssistant(options, async (nudge) => {
-    if (options.player !== undefined) await knownPlayer(nudge, options.player);
-    const records = await nudge.players.tokens(options.player, context);
+export async function tokens(
+  options: AdminOptions & ServerAccess & { readonly player?: string },
+): Promise<void> {
+  const print = (records: readonly TokenInfo[]) => {
     if (records.length === 0) console.log("No tokens.");
-    for (const record of records)
+    for (const record of records) {
+      const client =
+        record.client === undefined ? "" : `\t${record.client.name} (${record.client.platform})`;
       console.log(
-        `${record.playerId}\t${record.clientId}\t${new Date(record.createdAt).toISOString()}`,
+        `${record.playerId}\t${record.clientId}\t${new Date(record.createdAt).toISOString()}${client}`,
       );
-  });
+    }
+  };
+  await withAssistantOrServer(
+    options,
+    async (nudge) => {
+      if (options.player !== undefined) await knownPlayer(nudge, options.player);
+      print(await nudge.players.tokens(options.player, context));
+    },
+    async (server) => {
+      const query =
+        options.player === undefined ? "" : `?player=${encodeURIComponent(options.player)}`;
+      print((await server.call<TokensResponse>("GET", `/admin/tokens${query}`)).tokens);
+    },
+  );
 }
 
-/** Stops one client's token from signing in. */
-export async function revoke(options: AdminOptions & { readonly clientId: string }): Promise<void> {
-  await withAssistant(options, async (nudge) => {
-    const known = await nudge.players.tokens(undefined, context);
-    if (!known.some((record) => record.clientId === options.clientId))
-      throw new UsageError(`No token for client "${options.clientId}"; see nudge tokens`);
-    const record = await nudge.players.revoke(options.clientId, context);
-    console.log(`Revoked ${record.playerId}'s token for client ${record.clientId}.`);
-  });
+/** Stops one client's token from signing in; through the server, its open sockets close too. */
+export async function revoke(
+  options: AdminOptions & ServerAccess & { readonly clientId: string },
+): Promise<void> {
+  await withAssistantOrServer(
+    options,
+    async (nudge) => {
+      const known = await nudge.players.tokens(undefined, context);
+      if (!known.some((record) => record.clientId === options.clientId))
+        throw new UsageError(`No token for client "${options.clientId}"; see nudge tokens`);
+      const record = await nudge.players.revoke(options.clientId, context);
+      console.log(`Revoked ${record.playerId}'s token for client ${record.clientId}.`);
+    },
+    async (server) => {
+      await server.call("DELETE", `/admin/tokens/${encodeURIComponent(options.clientId)}`);
+      console.log(`Revoked the token for client ${options.clientId}.`);
+    },
+  );
 }
 
 async function knownPlayer(nudge: Nudge, id: string): Promise<void> {
@@ -134,13 +245,72 @@ export async function reload(options: AdminOptions): Promise<boolean> {
 
 async function withAssistant(
   options: AdminOptions,
-  use: (nudge: Nudge) => Promise<void>,
+  use: (nudge: Nudge, assistant: string) => Promise<void>,
 ): Promise<void> {
   const config = await loadConfig(options.config);
-  const nudge = await openAssistant(config, findAssistant(config, options.assistant), context);
+  const assistant = findAssistant(config, options.assistant);
+  const nudge = await openAssistant(config, assistant, context);
   try {
-    await use(nudge);
+    await use(nudge, assistant.name);
   } finally {
     await nudge.close(context);
+  }
+}
+
+/** Opens the assistant's database, or goes through its server when another process has it open. */
+async function withAssistantOrServer(
+  options: AdminOptions & ServerAccess,
+  local: (nudge: Nudge, assistant: string) => Promise<void>,
+  remote: (server: AdminServer) => Promise<void>,
+): Promise<void> {
+  try {
+    await withAssistant(options, local);
+  } catch (error) {
+    if (!(error instanceof DatabaseInUse)) throw error;
+    const config = await loadConfig(options.config);
+    const assistant = findAssistant(config, options.assistant).name;
+    if (options.token === undefined)
+      throw new UsageError(
+        `${assistant} is running in process ${error.pid}. To go through its server at ${options.server}, ` +
+          "pass an admin's token with --token or $NUDGE_TOKEN (and --url if it listens elsewhere).",
+      );
+    await remote(new AdminServer(new URL(options.server).origin, assistant, options.token));
+  }
+}
+
+/** Protocol v1's HTTP API of one assistant, as an admin. */
+class AdminServer {
+  constructor(
+    private readonly origin: string,
+    private readonly assistant: string,
+    private readonly token: string,
+  ) {}
+
+  async call<T = undefined>(method: string, path: string, body?: unknown): Promise<T> {
+    const url = `${this.origin}/v1/a/${encodeURIComponent(this.assistant)}${path}`;
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method,
+        headers: {
+          authorization: `Bearer ${this.token}`,
+          ...(body === undefined ? {} : { "content-type": "application/json" }),
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+    } catch (error) {
+      throw new UsageError(`Could not reach ${this.origin}: ${(error as Error).message}`);
+    }
+    const text = await response.text();
+    if (!response.ok) {
+      let message = text;
+      try {
+        message = (JSON.parse(text) as ErrorResponse).error;
+      } catch {
+        // Not one of ours; show what came back.
+      }
+      throw new UsageError(`${this.origin} said ${response.status}: ${message}`);
+    }
+    return (text === "" ? undefined : JSON.parse(text)) as T;
   }
 }

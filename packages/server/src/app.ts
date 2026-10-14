@@ -37,6 +37,7 @@ import {
   type TranscriptResponse,
   type WhenBusy,
 } from "./protocol.ts";
+import { HttpError } from "./v1/rest.ts";
 import { type V1Options, v1Routes } from "./v1/routes.ts";
 import { publicOps, publicView } from "./view.ts";
 
@@ -51,6 +52,8 @@ export type AppOptions = {
   /** Told to v1 clients in `welcome`. */
   readonly version?: string;
   readonly timing?: V1Options["timing"];
+  /** The server's address as clients reach it, for pairing links; default each request's origin. */
+  readonly publicUrl?: string;
 };
 
 type Env = {
@@ -60,15 +63,6 @@ type Env = {
     credential: Credential;
   };
 };
-
-class HttpError extends Error {
-  constructor(
-    readonly status: 400 | 401 | 404 | 409,
-    message: string,
-  ) {
-    super(message);
-  }
-}
 
 const context: Context = BACKGROUND_CONTEXT;
 
@@ -318,6 +312,7 @@ export function createApp(options: AppOptions): Hono<Env> {
       version: options.version ?? "0.0.0",
       report,
       timing: options.timing,
+      publicUrl: options.publicUrl,
     }),
   );
   if (options.web !== undefined) serveWeb(app, options.web);

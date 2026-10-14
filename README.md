@@ -58,6 +58,8 @@ nudge invite Ann                      # prints Ann's token, once
 nudge invite Bo
 nudge token ann                       # another token for Ann, such as for a lost one
 nudge tokens ann                      # Ann's tokens by client id; revoke one with `nudge revoke <client>`
+nudge pair bo                         # a one-time code, link and QR code that signs an app in as Bo
+nudge admin bo                        # Bo may use the admin API too (the first player always may)
 nudge room Trip --members ann,bo      # a shared room "trip"; `nudge room` lists them
 nudge serve                           # web UI at http://127.0.0.1:8787, API under /a/<assistant>
 ```
@@ -70,7 +72,9 @@ Or each person connects from their own terminal, and all of them see the same co
 NUDGE_TOKEN=nudge_… nudge chat trip --url http://127.0.0.1:8787/a/nudge
 ```
 
-One process owns an assistant's database at a time, so stop `nudge serve` before `nudge invite`, `nudge token`, `nudge tokens`, `nudge revoke`, `nudge room` or `nudge nudges`. `serve` listens on 127.0.0.1; put a TLS proxy in front before exposing it.
+One process owns an assistant's database at a time, so stop `nudge serve` before `nudge token`, `nudge admin`, `nudge room` or `nudge nudges`. `nudge invite`, `nudge pair`, `nudge tokens` and `nudge revoke` go through the running server instead when given an admin's token (`--token` or `$NUDGE_TOKEN`, and `--url` if it isn't on 127.0.0.1:8787); `invite` then prints a pairing code rather than a token. A pairing code works once, for ten minutes. Pairing links carry the address of the request; behind a proxy, start `nudge serve --public-url https://…`. `serve` listens on 127.0.0.1; put a TLS proxy in front before exposing it.
+
+Native apps use [protocol v1](docs/protocol/v1.md) under `/v1`: one WebSocket for live views and HTTP for commands, pairing and admin.
 
 `GET /a` lists the assistants without a token. The API, with `Authorization: Bearer <token>`, under `/a/<assistant>`: `GET /me`, `GET|POST /rooms`, `POST /rooms/personal`, `GET /rooms/<room>`, `POST /rooms/<room>/messages`, `POST /rooms/<room>/abort`, `GET /rooms/<room>/transcript`, `POST /protect`, `GET /nudges`, `DELETE /nudges/<id>`, `GET|POST /rooms/<room>/memory`, `DELETE /rooms/<room>/memory/<id>`. `GET /rooms/<room>/stream` is a WebSocket: send `{"type":"hello","token":…}` first, then get a snapshot and one batch of agent events per commit; send `submit` and `abort` frames. With `?format=view` it sends the room's conversation view instead, then its [Chord](https://github.com/earendil-works/pi/tree/main/packages/chord) ops per commit, for clients that mirror it (the web UI does). The types are in `packages/server/src/protocol.ts`.
 

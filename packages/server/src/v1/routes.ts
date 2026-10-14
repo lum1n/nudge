@@ -5,17 +5,20 @@ import { Hono } from "hono";
 import type { UpgradeWebSocket } from "hono/ws";
 import { Connection, type ConnectionOptions } from "./connection.ts";
 import { Hubs } from "./hub.ts";
+import { restRoutes } from "./rest.ts";
 
 export type V1Options = {
   readonly assistants: ReadonlyMap<string, Nudge>;
   readonly upgradeWebSocket: UpgradeWebSocket;
   readonly version: string;
   readonly report: (error: unknown) => void;
+  /** The server's address as clients reach it, for pairing links; default each request's origin. */
+  readonly publicUrl?: string;
   /** Defaults: 25 s heartbeat, 50 ms between patches, 10 s for the hello. */
   readonly timing?: Partial<Pick<ConnectionOptions, "heartbeatMs" | "flushMs" | "helloTimeoutMs">>;
 };
 
-/** Protocol v1, to mount at `/v1`: the assistant list and each assistant's socket. */
+/** Protocol v1, to mount at `/v1`: the HTTP commands and each assistant's socket. */
 export function v1Routes(options: V1Options): Hono {
   const app = new Hono();
   // A new epoch per app, so clients that reconnect after a restart know to subscribe again.
@@ -26,15 +29,6 @@ export function v1Routes(options: V1Options): Hono {
     if (found === undefined) hubs.set(nudge, (found = new Hubs(nudge, options.report)));
     return found;
   };
-
-  app.get("/a", (c) =>
-    c.json({
-      assistants: [...options.assistants].map(([name, nudge]) => ({
-        name,
-        displayName: nudge.displayName,
-      })),
-    }),
-  );
 
   // The socket authenticates with its first frame: browsers cannot set headers on a WebSocket.
   app.get(
@@ -70,5 +64,9 @@ export function v1Routes(options: V1Options): Hono {
     }),
   );
 
+  app.route(
+    "/",
+    restRoutes({ assistants: options.assistants, hubsOf, publicUrl: options.publicUrl }),
+  );
   return app;
 }

@@ -6,7 +6,13 @@ import type { Context as ModelContext } from "@earendil-works/pi-ai";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createNudge, DirectoryDoc, LOBBY, type NudgeOptions } from "../src/index.ts";
+import {
+  createNudge,
+  DirectoryDoc,
+  LOBBY,
+  type NudgeOptions,
+  PAIRING_TTL_MS,
+} from "../src/index.ts";
 
 const context = BACKGROUND_CONTEXT;
 
@@ -82,6 +88,58 @@ describe("players and rooms", () => {
     await expect(nudge.players.revoke(laptop.clientId, context)).rejects.toThrow(
       `No token for client "${laptop.clientId}"`,
     );
+    await nudge.close(context);
+  });
+
+  it("trades a pairing code for a token once, within ten minutes", async () => {
+    let now = 1_000_000;
+    const { options } = setup(":memory:");
+    const nudge = await createNudge({ ...options, now: () => now }, context);
+    const ann = (await nudge.players.invite("Ann", context)).player;
+    const client = { name: "Nudge", platform: "ios" };
+
+    const { code, expiresAt } = await nudge.players.pairingCode(ann.id, context);
+    expect(code).toMatch(/^[0-9A-Z]{4}-[0-9A-Z]{4}$/);
+    expect(expiresAt).toBe(now + PAIRING_TTL_MS);
+    // Typed by hand: lower case, no dash.
+    const paired = await nudge.players.pair(code.toLowerCase().replace("-", ""), client, context);
+    expect(paired?.player.id).toBe("ann");
+    expect(await nudge.players.authenticate(paired!.token, context)).toEqual({
+      player: ann,
+      clientId: paired!.clientId,
+    });
+    const record = (await nudge.players.tokens(ann.id, context)).find(
+      (t) => t.clientId === paired!.clientId,
+    );
+    expect(record?.client).toEqual(client);
+    expect(await nudge.players.pair(code, client, context)).toBeUndefined();
+
+    const late = await nudge.players.pairingCode(ann.id, context);
+    now += PAIRING_TTL_MS;
+    expect(await nudge.players.pair(late.code, client, context)).toBeUndefined();
+    expect(await nudge.players.pair("0000-0000", client, context)).toBeUndefined();
+    await expect(nudge.players.pairingCode("nobody", context)).rejects.toThrow(
+      'No player "nobody"',
+    );
+    const directory = await nudge.harness.snapshot(DirectoryDoc, context);
+    expect(Object.keys(directory?.pairing ?? {})).toEqual([]);
+    await nudge.close(context);
+  });
+
+  it("makes the first player an admin, and others when marked", async () => {
+    const { options } = setup(":memory:");
+    const nudge = await createNudge(options, context);
+    const ann = (await nudge.players.invite("Ann", context)).player;
+    const bo = (await nudge.players.invite("Bo", context)).player;
+    expect(await nudge.players.isAdmin(ann.id, context)).toBe(true);
+    expect(await nudge.players.isAdmin(bo.id, context)).toBe(false);
+    expect((await nudge.players.setAdmin(bo.id, true, context)).admin).toBe(true);
+    expect(await nudge.players.isAdmin(bo.id, context)).toBe(true);
+    await nudge.players.setAdmin(bo.id, false, context);
+    await nudge.players.setAdmin(ann.id, false, context);
+    expect(await nudge.players.isAdmin(bo.id, context)).toBe(false);
+    expect(await nudge.players.isAdmin(ann.id, context)).toBe(true);
+    expect(await nudge.players.isAdmin("nobody", context)).toBe(false);
     await nudge.close(context);
   });
 

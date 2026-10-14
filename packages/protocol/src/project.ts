@@ -44,6 +44,16 @@ export const MESSAGE_ENTRY = "nudge.message";
 export const FIRE_ENTRY = "nudge.fire";
 export const APPROVAL_ENTRY = "nudge.approval";
 
+/** Entries that are a timeline item each; the assistant entries between two of them are an answer. */
+const ITEM_ENTRIES: ReadonlySet<string> = new Set([
+  MESSAGE_ENTRY,
+  "pi.user",
+  FIRE_ENTRY,
+  APPROVAL_ENTRY,
+  "pi.compaction",
+  "pi.reset",
+]);
+
 /** Items a room view holds at most; older ones come from `GET /rooms/<id>/timeline`. */
 export const TIMELINE_LIMIT = 100;
 
@@ -128,6 +138,67 @@ export function projectTimeline(
   return items(entries, undefined, { after: options.after });
 }
 
+/**
+ * The id of the oldest entry the room view of `view` shows, or undefined when it shows none. History
+ * pages (`TimelinePager`) start below it, so they hold only what the view doesn't.
+ */
+export function windowStart(view: ConversationView, limit = TIMELINE_LIMIT): number | undefined {
+  const live = view.docs["pi.live"] as LiveState | undefined;
+  const starts: number[] = [];
+  const all = items(view.entries, live?.run === undefined ? undefined : live, {
+    start: (entryId) => starts.push(entryId),
+  });
+  if (all.length <= limit) return view.entries[0]?.id;
+  // Only an answer in flight with nothing written yet has no entry, and it is always the last item.
+  return starts[all.length - limit];
+}
+
+/**
+ * One page of history, from entries read newest first below the room view's window or the previous
+ * page. A page ends just above an entry that is an item of its own, so its oldest answer gets the id
+ * it would have in a room view (`answer:<the item before>`), and the next page starts at that entry.
+ */
+export class TimelinePager {
+  private readonly held: EntryRecord[] = [];
+  private count = 0;
+  private inAnswer = false;
+  private next: EntryRecord | undefined;
+
+  /** A page holds at least `limit` items, or all that are left, and at most one more. */
+  constructor(private readonly limit: number) {}
+
+  /** Takes the next older entry. False when the page is full: `entry` is not on it, stop reading. */
+  add(entry: EntryRecord): boolean {
+    if (this.next !== undefined) return false;
+    if (entry.kind === "pi.assistant") {
+      if (!this.inAnswer) this.count++;
+      this.inAnswer = true;
+    } else if (ITEM_ENTRIES.has(entry.kind)) {
+      if (this.count >= this.limit) {
+        this.next = entry;
+        return false;
+      }
+      this.count++;
+      this.inAnswer = false;
+    }
+    this.held.push(entry);
+    return true;
+  }
+
+  /**
+   * The page's items, oldest first, and the id the next page starts below (exclusive); no `before`
+   * when the page reaches the start of the room.
+   */
+  page(): { readonly items: TimelineItem[]; readonly before?: number } {
+    const entries = [...this.held].reverse();
+    if (this.next === undefined) return { items: projectTimeline(entries) };
+    return {
+      items: projectTimeline(entries, { after: `entry:${this.next.id}` }),
+      before: this.next.id + 1,
+    };
+  }
+}
+
 function items(
   entries: readonly EntryRecord[],
   live: LiveState | undefined,
@@ -138,6 +209,8 @@ function items(
       sources: readonly unknown[],
       build: () => TimelineItem,
     ) => TimelineItem;
+    /** Told the first entry of each item that has entries, in order. */
+    readonly start?: (entryId: number) => void;
   },
 ): TimelineItem[] {
   const keep = options.keep ?? ((_id, _sources, build) => build());
@@ -165,30 +238,20 @@ function items(
     timeline.push(
       keep(id, sources, () => buildAnswer(id, answerEntries, results, live, generated)),
     );
+    if (answerEntries[0] !== undefined) options.start?.(answerEntries[0].id);
     answer = [];
   };
 
   for (const entry of entries) {
-    switch (entry.kind) {
-      case "pi.assistant":
-        answer.push(entry);
-        continue;
-      case MESSAGE_ENTRY:
-      case "pi.user":
-      case FIRE_ENTRY:
-      case APPROVAL_ENTRY:
-      case "pi.compaction":
-      case "pi.reset": {
-        endAnswer();
-        const id = `entry:${entry.id}`;
-        timeline.push(keep(id, [entry], () => entryItem(id, entry)));
-        after = id;
-        continue;
-      }
-      default:
-        // System prompts, tool results (shown with their calls) and extension bookkeeping.
-        continue;
+    if (entry.kind === "pi.assistant") answer.push(entry);
+    else if (ITEM_ENTRIES.has(entry.kind)) {
+      endAnswer();
+      const id = `entry:${entry.id}`;
+      timeline.push(keep(id, [entry], () => entryItem(id, entry)));
+      options.start?.(entry.id);
+      after = id;
     }
+    // Anything else is a system prompt, a tool result (shown with its call) or bookkeeping.
   }
   endAnswer(live);
   return timeline;

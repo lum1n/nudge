@@ -292,6 +292,117 @@ export const ServerFrame = Type.Union([
 ]);
 export type ServerFrame = Static<typeof ServerFrame>;
 
+// HTTP: request and response bodies under `/v1/a/<assistant>`.
+
+export const ErrorResponse = Type.Object({ error: Type.String() });
+export type ErrorResponse = Static<typeof ErrorResponse>;
+
+export const AssistantsResponse = Type.Object({
+  assistants: Type.Array(Type.Object({ name: Type.String(), displayName: Type.String() })),
+});
+export type AssistantsResponse = Static<typeof AssistantsResponse>;
+
+export const ClientInfo = Type.Object({ name: Type.String(), platform: Type.String() });
+export type ClientInfo = Static<typeof ClientInfo>;
+
+export const PairRequest = Type.Object({ code: Type.String(), client: ClientInfo });
+export type PairRequest = Static<typeof PairRequest>;
+
+/** `token` is shown only here; keep it like a password. */
+export const PairResponse = Type.Object({
+  token: Type.String(),
+  clientId: Type.String(),
+  player: Player,
+});
+export type PairResponse = Static<typeof PairResponse>;
+
+export const MeResponse = Type.Object({
+  player: Player,
+  clientId: Type.String(),
+  /** May use the `/admin` routes. */
+  admin: Type.Boolean(),
+});
+export type MeResponse = Static<typeof MeResponse>;
+
+/** The caller is always a member; `members` are other player ids. */
+export const CreateRoomRequest = Type.Object({
+  name: Type.String(),
+  members: Type.Optional(Type.Array(Type.String())),
+});
+export type CreateRoomRequest = Static<typeof CreateRoomRequest>;
+
+export const WhenBusy = Type.Union([
+  Type.Literal("followUp"),
+  Type.Literal("steer"),
+  Type.Literal("reject"),
+]);
+export type WhenBusy = Static<typeof WhenBusy>;
+
+export const MessageRequest = Type.Object({
+  text: Type.String(),
+  /** Chosen by the client; sending the same one again is answered with the same submission. */
+  requestId: Type.String(),
+  /** What to do while the assistant is answering. Default `followUp`. */
+  whenBusy: Type.Optional(WhenBusy),
+});
+export type MessageRequest = Static<typeof MessageRequest>;
+
+export const MessageResponse = Type.Object({ submissionId: Type.Integer() });
+export type MessageResponse = Static<typeof MessageResponse>;
+
+export const TimelineResponse = Type.Object({
+  /** Oldest first. */
+  items: Type.Array(TimelineItem),
+  /** Pass as `before` for the page before this one; absent at the start of the room. */
+  before: Type.Optional(Type.String()),
+});
+export type TimelineResponse = Static<typeof TimelineResponse>;
+
+export const RememberRequest = Type.Object({ text: Type.String() });
+export type RememberRequest = Static<typeof RememberRequest>;
+
+export const DecideRequest = Type.Object({ approve: Type.Boolean() });
+export type DecideRequest = Static<typeof DecideRequest>;
+
+export const ProtectRequest = Type.Object({
+  value: Type.String(),
+  /** Upper-case letters, such as `NAME`; default `PRIVATE`. */
+  kind: Type.Optional(Type.String({ pattern: "^[A-Z]+$" })),
+});
+export type ProtectRequest = Static<typeof ProtectRequest>;
+
+export const ProtectResponse = Type.Object({ placeholder: Type.String() });
+export type ProtectResponse = Static<typeof ProtectResponse>;
+
+export const CreatePlayerRequest = Type.Object({ displayName: Type.String() });
+export type CreatePlayerRequest = Static<typeof CreatePlayerRequest>;
+
+export const PlayerResponse = Type.Object({ player: Player });
+export type PlayerResponse = Static<typeof PlayerResponse>;
+
+export const PairingCodeRequest = Type.Object({ playerId: Type.String() });
+export type PairingCodeRequest = Static<typeof PairingCodeRequest>;
+
+export const PairingCodeResponse = Type.Object({
+  code: Type.String(),
+  /** `nudge://pair?server=…&assistant=…&code=…`, for a link or a QR code. */
+  link: Type.String(),
+  expiresAt: Type.Number(),
+});
+export type PairingCodeResponse = Static<typeof PairingCodeResponse>;
+
+export const TokenInfo = Type.Object({
+  clientId: Type.String(),
+  playerId: Type.String(),
+  createdAt: Type.Number(),
+  /** What the client said it is when it paired. */
+  client: Type.Optional(ClientInfo),
+});
+export type TokenInfo = Static<typeof TokenInfo>;
+
+export const TokensResponse = Type.Object({ tokens: Type.Array(TokenInfo) });
+export type TokensResponse = Static<typeof TokensResponse>;
+
 /** Socket close codes, after HTTP status codes. */
 export const CLOSE = {
   badRequest: 4400,
@@ -324,4 +435,25 @@ export const SCHEMAS = {
   Target,
   ClientFrame,
   ServerFrame,
+  ErrorResponse,
+  AssistantsResponse,
+  ClientInfo,
+  PairRequest,
+  PairResponse,
+  MeResponse,
+  CreateRoomRequest,
+  WhenBusy,
+  MessageRequest,
+  MessageResponse,
+  TimelineResponse,
+  RememberRequest,
+  DecideRequest,
+  ProtectRequest,
+  ProtectResponse,
+  CreatePlayerRequest,
+  PlayerResponse,
+  PairingCodeRequest,
+  PairingCodeResponse,
+  TokenInfo,
+  TokensResponse,
 };

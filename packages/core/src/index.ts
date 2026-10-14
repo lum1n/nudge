@@ -65,16 +65,25 @@ export {
 } from "./host-api.ts";
 export {
   canUse,
+  type ClientInfo,
   DirectoryDoc,
   type DirectoryState,
   LOBBY,
+  type PairingRecord,
   type Player,
   type Room,
   type RoomKind,
   roomOf,
   type TokenRecord,
 } from "./identity/directory.ts";
-export { type Credential, type Invitation, Players } from "./identity/players.ts";
+export {
+  type Credential,
+  type Invitation,
+  isAdmin,
+  PAIRING_TTL_MS,
+  type PairingCode,
+  Players,
+} from "./identity/players.ts";
 export {
   type Fact,
   MAX_FACT_LENGTH,

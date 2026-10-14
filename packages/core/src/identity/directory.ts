@@ -8,6 +8,8 @@ export type Player = {
   id: string;
   displayName: string;
   createdAt: number;
+  /** May use the admin API. The first player may too, flag or not. */
+  admin?: boolean;
 };
 
 /** A credential for one client of one player. Only its hash is stored. */
@@ -15,6 +17,17 @@ export type TokenRecord = {
   playerId: string;
   clientId: string;
   createdAt: number;
+  /** What the client said it is when it paired. */
+  client?: ClientInfo;
+};
+
+export type ClientInfo = { name: string; platform: string };
+
+/** A one-time code that turns into a token for `playerId`. Only its hash is stored. */
+export type PairingRecord = {
+  playerId: string;
+  createdAt: number;
+  expiresAt: number;
 };
 
 /**
@@ -39,6 +52,8 @@ export type DirectoryState = {
   /** Keyed by the token's SHA-256, hex. */
   tokens: Record<string, TokenRecord>;
   rooms: Record<string, Room>;
+  /** Keyed by the code's SHA-256, hex. Absent in directories from before pairing. */
+  pairing?: Record<string, PairingRecord>;
 };
 
 /** Who uses the assistant and where: players, their tokens and the rooms index. One per storage. */
@@ -55,6 +70,20 @@ const TOKEN_PREFIX = "nudge_";
 
 export function newToken(): string {
   return TOKEN_PREFIX + randomBytes(32).toString("base64url");
+}
+
+/** Crockford's base 32: no I, L, O or U, so a code typed from a screen comes out right. */
+const CODE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+
+/** `XXXX-XXXX`: 40 bits, enough for a code that works once within minutes. */
+export function newPairingCode(): string {
+  const chars = [...randomBytes(8)].map((byte) => CODE_ALPHABET[byte % CODE_ALPHABET.length]);
+  return `${chars.slice(0, 4).join("")}-${chars.slice(4).join("")}`;
+}
+
+/** The form a pairing code is hashed in: upper case, no spaces or dashes, O as 0, I and L as 1. */
+export function normalizePairingCode(code: string): string {
+  return code.toUpperCase().replace(/[\s-]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
 }
 
 export function hashToken(token: string): string {

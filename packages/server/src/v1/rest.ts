@@ -1,0 +1,380 @@
+import type { Cursor, EntryId } from "@earendil-works/pi-durable";
+import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import {
+  AlreadyDecided,
+  ApprovalNotFound,
+  canUse,
+  type Credential,
+  type Nudge,
+  type Room as CoreRoom,
+  type TokenRecord,
+} from "@nudge/core";
+import {
+  type AssistantsResponse,
+  CreatePlayerRequest,
+  CreateRoomRequest,
+  DecideRequest,
+  decodeCursor,
+  encodeCursor,
+  type MeResponse,
+  MessageRequest,
+  type MessageResponse,
+  PairingCodeRequest,
+  type PairingCodeResponse,
+  PairRequest,
+  type PairResponse,
+  type PlayerResponse,
+  ProtectRequest,
+  type ProtectResponse,
+  RememberRequest,
+  type Room,
+  type TimelineResponse,
+  type TokenInfo,
+  type TokensResponse,
+} from "@nudge/protocol";
+import {
+  TimelinePager,
+  toApproval,
+  toFact,
+  toPlayer,
+  toRoom,
+  windowStart,
+} from "@nudge/protocol/project";
+import { type Context as HonoContext, Hono, type MiddlewareHandler } from "hono";
+import type { Static, TSchema } from "typebox";
+import { Value } from "typebox/value";
+import type { Hubs } from "./hub.ts";
+
+const context = BACKGROUND_CONTEXT;
+
+export type RestOptions = {
+  readonly assistants: ReadonlyMap<string, Nudge>;
+  readonly hubsOf: (nudge: Nudge) => Hubs;
+  /** The server's address as clients reach it, for pairing links; default the request's origin. */
+  readonly publicUrl?: string;
+};
+
+type Env = {
+  Variables: {
+    name: string;
+    nudge: Nudge;
+    credential: Credential;
+  };
+};
+
+export class HttpError extends Error {
+  constructor(
+    readonly status: 400 | 401 | 403 | 404 | 409,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+/** Entries read per storage page while a timeline page fills. */
+const ENTRY_BATCH = 200;
+/** Timeline items per page: default and most. */
+const PAGE_DEFAULT = 50;
+const PAGE_MAX = 200;
+
+/**
+ * Protocol v1's HTTP commands, to mount at `/v1`: the assistant list, and per assistant under
+ * `/a/<assistant>`, pairing, the caller's rooms, messages, memory, approvals, nudges, history and
+ * the admin routes. Errors are `{ error }` with an HTTP status.
+ */
+export function restRoutes(options: RestOptions): Hono {
+  const app = new Hono<Env>();
+
+  app.get("/a", (c) =>
+    c.json({
+      assistants: [...options.assistants].map(([name, nudge]) => ({
+        name,
+        displayName: nudge.displayName,
+      })),
+    } satisfies AssistantsResponse),
+  );
+
+  const findAssistant: MiddlewareHandler<Env> = async (c, next) => {
+    const name = c.req.param("assistant") ?? "";
+    const nudge = options.assistants.get(name);
+    if (nudge === undefined) throw new HttpError(404, `No assistant "${name}"`);
+    c.set("name", name);
+    c.set("nudge", nudge);
+    await next();
+  };
+
+  const authenticate: MiddlewareHandler<Env> = async (c, next) => {
+    const token = /^Bearer\s+(\S+)$/i.exec(c.req.header("authorization") ?? "")?.[1];
+    const credential =
+      token === undefined ? undefined : await c.var.nudge.players.authenticate(token, context);
+    if (credential === undefined) throw new HttpError(401, "Missing or unknown token");
+    c.set("credential", credential);
+    await next();
+  };
+
+  const admin: MiddlewareHandler<Env> = async (c, next) => {
+    if (!(await c.var.nudge.players.isAdmin(c.var.credential.player.id, context)))
+      throw new HttpError(403, "Only admins may do that");
+    await next();
+  };
+
+  const api = new Hono<Env>();
+  api.use(findAssistant);
+
+  // Before `authenticate`: a new client has no token yet.
+  api.post("/pair", async (c) => {
+    const body = await readBody(c, PairRequest);
+    const paired = await c.var.nudge.players.pair(body.code, body.client, context);
+    if (paired === undefined) throw new HttpError(401, "Unknown or expired pairing code");
+    return c.json({
+      token: paired.token,
+      clientId: paired.clientId,
+      player: toPlayer(paired.player),
+    } satisfies PairResponse);
+  });
+
+  api.use(authenticate);
+
+  api.get("/me", async (c) => {
+    const { player, clientId } = c.var.credential;
+    return c.json({
+      player: toPlayer(player),
+      clientId,
+      admin: await c.var.nudge.players.isAdmin(player.id, context),
+    } satisfies MeResponse);
+  });
+
+  api.post("/rooms", async (c) => {
+    const body = await readBody(c, CreateRoomRequest);
+    const name = body.name.trim();
+    if (name === "") throw new HttpError(400, "A room needs a name");
+    const me = c.var.credential.player.id;
+    const members = [me, ...(body.members ?? []).filter((id) => id !== me)];
+    let room: CoreRoom;
+    try {
+      room = await c.var.nudge.rooms.createShared({ name, members }, context);
+    } catch (error) {
+      throw new HttpError(400, (error as Error).message);
+    }
+    return c.json(await roomOf(c.var.nudge, room), 201);
+  });
+
+  api.post("/rooms/personal", async (c) => {
+    const room = await c.var.nudge.rooms.ensurePersonal(c.var.credential.player.id, context);
+    return c.json(await roomOf(c.var.nudge, room));
+  });
+
+  api.post("/rooms/:room/messages", async (c) => {
+    const room = await usableRoom(c);
+    const body = await readBody(c, MessageRequest);
+    if (body.text.trim() === "") throw new HttpError(400, "A message needs text");
+    const { player, clientId } = c.var.credential;
+    const submission = await c.var.nudge.submit(
+      room.id,
+      {
+        text: body.text,
+        // The author is whoever the token belongs to, never what the body says.
+        author: { playerId: player.id, displayName: player.displayName, clientId },
+        requestId: body.requestId,
+        whenBusy: body.whenBusy,
+      },
+      context,
+    );
+    return c.json({ submissionId: submission.id } satisfies MessageResponse, 202);
+  });
+
+  api.post("/rooms/:room/abort", async (c) => {
+    const room = await usableRoom(c);
+    await c.var.nudge.abort(room.id, context);
+    return c.body(null, 204);
+  });
+
+  api.get("/rooms/:room/timeline", async (c) => {
+    const room = await usableRoom(c);
+    const limit = Math.min(Math.max(Number(c.req.query("limit")) || PAGE_DEFAULT, 1), PAGE_MAX);
+    const cursor = c.req.query("before");
+    let before: number | undefined;
+    if (cursor !== undefined) {
+      const value = decodeCursor(cursor) as { before?: unknown } | undefined;
+      if (typeof value?.before !== "number" || !Number.isInteger(value.before))
+        throw new HttpError(400, "Bad cursor");
+      before = value.before;
+    } else {
+      // Below what the room view shows; usually the caller has it open, so its hub is too.
+      const lease = await options.hubsOf(c.var.nudge).room(room.id);
+      if (lease === undefined) throw new HttpError(404, `No room "${room.id}"`);
+      try {
+        before = windowStart(lease.hub.conversationView());
+      } finally {
+        lease.release();
+      }
+    }
+    if (before === undefined) return c.json({ items: [] } satisfies TimelineResponse);
+
+    const conversation = await c.var.nudge.conversation(room.id, context);
+    const pager = new TimelinePager(limit);
+    let next: Cursor | undefined;
+    read: do {
+      const page = await conversation.entries(
+        { maxEntryId: (before - 1) as EntryId },
+        ENTRY_BATCH,
+        next,
+        context,
+      );
+      for (const entry of page.items) if (!pager.add(entry)) break read;
+      next = page.next;
+    } while (next !== undefined);
+    const page = pager.page();
+    return c.json({
+      items: page.items,
+      ...(page.before === undefined ? {} : { before: encodeCursor({ before: page.before }) }),
+    } satisfies TimelineResponse);
+  });
+
+  api.post("/rooms/:room/memory", async (c) => {
+    const room = await usableRoom(c);
+    const body = await readBody(c, RememberRequest);
+    if (body.text.trim() === "") throw new HttpError(400, "A fact needs text");
+    try {
+      return c.json(toFact(await c.var.nudge.memory.remember(room.id, body.text, context)), 201);
+    } catch (error) {
+      throw new HttpError(400, (error as Error).message);
+    }
+  });
+
+  api.delete("/rooms/:room/memory/:fact", async (c) => {
+    const room = await usableRoom(c);
+    const id = c.req.param("fact");
+    if (!(await c.var.nudge.memory.forget(room.id, id, context)))
+      throw new HttpError(404, `No fact "${id}"`);
+    return c.body(null, 204);
+  });
+
+  api.post("/rooms/:room/approvals/:approval", async (c) => {
+    const room = await usableRoom(c);
+    const body = await readBody(c, DecideRequest);
+    const { player } = c.var.credential;
+    try {
+      const approval = await c.var.nudge.approvals.decide(
+        room.id,
+        c.req.param("approval"),
+        { approve: body.approve, by: { playerId: player.id, displayName: player.displayName } },
+        context,
+      );
+      return c.json(toApproval(approval));
+    } catch (error) {
+      if (error instanceof ApprovalNotFound) throw new HttpError(404, error.message);
+      if (error instanceof AlreadyDecided) throw new HttpError(409, error.message);
+      throw error;
+    }
+  });
+
+  api.delete("/nudges/:id", async (c) => {
+    const id = c.req.param("id");
+    const nudge = await c.var.nudge.nudges.get(id, context);
+    const room =
+      nudge === undefined ? undefined : await c.var.nudge.rooms.get(nudge.roomId, context);
+    if (room === undefined || !canUse(room, c.var.credential.player.id))
+      throw new HttpError(404, `No nudge "${id}"`);
+    await c.var.nudge.nudges.cancel(id, context);
+    return c.body(null, 204);
+  });
+
+  api.post("/protect", async (c) => {
+    const body = await readBody(c, ProtectRequest);
+    if (body.value.trim() === "") throw new HttpError(400, "Nothing to protect");
+    const placeholder = await c.var.nudge.protect(body.value.trim(), body.kind);
+    return c.json({ placeholder } satisfies ProtectResponse);
+  });
+
+  api.post("/admin/players", admin, async (c) => {
+    const body = await readBody(c, CreatePlayerRequest);
+    if (body.displayName.trim() === "") throw new HttpError(400, "A player needs a name");
+    const player = await c.var.nudge.players.create(body.displayName, context);
+    return c.json({ player: toPlayer(player) } satisfies PlayerResponse, 201);
+  });
+
+  api.post("/admin/pairing-codes", admin, async (c) => {
+    const body = await readBody(c, PairingCodeRequest);
+    if ((await c.var.nudge.players.get(body.playerId, context)) === undefined)
+      throw new HttpError(404, `No player "${body.playerId}"`);
+    const { code, expiresAt } = await c.var.nudge.players.pairingCode(body.playerId, context);
+    const server = options.publicUrl ?? new URL(c.req.url).origin;
+    return c.json(
+      {
+        code,
+        link: pairingLink(server, c.var.name, code),
+        expiresAt,
+      } satisfies PairingCodeResponse,
+      201,
+    );
+  });
+
+  api.get("/admin/tokens", admin, async (c) => {
+    const playerId = c.req.query("player") || undefined;
+    if (playerId !== undefined && (await c.var.nudge.players.get(playerId, context)) === undefined)
+      throw new HttpError(404, `No player "${playerId}"`);
+    const records = await c.var.nudge.players.tokens(playerId, context);
+    return c.json({ tokens: records.map(toTokenInfo) } satisfies TokensResponse);
+  });
+
+  // Sockets signed in with the token close with 4401: each connection watches the directory.
+  api.delete("/admin/tokens/:client", admin, async (c) => {
+    const clientId = c.req.param("client");
+    const known = await c.var.nudge.players.tokens(undefined, context);
+    if (!known.some((record) => record.clientId === clientId))
+      throw new HttpError(404, `No token for client "${clientId}"`);
+    await c.var.nudge.players.revoke(clientId, context);
+    return c.body(null, 204);
+  });
+
+  app.route("/a/:assistant", api);
+  return app as unknown as Hono;
+}
+
+/** `nudge://pair?server=…&assistant=…&code=…`, what a pairing QR code holds. */
+export function pairingLink(server: string, assistant: string, code: string): string {
+  const query = new URLSearchParams({ server, assistant, code });
+  return `nudge://pair?${query.toString()}`;
+}
+
+/** The room in the path, if the caller may use it. Rooms they may not use do not exist for them. */
+async function usableRoom(c: HonoContext<Env>): Promise<CoreRoom> {
+  const id = c.req.param("room") ?? "";
+  const room = await c.var.nudge.rooms.get(id, context);
+  if (room === undefined || !canUse(room, c.var.credential.player.id))
+    throw new HttpError(404, `No room "${id}"`);
+  return room;
+}
+
+async function roomOf(nudge: Nudge, room: CoreRoom): Promise<Room> {
+  const members = new Map(
+    (await nudge.rooms.members(room.id, context)).map((player) => [player.id, player]),
+  );
+  return toRoom(room, (id) => members.get(id));
+}
+
+function toTokenInfo(record: TokenRecord): TokenInfo {
+  return {
+    clientId: record.clientId,
+    playerId: record.playerId,
+    createdAt: record.createdAt,
+    ...(record.client === undefined ? {} : { client: record.client }),
+  };
+}
+
+/** The JSON body, checked against `schema`; a 400 naming the first problem otherwise. */
+async function readBody<S extends TSchema>(c: HonoContext<Env>, schema: S): Promise<Static<S>> {
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    throw new HttpError(400, "Expected a JSON body");
+  }
+  if (Value.Check(schema, body)) return body;
+  const [first] = Value.Errors(schema, body);
+  throw new HttpError(
+    400,
+    first === undefined ? "Bad body" : `${first.instancePath || "body"} ${first.message}`,
+  );
+}

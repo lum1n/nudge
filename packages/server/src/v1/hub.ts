@@ -58,6 +58,27 @@ export class Hubs {
     return this.rooms.lease(roomId, () => RoomHub.open(this.nudge, roomId, directory, this.report));
   }
 
+  /**
+   * Calls `revoked` once the token of `clientId` stops working, as when an admin revokes it.
+   * Returns a function that stops watching.
+   */
+  async watchToken(clientId: string, revoked: () => void): Promise<() => void> {
+    const directory = await this.openDirectory();
+    const known = () =>
+      Object.values(directory.value.tokens).some((record) => record.clientId === clientId);
+    let stopped = false;
+    const stop = directory.listen(() => {
+      if (stopped || known()) return;
+      stopped = true;
+      stop();
+      revoked();
+    });
+    return () => {
+      stopped = true;
+      stop();
+    };
+  }
+
   async home(playerId: string): Promise<Lease<HomeHub>> {
     const directory = await this.openDirectory();
     return this.homes.lease(playerId, () =>
@@ -241,6 +262,11 @@ export class RoomHub implements Hub<RoomView> {
       nudges: this.nudges,
     });
     return this.projected;
+  }
+
+  /** The conversation as last committed: raw entries and pi-durable's documents. */
+  conversationView(): ConversationView {
+    return this.conversation;
   }
 
   /** The room's pending nudges as last read. */
