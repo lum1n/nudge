@@ -18,6 +18,7 @@ import {
   type TimelineItem,
   TimelineResponse,
   TokensResponse,
+  UsageResponse,
 } from "@nudge/protocol";
 import { RoomProjector, TIMELINE_LIMIT } from "@nudge/protocol/project";
 import type { TSchema } from "typebox";
@@ -200,6 +201,14 @@ describe("v1 HTTP", () => {
       body: { value: "AB 12345", kind: "PLATE" },
     });
     expect(protectedValue.json.placeholder).toMatch(/PLATE/);
+  });
+
+  it("tells the month's spend, and admins every room's and player's", async () => {
+    const ann = await call("GET", "/usage", { token: tokens.Ann, schema: UsageResponse });
+    expect(ann.json).toMatchObject({ total: 0, mine: 0, budget: {}, months: [] });
+    expect(ann.json.month).toMatch(/^\d{4}-\d{2}$/);
+    const bo = await call("GET", "/usage", { token: tokens.Bo, schema: UsageResponse });
+    expect(bo.json.months).toBeUndefined();
   });
 
   it("pairs a new client with a code from an admin, once", async () => {

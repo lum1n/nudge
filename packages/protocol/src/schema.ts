@@ -378,6 +378,31 @@ export type PlayerMemoryResponse = Static<typeof PlayerMemoryResponse>;
 export const ShareMemoryRequest = Type.Object({ shared: Type.Boolean() });
 export type ShareMemoryRequest = Static<typeof ShareMemoryRequest>;
 
+/** One month's model spend, in US dollars. */
+export const MonthUsage = Type.Object({
+  month: Type.String({ description: "YYYY-MM in the assistant's time zone" }),
+  total: Type.Number(),
+  /** By player id: what answering their messages cost. */
+  players: Type.Record(Type.String(), Type.Number()),
+  /** By room id. */
+  rooms: Type.Record(Type.String(), Type.Number()),
+});
+export type MonthUsage = Static<typeof MonthUsage>;
+
+/** The month's spend and limits; `months` (every room and player) for admins only. */
+export const UsageResponse = Type.Object({
+  month: Type.String(),
+  total: Type.Number(),
+  /** What answering the caller's messages cost this month. */
+  mine: Type.Number(),
+  budget: Type.Object({
+    monthlyUsd: Type.Optional(Type.Number()),
+    perPlayerUsd: Type.Optional(Type.Number()),
+  }),
+  months: Type.Optional(Type.Array(MonthUsage)),
+});
+export type UsageResponse = Static<typeof UsageResponse>;
+
 /** The server's VAPID public key, for `PushManager.subscribe`'s `applicationServerKey`. */
 export const PushKeyResponse = Type.Object({ publicKey: Type.String() });
 export type PushKeyResponse = Static<typeof PushKeyResponse>;
@@ -532,6 +557,8 @@ export const SCHEMAS = {
   ShareMemoryRequest,
   PushKeyResponse,
   PushSubscribeRequest,
+  MonthUsage,
+  UsageResponse,
   DecideRequest,
   RoomExtension,
   RoomExtensionsResponse,

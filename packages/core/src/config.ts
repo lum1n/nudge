@@ -58,6 +58,14 @@ const AssistantSchema = Type.Object({
   instructions: Type.Optional(Type.String()),
   /** Installed after the built-in extension, in order. */
   extensions: Type.Optional(Type.Array(ExtensionSchema)),
+  /** Monthly limits on model spend, in US dollars as the model catalog prices it. */
+  budget: Type.Optional(
+    Type.Object({
+      monthlyUsd: Type.Optional(Type.Number({ exclusiveMinimum: 0 })),
+      perPlayerUsd: Type.Optional(Type.Number({ exclusiveMinimum: 0 })),
+      warnAt: Type.Optional(Type.Number({ exclusiveMinimum: 0, maximum: 1 })),
+    }),
+  ),
 });
 
 /** Notifications `nudge serve` pushes to browsers that turn them on. */

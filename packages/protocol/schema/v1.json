@@ -3057,6 +3057,93 @@
         }
       }
     },
+    "MonthUsage": {
+      "type": "object",
+      "required": ["month", "total", "players", "rooms"],
+      "properties": {
+        "month": {
+          "type": "string",
+          "description": "YYYY-MM in the assistant's time zone"
+        },
+        "total": {
+          "type": "number"
+        },
+        "players": {
+          "type": "object",
+          "patternProperties": {
+            "^.*$": {
+              "type": "number"
+            }
+          }
+        },
+        "rooms": {
+          "type": "object",
+          "patternProperties": {
+            "^.*$": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    "UsageResponse": {
+      "type": "object",
+      "required": ["month", "total", "mine", "budget"],
+      "properties": {
+        "month": {
+          "type": "string"
+        },
+        "total": {
+          "type": "number"
+        },
+        "mine": {
+          "type": "number"
+        },
+        "budget": {
+          "type": "object",
+          "properties": {
+            "monthlyUsd": {
+              "type": "number"
+            },
+            "perPlayerUsd": {
+              "type": "number"
+            }
+          }
+        },
+        "months": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["month", "total", "players", "rooms"],
+            "properties": {
+              "month": {
+                "type": "string",
+                "description": "YYYY-MM in the assistant's time zone"
+              },
+              "total": {
+                "type": "number"
+              },
+              "players": {
+                "type": "object",
+                "patternProperties": {
+                  "^.*$": {
+                    "type": "number"
+                  }
+                }
+              },
+              "rooms": {
+                "type": "object",
+                "patternProperties": {
+                  "^.*$": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "DecideRequest": {
       "type": "object",
       "required": ["approve"],

@@ -9,6 +9,12 @@
       "model": { "provider": "anthropic", "modelId": "claude-sonnet-5" },
       "timeZone": "Europe/Oslo",
       "instructions": "Answer in the language you are written to. Keep answers short.",
+      "budget": {
+        "$comment": "Monthly limits on model spend in USD. Past perPlayerUsd a player's messages are refused; past monthlyUsd nothing goes to the model until the month ends. warnAt is the share at which people are told. `nudge usage` shows the spend.",
+        "monthlyUsd": 20,
+        "perPlayerUsd": 5,
+        "warnAt": 0.8
+      },
       "extensions": [
         {
           "$comment": "from is a file or package directory relative to this file, or an installed package name. settings are checked against the extension's own schema. rooms lists the kinds of room it is on in by default (lobby, personal, shared; default all); people can turn it on or off per room with /extensions. Set enabled to false to keep an entry without installing it.",

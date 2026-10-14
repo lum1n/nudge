@@ -14,6 +14,7 @@ import type {
   RoomsResponse,
   TokenInfo,
   TokensResponse,
+  UsageResponse,
 } from "@nudge/protocol";
 import { toHomeNudge, toRoom } from "@nudge/protocol/project";
 import { pairingLink } from "@nudge/server";
@@ -272,6 +273,45 @@ export async function nudges(options: AdminOptions & ServerAccess): Promise<void
     options,
     async (nudge) => print((await nudge.nudges.list(context)).map(toHomeNudge)),
     async (server) => print((await server.call<NudgesResponse>("GET", "/admin/nudges")).nudges),
+  );
+}
+
+export async function usage(options: AdminOptions & ServerAccess): Promise<void> {
+  const money = (amount: number) => `$${amount.toFixed(2)}`;
+  const print = (report: Omit<UsageResponse, "mine">) => {
+    const { monthlyUsd, perPlayerUsd } = report.budget;
+    console.log(
+      `Budget: ${monthlyUsd === undefined ? "none" : `${money(monthlyUsd)} a month`}` +
+        (perPlayerUsd === undefined ? "" : `, ${money(perPlayerUsd)} per player`),
+    );
+    const months = report.months ?? [];
+    if (months.length === 0) console.log(`${report.month}\t${money(report.total)}`);
+    for (const month of months) {
+      console.log(`${month.month}\t${money(month.total)}`);
+      const rows = [
+        ...Object.entries(month.players).map(([id, amount]) => [`player ${id}`, amount] as const),
+        ...Object.entries(month.rooms).map(([id, amount]) => [`room ${id}`, amount] as const),
+      ].sort(([, a], [, b]) => b - a);
+      for (const [name, amount] of rows) console.log(`  ${name}\t${money(amount)}`);
+    }
+  };
+  await withAssistantOrServer(
+    options,
+    async (nudge) => {
+      const { month, spend, budget } = nudge.spending.thisMonth();
+      print({
+        month,
+        total: spend.total,
+        budget,
+        months: nudge.spending.months().map(({ month, spend }) => ({
+          month,
+          total: spend.total,
+          players: spend.players,
+          rooms: spend.rooms,
+        })),
+      });
+    },
+    async (server) => print(await server.call<UsageResponse>("GET", "/usage")),
   );
 }
 

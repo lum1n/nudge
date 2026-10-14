@@ -41,6 +41,8 @@ import { VaultDoc } from "./privacy/vault-doc.ts";
 import { openDatabaseStorage } from "./encrypted-storage.ts";
 import { lockDatabase } from "./storage-lock.ts";
 import { type RoomEvent, RoomEvents } from "./room-events.ts";
+import { type Budget, BudgetReached, Spending, type SpendWarning, usd } from "./spending.ts";
+import { FIRE_ENTRY, type FireEntryData } from "./nudges/timer-task.ts";
 
 export type PrivacyOptions = {
   /** Detectors to run instead of the built-in ones. Names are protected separately. */
@@ -65,6 +67,8 @@ export type NudgeOptions = {
   readonly extensions?: readonly ExtensionInput[];
   readonly settings?: HarnessSettings;
   readonly privacy?: PrivacyOptions;
+  /** Monthly limits on model spend; none without. */
+  readonly budget?: Budget;
   /** Clock for timestamps and timers; tests inject a fake one. */
   readonly now?: () => number;
   readonly onReport?: (error: unknown) => void;
@@ -102,6 +106,8 @@ type Parts = {
   readonly installed: readonly SetUpExtension[];
   readonly report: (error: unknown) => void;
   readonly events: RoomEvents;
+  readonly spending: Spending;
+  readonly timeZone: string;
 };
 
 /** One assistant: one storage, one Harness, one registry. */
@@ -118,6 +124,9 @@ export class Nudge {
   readonly changes = new Changes();
   /** Finished answers and new approvals in every room, for hosts that pass them on. */
   readonly events: RoomEvents;
+  /** Model spend by month, room and player, and the budget it is held to. */
+  readonly spending: Spending;
+  private readonly timeZone: string;
   private readonly models: RedactingModels;
   private readonly now: () => number;
   private readonly unlock: () => Promise<void>;
@@ -142,6 +151,8 @@ export class Nudge {
     this.installed = parts.installed;
     this.report = parts.report;
     this.events = parts.events;
+    this.spending = parts.spending;
+    this.timeZone = parts.timeZone;
     this.events.subscribe((event) => this.deliver(event));
     this.players = new Players(harness, (name) => this.protect(name, "NAME").then(() => {}), now);
     const changed = (change: Change) => this.changes.emit(change);
@@ -236,6 +247,19 @@ export class Nudge {
       };
       const lobby = await harness.root(context, { agent });
       const events = await openRoomEvents(harness, context, options.onReport ?? (() => {}));
+      const spending = await Spending.open(
+        harness,
+        {
+          budget: options.budget ?? {},
+          timeZone,
+          now,
+          warn: (warning) => void whenOpen().warnOfSpend(warning),
+          report: options.onReport ?? (() => {}),
+        },
+        await harness.snapshot(DirectoryDoc, context),
+        context,
+      );
+      models.refuse = () => spending.refusal();
       const nudge = new Nudge({
         harness,
         displayName,
@@ -249,6 +273,8 @@ export class Nudge {
         installed,
         report: options.onReport ?? (() => {}),
         events,
+        spending,
+        timeZone,
       });
       await nudge.rooms.adoptLobby(lobby.id, context);
       const directory = await harness.snapshot(DirectoryDoc, context);
@@ -400,6 +426,52 @@ export class Nudge {
     await conversation.configure({ extensions: this.selection(room) }, context);
   }
 
+  /**
+   * Tells a player, in their own room, that their budget is nearly spent, or every admin that the
+   * assistant's is. It arrives like a fired nudge.
+   */
+  private async warnOfSpend(warning: SpendWarning): Promise<void> {
+    try {
+      const players =
+        warning.kind === "player"
+          ? [warning.playerId!]
+          : (await this.players.list(BACKGROUND_CONTEXT)).map((player) => player.id);
+      const month = new Intl.DateTimeFormat("en-CA", {
+        timeZone: this.timeZone,
+        year: "numeric",
+        month: "2-digit",
+      }).format(this.now());
+      const whose = warning.kind === "player" ? "your" : "the assistant's";
+      const message = `Spent ${usd(warning.spent)} of ${whose} ${usd(warning.limit)} budget this month`;
+      for (const playerId of players) {
+        if (
+          warning.kind === "assistant" &&
+          !(await this.players.isAdmin(playerId, BACKGROUND_CONTEXT))
+        )
+          continue;
+        const room = await this.rooms.ensurePersonal(playerId, BACKGROUND_CONTEXT);
+        const conversation = await this.conversation(room.id, BACKGROUND_CONTEXT);
+        await conversation.submit(
+          {
+            type: "input",
+            content:
+              `${message}. Past the limit, ${warning.kind === "player" ? "their messages are refused" : "nothing more is answered"} ` +
+              `until the month ends. Tell them briefly, in your own words.`,
+            whenBusy: "followUp",
+            requestId: `budget:${month}:${warning.kind}:${warning.playerId ?? ""}`,
+            entry: {
+              kind: FIRE_ENTRY,
+              data: { nudgeId: "budget", message, fireAt: this.now() } satisfies FireEntryData,
+            },
+          },
+          BACKGROUND_CONTEXT,
+        );
+      }
+    } catch (error) {
+      this.report(error);
+    }
+  }
+
   /** Hands a room event to the extensions on in its room. */
   private deliver(event: RoomEvent): void {
     void (async () => {
@@ -435,6 +507,11 @@ export class Nudge {
   /** Posts a message to a room. Checking that the author may use the room is the host's job. */
   async submit(roomId: string, draft: MessageDraft, context: Context): Promise<Submission> {
     const room = await this.room(roomId, context);
+    const refusal =
+      draft.author === undefined
+        ? this.spending.refusal()
+        : this.spending.refusalFor(draft.author.playerId);
+    if (refusal !== undefined) throw new BudgetReached(refusal);
     // The model sees "<name>: <text>"; the name is personal, so it goes to the vault first.
     if (draft.author !== undefined) this.models.vault.protect(draft.author.displayName, "NAME");
     return submitMessage(
@@ -488,6 +565,8 @@ export class Nudge {
   async close(context: Context): Promise<void> {
     try {
       this.events.close();
+      await this.spending.flush();
+      this.spending.close();
       await this.harness.close(context);
     } finally {
       await closeAll(this.installed, this.report);

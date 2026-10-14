@@ -22,6 +22,7 @@ import type {
   TimelineResponse,
   TokenInfo,
   TokensResponse,
+  UsageResponse,
 } from "@nudge/protocol";
 
 /**
@@ -148,6 +149,11 @@ export class Api {
   /** With `shared`, everyone in the caller's rooms, and the model there, sees their own facts. */
   shareMyMemory(shared: boolean): Promise<PlayerMemoryResponse> {
     return this.request("PUT", "/me/memory/sharing", { shared });
+  }
+
+  /** This month's model spend: the assistant's and the caller's, and every month's for admins. */
+  usage(): Promise<UsageResponse> {
+    return this.request("GET", "/usage");
   }
 
   /** The server's VAPID public key; a 404 when the server sends no pushes. */

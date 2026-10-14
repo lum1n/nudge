@@ -3,6 +3,7 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
   AlreadyDecided,
   ApprovalNotFound,
+  BudgetReached,
   canUse,
   type Credential,
   ExtensionNotFound,
@@ -46,6 +47,7 @@ import {
   type TimelineResponse,
   type TokenInfo,
   type TokensResponse,
+  type UsageResponse,
 } from "@nudge/protocol";
 import {
   TimelinePager,
@@ -83,7 +85,7 @@ type Env = {
 
 export class HttpError extends Error {
   constructor(
-    readonly status: 400 | 401 | 403 | 404 | 409,
+    readonly status: 400 | 401 | 403 | 404 | 409 | 429,
     message: string,
   ) {
     super(message);
@@ -205,6 +207,32 @@ export function restRoutes(options: RestOptions): Hono {
     } satisfies PlayerMemoryResponse);
   });
 
+  api.get("/usage", async (c) => {
+    const { spending } = c.var.nudge;
+    const { month, spend, budget } = spending.thisMonth();
+    const me = c.var.credential.player.id;
+    const admin = await c.var.nudge.players.isAdmin(me, context);
+    return c.json({
+      month,
+      total: spend.total,
+      mine: spend.players[me] ?? 0,
+      budget: {
+        ...(budget.monthlyUsd === undefined ? {} : { monthlyUsd: budget.monthlyUsd }),
+        ...(budget.perPlayerUsd === undefined ? {} : { perPlayerUsd: budget.perPlayerUsd }),
+      },
+      ...(admin
+        ? {
+            months: spending.months().map(({ month, spend }) => ({
+              month,
+              total: spend.total,
+              players: spend.players,
+              rooms: spend.rooms,
+            })),
+          }
+        : {}),
+    } satisfies UsageResponse);
+  });
+
   const pushes = (c: HonoContext<Env>): Pushes => {
     const found = options.pushesOf?.(c.var.nudge);
     if (found === undefined) throw new HttpError(404, "This server sends no pushes");
@@ -258,17 +286,23 @@ export function restRoutes(options: RestOptions): Hono {
     const body = await readBody(c, MessageRequest);
     if (body.text.trim() === "") throw new HttpError(400, "A message needs text");
     const { player, clientId } = c.var.credential;
-    const submission = await c.var.nudge.submit(
-      room.id,
-      {
-        text: body.text,
-        // The author is whoever the token belongs to, never what the body says.
-        author: { playerId: player.id, displayName: player.displayName, clientId },
-        requestId: body.requestId,
-        whenBusy: body.whenBusy,
-      },
-      context,
-    );
+    let submission;
+    try {
+      submission = await c.var.nudge.submit(
+        room.id,
+        {
+          text: body.text,
+          // The author is whoever the token belongs to, never what the body says.
+          author: { playerId: player.id, displayName: player.displayName, clientId },
+          requestId: body.requestId,
+          whenBusy: body.whenBusy,
+        },
+        context,
+      );
+    } catch (error) {
+      if (error instanceof BudgetReached) throw new HttpError(429, error.message);
+      throw error;
+    }
     return c.json({ submissionId: submission.id } satisfies MessageResponse, 202);
   });
 

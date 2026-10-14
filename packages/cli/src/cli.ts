@@ -9,6 +9,7 @@ import {
   room,
   token,
   tokens,
+  usage,
 } from "./commands/admin.ts";
 import { chat } from "./commands/chat.ts";
 import { connector } from "./commands/connector.ts";
@@ -34,6 +35,7 @@ Commands:
                      the admins; the first player always may
   room [name]        Create a shared room with --members, or list the rooms
   nudges             List the scheduled nudges of every room
+  usage              Model spend by month, player and room, and the budget
   connectors [room]  List the APIs a room can call (default: the lobby)
   connector share|unshare <id> [room]
                      Share a room's connector, one without a key, with every room, or
@@ -153,6 +155,9 @@ async function main(argv: string[]): Promise<number> {
     }
     case "nudges":
       await nudges(access);
+      return 0;
+    case "usage":
+      await usage(access);
       return 0;
     case "connectors":
       await connector({ ...access, room: argument });

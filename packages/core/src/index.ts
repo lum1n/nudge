@@ -44,6 +44,16 @@ export {
 } from "./approvals/approvals.ts";
 export { type Change, type ChangeListener, Changes } from "./changes.ts";
 export {
+  type Budget,
+  BudgetReached,
+  type MonthSpend,
+  SpendDoc,
+  Spending,
+  type SpendState,
+  type SpendWarning,
+  totalCost,
+} from "./spending.ts";
+export {
   type AnswerCause,
   type RoomEvent,
   type RoomEventListener,
@@ -171,6 +181,7 @@ export async function openAssistant(
       timeZone: assistant.timeZone,
       instructions: assistant.instructions,
       extensions: await loadExtensions(assistant.extensions ?? []),
+      ...(assistant.budget === undefined ? {} : { budget: assistant.budget }),
       ...overrides,
     },
     context,

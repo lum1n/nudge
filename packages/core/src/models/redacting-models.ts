@@ -50,6 +50,8 @@ export class RedactingModels implements Models {
   private saving: Promise<void> = Promise.resolve();
   /** The assistant's detectors, then its extensions'; replaced when extensions reload. */
   detectors: readonly PiiDetector[];
+  /** Why no request may go out now, such as a spent budget; undefined lets them through. */
+  refuse: () => string | undefined = () => undefined;
 
   constructor(
     private readonly inner: Models,
@@ -137,6 +139,7 @@ export class RedactingModels implements Models {
         ]),
       ),
     };
+    this.checkAllowed();
     await this.flush();
     return this.inner.classify(model, redacted, options);
   }
@@ -153,6 +156,7 @@ export class RedactingModels implements Models {
           : block,
       ),
     };
+    this.checkAllowed();
     await this.flush();
     const result = await this.inner.generateImages(model, redacted, options);
     return {
@@ -207,6 +211,7 @@ export class RedactingModels implements Models {
     this.inner.cancelDeferred(model, handle, options);
 
   private async prepare(model: Model<Api>, context: Context): Promise<Context> {
+    this.checkAllowed();
     const redacted = redactContext(context, this.vault, this.detectors);
     await this.flush();
     this.options.onRequest?.({ model: `${model.provider}/${model.id}`, context: redacted });
@@ -283,9 +288,19 @@ export class RedactingModels implements Models {
     }
   }
 
+  private checkAllowed(): void {
+    const refusal = this.refuse();
+    if (refusal !== undefined) throw new RequestRefused(refusal);
+  }
+
   private notReady(): never {
     throw new Error("Redaction is not ready: the vault is not loaded yet");
   }
+}
+
+/** A request the assistant would not send, such as one past its budget. */
+export class RequestRefused extends Error {
+  override name = "RequestRefused";
 }
 
 function failedMessage(model: Model<Api>, error: unknown): AssistantMessage {
@@ -304,7 +319,10 @@ function failedMessage(model: Model<Api>, error: unknown): AssistantMessage {
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
     stopReason: "error",
-    errorMessage: `Redaction failed: ${error instanceof Error ? error.message : String(error)}`,
+    errorMessage:
+      error instanceof RequestRefused
+        ? error.message
+        : `Redaction failed: ${error instanceof Error ? error.message : String(error)}`,
     timestamp: Date.now(),
   };
 }

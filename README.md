@@ -96,6 +96,12 @@ A room page shows the same conversation the CLI and the API see, live, for every
 
 Notifications: "Turn on" under Notifications on the room list subscribes the browser to Web Push. Then answers, fired nudges and approvals in that player's rooms arrive as notifications, except for a room that is open in a visible tab. They need HTTPS, or `localhost`, and on an iPhone the site added to the home screen. Pushes are encrypted for the browser, so Google's, Mozilla's or Apple's push service only relays them. By default a notification says only which room has news; `"push": { "preview": "text" }` in `nudge.json` adds the start of the text. `nudge serve` makes the server's push keys on first start (`push-vapid.json` beside the first assistant's database); losing them means browsers must turn notifications on again.
 
+## Spend
+
+Every model request's cost, as the model catalog prices it, is booked per month to the room and to the player whose message was being answered. That includes what tools such as the browser report. Nudges and watches count for the room only. `nudge usage` prints the months, by player and room, and `GET /v1/a/<assistant>/usage` gives the same to admins (others see the total and their own share).
+
+`"budget": { "monthlyUsd": 20, "perPlayerUsd": 5, "warnAt": 0.8 }` on an assistant in `nudge.json` sets limits. At `warnAt` of a limit, the player, or for the assistant's limit the admins, hear about it in their own room, once a month. Past a player's limit their messages are refused. Past the assistant's, nothing more goes to the model, nudges and watches included, until the month ends (in the assistant's time zone). Local models cost nothing.
+
 ## Privacy
 
 The model provider never sees personal data. Before a request leaves, Nudge replaces e-mail addresses, phone numbers, IBANs, card numbers, Norwegian national identity and account numbers, and the names of the people chatting with placeholders such as `⟦EMAIL1⟧`; when the answer comes back, it puts the values back. This covers every request, including tool rounds and the summaries made when a long conversation is compacted. A value keeps its placeholder for the life of the assistant.
