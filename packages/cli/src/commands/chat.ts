@@ -48,6 +48,9 @@ export async function chat(options: ChatOptions): Promise<void> {
   );
   rl = createInterface({ input: process.stdin, output: process.stdout, prompt: "> " });
   rl.on("close", () => (inputEnded = true));
+  // Readline drops lines, and its close, that come before the iterator exists; piped input can
+  // all arrive while the room is still loading.
+  const lines = rl[Symbol.asyncIterator]();
   const prompt = rl;
   // Approvals already announced, so each new one is shown once.
   const announced = new Set<string>();
@@ -121,7 +124,7 @@ export async function chat(options: ChatOptions): Promise<void> {
     void quit();
   });
 
-  for await (const raw of rl) {
+  for await (const raw of lines) {
     const line = raw.trim();
     if (line === "") {
       ask();
