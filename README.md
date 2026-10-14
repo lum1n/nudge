@@ -193,6 +193,10 @@ An entry's `rooms` lists the kinds of room it is on in by default (`"lobby"`, `"
 - Results reach the model through the same redaction as everything else. Images in results are left out unless a server sets `"images": true`, since redaction only reads text.
 - The tool lists are read when the extension is installed; `nudge reload` reads them again. A server that can't be reached then is left out and reported. Connections close after `idleMinutes` (default 5) unused, and on reload and shutdown.
 
+### Web search
+
+`extensions/search` gives the model `web_search`, through a [SearXNG](https://docs.searxng.org) instance of your own, and `read_page`, which reads one page as text without starting a browser. Set `url` to the instance (default `http://127.0.0.1:8888`) and turn on its JSON output (`search: formats: [html, json]` in its `settings.yml`); `language` picks the results' language. `read_page` only reads public addresses, also after a redirect, unless `readLocalPages` is on. A connector the room added for the task still comes first, and pages that need a login or clicking around are the browser's.
+
 ### Code mode
 
 `extensions/codemode` gives the model one `codemode` tool: it writes a short JavaScript program that calls the room's tools as `tools.<name>(args)`, so it can loop, filter and combine their results in one step instead of one tool call per turn.

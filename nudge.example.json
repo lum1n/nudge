@@ -37,6 +37,12 @@
           "settings": { "minMinutes": 30, "maxPerRoom": 10 }
         },
         {
+          "$comment": "Web search through your own SearXNG (JSON output on), and reading a page as text.",
+          "from": "./extensions/search",
+          "settings": { "url": "http://127.0.0.1:8888", "language": "nb" },
+          "enabled": false
+        },
+        {
           "$comment": "Talk to the assistant from Telegram. The bot token comes from TELEGRAM_BOT_TOKEN; people link with /link <code from nudge pair>. Off here (enabled: false) so the example works without a token.",
           "from": "./extensions/telegram",
           "enabled": false
