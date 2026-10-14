@@ -207,6 +207,35 @@ An entry's `rooms` lists the kinds of room it is on in by default (`"lobby"`, `"
 - API keys, the local network and read paths are set by people, never by the model: on the room's **Connectors** page in the web UI, or with `/connectors` and `/connector-key <id>` in `nudge chat` (the key isn't echoed). Keys are stored encrypted and scrubbed from what the model sees.
 - A connector belongs to the room it was added in. The owner can share one without a key with every room: `nudge connector share <id> [room]`, and `unshare` to move it back. `nudge connectors [room]` lists a room's.
 
+### Mail
+
+`extensions/mail` lets rooms search and read a mailbox over IMAP and send over SMTP. Accounts are set in the extension's settings, each with the rooms that may use it:
+
+```json
+{
+  "from": "./extensions/mail",
+  "settings": {
+    "accounts": [
+      {
+        "id": "family",
+        "from": "Family <family@example.org>",
+        "imap": {
+          "host": "imap.example.org",
+          "user": "family@example.org",
+          "password": "${FAMILY_MAIL_PASSWORD}"
+        },
+        "rooms": ["family"]
+      }
+    ]
+  }
+}
+```
+
+- The model gets `mail_search`, `mail_read` and `mail_send`. Reading opens the inbox read-only, so nothing is marked read. Sending, replies included (kept in their thread), waits for someone in the room to approve it.
+- SMTP defaults to the IMAP host with `imap.` changed to `smtp.`, port 465 and the same login; give `smtp` to set it.
+- Mail goes to the model like any tool output: addresses, phone numbers and the like as placeholders. Other names in a message are not detected.
+- Some servers don't keep a copy of sent mail in Sent by themselves.
+
 ### Watches
 
 `extensions/watches` lets a room ask the assistant to keep an eye on something: "tell me when a 2027 GLC under 800 000 kr shows up on Finn", "when tomorrow's power price goes above 2 kr". The model adds a watch with `add_watch` (what to check, and how often), and `list_watches` and `remove_watch` show and stop them.
