@@ -1,5 +1,5 @@
 import { parseArgs } from "node:util";
-import { invite, nudges, reload, room } from "./commands/admin.ts";
+import { invite, nudges, reload, revoke, room, token, tokens } from "./commands/admin.ts";
 import { chat } from "./commands/chat.ts";
 import { doctor } from "./commands/doctor.ts";
 import { init } from "./commands/init.ts";
@@ -14,13 +14,17 @@ Commands:
                      (default: the lobby)
   serve              Run every assistant behind an HTTP and WebSocket server
   invite <name>      Add a player and print their token
+  token <player>     Print a new token for a player, such as for a lost one
+  tokens [player]    List the tokens of a player, or of everyone, by client id
+  revoke <client>    Stop the token of a client id from signing in
   room [name]        Create a shared room with --members, or list the rooms
   nudges             List the scheduled nudges of every room
   reload             Reinstall extensions from the config in the running assistant
   doctor             Check Node, config, storage and model credentials;
                      --ping sends one request, --privacy tests redaction
 
-invite, room and nudges open the assistant's database, so stop "nudge serve" first.
+invite, token, tokens, revoke, room and nudges open the assistant's database, so stop
+"nudge serve" first.
 
 Options:
   -c, --config <file>      Config file (default: nudge.json)
@@ -83,6 +87,23 @@ async function main(argv: string[]): Promise<number> {
         name: argument,
         server: values.url ?? `http://${values.host}:${values.port}`,
       });
+      return 0;
+    case "token":
+      if (argument === undefined)
+        throw new UsageError("token needs a player id: nudge token <player>");
+      await token({
+        ...admin,
+        player: argument,
+        server: values.url ?? `http://${values.host}:${values.port}`,
+      });
+      return 0;
+    case "tokens":
+      await tokens({ ...admin, player: argument });
+      return 0;
+    case "revoke":
+      if (argument === undefined)
+        throw new UsageError("revoke needs a client id from nudge tokens: nudge revoke <client>");
+      await revoke({ ...admin, clientId: argument });
       return 0;
     case "room": {
       const members = values.members

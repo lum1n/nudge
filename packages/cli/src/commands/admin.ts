@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { findAssistant, loadConfig, type Nudge, openAssistant } from "@nudge/core";
+import { UsageError } from "../errors.ts";
 import { describeNudge } from "../render.ts";
 
 export type AdminOptions = {
@@ -21,6 +22,52 @@ export async function invite(
     console.log(`In a browser: ${new URL("/login", options.server).href}#token=${token}`);
     console.log("In a terminal: NUDGE_TOKEN=<token> nudge chat --url <server>/a/<assistant>");
   });
+}
+
+/** Prints a new token for an existing player, once; their other tokens keep working. */
+export async function token(
+  options: AdminOptions & { readonly player: string; readonly server: string },
+): Promise<void> {
+  await withAssistant(options, async (nudge) => {
+    await knownPlayer(nudge, options.player);
+    const issued = await nudge.players.issueToken(options.player, context);
+    console.log(
+      `New token for ${issued.player.displayName} (client ${issued.clientId}), shown only now:\n`,
+    );
+    console.log(`  ${issued.token}\n`);
+    console.log(`In a browser: ${new URL("/login", options.server).href}#token=${issued.token}`);
+    console.log(`Revoke it with: nudge revoke ${issued.clientId}`);
+  });
+}
+
+/** Lists the tokens of one player, or of everyone, by client id and when they were issued. */
+export async function tokens(options: AdminOptions & { readonly player?: string }): Promise<void> {
+  await withAssistant(options, async (nudge) => {
+    if (options.player !== undefined) await knownPlayer(nudge, options.player);
+    const records = await nudge.players.tokens(options.player, context);
+    if (records.length === 0) console.log("No tokens.");
+    for (const record of records)
+      console.log(
+        `${record.playerId}\t${record.clientId}\t${new Date(record.createdAt).toISOString()}`,
+      );
+  });
+}
+
+/** Stops one client's token from signing in. */
+export async function revoke(options: AdminOptions & { readonly clientId: string }): Promise<void> {
+  await withAssistant(options, async (nudge) => {
+    const known = await nudge.players.tokens(undefined, context);
+    if (!known.some((record) => record.clientId === options.clientId))
+      throw new UsageError(`No token for client "${options.clientId}"; see nudge tokens`);
+    const record = await nudge.players.revoke(options.clientId, context);
+    console.log(`Revoked ${record.playerId}'s token for client ${record.clientId}.`);
+  });
+}
+
+async function knownPlayer(nudge: Nudge, id: string): Promise<void> {
+  if ((await nudge.players.get(id, context)) !== undefined) return;
+  const ids = (await nudge.players.list(context)).map((player) => player.id);
+  throw new UsageError(`No player "${id}"; players: ${ids.join(", ") || "none"}`);
 }
 
 /** Creates a shared room, or lists the rooms without a name. */

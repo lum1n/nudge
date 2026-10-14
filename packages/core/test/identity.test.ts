@@ -62,6 +62,29 @@ describe("players and rooms", () => {
     await reopened.close(context);
   });
 
+  it("lists a player's tokens and revokes one without the others", async () => {
+    const { options } = setup(":memory:");
+    const nudge = await createNudge(options, context);
+    const ann = await nudge.players.invite("Ann", context);
+    const bo = await nudge.players.invite("Bo", context);
+    const laptop = await nudge.players.issueToken(ann.player.id, context);
+
+    const anns = await nudge.players.tokens(ann.player.id, context);
+    expect(anns.map((t) => t.clientId)).toEqual([ann.clientId, laptop.clientId]);
+    expect(JSON.stringify(anns)).not.toContain(ann.token);
+    expect(await nudge.players.tokens(undefined, context)).toHaveLength(3);
+    await expect(nudge.players.tokens("nobody", context)).rejects.toThrow('No player "nobody"');
+
+    expect((await nudge.players.revoke(laptop.clientId, context)).playerId).toBe(ann.player.id);
+    expect(await nudge.players.authenticate(laptop.token, context)).toBeUndefined();
+    expect((await nudge.players.authenticate(ann.token, context))?.player.id).toBe("ann");
+    expect((await nudge.players.authenticate(bo.token, context))?.player.id).toBe("bo");
+    await expect(nudge.players.revoke(laptop.clientId, context)).rejects.toThrow(
+      `No token for client "${laptop.clientId}"`,
+    );
+    await nudge.close(context);
+  });
+
   it("gives each player the lobby, their own room and the shared rooms they are in", async () => {
     const { options } = setup(":memory:");
     const nudge = await createNudge(options, context);

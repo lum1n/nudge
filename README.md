@@ -56,6 +56,8 @@ Each person is a player with their own token. Everyone shares the lobby; a perso
 ```bash
 nudge invite Ann                      # prints Ann's token, once
 nudge invite Bo
+nudge token ann                       # another token for Ann, such as for a lost one
+nudge tokens ann                      # Ann's tokens by client id; revoke one with `nudge revoke <client>`
 nudge room Trip --members ann,bo      # a shared room "trip"; `nudge room` lists them
 nudge serve                           # web UI at http://127.0.0.1:8787, API under /a/<assistant>
 ```
@@ -68,7 +70,7 @@ Or each person connects from their own terminal, and all of them see the same co
 NUDGE_TOKEN=nudge_… nudge chat trip --url http://127.0.0.1:8787/a/nudge
 ```
 
-One process owns an assistant's database at a time, so stop `nudge serve` before `nudge invite`, `nudge room` or `nudge nudges`. `serve` listens on 127.0.0.1; put a TLS proxy in front before exposing it.
+One process owns an assistant's database at a time, so stop `nudge serve` before `nudge invite`, `nudge token`, `nudge tokens`, `nudge revoke`, `nudge room` or `nudge nudges`. `serve` listens on 127.0.0.1; put a TLS proxy in front before exposing it.
 
 `GET /a` lists the assistants without a token. The API, with `Authorization: Bearer <token>`, under `/a/<assistant>`: `GET /me`, `GET|POST /rooms`, `POST /rooms/personal`, `GET /rooms/<room>`, `POST /rooms/<room>/messages`, `POST /rooms/<room>/abort`, `GET /rooms/<room>/transcript`, `POST /protect`, `GET /nudges`, `DELETE /nudges/<id>`, `GET|POST /rooms/<room>/memory`, `DELETE /rooms/<room>/memory/<id>`. `GET /rooms/<room>/stream` is a WebSocket: send `{"type":"hello","token":…}` first, then get a snapshot and one batch of agent events per commit; send `submit` and `abort` frames. With `?format=view` it sends the room's conversation view instead, then its [Chord](https://github.com/earendil-works/pi/tree/main/packages/chord) ops per commit, for clients that mirror it (the web UI does). The types are in `packages/server/src/protocol.ts`.
 

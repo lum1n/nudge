@@ -71,6 +71,7 @@ export {
   type Room,
   type RoomKind,
   roomOf,
+  type TokenRecord,
 } from "./identity/directory.ts";
 export { type Credential, type Invitation, Players } from "./identity/players.ts";
 export {

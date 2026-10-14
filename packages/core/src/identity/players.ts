@@ -1,7 +1,15 @@
 import { randomUUID } from "node:crypto";
 import type { Context } from "@earendil-works/chord";
 import type { Harness } from "@earendil-works/pi-durable";
-import { DirectoryDoc, freeId, hashToken, newToken, type Player, slug } from "./directory.ts";
+import {
+  DirectoryDoc,
+  freeId,
+  hashToken,
+  newToken,
+  type Player,
+  slug,
+  type TokenRecord,
+} from "./directory.ts";
 
 /** What a valid token stands for. */
 export type Credential = { readonly player: Player; readonly clientId: string };
@@ -77,6 +85,31 @@ export class Players {
       return { ...player };
     }, context);
     return { player, clientId, token };
+  }
+
+  /** Every token's record, oldest first; only `playerId`'s when given. The tokens themselves are gone. */
+  async tokens(playerId: string | undefined, context: Context): Promise<TokenRecord[]> {
+    const directory = await this.harness.snapshot(DirectoryDoc, context);
+    if (playerId !== undefined && directory?.players[playerId] === undefined)
+      throw new Error(`No player "${playerId}"`);
+    return Object.values(directory?.tokens ?? {})
+      .filter((record) => playerId === undefined || record.playerId === playerId)
+      .map((record) => ({ ...record }))
+      .sort((a, b) => a.createdAt - b.createdAt);
+  }
+
+  /** Stops the token of client `clientId` from signing in, and returns its record. */
+  async revoke(clientId: string, context: Context): Promise<TokenRecord> {
+    return this.harness.commit(async (tx) => {
+      const directory = await tx.doc(DirectoryDoc);
+      const hash = Object.keys(directory.tokens).find(
+        (hash) => directory.tokens[hash]!.clientId === clientId,
+      );
+      if (hash === undefined) throw new Error(`No token for client "${clientId}"`);
+      const record = { ...directory.tokens[hash]! };
+      delete directory.tokens[hash];
+      return record;
+    }, context);
   }
 
   async authenticate(token: string, context: Context): Promise<Credential | undefined> {
