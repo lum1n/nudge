@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import nudge.ffi.AnswerStatus
+import nudge.ffi.ApprovalStatus
 import nudge.ffi.ClientConfig
 import nudge.ffi.ConnectionStatus
 import nudge.ffi.NudgeClient
@@ -128,6 +129,46 @@ class ClientTest {
 
         val home = admin.observeHomeState().awaitState { it.view != null }
         assertTrue(home.view!!.rooms.any { it.room.id == "trip" })
+    }
+
+    @Test
+    fun approvalsAndNudges() = runBlocking {
+        val admin = client(MemoryTokens(ann))
+        val member = client(MemoryTokens(bo))
+        val room = member.observeRoomState("trip")
+        room.awaitState { it.status == SyncStatus.LIVE }
+
+        // The model's `pay` waits for someone in the room to approve.
+        admin.send("trip", "Please pay the bill", null)
+        val approval = room.awaitState { state ->
+            state.approvals.any { it.status == ApprovalStatus.PENDING }
+        }.approvals[0]
+        assertEquals("Pay 10 kr", approval.summary)
+        assertEquals("bo", member.decide("trip", approval.id, true).decidedBy?.id)
+        val done = room.awaitState { it.approvals[0].status == ApprovalStatus.DONE }
+        assertEquals("Paid 10 kr.", done.approvals[0].result)
+        try {
+            admin.decide("trip", approval.id, false)
+            error("not refused")
+        } catch (e: NudgeException.Status) {
+            assertEquals(409.toUShort(), e.status)
+        }
+
+        // The model's `schedule_nudge` shows in the room and on the home view.
+        admin.send("trip", "Remind me to water the plants", null)
+        val scheduled = room.awaitState { it.nudges.size == 1 }.nudges[0]
+        assertEquals("Water the plants", scheduled.message)
+        val home = admin.observeHomeState().awaitState { it.view?.nudges?.size == 1 }
+        assertEquals("trip", home.view!!.nudges[0].roomId)
+        member.cancelNudge(scheduled.id)
+        room.awaitState { it.nudges.isEmpty() }
+        try {
+            member.cancelNudge(scheduled.id)
+            error("not refused")
+        } catch (e: NudgeException.Status) {
+            assertEquals(404.toUShort(), e.status)
+        }
+        room.close()
     }
 
     @Test

@@ -2,18 +2,89 @@
 // assistant "robin" with players Ann (the admin) and Bo and their shared room "trip", in memory.
 // Runs the built packages, so `pnpm build` first: `node packages/server/scripts/faux-server.ts`.
 // Prints one JSON line, `{ url, assistant, tokens: { ann, bo } }`, and stops when stdin ends.
+//
+// The model answers "Hello! …" in several pieces first and "Answer <n>." after that. A message
+// containing "please pay" makes it call `pay`, which waits for an approval and answers "Paid 10 kr.";
+// one containing "remind me" makes it schedule the nudge "Water the plants" an hour ahead.
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { createModels } from "@earendil-works/pi-ai/models";
-import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
-import { createNudge } from "@nudge/core";
+import {
+  type FauxResponseFactory,
+  fauxAssistantMessage,
+  fauxProvider,
+  fauxToolCall,
+} from "@earendil-works/pi-ai/providers/faux";
+import {
+  createNudge,
+  defineNudgeExtension,
+  defineTool,
+  requestApproval,
+  roomOf,
+  Type,
+} from "@nudge/core";
 import { serveNudge } from "@nudge/server";
 
 const context = BACKGROUND_CONTEXT;
+
+const payer = defineNudgeExtension({
+  name: "payer",
+  version: "1",
+  setup: () => ({
+    tools: [
+      defineTool({
+        name: "pay",
+        description: "Pay an amount, once someone approves.",
+        parameters: Type.Object({ amount: Type.Number() }),
+        execute: async (args, api, context) => {
+          const room = await roomOf(api, api.conversationId, context);
+          const approval = await api.commit(
+            (tx) =>
+              requestApproval(
+                tx,
+                room.id,
+                {
+                  extension: "payer",
+                  kind: "pay",
+                  summary: `Pay ${args.amount} kr`,
+                  payload: { amount: args.amount },
+                },
+                Date.now(),
+              ),
+            context,
+          );
+          return { output: [{ type: "text", text: `Waiting for approval ${approval.id}.` }] };
+        },
+      }),
+    ],
+    approvals: {
+      pay: async (payload) => ({ text: `Paid ${(payload as { amount: number }).amount} kr.` }),
+    },
+  }),
+});
+
+let answers = 0;
+const respond: FauxResponseFactory = (request) => {
+  const last = request.messages.at(-1);
+  const text =
+    last?.role !== "user"
+      ? ""
+      : typeof last.content === "string"
+        ? last.content
+        : last.content.map((part) => (part.type === "text" ? part.text : "")).join("");
+  if (/please pay/i.test(text))
+    return fauxAssistantMessage([fauxToolCall("pay", { amount: 10 })], { stopReason: "toolUse" });
+  if (/remind me/i.test(text))
+    return fauxAssistantMessage(
+      [fauxToolCall("schedule_nudge", { message: "Water the plants", in_minutes: 60 })],
+      { stopReason: "toolUse" },
+    );
+  const n = answers++;
+  return fauxAssistantMessage(
+    n === 0 ? `Hello! ${"This answer arrives in several pieces. ".repeat(8)}` : `Answer ${n - 1}.`,
+  );
+};
 const faux = fauxProvider({ tokensPerSecond: 200 });
-faux.setResponses([
-  fauxAssistantMessage(`Hello! ${"This answer arrives in several pieces. ".repeat(8)}`),
-  ...Array.from({ length: 500 }, (_, n) => fauxAssistantMessage(`Answer ${n}.`)),
-]);
+faux.setResponses(Array.from({ length: 1000 }, () => respond));
 const models = createModels();
 models.setProvider(faux.provider);
 const nudge = await createNudge(
@@ -22,6 +93,7 @@ const nudge = await createNudge(
     models,
     model: { provider: faux.provider.id, modelId: faux.getModel().id },
     settings: { progress: { partialIntervalMs: 20 } },
+    extensions: [payer],
   },
   context,
 );

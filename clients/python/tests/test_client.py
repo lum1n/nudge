@@ -13,6 +13,7 @@ import nudge
 import pytest
 from nudge import (
     AnswerStatus,
+    ApprovalStatus,
     Client,
     FileTokens,
     MemoryTokens,
@@ -118,6 +119,50 @@ def test_pairing_and_a_streamed_answer(server, tmp_path: Path) -> None:
 
             home = await ann.home().wait_for(lambda u: u.view is not None, TIMEOUT)
             assert "trip" in [r.room.id for r in home.view.rooms]
+
+    run(test())
+
+
+def test_approvals_and_nudges(server) -> None:
+    async def test() -> None:
+        async with (
+            Client(server.url, server.assistant, MemoryTokens(server.ann)) as ann,
+            Client(server.url, server.assistant, MemoryTokens(server.bo)) as bo,
+        ):
+            async with bo.room("trip") as room:
+                await room.wait_for(lambda s: s.status == SyncStatus.LIVE, TIMEOUT)
+
+                # The model's `pay` waits for someone in the room to approve.
+                await ann.send("trip", "Please pay the bill")
+                state = await room.wait_for(
+                    lambda s: any(a.status == ApprovalStatus.PENDING for a in s.approvals), TIMEOUT
+                )
+                approval = state.approvals[0]
+                assert approval.summary == "Pay 10 kr"
+                decided = await bo.decide("trip", approval.id, True)
+                assert decided.decided_by is not None and decided.decided_by.id == "bo"
+                state = await room.wait_for(
+                    lambda s: s.approvals[0].status == ApprovalStatus.DONE, TIMEOUT
+                )
+                assert state.approvals[0].result == "Paid 10 kr."
+                with pytest.raises(NudgeError.Status) as refused:
+                    await ann.decide("trip", approval.id, False)
+                assert refused.value.status == 409
+
+                # The model's `schedule_nudge` shows in the room and on the home view.
+                await ann.send("trip", "Remind me to water the plants")
+                state = await room.wait_for(lambda s: len(s.nudges) == 1, TIMEOUT)
+                scheduled = state.nudges[0]
+                assert scheduled.message == "Water the plants"
+                home = await ann.home().wait_for(
+                    lambda u: u.view is not None and len(u.view.nudges) == 1, TIMEOUT
+                )
+                assert home.view.nudges[0].room_id == "trip"
+                await bo.cancel_nudge(scheduled.id)
+                await room.wait_for(lambda s: not s.nudges, TIMEOUT)
+                with pytest.raises(NudgeError.Status) as refused:
+                    await bo.cancel_nudge(scheduled.id)
+                assert refused.value.status == 404
 
     run(test())
 

@@ -130,6 +130,46 @@ final class ClientTests: XCTestCase {
         XCTAssertTrue(view.view!.rooms.contains { $0.room.id == "trip" })
     }
 
+    func testApprovalsAndNudges() async throws {
+        let admin = try client(MemoryTokens(server.ann))
+        let member = try client(MemoryTokens(server.bo))
+        let room = member.observeRoomState("trip")
+        _ = try await within { try await room.first { $0.status == .live } }
+
+        // The model's `pay` waits for someone in the room to approve.
+        _ = try await admin.send(room: "trip", text: "Please pay the bill", whenBusy: nil)
+        let asked = try await within { try await room.first { $0.approvals.contains { $0.status == .pending } } }
+        let approval = asked.approvals[0]
+        XCTAssertEqual(approval.summary, "Pay 10 kr")
+        let decided = try await member.decide(room: "trip", approvalId: approval.id, approve: true)
+        XCTAssertEqual(decided.decidedBy?.id, "bo")
+        let done = try await within { try await room.first { $0.approvals.first?.status == .done } }
+        XCTAssertEqual(done.approvals[0].result, "Paid 10 kr.")
+        do {
+            _ = try await admin.decide(room: "trip", approvalId: approval.id, approve: false)
+            XCTFail("not refused")
+        } catch NudgeError.Status(let status, _) {
+            XCTAssertEqual(status, 409)
+        }
+
+        // The model's `schedule_nudge` shows in the room and on the home view.
+        _ = try await admin.send(room: "trip", text: "Remind me to water the plants", whenBusy: nil)
+        let scheduled = try await within { try await room.first { $0.nudges.count == 1 } }.nudges[0]
+        XCTAssertEqual(scheduled.message, "Water the plants")
+        let home = admin.observeHomeState()
+        let view = try await within { try await home.first { $0.view?.nudges.count == 1 } }
+        XCTAssertEqual(view.view!.nudges[0].roomId, "trip")
+        try await member.cancelNudge(nudgeId: scheduled.id)
+        _ = try await within { try await room.first { $0.nudges.isEmpty } }
+        do {
+            try await member.cancelNudge(nudgeId: scheduled.id)
+            XCTFail("not refused")
+        } catch NudgeError.Status(let status, _) {
+            XCTAssertEqual(status, 404)
+        }
+        room.close()
+    }
+
     func testRefusalsAndRevocation() async throws {
         let admin = try client(MemoryTokens(server.ann))
         let member = try client(MemoryTokens(server.bo))
