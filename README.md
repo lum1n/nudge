@@ -11,6 +11,7 @@ An extendable, multiplayer personal assistant that keeps personal data away from
 - `@nudge/protocol`: the types of [protocol v1](docs/protocol/v1.md), its JSON schema, and the room projector.
 - `@nudge/client`: the TypeScript client of protocol v1.
 - `clients/rust`: the Rust client of protocol v1 (`nudge-protocol`, `nudge-client`), and its UniFFI bindings for Swift, Kotlin and Python (`nudge-ffi`).
+- `clients/python`: the Python package `nudge-client` (asyncio), built on `nudge-ffi` with maturin.
 - `@nudge/cli`: the `nudge` command.
 - `@nudge/web`: the web UI (`apps/web`), served by `nudge serve`.
 - `@nudge/ext-hello`: a sample extension (`extensions/hello`).
@@ -195,6 +196,13 @@ The Rust client needs a Rust toolchain (edition 2024). Its tests start a server 
 
 ```bash
 cd clients/rust && cargo test
+```
+
+The Python package builds with [maturin](https://www.maturin.rs/) and runs the same server for its tests:
+
+```bash
+cd clients/python && uv venv && uv pip install maturin pytest
+.venv/bin/maturin develop --uv && .venv/bin/python -m pytest
 ```
 
 For the web UI with hot reload, run `nudge serve` and then `pnpm -C apps/web dev`: Vite proxies `/v1` (HTTP and WebSocket) to `127.0.0.1:8787`, or to `$NUDGE_SERVER`.

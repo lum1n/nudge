@@ -1,0 +1,26 @@
+[build-system]
+requires = ["maturin>=1.15,<2"]
+build-backend = "maturin"
+
+[project]
+name = "nudge-client"
+description = "Python client of the Nudge protocol v1, on the Rust client core"
+version = "0.0.0"
+license = "MIT"
+requires-python = ">=3.10"
+
+[dependency-groups]
+dev = ["pytest>=8", "maturin>=1.15,<2"]
+
+[tool.maturin]
+bindings = "uniffi"
+manifest-path = "../rust/nudge-ffi/Cargo.toml"
+python-source = "python"
+module-name = "nudge._ffi"
+
+[tool.ruff]
+line-length = 100
+extend-exclude = ["python/nudge/_ffi"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

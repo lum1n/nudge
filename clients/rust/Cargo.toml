@@ -23,3 +23,8 @@ rand = "0.10.3"
 url = "2"
 uniffi = "0.32.2"
 jsonschema = { version = "0.58.6", default-features = false }
+
+# The library ships inside apps and wheels. Symbols stay: uniffi-bindgen reads its metadata from them.
+[profile.release]
+lto = "thin"
+strip = "debuginfo"

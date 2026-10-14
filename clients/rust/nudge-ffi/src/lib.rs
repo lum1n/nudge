@@ -394,10 +394,18 @@ impl NudgeClient {
         })
     }
 
-    /// Trades a pairing code for a token, and stores it.
+    /// Trades a pairing code for a token, and stores it. A socket that gave up for want of a
+    /// token connects again.
     pub async fn pair(&self, code: String) -> Result<Paired, NudgeError> {
         let (api, info) = (self.client.api().clone(), self.info.clone());
         let paired = run(async move { api.pair(&code, info).await }).await?;
+        if let nudge_client::ConnectionStatus::Closed {
+            code: p::close::UNAUTHORIZED,
+            ..
+        } = self.client.connection().status()
+        {
+            self.client.open();
+        }
         Ok(Paired {
             client_id: paired.client_id,
             player: paired.player.into(),
