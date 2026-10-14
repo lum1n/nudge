@@ -33,7 +33,7 @@ describe("lists", () => {
   let nudge: Nudge;
   let requests: ModelContext[];
   /** The tool call the model makes next, by what was said. */
-  const calls: Record<string, [string, Record<string, unknown>]> = {
+  const calls: Record<string, [string, Parameters<typeof fauxToolCall>[1]]> = {
     "need milk": ["list_add", { list: "Shopping", items: ["milk", "eggs", "Milk"] }],
     "got the milk": ["list_check", { list: "shopping", items: ["MILK", "bread"] }],
     "what's on it": ["list_show", { list: "shopping" }],
