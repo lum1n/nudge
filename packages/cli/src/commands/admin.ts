@@ -2,12 +2,20 @@ import { readFile } from "node:fs/promises";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { DatabaseInUse, findAssistant, loadConfig, type Nudge, openAssistant } from "@nudge/core";
 import type {
+  AdminPlayer,
   ErrorResponse,
+  HomeNudge,
+  NudgesResponse,
   PairingCodeResponse,
+  PairResponse,
   PlayerResponse,
+  PlayersResponse,
+  Room,
+  RoomsResponse,
   TokenInfo,
   TokensResponse,
 } from "@nudge/protocol";
+import { toHomeNudge, toRoom } from "@nudge/protocol/project";
 import { pairingLink } from "@nudge/server";
 import { renderUnicodeCompact } from "uqr";
 import { UsageError } from "../errors.ts";
@@ -98,36 +106,60 @@ function printPairing({ code, link, expiresAt }: PairingCodeResponse): void {
 
 /** Marks a player as an admin, or with `remove` not; lists the admins without a player. */
 export async function admin(
-  options: AdminOptions & { readonly player?: string; readonly remove: boolean },
+  options: AdminOptions & ServerAccess & { readonly player?: string; readonly remove: boolean },
 ): Promise<void> {
-  await withAssistant(options, async (nudge) => {
-    if (options.player !== undefined) {
-      await knownPlayer(nudge, options.player);
-      await nudge.players.setAdmin(options.player, !options.remove, context);
-    }
-    const admins: string[] = [];
-    for (const player of await nudge.players.list(context))
-      if (await nudge.players.isAdmin(player.id, context)) admins.push(player.id);
+  const print = (admins: readonly string[]) => {
     if (options.remove && options.player !== undefined && admins.includes(options.player))
       console.log(`${options.player} is the first player, and stays an admin.`);
     console.log(`Admins: ${admins.join(", ") || "none"}`);
-  });
+  };
+  await withAssistantOrServer(
+    options,
+    async (nudge) => {
+      if (options.player !== undefined) {
+        await knownPlayer(nudge, options.player);
+        await nudge.players.setAdmin(options.player, !options.remove, context);
+      }
+      const admins: string[] = [];
+      for (const player of await nudge.players.list(context))
+        if (await nudge.players.isAdmin(player.id, context)) admins.push(player.id);
+      print(admins);
+    },
+    async (server) => {
+      if (options.player !== undefined)
+        await server.call<AdminPlayer>(
+          "PUT",
+          `/admin/players/${encodeURIComponent(options.player)}/admin`,
+          { admin: !options.remove },
+        );
+      const { players } = await server.call<PlayersResponse>("GET", "/admin/players");
+      print(players.filter((player) => player.admin).map((player) => player.id));
+    },
+  );
 }
 
 /** Prints a new token for an existing player, once; their other tokens keep working. */
 export async function token(
-  options: AdminOptions & { readonly player: string; readonly server: string },
+  options: AdminOptions & ServerAccess & { readonly player: string },
 ): Promise<void> {
-  await withAssistant(options, async (nudge) => {
-    await knownPlayer(nudge, options.player);
-    const issued = await nudge.players.issueToken(options.player, context);
+  const print = (issued: PairResponse) => {
     console.log(
       `New token for ${issued.player.displayName} (client ${issued.clientId}), shown only now:\n`,
     );
     console.log(`  ${issued.token}\n`);
     console.log(`In a browser: ${new URL("/login", options.server).href}#token=${issued.token}`);
     console.log(`Revoke it with: nudge revoke ${issued.clientId}`);
-  });
+  };
+  await withAssistantOrServer(
+    options,
+    async (nudge) => {
+      await knownPlayer(nudge, options.player);
+      const issued = await nudge.players.issueToken(options.player, context);
+      print({ token: issued.token, clientId: issued.clientId, player: issued.player });
+    },
+    async (server) =>
+      print(await server.call<PairResponse>("POST", "/admin/tokens", { playerId: options.player })),
+  );
 }
 
 /** Lists the tokens of one player, or of everyone, by client id and when they were issued. */
@@ -186,32 +218,61 @@ async function knownPlayer(nudge: Nudge, id: string): Promise<void> {
 
 /** Creates a shared room, or lists the rooms without a name. */
 export async function room(
-  options: AdminOptions & { readonly name?: string; readonly members: readonly string[] },
+  options: AdminOptions &
+    ServerAccess & { readonly name?: string; readonly members: readonly string[] },
 ): Promise<void> {
-  await withAssistant(options, async (nudge) => {
-    if (options.name === undefined) {
-      for (const room of await nudge.rooms.list(context)) {
-        const members = (await nudge.rooms.members(room.id, context)).map((p) => p.id);
-        console.log(`${room.id}\t${room.kind}\t${room.name}\t${members.join(", ")}`);
+  const printRooms = (rooms: readonly Room[]) => {
+    for (const room of rooms)
+      console.log(
+        `${room.id}\t${room.kind}\t${room.name}\t${room.members.map((p) => p.id).join(", ")}`,
+      );
+  };
+  const printCreated = (room: Room) =>
+    console.log(`Created room "${room.id}" for ${room.members.map((p) => p.id).join(", ")}.`);
+  await withAssistantOrServer(
+    options,
+    async (nudge) => {
+      if (options.name === undefined) {
+        const players = new Map((await nudge.players.list(context)).map((p) => [p.id, p]));
+        printRooms(
+          (await nudge.rooms.list(context)).map((room) => toRoom(room, (id) => players.get(id))),
+        );
+        return;
       }
-      return;
-    }
-    const created = await nudge.rooms.createShared(
-      { name: options.name, members: options.members },
-      context,
-    );
-    console.log(`Created room "${created.id}" for ${created.members.join(", ")}.`);
-  });
+      const created = await nudge.rooms.createShared(
+        { name: options.name, members: options.members },
+        context,
+      );
+      const players = new Map((await nudge.players.list(context)).map((p) => [p.id, p]));
+      printCreated(toRoom(created, (id) => players.get(id)));
+    },
+    async (server) => {
+      if (options.name === undefined) {
+        printRooms((await server.call<RoomsResponse>("GET", "/admin/rooms")).rooms);
+        return;
+      }
+      printCreated(
+        await server.call<Room>("POST", "/admin/rooms", {
+          name: options.name,
+          members: options.members,
+        }),
+      );
+    },
+  );
 }
 
 /** Lists every pending nudge, with its room. */
-export async function nudges(options: AdminOptions): Promise<void> {
-  await withAssistant(options, async (nudge) => {
-    const pending = await nudge.nudges.list(context);
+export async function nudges(options: AdminOptions & ServerAccess): Promise<void> {
+  const print = (pending: readonly HomeNudge[]) => {
     if (pending.length === 0) console.log("No nudges scheduled.");
     for (const scheduled of pending)
       console.log(`${scheduled.roomId}\t${describeNudge(scheduled)}`);
-  });
+  };
+  await withAssistantOrServer(
+    options,
+    async (nudge) => print((await nudge.nudges.list(context)).map(toHomeNudge)),
+    async (server) => print((await server.call<NudgesResponse>("GET", "/admin/nudges")).nudges),
+  );
 }
 
 /**

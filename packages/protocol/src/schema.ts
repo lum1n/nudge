@@ -406,6 +406,38 @@ export type TokenInfo = Static<typeof TokenInfo>;
 export const TokensResponse = Type.Object({ tokens: Type.Array(TokenInfo) });
 export type TokensResponse = Static<typeof TokensResponse>;
 
+export const AdminPlayer = Type.Object({
+  id: Type.String(),
+  displayName: Type.String(),
+  /** May use the `/admin` routes. */
+  admin: Type.Boolean(),
+});
+export type AdminPlayer = Static<typeof AdminPlayer>;
+
+export const PlayersResponse = Type.Object({ players: Type.Array(AdminPlayer) });
+export type PlayersResponse = Static<typeof PlayersResponse>;
+
+export const SetAdminRequest = Type.Object({ admin: Type.Boolean() });
+export type SetAdminRequest = Static<typeof SetAdminRequest>;
+
+/** A new token for an existing player; like `PairResponse`, the token is shown only here. */
+export const IssueTokenRequest = Type.Object({ playerId: Type.String() });
+export type IssueTokenRequest = Static<typeof IssueTokenRequest>;
+
+export const RoomsResponse = Type.Object({ rooms: Type.Array(Room) });
+export type RoomsResponse = Static<typeof RoomsResponse>;
+
+/** Unlike `POST /rooms`, the caller is not added: `members` are all the room's player ids. */
+export const AdminCreateRoomRequest = Type.Object({
+  name: Type.String(),
+  members: Type.Array(Type.String()),
+});
+export type AdminCreateRoomRequest = Static<typeof AdminCreateRoomRequest>;
+
+/** Every room's pending nudges, soonest first. */
+export const NudgesResponse = Type.Object({ nudges: Type.Array(HomeNudge) });
+export type NudgesResponse = Static<typeof NudgesResponse>;
+
 /** Socket close codes, after HTTP status codes. */
 export const CLOSE = {
   badRequest: 4400,
@@ -459,4 +491,11 @@ export const SCHEMAS = {
   PairingCodeResponse,
   TokenInfo,
   TokensResponse,
+  AdminPlayer,
+  PlayersResponse,
+  SetAdminRequest,
+  IssueTokenRequest,
+  RoomsResponse,
+  AdminCreateRoomRequest,
+  NudgesResponse,
 };

@@ -3,11 +3,15 @@ import { createModels } from "@earendil-works/pi-ai/models";
 import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
 import { createNudge, type Nudge, requestApproval } from "@nudge/core";
 import {
+  AdminPlayer,
   CLOSE,
   MeResponse,
+  NudgesResponse,
   PairingCodeResponse,
   PairResponse,
+  PlayersResponse,
   Room,
+  RoomsResponse,
   type RoomView,
   ServerFrame,
   type TimelineItem,
@@ -250,6 +254,99 @@ describe("v1 HTTP", () => {
       },
     ]);
     expect((await call("GET", "/admin/tokens", { token: tokens.Ann })).json.tokens).toHaveLength(4);
+  });
+
+  it("lets an admin manage players, tokens, rooms and nudges while serving", async () => {
+    for (const [method, path] of [
+      ["GET", "/admin/players"],
+      ["GET", "/admin/rooms"],
+      ["GET", "/admin/nudges"],
+    ] as const)
+      expect((await call(method, path, { token: tokens.Bo })).status).toBe(403);
+
+    const players = await call("GET", "/admin/players", {
+      token: tokens.Ann,
+      schema: PlayersResponse,
+    });
+    expect(players.json.players).toEqual([
+      { id: "ann", displayName: "Ann", admin: true },
+      { id: "bo", displayName: "Bo", admin: false },
+      { id: "cy", displayName: "Cy", admin: false },
+    ]);
+
+    const made = await call("PUT", "/admin/players/bo/admin", {
+      token: tokens.Ann,
+      body: { admin: true },
+      schema: AdminPlayer,
+    });
+    expect(made.json).toEqual({ id: "bo", displayName: "Bo", admin: true });
+    expect((await call("GET", "/admin/rooms", { token: tokens.Bo })).status).toBe(200);
+    // The first player stays an admin.
+    const kept = await call("PUT", "/admin/players/ann/admin", {
+      token: tokens.Bo,
+      body: { admin: false },
+    });
+    expect(kept.json.admin).toBe(true);
+    expect(
+      (await call("PUT", "/admin/players/zed/admin", { token: tokens.Ann, body: { admin: true } }))
+        .status,
+    ).toBe(404);
+
+    const issued = await call("POST", "/admin/tokens", {
+      token: tokens.Ann,
+      body: { playerId: "cy" },
+      schema: PairResponse,
+    });
+    expect(issued.status).toBe(201);
+    expect((await call("GET", "/me", { token: issued.json.token })).json.player.id).toBe("cy");
+    expect(
+      (await call("POST", "/admin/tokens", { token: tokens.Ann, body: { playerId: "zed" } }))
+        .status,
+    ).toBe(404);
+
+    // The caller isn't added to a room an admin makes for others.
+    const created = await call("POST", "/admin/rooms", {
+      token: tokens.Ann,
+      body: { name: "Band", members: ["bo", "cy"] },
+      schema: Room,
+    });
+    expect(created).toMatchObject({ status: 201, json: { id: "band", kind: "shared" } });
+    expect(created.json.members.map((member: { id: string }) => member.id)).toEqual(["bo", "cy"]);
+    expect(
+      (await call("POST", "/admin/rooms", { token: tokens.Ann, body: { name: "X", members: [] } }))
+        .status,
+    ).toBe(400);
+    expect(
+      (
+        await call("POST", "/admin/rooms", {
+          token: tokens.Ann,
+          body: { name: "X", members: ["zed"] },
+        })
+      ).status,
+    ).toBe(400);
+    const rooms = await call("GET", "/admin/rooms", { token: tokens.Ann, schema: RoomsResponse });
+    expect(rooms.json.rooms.map((room: { id: string }) => room.id)).toEqual([
+      "lobby",
+      "trip",
+      "band",
+    ]);
+
+    await nudge.nudges.schedule(
+      "band",
+      { message: "Practice", fireAt: Date.now() + 3_600_000 },
+      context,
+    );
+    await nudge.nudges.schedule("trip", { message: "Pack", fireAt: Date.now() + 60_000 }, context);
+    const pending = await call("GET", "/admin/nudges", {
+      token: tokens.Ann,
+      schema: NudgesResponse,
+    });
+    expect(
+      pending.json.nudges.map((n: { roomId: string; message: string }) => [n.roomId, n.message]),
+    ).toEqual([
+      ["trip", "Pack"],
+      ["band", "Practice"],
+    ]);
   });
 
   it("closes the sockets of a revoked token with 4401", async () => {

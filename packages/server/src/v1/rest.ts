@@ -6,28 +6,36 @@ import {
   canUse,
   type Credential,
   type Nudge,
+  type Player as CorePlayer,
   type Room as CoreRoom,
   type TokenRecord,
 } from "@nudge/core";
 import {
+  AdminCreateRoomRequest,
+  type AdminPlayer,
   type AssistantsResponse,
   CreatePlayerRequest,
   CreateRoomRequest,
   DecideRequest,
   decodeCursor,
   encodeCursor,
+  IssueTokenRequest,
   type MeResponse,
   MessageRequest,
   type MessageResponse,
+  type NudgesResponse,
   PairingCodeRequest,
   type PairingCodeResponse,
   PairRequest,
   type PairResponse,
   type PlayerResponse,
+  type PlayersResponse,
   ProtectRequest,
   type ProtectResponse,
   RememberRequest,
   type Room,
+  type RoomsResponse,
+  SetAdminRequest,
   type TimelineResponse,
   type TokenInfo,
   type TokensResponse,
@@ -36,6 +44,7 @@ import {
   TimelinePager,
   toApproval,
   toFact,
+  toHomeNudge,
   toPlayer,
   toRoom,
   windowStart,
@@ -294,6 +303,67 @@ export function restRoutes(options: RestOptions): Hono {
     return c.json({ player: toPlayer(player) } satisfies PlayerResponse, 201);
   });
 
+  api.get("/admin/players", admin, async (c) => {
+    const nudge = c.var.nudge;
+    const players = await Promise.all(
+      (await nudge.players.list(context)).map((player) => adminPlayerOf(nudge, player)),
+    );
+    return c.json({ players } satisfies PlayersResponse);
+  });
+
+  // The first player stays an admin either way; the reply says so.
+  api.put("/admin/players/:player/admin", admin, async (c) => {
+    const body = await readBody(c, SetAdminRequest);
+    const id = c.req.param("player");
+    if ((await c.var.nudge.players.get(id, context)) === undefined)
+      throw new HttpError(404, `No player "${id}"`);
+    const player = await c.var.nudge.players.setAdmin(id, body.admin, context);
+    return c.json(await adminPlayerOf(c.var.nudge, player));
+  });
+
+  api.post("/admin/tokens", admin, async (c) => {
+    const body = await readBody(c, IssueTokenRequest);
+    if ((await c.var.nudge.players.get(body.playerId, context)) === undefined)
+      throw new HttpError(404, `No player "${body.playerId}"`);
+    const issued = await c.var.nudge.players.issueToken(body.playerId, context);
+    return c.json(
+      {
+        token: issued.token,
+        clientId: issued.clientId,
+        player: toPlayer(issued.player),
+      } satisfies PairResponse,
+      201,
+    );
+  });
+
+  api.get("/admin/rooms", admin, async (c) => {
+    const nudge = c.var.nudge;
+    const players = new Map((await nudge.players.list(context)).map((p) => [p.id, p]));
+    const rooms = (await nudge.rooms.list(context)).map((room) =>
+      toRoom(room, (id) => players.get(id)),
+    );
+    return c.json({ rooms } satisfies RoomsResponse);
+  });
+
+  api.post("/admin/rooms", admin, async (c) => {
+    const body = await readBody(c, AdminCreateRoomRequest);
+    const name = body.name.trim();
+    if (name === "") throw new HttpError(400, "A room needs a name");
+    if (body.members.length === 0) throw new HttpError(400, "A room needs members");
+    let room: CoreRoom;
+    try {
+      room = await c.var.nudge.rooms.createShared({ name, members: body.members }, context);
+    } catch (error) {
+      throw new HttpError(400, (error as Error).message);
+    }
+    return c.json(await roomOf(c.var.nudge, room), 201);
+  });
+
+  api.get("/admin/nudges", admin, async (c) => {
+    const pending = await c.var.nudge.nudges.list(context);
+    return c.json({ nudges: pending.map(toHomeNudge) } satisfies NudgesResponse);
+  });
+
   api.post("/admin/pairing-codes", admin, async (c) => {
     const body = await readBody(c, PairingCodeRequest);
     if ((await c.var.nudge.players.get(body.playerId, context)) === undefined)
@@ -352,6 +422,10 @@ async function roomOf(nudge: Nudge, room: CoreRoom): Promise<Room> {
     (await nudge.rooms.members(room.id, context)).map((player) => [player.id, player]),
   );
   return toRoom(room, (id) => members.get(id));
+}
+
+async function adminPlayerOf(nudge: Nudge, player: CorePlayer): Promise<AdminPlayer> {
+  return { ...toPlayer(player), admin: await nudge.players.isAdmin(player.id, context) };
 }
 
 function toTokenInfo(record: TokenRecord): TokenInfo {

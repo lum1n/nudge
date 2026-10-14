@@ -78,7 +78,7 @@ Or each person connects from their own terminal, and all of them see the same co
 NUDGE_TOKEN=nudge_… nudge chat trip --url http://127.0.0.1:8787 --assistant nudge
 ```
 
-One process owns an assistant's database at a time, so stop `nudge serve` before `nudge token`, `nudge admin`, `nudge room` or `nudge nudges`. `nudge invite`, `nudge pair`, `nudge tokens` and `nudge revoke` go through the running server instead when given an admin's token (`--token` or `$NUDGE_TOKEN`, and `--url` if it isn't on 127.0.0.1:8787); `invite` then prints a pairing code rather than a token. A pairing code works once, for ten minutes. Pairing links carry the address of the request; behind a proxy, start `nudge serve --public-url https://…`. `serve` listens on 127.0.0.1; put a TLS proxy in front before exposing it.
+One process owns an assistant's database at a time. While `nudge serve` runs, the admin commands (`invite`, `pair`, `token`, `tokens`, `revoke`, `admin`, `room` and `nudges`) go through the server instead when given an admin's token (`--token` or `$NUDGE_TOKEN`, and `--url` if it isn't on 127.0.0.1:8787); `invite` then prints a pairing code rather than a token. A pairing code works once, for ten minutes. Pairing links carry the address of the request; behind a proxy, start `nudge serve --public-url https://…`. `serve` listens on 127.0.0.1; put a TLS proxy in front before exposing it.
 
 Every client, the web UI, `nudge chat --url` and the native apps, talks [protocol v1](docs/protocol/v1.md) under `/v1`: one WebSocket for live views and HTTP for commands, pairing and admin. `GET /v1/a` lists the assistants without a token. The types are in `@nudge/protocol`, and `@nudge/client` is the TypeScript client.
 

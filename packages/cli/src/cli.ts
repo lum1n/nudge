@@ -36,9 +36,10 @@ Commands:
   doctor             Check Node, config, storage and model credentials;
                      --ping sends one request, --privacy tests redaction
 
-token, admin, room and nudges open the assistant's database, so stop "nudge serve"
-first. invite, pair, tokens and revoke go through the running server instead when given
-an admin's token (--token or $NUDGE_TOKEN; --url when it isn't on --host and --port).
+The admin commands (invite to nudges) open the assistant's database. While "nudge serve"
+has it open, they go through the server instead when given an admin's token (--token or
+$NUDGE_TOKEN; --url when it isn't on --host and --port). invite and pair then print a
+pairing code instead of a token.
 
 Options:
   -c, --config <file>      Config file (default: nudge.json)
@@ -119,7 +120,7 @@ async function main(argv: string[]): Promise<number> {
     case "token":
       if (argument === undefined)
         throw new UsageError("token needs a player id: nudge token <player>");
-      await token({ ...admin, player: argument, server });
+      await token({ ...access, player: argument });
       return 0;
     case "tokens":
       await tokens({ ...access, player: argument });
@@ -130,18 +131,18 @@ async function main(argv: string[]): Promise<number> {
       await revoke({ ...access, clientId: argument });
       return 0;
     case "admin":
-      await markAdmin({ ...admin, player: argument, remove: values.remove });
+      await markAdmin({ ...access, player: argument, remove: values.remove });
       return 0;
     case "room": {
       const members = values.members
         .split(",")
         .map((id) => id.trim())
         .filter((id) => id !== "");
-      await room({ ...admin, name: argument, members });
+      await room({ ...access, name: argument, members });
       return 0;
     }
     case "nudges":
-      await nudges(admin);
+      await nudges(access);
       return 0;
     case "reload":
       return (await reload(admin)) ? 0 : 1;
