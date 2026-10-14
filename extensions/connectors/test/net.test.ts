@@ -56,6 +56,19 @@ describe("lockedUrl", () => {
     expect(() => lockedUrl(connector, "https://evil.example/steal")).toThrow(ConnectorError);
     expect(() => lockedUrl(connector, "//evil.example/steal")).toThrow(ConnectorError);
   });
+
+  it("treats a leading slash as relative to the base path, not the origin's root", () => {
+    const url = lockedUrl(connector, "/forecast", { lat: "1", lon: "2" });
+    expect(url.toString()).toBe("https://api.example.com/v1/forecast?lat=1&lon=2");
+  });
+
+  it("appends onto a base URL missing its trailing slash, with or without a leading slash", () => {
+    const noSlash = { name: "Weather", baseUrl: "https://api.example.com/v1" };
+    expect(lockedUrl(noSlash, "forecast").toString()).toBe("https://api.example.com/v1/forecast");
+    expect(lockedUrl(noSlash, "/forecast").toString()).toBe(
+      "https://api.example.com/v1/forecast",
+    );
+  });
 });
 
 describe("assertReachable", () => {

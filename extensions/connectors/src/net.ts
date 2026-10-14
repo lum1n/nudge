@@ -9,10 +9,18 @@ export class ConnectorError extends Error {
   override name = "ConnectorError";
 }
 
+/** A path that names another origin outright: a scheme (`https://…`) or network-path (`//host/…`). */
+const NAMES_ANOTHER_ORIGIN = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
+
 /**
  * Builds the URL for one call: `path` (and `query`) resolved against the connector's `baseUrl`,
  * refused if that lands outside the connector's own origin. `path` may not be an absolute URL to
  * somewhere else — that would otherwise let a call silently leave the connector it claims to use.
+ *
+ * A `path` starting with a single `/` is treated as relative to `baseUrl`'s own path, not to the
+ * origin's root: OpenAPI documents always spell paths with a leading slash (`/graphql`), and under
+ * plain `new URL(path, base)` resolution that leading slash silently discards everything after the
+ * host in `baseUrl`, sending the call to the wrong place without any error.
  */
 export function lockedUrl(
   connector: Pick<Connector, "baseUrl" | "name">,
@@ -20,9 +28,11 @@ export function lockedUrl(
   query?: Readonly<Record<string, string>>,
 ): URL {
   const base = new URL(connector.baseUrl);
+  const baseDir = base.pathname.endsWith("/") ? connector.baseUrl : `${connector.baseUrl}/`;
+  const resolved = NAMES_ANOTHER_ORIGIN.test(path) ? path : path.replace(/^\/+/, "");
   let url: URL;
   try {
-    url = new URL(path, connector.baseUrl);
+    url = new URL(resolved, baseDir);
   } catch {
     throw new ConnectorError(`"${path}" is not a valid path`);
   }
