@@ -8,6 +8,9 @@ An extendable, multiplayer personal assistant that keeps personal data away from
 
 - `@nudge/core`: the embeddable library. One `Nudge` is one assistant: one storage, one Harness, one registry.
 - `@nudge/server`: an HTTP and WebSocket API over one or more assistants.
+- `@nudge/protocol`: the types of [protocol v1](docs/protocol/v1.md), its JSON schema, and the room projector.
+- `@nudge/client`: the TypeScript client of protocol v1.
+- `clients/rust`: the Rust client of protocol v1 (`nudge-protocol`, `nudge-client`), and its UniFFI bindings for Swift, Kotlin and Python (`nudge-ffi`).
 - `@nudge/cli`: the `nudge` command.
 - `@nudge/web`: the web UI (`apps/web`), served by `nudge serve`.
 - `@nudge/ext-hello`: a sample extension (`extensions/hello`).
@@ -186,6 +189,12 @@ Requires Node ≥ 22.19 and pnpm.
 pnpm install
 pnpm check   # typecheck, lint, test
 pnpm build   # every package, and the web UI into apps/web/dist
+```
+
+The Rust client needs a Rust toolchain (edition 2024). Its tests start a server on a faux model with `node packages/server/scripts/faux-server.ts`, which runs the built packages, so `pnpm build` first:
+
+```bash
+cd clients/rust && cargo test
 ```
 
 For the web UI with hot reload, run `nudge serve` and then `pnpm -C apps/web dev`: Vite proxies `/v1` (HTTP and WebSocket) to `127.0.0.1:8787`, or to `$NUDGE_SERVER`.
