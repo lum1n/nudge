@@ -16,6 +16,7 @@ export async function init(path: string): Promise<void> {
   console.log(
     `Set ANTHROPIC_API_KEY, or add an OpenAI-compatible server under "providers", then run: nudge chat`,
   );
+  console.log("nudge.example.json in the Nudge repository shows every option.");
 }
 
 async function exists(path: string): Promise<boolean> {

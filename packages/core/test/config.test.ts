@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { ConfigError, formatHour, parseConfig } from "../src/index.ts";
 
@@ -17,6 +19,14 @@ describe("parseConfig", () => {
     expect(() => parseConfig({ assistants: [{ name: "Home Base" }] }, "/")).toThrow(ConfigError);
     expect(() => parseConfig({ assistants: [{ name: "a" }, { name: "a" }] }, "/")).toThrow(/twice/);
     expect(() => parseConfig({ assistants: [] }, "/")).toThrow(ConfigError);
+  });
+
+  it("accepts nudge.example.json", async () => {
+    const root = fileURLToPath(new URL("../../../", import.meta.url));
+    const example = JSON.parse(await readFile(`${root}nudge.example.json`, "utf8"));
+    const config = parseConfig(example, root);
+    expect(config.assistants.map((a) => a.name)).toEqual(["robin", "pocket"]);
+    expect(config.assistants[0]!.extensions?.[0]?.from).toMatch(/extensions\/hello\//);
   });
 });
 
