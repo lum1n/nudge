@@ -262,6 +262,19 @@ importers:
         specifier: 1.2.0
         version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@4.6.6)
 
+  extensions/ner:
+    dependencies:
+      '@nudge/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+    devDependencies:
+      '@earendil-works/chord':
+        specifier: 1.2.0
+        version: 1.2.0
+      '@earendil-works/pi-ai':
+        specifier: 1.2.0
+        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@4.6.6)
+
   extensions/search:
     dependencies:
       '@nudge/core':

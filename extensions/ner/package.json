@@ -1,0 +1,27 @@
+{
+  "name": "@nudge/ext-ner",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Find people's names and street addresses the regular detectors miss, with name lists and rules on the host, no model",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "@nudge/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@nudge/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@earendil-works/chord": "1.2.0",
+    "@earendil-works/pi-ai": "1.2.0"
+  }
+}

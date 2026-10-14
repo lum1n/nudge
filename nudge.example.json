@@ -23,6 +23,11 @@
           "rooms": ["personal", "shared"]
         },
         {
+          "$comment": "Optional: finds people's names and street addresses the regular detectors miss, with name lists and rules on the host. extraNames adds your own.",
+          "from": "./extensions/ner",
+          "settings": { "extraNames": ["Tiril", "Bestemor Gunn"] }
+        },
+        {
           "$comment": "Receipts and other documents per room: uploaded on the room's Documents page, text read on the host, files stored encrypted.",
           "from": "./extensions/documents",
           "settings": { "maxMegabytes": 20 }

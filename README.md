@@ -111,6 +111,8 @@ The model provider never sees personal data. Before a request leaves, Nudge repl
 - `NUDGE_DEBUG_REQUESTS=1 nudge chat` (or `nudge serve`) writes every request, exactly as the provider receives it, to `<database>.requests.jsonl`.
 - **Model view** on a room's page in the web UI (or `GET /rooms/<id>/model-view`) shows anyone in the room what its next request sends: the instructions and sections, every message and tool call, with placeholders where the values were.
 
+`extensions/ner` is optional and finds more: people's names (common Norwegian and English given names, a capitalized family name after one, a known family name after a capitalized word, and the name after a greeting, sign-off or title such as "Mvh" or "Dr.") and Norwegian street addresses ("Storgata 5B, 0151 Oslo"). It uses name lists and rules on the host, no model. Words that are also names, like "Per" or "Liv", count at the start of a sentence only next to a family name. Town names on their own are left alone, so tools still know where things are. `extraNames` adds names the lists don't have, such as relatives'; `names` and `addresses` turn either part off. It will miss some names and catch some words that aren't names; check with **Model view**.
+
 Display names of players are always protected. The transcript and the placeholder vault are stored unredacted in the assistant's SQLite file on your host. Images and thinking blocks are passed through unchanged.
 
 Each assistant keeps its data in one SQLite file, by default `data/<name>.sqlite` next to the config.
