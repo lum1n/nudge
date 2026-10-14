@@ -42,30 +42,34 @@ async fn run<T: Send + 'static>(future: impl Future<Output = T> + Send + 'static
 }
 
 #[derive(Debug, thiserror::Error, uniffi::Error)]
+// Fields aren't called `message`: Kotlin's exceptions have one already.
 pub enum NudgeError {
     /// The server answered with an error: 400 bad request, 401 no or unknown token (or a bad
     /// pairing code), 403 not an admin, 404 no such room or thing, 409 decided already.
-    #[error("{message} ({status})")]
-    Status { status: u16, message: String },
+    #[error("{detail} ({status})")]
+    Status { status: u16, detail: String },
     /// No answer: the server is down or the network is gone.
-    #[error("{message}")]
-    Network { message: String },
+    #[error("{detail}")]
+    Network { detail: String },
     /// An answer this client couldn't read.
-    #[error("{message}")]
-    Decode { message: String },
+    #[error("{detail}")]
+    Decode { detail: String },
     /// A bad server address, or a cache that won't open.
-    #[error("{message}")]
-    Config { message: String },
+    #[error("{detail}")]
+    Config { detail: String },
 }
 
 impl From<ApiError> for NudgeError {
     fn from(error: ApiError) -> Self {
         match error {
-            ApiError::Status { status, message } => NudgeError::Status { status, message },
-            ApiError::Network(message) => NudgeError::Network { message },
-            ApiError::Decode(message) => NudgeError::Decode { message },
+            ApiError::Status { status, message } => NudgeError::Status {
+                status,
+                detail: message,
+            },
+            ApiError::Network(detail) => NudgeError::Network { detail },
+            ApiError::Decode(detail) => NudgeError::Decode { detail },
             ApiError::Address(_) => NudgeError::Config {
-                message: error.to_string(),
+                detail: error.to_string(),
             },
         }
     }
@@ -76,7 +80,7 @@ impl From<ClientError> for NudgeError {
         match error {
             ClientError::Api(error) => error.into(),
             ClientError::Cache(error) => NudgeError::Config {
-                message: error.to_string(),
+                detail: error.to_string(),
             },
         }
     }
@@ -317,13 +321,16 @@ impl NudgeClient {
         Ok(Arc::new(NudgeClient { client, info }))
     }
 
-    /// Connects the socket; observed views are subscribed once it is open.
-    pub fn open(&self) {
+    // `connect` and `disconnect` rather than `open` and `close`: the bindings' objects have a
+    // `close` that frees them.
+
+    /// Opens the socket; observed views are subscribed once it is open.
+    pub fn connect(&self) {
         self.client.open();
     }
 
-    /// Closes the socket; observers stay, and are subscribed again by `open()`.
-    pub fn close(&self) {
+    /// Closes the socket; observers stay, and are subscribed again by `connect()`.
+    pub fn disconnect(&self) {
         self.client.close();
     }
 

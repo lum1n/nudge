@@ -277,13 +277,13 @@ class Client:
 
     def open(self) -> None:
         """Connects the socket; watched views are subscribed once it is open."""
-        self.ffi.open()
+        self.ffi.connect()
 
     def close(self) -> None:
         """Closes the socket and every watch of this client."""
         for watch in list(self._watches):
             watch.close()
-        self.ffi.close()
+        self.ffi.disconnect()
 
     async def __aenter__(self) -> Client:
         self.open()

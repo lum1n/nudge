@@ -1,0 +1,8 @@
+[bindings.kotlin]
+package_name = "nudge.ffi"
+cdylib_name = "nudge_ffi"
+
+[bindings.swift]
+module_name = "NudgeFFI"
+ffi_module_name = "NudgeFFIC"
+ffi_module_filename = "NudgeFFIC"

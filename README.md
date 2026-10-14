@@ -12,6 +12,8 @@ An extendable, multiplayer personal assistant that keeps personal data away from
 - `@nudge/client`: the TypeScript client of protocol v1.
 - `clients/rust`: the Rust client of protocol v1 (`nudge-protocol`, `nudge-client`), and its UniFFI bindings for Swift, Kotlin and Python (`nudge-ffi`).
 - `clients/python`: the Python package `nudge-client` (asyncio), built on `nudge-ffi` with maturin.
+- `clients/android`: the Android library (Kotlin, `StateFlow`s) and a Compose sample app.
+- `clients/apple`: the Swift package (`@Observable` models) for iOS and macOS.
 - `@nudge/cli`: the `nudge` command.
 - `@nudge/web`: the web UI (`apps/web`), served by `nudge serve`.
 - `@nudge/ext-hello`: a sample extension (`extensions/hello`).
@@ -203,6 +205,13 @@ The Python package builds with [maturin](https://www.maturin.rs/) and runs the s
 ```bash
 cd clients/python && uv venv && uv pip install maturin pytest
 .venv/bin/maturin develop --uv && .venv/bin/python -m pytest
+```
+
+The Kotlin and Swift bindings run their tests on this machine too, against the host build of the library; see `clients/android` and `clients/apple` for building the apps' native libraries:
+
+```bash
+cd clients/android && ./gradlew :nudge:testDebugUnitTest -Pnudge.native=false
+cd clients/apple && scripts/build.sh && swift test
 ```
 
 For the web UI with hot reload, run `nudge serve` and then `pnpm -C apps/web dev`: Vite proxies `/v1` (HTTP and WebSocket) to `127.0.0.1:8787`, or to `$NUDGE_SERVER`.

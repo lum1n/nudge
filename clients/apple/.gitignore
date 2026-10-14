@@ -1,0 +1,6 @@
+.build/
+.swiftpm/
+/NudgeFFIC.xcframework/
+/Sources/NudgeFFI/NudgeFFI.swift
+/Sources/NudgeFFIC/NudgeFFIC.h
+/Sources/NudgeFFIC/module.modulemap
