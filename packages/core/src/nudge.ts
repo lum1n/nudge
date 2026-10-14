@@ -18,7 +18,6 @@ import {
   type Storage,
   type Submission,
 } from "@earendil-works/pi-durable";
-import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { Approvals } from "./approvals/approvals.ts";
 import { type Change, Changes } from "./changes.ts";
 import { createBuiltinExtension } from "./extensions/builtin.ts";
@@ -39,6 +38,7 @@ import { RedactingModels, type RedactionOptions } from "./models/redacting-model
 import { builtinDetectors, type PiiDetector } from "./privacy/detectors.ts";
 import { Vault } from "./privacy/vault.ts";
 import { VaultDoc } from "./privacy/vault-doc.ts";
+import { openDatabaseStorage } from "./encrypted-storage.ts";
 import { lockDatabase } from "./storage-lock.ts";
 
 export type PrivacyOptions = {
@@ -538,5 +538,5 @@ async function followConfig(
 
 async function openStorage(database: string): Promise<Storage> {
   if (database === ":memory:") return new MemoryStorage();
-  return openNodeSqliteStorage(database);
+  return openDatabaseStorage(database);
 }

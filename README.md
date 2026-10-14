@@ -107,6 +107,8 @@ Display names of players are always protected. The transcript and the placeholde
 
 Each assistant keeps its data in one SQLite file, by default `data/<name>.sqlite` next to the config.
 
+To encrypt that file, stop `nudge serve` and run `nudge db encrypt`. It encrypts the file in place (SQLite3 Multiple Ciphers) and writes a key to `<database>.key`, readable only by you, or uses `NUDGE_DB_KEY` (32 random bytes, base64: `openssl rand -base64 32`) when that is set. With `NUDGE_DB_KEY` set, a new database is created encrypted. `nudge db` shows each database's state and `nudge db decrypt` undoes it. Like the other keys, this protects copies of the database and backups, not a host where someone can also read the key. Losing the key loses the data, so keep a copy of the key somewhere other than the database's backups.
+
 ## Extensions
 
 An extension adds tools, prompt sections, hooks, tasks and PII detectors to an assistant. List them per assistant in `nudge.json`; `from` is a file or package directory relative to the config, or an installed package name:

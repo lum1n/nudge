@@ -5,6 +5,8 @@ import {
   buildModels,
   builtinDetectors,
   checkExtensions,
+  databaseEncryption,
+  databaseKey,
   DEFAULT_MODEL,
   loadConfig,
   Vault,
@@ -64,6 +66,23 @@ export async function doctor(options: DoctorOptions): Promise<boolean> {
       check(true, `${assistant.name}: storage ${database}`);
     } catch (error) {
       check(false, `${assistant.name}: storage ${database}: ${(error as Error).message}`);
+    }
+    try {
+      const state = await databaseEncryption(database);
+      const key = await databaseKey(database);
+      if (state === "encrypted")
+        check(key !== undefined, `${assistant.name}: encrypted, key ${key?.source ?? "missing"}`);
+      else if (state === "plain")
+        check(
+          key === undefined,
+          key === undefined
+            ? `${assistant.name}: not encrypted ("nudge db encrypt" to encrypt it)`
+            : `${assistant.name}: not encrypted, but ${key.source} is set`,
+        );
+      else if (key !== undefined)
+        check(true, `${assistant.name}: will be created encrypted (key ${key.source})`);
+    } catch (error) {
+      check(false, `${assistant.name}: encryption: ${(error as Error).message}`);
     }
     if (assistant.extensions !== undefined) {
       try {

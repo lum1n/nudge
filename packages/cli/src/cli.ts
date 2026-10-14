@@ -12,6 +12,7 @@ import {
 } from "./commands/admin.ts";
 import { chat } from "./commands/chat.ts";
 import { connector } from "./commands/connector.ts";
+import { db } from "./commands/db.ts";
 import { doctor } from "./commands/doctor.ts";
 import { init } from "./commands/init.ts";
 import { serve } from "./commands/serve.ts";
@@ -37,6 +38,10 @@ Commands:
   connector share|unshare <id> [room]
                      Share a room's connector, one without a key, with every room, or
                      move a shared one back into the room
+  db [encrypt|decrypt]
+                     Show whether each database is encrypted, or encrypt or decrypt it in
+                     place (stop "nudge serve" first). The key is NUDGE_DB_KEY, or a
+                     <database>.key file that "encrypt" writes
   reload             Reinstall extensions from the config in the running assistant
   doctor             Check Node, config, storage and model credentials;
                      --ping sends one request, --privacy tests redaction
@@ -159,6 +164,11 @@ async function main(argv: string[]): Promise<number> {
       await connector({ ...access, verb: argument, id, room: where });
       return 0;
     }
+    case "db":
+      if (argument !== undefined && argument !== "encrypt" && argument !== "decrypt")
+        throw new UsageError("Usage: nudge db [encrypt|decrypt]");
+      await db({ ...admin, verb: argument });
+      return 0;
     case "reload":
       return (await reload(admin)) ? 0 : 1;
     case "doctor":
@@ -171,7 +181,7 @@ async function main(argv: string[]): Promise<number> {
   }
 }
 
-const QUIET_ERRORS = new Set(["ConfigError", "UsageError", "DatabaseInUse"]);
+const QUIET_ERRORS = new Set(["ConfigError", "UsageError", "DatabaseInUse", "DatabaseKeyError"]);
 
 export function run(argv: string[]): void {
   main(argv).then(

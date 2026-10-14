@@ -112,7 +112,17 @@ export {
   type Span,
 } from "./privacy/detectors.ts";
 export { Vault, type VaultEntry } from "./privacy/vault.ts";
-export { DatabaseInUse } from "./storage-lock.ts";
+export {
+  type DatabaseEncryption,
+  type DatabaseKey,
+  DatabaseKeyError,
+  databaseEncryption,
+  databaseKey,
+  decryptDatabase,
+  encryptDatabase,
+  keyFile,
+} from "./encrypted-storage.ts";
+export { DatabaseInUse, lockDatabase } from "./storage-lock.ts";
 export {
   ExtensionNotFound,
   type InstalledExtension,

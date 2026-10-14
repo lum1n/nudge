@@ -4,6 +4,7 @@ packages:
   - extensions/*
 allowBuilds:
   "@google/genai": false
+  better-sqlite3-multiple-ciphers: true
   protobufjs: false
 minimumReleaseAgeExclude:
   - "@earendil-works/chord@1.2.0"
