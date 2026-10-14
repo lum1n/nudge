@@ -5,10 +5,10 @@ import type {
   EntryRecord,
   SnapshotEvent,
 } from "@earendil-works/pi-durable";
-import type { Fact, Player, Room, ScheduledNudge } from "@nudge/core";
+import type { Approval, Fact, Player, Room, ScheduledNudge } from "@nudge/core";
 
 /** What the view's `nudge.message` and `nudge.fire` entries hold, for clients that render them. */
-export type { FireEntryData, MessageEntryData } from "@nudge/core";
+export type { ApprovalEntryData, FireEntryData, MessageEntryData } from "@nudge/core";
 
 /** GET /a, without a token: which assistants this server hosts. The web UI signs in with it. */
 export type AssistantsResponse = {
@@ -63,6 +63,12 @@ export type NudgesResponse = { readonly nudges: readonly ScheduledNudge[] };
 
 /** GET /rooms/<room>/memory: what the assistant remembers in the room, oldest first. */
 export type MemoryResponse = { readonly facts: readonly Fact[] };
+
+/** GET /rooms/<room>/approvals, newest first. */
+export type ApprovalsResponse = { readonly approvals: readonly Approval[] };
+
+/** POST /rooms/<room>/approvals/<id> → the decided `Approval`, after its action ran. 409 when already decided. */
+export type DecideRequest = { readonly approve: boolean };
 
 /** POST /rooms/<room>/memory → 201 with the new `Fact`. */
 export type RememberRequest = { readonly text: string };

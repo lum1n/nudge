@@ -7,6 +7,8 @@ import { join } from "node:path";
 import { upgradeWebSocket } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import {
+  AlreadyDecided,
+  ApprovalNotFound,
   canUse,
   type Credential,
   type Nudge,
@@ -16,10 +18,12 @@ import {
 import { type Context as HonoContext, Hono, type MiddlewareHandler } from "hono";
 import type { WSContext } from "hono/ws";
 import {
+  type ApprovalsResponse,
   type AssistantsResponse,
   CLOSE,
   type ClientFrame,
   type CreateRoomRequest,
+  type DecideRequest,
   type MeResponse,
   type MemoryResponse,
   type MessageRequest,
@@ -53,7 +57,7 @@ type Env = {
 
 class HttpError extends Error {
   constructor(
-    readonly status: 400 | 401 | 404,
+    readonly status: 400 | 401 | 404 | 409,
     message: string,
   ) {
     super(message);
@@ -240,6 +244,32 @@ export function createApp(options: AppOptions): Hono<Env> {
     if (!(await c.var.nudge.memory.forget(room.id, id, context)))
       throw new HttpError(404, `No fact "${id}"`);
     return c.body(null, 204);
+  });
+
+  api.get("/rooms/:room/approvals", async (c) => {
+    const room = await usableRoom(c);
+    const approvals = await c.var.nudge.approvals.list(room.id, context);
+    return c.json({ approvals } satisfies ApprovalsResponse);
+  });
+
+  api.post("/rooms/:room/approvals/:id", async (c) => {
+    const room = await usableRoom(c);
+    const body = await readJson<DecideRequest>(c);
+    if (typeof body.approve !== "boolean") throw new HttpError(400, "Say approve: true or false");
+    const { player } = c.var.credential;
+    try {
+      const approval = await c.var.nudge.approvals.decide(
+        room.id,
+        c.req.param("id"),
+        { approve: body.approve, by: { playerId: player.id, displayName: player.displayName } },
+        context,
+      );
+      return c.json(approval);
+    } catch (error) {
+      if (error instanceof ApprovalNotFound) throw new HttpError(404, error.message);
+      if (error instanceof AlreadyDecided) throw new HttpError(409, error.message);
+      throw error;
+    }
   });
 
   api.get("/nudges", async (c) => {

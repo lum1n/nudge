@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import {
   api,
+  type ApprovalsResponse,
   type MeResponse,
   type MemoryResponse,
   type NudgesResponse,
@@ -23,6 +24,14 @@ export const memoryQuery = (assistant: string, room: string) =>
   queryOptions({
     queryKey: [assistant, "rooms", room, "memory"],
     queryFn: () => api<MemoryResponse>(assistant, `/rooms/${encodeURIComponent(room)}/memory`),
+  });
+
+/** The room's approvals, newest first. */
+export const approvalsQuery = (assistant: string, room: string) =>
+  queryOptions({
+    queryKey: [assistant, "rooms", room, "approvals"],
+    queryFn: () =>
+      api<ApprovalsResponse>(assistant, `/rooms/${encodeURIComponent(room)}/approvals`),
   });
 
 /** Every pending nudge the caller may see, across every room they may use. */

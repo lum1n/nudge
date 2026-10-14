@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import type { Extension } from "@earendil-works/pi-durable";
+import type { ApprovalHandler } from "../approvals/approvals.ts";
 import type { Static, TSchema } from "typebox";
 import { Value } from "typebox/value";
 import { ConfigError } from "../config.ts";
@@ -57,6 +58,11 @@ export type ExtensionParts = Omit<Extension, "name"> & {
   readonly roomSocket?: RoomSocketHandler;
   /** Models the extension calls itself, so `nudge doctor` can check their credentials. */
   readonly models?: readonly { readonly provider: string; readonly modelId: string }[];
+  /**
+   * Runs actions people approved, by kind. The extension's tools ask with `requestApproval`
+   * under the extension's name.
+   */
+  readonly approvals?: Readonly<Record<string, ApprovalHandler>>;
 };
 
 export type NudgeExtension<S extends TSchema = TSchema> = {
@@ -111,6 +117,7 @@ export type SetUpExtension = {
   readonly detectors: readonly PiiDetector[];
   readonly roomSocket?: RoomSocketHandler;
   readonly models: readonly { readonly provider: string; readonly modelId: string }[];
+  readonly approvals: Readonly<Record<string, ApprovalHandler>>;
 };
 
 /** Checks the settings and runs `setup`. A plain extension passes through. */
@@ -127,7 +134,7 @@ export async function setUpExtension(
     const extension = input as Extension;
     if (extension.name === BUILTIN_NAME)
       throw new Error(`"${BUILTIN_NAME}" is the built-in extension`);
-    return { extension, detectors: [], models: [] };
+    return { extension, detectors: [], models: [], approvals: {} };
   }
   const { extension: definition } = use;
   const settings = checkSettings(definition, use.settings);
@@ -137,6 +144,7 @@ export async function setUpExtension(
     detectors = [],
     roomSocket,
     models = [],
+    approvals = {},
     ...parts
   } = await definition.setup({
     ...base,
@@ -148,6 +156,7 @@ export async function setUpExtension(
     version: definition.version,
     detectors,
     models,
+    approvals,
     ...(roomSocket === undefined ? {} : { roomSocket }),
   };
 }

@@ -16,7 +16,9 @@ const summary = (message: ThreadMessage) =>
       ? `${message.author?.displayName}${message.mine ? " (me)" : ""}: ${message.text}`
       : message.role === "nudge"
         ? `nudge: ${message.text}`
-        : `marker: ${message.kind}`;
+        : message.role === "approval"
+          ? `approval ${message.approvalId} ${message.status}: ${message.summary}`
+          : `marker: ${message.kind}`;
 
 describe("ThreadReader", () => {
   it("shows the run as messages: authors, an answer with its tool round, and the fired nudge", () => {
@@ -194,5 +196,33 @@ describe("ThreadReader", () => {
       role: "assistant",
       parts: [{ type: "tool-call", toolName: "browse", details: { needsLogin: true } }],
     });
+  });
+
+  it("shows how an approval ended between the answers around it", () => {
+    const base = views.at(-1)!;
+    const view = {
+      ...base,
+      entries: [
+        {
+          id: 1,
+          conversationId: 1,
+          kind: "pi.user",
+          model: [{ role: "user", content: "mail Ann" }],
+        },
+        {
+          id: 2,
+          conversationId: 1,
+          kind: "nudge.approval",
+          data: { id: "a1", summary: "Send a mail to Ann", status: "done", decidedBy: "Bo" },
+          model: [{ role: "user", content: "Bo approved a1" }],
+        },
+      ],
+    } as unknown as ConversationView;
+    const thread = new ThreadReader().read(view, "ann");
+    expect(thread.messages.map(summary)).toEqual([
+      "undefined: mail Ann",
+      "approval a1 done: Send a mail to Ann",
+    ]);
+    expect(thread.messages.at(-1)).toMatchObject({ decidedBy: "Bo" });
   });
 });

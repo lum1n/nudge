@@ -23,6 +23,23 @@ export {
   type NudgeConfig,
   parseConfig,
 } from "./config.ts";
+export {
+  AlreadyDecided,
+  APPROVAL_ENTRY,
+  type Approval,
+  type ApprovalDraft,
+  type ApprovalEntryData,
+  type ApprovalHandler,
+  ApprovalNotFound,
+  type ApprovalOutcome,
+  type ApprovalRun,
+  Approvals,
+  ApprovalsDoc,
+  type ApprovalStatus,
+  type Decision,
+  MAX_PENDING,
+  requestApproval,
+} from "./approvals/approvals.ts";
 export { describeRoom, formatHour } from "./extensions/builtin.ts";
 export {
   defineNudgeExtension,

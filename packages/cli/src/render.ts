@@ -1,6 +1,9 @@
 import type { Message } from "@earendil-works/pi-ai";
 import type { AgentEvent, EntryRecord, SnapshotEvent } from "@earendil-works/pi-durable";
 import {
+  APPROVAL_ENTRY,
+  type Approval,
+  type ApprovalEntryData,
   FIRE_ENTRY,
   type FireEntryData,
   MESSAGE_ENTRY,
@@ -21,6 +24,13 @@ export function entryLine(entry: EntryRecord, assistantName: string): Line | und
   }
   if (entry.kind === FIRE_ENTRY)
     return { who: "nudge", text: (entry.data as FireEntryData).message };
+  if (entry.kind === APPROVAL_ENTRY) {
+    const data = entry.data as ApprovalEntryData;
+    return {
+      who: data.id,
+      text: `${data.status} by ${data.decidedBy ?? "nobody"}: ${data.summary}`,
+    };
+  }
   const message = entry.model?.[0];
   if (message === undefined) return undefined;
   if (entry.kind === "pi.user") return { who: "you", text: messageText(message).trim() };
@@ -29,6 +39,13 @@ export function entryLine(entry: EntryRecord, assistantName: string): Line | und
     return text === "" ? undefined : { who: assistantName, text };
   }
   return undefined;
+}
+
+/** `a3 pending  Send a mail to Ann`, with who decided and what came of it once decided. */
+export function describeApproval(approval: Approval): string {
+  const who = approval.decidedBy === undefined ? "" : ` by ${approval.decidedBy.displayName}`;
+  const result = approval.result === undefined ? "" : ` → ${approval.result.split("\n")[0]}`;
+  return `${approval.id} ${approval.status}${who}  ${approval.summary}${result}`;
 }
 
 /** `12  Tue 13 Oct, 14:30, every 60 min  Water the plants`, in this machine's time zone. */
@@ -133,6 +150,14 @@ export class ChatRenderer {
     if (entry.kind === FIRE_ENTRY) {
       this.endAnswer();
       this.write(dim(`  · nudge: ${(entry.data as FireEntryData).message}\n`));
+      return;
+    }
+    if (entry.kind === APPROVAL_ENTRY) {
+      const data = entry.data as ApprovalEntryData;
+      this.endAnswer();
+      this.write(
+        dim(`  · ${data.id} ${data.status} by ${data.decidedBy ?? "nobody"}: ${data.summary}\n`),
+      );
       return;
     }
     if (entry.kind !== MESSAGE_ENTRY) return;

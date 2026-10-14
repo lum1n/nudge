@@ -20,11 +20,18 @@ import {
   type PendingSend,
   toThreadMessageLike,
 } from "../../assistant-runtime.ts";
-import { cancelNudge, forget, forgetToken, remember } from "../../api.ts";
+import {
+  type Approval,
+  cancelNudge,
+  decideApproval,
+  forget,
+  forgetToken,
+  remember,
+} from "../../api.ts";
 import { useEarlierHistory } from "../../earlier.ts";
-import { memoryQuery, meQuery, nudgesQuery, roomQuery } from "../../queries.ts";
+import { approvalsQuery, memoryQuery, meQuery, nudgesQuery, roomQuery } from "../../queries.ts";
 import { type RoomSocket, useRoomSocket, useRoomState } from "../../room-socket.ts";
-import { type RoomStatus, ThreadReader } from "../../thread.ts";
+import { type RoomStatus, type ThreadMessage, ThreadReader } from "../../thread.ts";
 import { newlyDoneToolCalls } from "../../tool-watch.ts";
 
 const MEMORY_TOOLS = new Set(["remember", "forget"]);
@@ -82,6 +89,7 @@ function Room() {
       ) : (
         <Chat socket={socket} />
       )}
+      <ApprovalsPanel assistant={assistant} room={room} />
       <MemoryPanel assistant={assistant} room={room} />
       <NudgesPanel assistant={assistant} room={room} />
     </section>
@@ -114,6 +122,12 @@ function Chat({ socket }: { socket: RoomSocket }) {
     if (done.some((call) => NUDGE_TOOLS.has(call.toolName)))
       void queryClient.invalidateQueries({ queryKey: [assistant, "nudges"] });
   }, [thread, seenToolCalls, queryClient, assistant, room]);
+
+  // A tool that asked for approval, or an approval that ended, changes the room's approvals.
+  const approvalSignal = useMemo(() => approvalCount(thread?.messages ?? []), [thread]);
+  useEffect(() => {
+    void queryClient.invalidateQueries({ queryKey: [assistant, "rooms", room, "approvals"] });
+  }, [approvalSignal, queryClient, assistant, room]);
 
   const runtime = useExternalStoreRuntime({
     messages: thread?.messages ?? [],
@@ -248,12 +262,21 @@ function AssistantMessage({ message }: { message: Extract<MessageState, { role: 
 }
 
 function SystemMessage({ message }: { message: MessageState }) {
-  const part = message.content[0] as
-    | { readonly name?: string; readonly data?: unknown }
-    | undefined;
-  if (part?.name === "nudge")
-    return <p className="italic text-stone-600">Nudge: {(part.data as { text: string }).text}</p>;
-  if (part?.name === "marker") return <hr />;
+  // See `toThreadMessageLike`: the line's kind and data are in `metadata.custom`.
+  const custom = message.metadata.custom as { kind?: string; text?: string } | undefined;
+  if (custom?.kind === "nudge")
+    return <p className="italic text-stone-600">Nudge: {custom.text}</p>;
+  if (custom?.kind === "marker") return <hr />;
+  if (custom?.kind === "approval") {
+    const data = custom as { summary: string; status: string; decidedBy?: string };
+    return (
+      <p className="text-sm text-stone-600 italic">
+        {data.decidedBy ?? "Someone"} {data.status === "denied" ? "denied" : "approved"}{" "}
+        {data.summary}
+        {data.status === "failed" ? " — it failed" : ""}
+      </p>
+    );
+  }
   return null;
 }
 
@@ -294,6 +317,9 @@ function ToolCallPart({ toolName, status, result, isError, artifact }: ToolCallM
         </Link>
       </p>
     );
+  const approval = (artifact as { approval?: string } | undefined)?.approval;
+  if (typeof approval === "string")
+    return <ApprovalCard assistant={assistant} room={room} id={approval} />;
   return (
     <p className="text-sm text-stone-500">
       {toolName} — {result !== undefined ? (isError ? "failed" : "done") : status.type}
@@ -312,6 +338,109 @@ function statusLabel(status: MessageStatus): string {
     case "complete":
       return "";
   }
+}
+
+/** Tool calls that asked for approval plus approvals that ended: changes when the list does. */
+function approvalCount(messages: readonly ThreadMessage[]): number {
+  let count = 0;
+  for (const message of messages) {
+    if (message.role === "approval") count += 1;
+    if (message.role === "assistant")
+      for (const part of message.parts)
+        if (part.type === "tool-call" && (part.details as { approval?: unknown })?.approval)
+          count += 1;
+  }
+  return count;
+}
+
+/** Approve and Deny for one approval, where the tool asked for it in the chat. */
+function ApprovalCard({ assistant, room, id }: { assistant: string; room: string; id: string }) {
+  const query = useQuery(approvalsQuery(assistant, room));
+  const approval = query.data?.approvals.find((item) => item.id === id);
+  if (approval === undefined) return <p className="text-sm text-stone-500">Asked for approval</p>;
+  return (
+    <div className="my-1 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm">
+      <ApprovalRow assistant={assistant} room={room} approval={approval} />
+    </div>
+  );
+}
+
+function ApprovalRow({
+  assistant,
+  room,
+  approval,
+}: {
+  assistant: string;
+  room: string;
+  approval: Approval;
+}) {
+  const queryClient = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+
+  async function decide(approve: boolean) {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await decideApproval(assistant, room, approval.id, approve);
+    } catch (caught) {
+      setError((caught as Error).message);
+    } finally {
+      setBusy(false);
+      await queryClient.invalidateQueries({ queryKey: [assistant, "rooms", room, "approvals"] });
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-baseline justify-between gap-2">
+        <span>{approval.summary}</span>
+        {approval.status === "pending" ? (
+          <span className="flex shrink-0 gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void decide(true)}
+              className="rounded bg-emerald-700 px-2 py-0.5 text-white disabled:opacity-50"
+            >
+              Approve
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void decide(false)}
+              className="rounded border border-stone-300 px-2 py-0.5 disabled:opacity-50"
+            >
+              Deny
+            </button>
+          </span>
+        ) : (
+          <span className="shrink-0 text-stone-500">
+            {approval.status}
+            {approval.decidedBy ? ` by ${approval.decidedBy.displayName}` : ""}
+          </span>
+        )}
+      </div>
+      {error !== undefined && <p className="text-red-700">{error}</p>}
+    </div>
+  );
+}
+
+/** What waits for someone in the room to approve it; hidden while nothing does. */
+function ApprovalsPanel({ assistant, room }: { assistant: string; room: string }) {
+  const query = useQuery(approvalsQuery(assistant, room));
+  const pending = query.data?.approvals.filter((item) => item.status === "pending") ?? [];
+  if (pending.length === 0) return null;
+  return (
+    <section className="flex flex-col gap-2 rounded border border-amber-300 bg-amber-50 p-3">
+      <h3 className="text-sm font-medium tracking-wide text-amber-800 uppercase">
+        Waiting for approval
+      </h3>
+      {pending.map((approval) => (
+        <ApprovalRow key={approval.id} assistant={assistant} room={room} approval={approval} />
+      ))}
+    </section>
+  );
 }
 
 function MemoryPanel({ assistant, room }: { assistant: string; room: string }) {

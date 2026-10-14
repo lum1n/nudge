@@ -5,12 +5,13 @@ import type {
   LiveState,
   ToolSlot,
 } from "@earendil-works/pi-durable";
-import type { FireEntryData, MessageEntryData } from "@nudge/server";
+import type { ApprovalEntryData, FireEntryData, MessageEntryData } from "@nudge/server";
 import type { ConversationView } from "./mirror.ts";
 
 // Entry kinds of @nudge/core. The recorded fixture's tests fail when they drift.
 const MESSAGE_ENTRY = "nudge.message";
 const FIRE_ENTRY = "nudge.fire";
+const APPROVAL_ENTRY = "nudge.approval";
 
 export type Author = { readonly playerId: string; readonly displayName: string };
 
@@ -46,6 +47,15 @@ export type ThreadMessage =
     }
   /** A scheduled nudge that fired; the assistant answers it like a message. */
   | { readonly role: "nudge"; readonly id: string; readonly text: string; readonly firedAt: number }
+  /** How an action people were asked to approve ended; the assistant answers it like a message. */
+  | {
+      readonly role: "approval";
+      readonly id: string;
+      readonly approvalId: string;
+      readonly summary: string;
+      readonly status: ApprovalEntryData["status"];
+      readonly decidedBy?: string;
+    }
   /** One answer: every model response and tool round between two messages. */
   | {
       readonly role: "assistant";
@@ -150,6 +160,7 @@ export class ThreadReader {
         case MESSAGE_ENTRY:
         case "pi.user":
         case FIRE_ENTRY:
+        case APPROVAL_ENTRY:
         case "pi.compaction":
         case "pi.reset": {
           endAnswer();
@@ -191,6 +202,17 @@ function entryMessage(id: string, entry: EntryRecord, me: string): ThreadMessage
     case FIRE_ENTRY: {
       const data = entry.data as FireEntryData;
       return { role: "nudge", id, text: data.message, firedAt: data.fireAt };
+    }
+    case APPROVAL_ENTRY: {
+      const data = entry.data as ApprovalEntryData;
+      return {
+        role: "approval",
+        id,
+        approvalId: data.id,
+        summary: data.summary,
+        status: data.status,
+        ...(data.decidedBy === undefined ? {} : { decidedBy: data.decidedBy }),
+      };
     }
     case "pi.compaction":
     case "pi.reset":
@@ -293,6 +315,18 @@ function queued(item: InboxItem, me: string): QueuedMessage[] {
   if (entry?.kind === FIRE_ENTRY) {
     const data = entry.data as FireEntryData;
     return [{ id: item.id, mode: item.mode, text: data.message, mine: false, nudge: true }];
+  }
+  if (entry?.kind === APPROVAL_ENTRY) {
+    const data = entry.data as ApprovalEntryData;
+    return [
+      {
+        id: item.id,
+        mode: item.mode,
+        text: `${data.id} ${data.status}: ${data.summary}`,
+        mine: false,
+        nudge: true,
+      },
+    ];
   }
   return [
     {

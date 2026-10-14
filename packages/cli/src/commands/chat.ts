@@ -1,7 +1,7 @@
 import { userInfo } from "node:os";
 import { createInterface } from "node:readline/promises";
 import { UsageError } from "../errors.ts";
-import { ChatRenderer, describeNudge } from "../render.ts";
+import { ChatRenderer, describeApproval, describeNudge } from "../render.ts";
 import { type ChatSession, openLocal, openRemote } from "../session.ts";
 
 export type ChatOptions = {
@@ -22,7 +22,8 @@ const HELP =
   "/private <value> keeps a value from the model, /who lists who can read along, " +
   "/nudges lists scheduled nudges, /nudges cancel <id> cancels one, " +
   "/memory lists what the assistant remembers here, /memory add <text> and /memory forget <id> " +
-  "change it, /quit leaves.";
+  "change it, /approvals lists actions waiting for approval, /approve <id> and /deny <id> " +
+  "decide one, /quit leaves.";
 
 export async function chat(options: ChatOptions): Promise<void> {
   let rl: ReturnType<typeof createInterface> | undefined;
@@ -42,13 +43,31 @@ export async function chat(options: ChatOptions): Promise<void> {
   const where = room.kind === "lobby" ? "" : ` · ${room.name}`;
   console.log(`${assistantName}${where} · ${HELP}\n`);
   const prompt = rl;
+  // Approvals already announced, so each new one is shown once.
+  const announced = new Set<string>();
+  const announce = async () => {
+    const waiting = (await session.approvals()).filter(
+      (approval) => approval.status === "pending" && !announced.has(approval.id),
+    );
+    for (const approval of waiting.reverse()) {
+      announced.add(approval.id);
+      console.log(
+        `  ? ${describeApproval(approval)} — /approve ${approval.id} or /deny ${approval.id}`,
+      );
+    }
+    if (waiting.length > 0) prompt.prompt();
+  };
   const snapshot = await session.attach((events) => {
     for (const event of events) {
       renderer.event(event);
-      if (event.type === "run_end") prompt.prompt();
+      if (event.type === "run_end") {
+        prompt.prompt();
+        void announce().catch(() => {});
+      }
     }
   });
   renderer.history(snapshot);
+  await announce().catch(() => {});
 
   if (!renderer.busy) rl.prompt();
 
@@ -104,6 +123,17 @@ export async function chat(options: ChatOptions): Promise<void> {
             (await session.forget(rest!.trim())) ? "  Forgotten." : `  No fact ${rest} here.`,
           );
         else console.log("  Usage: /memory add <text> | /memory forget <id>");
+      } else if (line === "/approvals") {
+        const approvals = await session.approvals();
+        if (approvals.length === 0) console.log("  Nothing to approve here.");
+        for (const approval of approvals) console.log(`  ${describeApproval(approval)}`);
+      } else if (/^\/(approve|deny)(\s|$)/.test(line)) {
+        const [, verb, id] = /^\/(approve|deny)\s+(\S+)$/.exec(line) ?? [];
+        if (id === undefined) console.log("  Usage: /approve <id> | /deny <id>");
+        else {
+          const decided = await session.decide(id, verb === "approve");
+          console.log(`  ${describeApproval(decided)}`);
+        }
       } else if (line.startsWith("/private ")) {
         const placeholder = await session.protect(line.slice("/private ".length));
         console.log(`  The model will see ${placeholder} instead.`);

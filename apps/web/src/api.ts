@@ -1,4 +1,5 @@
 import type {
+  ApprovalsResponse,
   AssistantsResponse,
   ErrorResponse,
   MeResponse,
@@ -9,6 +10,7 @@ import type {
 } from "@nudge/server";
 
 export type {
+  ApprovalsResponse,
   AssistantsResponse,
   MeResponse,
   MemoryResponse,
@@ -22,6 +24,7 @@ export type {
 export type Room = RoomResponse["room"];
 export type Fact = MemoryResponse["facts"][number];
 export type ScheduledNudge = NudgesResponse["nudges"][number];
+export type Approval = ApprovalsResponse["approvals"][number];
 
 /** A non-2xx answer from the Nudge API. */
 export class ApiError extends Error {
@@ -126,6 +129,19 @@ export function remember(assistant: string, room: string, text: string): Promise
 export function forget(assistant: string, room: string, id: string): Promise<void> {
   return api(assistant, `/rooms/${encodeURIComponent(room)}/memory/${encodeURIComponent(id)}`, {
     method: "DELETE",
+  });
+}
+
+/** Approves or denies an approval; an approved action has run when this resolves. */
+export function decideApproval(
+  assistant: string,
+  room: string,
+  id: string,
+  approve: boolean,
+): Promise<Approval> {
+  return api(assistant, `/rooms/${encodeURIComponent(room)}/approvals/${encodeURIComponent(id)}`, {
+    method: "POST",
+    body: JSON.stringify({ approve }),
   });
 }
 

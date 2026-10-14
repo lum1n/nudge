@@ -1,4 +1,4 @@
-import type { AppendMessage } from "@assistant-ui/react";
+import { type AppendMessage, fromThreadMessageLike } from "@assistant-ui/react";
 import { describe, expect, it } from "vitest";
 import { appendText, buildQueueAdapter, toThreadMessageLike } from "../src/assistant-runtime.ts";
 import type { QueuedMessage, ThreadMessage } from "../src/thread.ts";
@@ -24,20 +24,51 @@ describe("toThreadMessageLike", () => {
     });
   });
 
-  it("carries a fired nudge as a data-nudge system part", () => {
+  // assistant-ui's own conversion runs too: it refuses system messages that aren't one text part.
+  const accepted = (message: ThreadMessage) =>
+    fromThreadMessageLike(toThreadMessageLike(message), message.id, {
+      type: "complete",
+      reason: "unknown",
+    });
+
+  it("carries a fired nudge as a system line with its kind in metadata", () => {
     const nudge: ThreadMessage = { role: "nudge", id: "entry:2", text: "Kettle", firedAt: 2000 };
-    expect(toThreadMessageLike(nudge)).toMatchObject({
+    expect(accepted(nudge)).toMatchObject({
       role: "system",
-      content: [{ type: "data-nudge", data: { text: "Kettle" } }],
+      content: [{ type: "text", text: "Kettle" }],
       createdAt: new Date(2000),
+      metadata: { custom: { kind: "nudge", text: "Kettle" } },
     });
   });
 
-  it("carries a marker as a data-marker system part", () => {
+  it("carries a marker as a system line with its kind in metadata", () => {
     const marker: ThreadMessage = { role: "marker", id: "entry:3", kind: "reset" };
-    expect(toThreadMessageLike(marker)).toMatchObject({
+    expect(accepted(marker)).toMatchObject({
       role: "system",
-      content: [{ type: "data-marker", data: { kind: "reset" } }],
+      metadata: { custom: { kind: "marker", marker: "reset" } },
+    });
+  });
+
+  it("carries how an approval ended as a system line", () => {
+    const approval: ThreadMessage = {
+      role: "approval",
+      id: "entry:4",
+      approvalId: "a1",
+      summary: "Send a mail",
+      status: "done",
+      decidedBy: "Bo",
+    };
+    expect(accepted(approval)).toMatchObject({
+      role: "system",
+      metadata: {
+        custom: {
+          kind: "approval",
+          id: "a1",
+          summary: "Send a mail",
+          status: "done",
+          decidedBy: "Bo",
+        },
+      },
     });
   });
 

@@ -24,18 +24,39 @@ export function toThreadMessageLike(message: ThreadMessage): ThreadMessageLike {
               },
             }),
       };
+    // assistant-ui takes a system message with exactly one text part, so what kind of line it
+    // is and its data ride along in `metadata.custom`.
     case "nudge":
       return {
         id: message.id,
         role: "system",
-        content: [{ type: "data-nudge", data: { text: message.text } }],
+        content: [{ type: "text", text: message.text }],
         createdAt: new Date(message.firedAt),
+        metadata: { custom: { kind: "nudge", text: message.text } },
+      };
+    case "approval":
+      return {
+        id: message.id,
+        role: "system",
+        content: [
+          { type: "text", text: `${message.approvalId} ${message.status}: ${message.summary}` },
+        ],
+        metadata: {
+          custom: {
+            kind: "approval",
+            id: message.approvalId,
+            summary: message.summary,
+            status: message.status,
+            ...(message.decidedBy === undefined ? {} : { decidedBy: message.decidedBy }),
+          },
+        },
       };
     case "marker":
       return {
         id: message.id,
         role: "system",
-        content: [{ type: "data-marker", data: { kind: message.kind } }],
+        content: [{ type: "text", text: message.kind }],
+        metadata: { custom: { kind: "marker", marker: message.kind } },
       };
     case "assistant":
       return {

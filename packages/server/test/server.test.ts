@@ -5,9 +5,10 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
 import type { AgentEvent, SnapshotEvent } from "@earendil-works/pi-durable";
-import { createNudge, MESSAGE_ENTRY, type Nudge } from "@nudge/core";
+import { createNudge, MESSAGE_ENTRY, type Nudge, requestApproval } from "@nudge/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  type ApprovalsResponse,
   type AssistantsResponse,
   createApp,
   type MeResponse,
@@ -243,6 +244,51 @@ describe("server", () => {
     expect((await call("DELETE", "/rooms/trip/memory/m1", tokens.Bo!)).status).toBe(204);
     expect((await call("DELETE", "/rooms/trip/memory/m1", tokens.Bo!)).status).toBe(404);
     expect(await facts(tokens.Ann!)).toEqual([]);
+  });
+
+  it("lists and decides a room's approvals only for its members", async () => {
+    const call = (method: string, path: string, token: string, body?: object) =>
+      fetch(`${base}${path}`, {
+        method,
+        headers: {
+          authorization: `Bearer ${token}`,
+          ...(body === undefined ? {} : { "content-type": "application/json" }),
+        },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+    await nudge.harness.commit(
+      (tx) =>
+        requestApproval(
+          tx,
+          "trip",
+          { extension: "mailer", kind: "send", summary: "Send the packing list", payload: null },
+          0,
+        ),
+      context,
+    );
+    const list = async (token: string) =>
+      ((await (await call("GET", "/rooms/trip/approvals", token)).json()) as ApprovalsResponse)
+        .approvals;
+    expect(await list(tokens.Ann!)).toMatchObject([{ id: "a1", status: "pending" }]);
+    expect((await call("GET", "/rooms/trip/approvals", tokens.Cy!)).status).toBe(404);
+    expect(
+      (await call("POST", "/rooms/trip/approvals/a1", tokens.Cy!, { approve: true })).status,
+    ).toBe(404);
+    expect((await call("POST", "/rooms/trip/approvals/a1", tokens.Bo!, {})).status).toBe(400);
+    expect(
+      (await call("POST", "/rooms/trip/approvals/a9", tokens.Bo!, { approve: true })).status,
+    ).toBe(404);
+
+    const denied = await call("POST", "/rooms/trip/approvals/a1", tokens.Bo!, { approve: false });
+    expect(denied.status).toBe(200);
+    expect(await denied.json()).toMatchObject({
+      status: "denied",
+      decidedBy: { playerId: "bo", displayName: "Bo" },
+    });
+    expect(
+      (await call("POST", "/rooms/trip/approvals/a1", tokens.Ann!, { approve: true })).status,
+    ).toBe(409);
+    await nudge.harness.waitForIdle(context);
   });
 
   it("serves the web UI outside /a, with index.html for the browser's routes", async () => {

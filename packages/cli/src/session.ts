@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { AgentEvent, SnapshotEvent } from "@earendil-works/pi-durable";
 import {
+  type Approval,
   type Author,
   canUse,
   type Fact,
@@ -13,6 +14,7 @@ import {
   type ScheduledNudge,
 } from "@nudge/core";
 import type {
+  ApprovalsResponse,
   ClientFrame,
   MemoryResponse,
   MeResponse,
@@ -44,6 +46,10 @@ export interface ChatSession {
   remember(text: string): Promise<Fact>;
   /** False when this room remembers no fact with that id. */
   forget(id: string): Promise<boolean>;
+  /** Actions waiting for approval in this room, and recently decided ones; newest first. */
+  approvals(): Promise<Approval[]>;
+  /** Approves or denies one; an approved action runs before this resolves. */
+  decide(id: string, approve: boolean): Promise<Approval>;
   close(): Promise<void>;
 }
 
@@ -184,6 +190,15 @@ class LocalSession implements ChatSession {
     return this.nudge.memory.forget(this.room.id, id, context);
   }
 
+  approvals(): Promise<Approval[]> {
+    return this.nudge.approvals.list(this.room.id, context);
+  }
+
+  decide(id: string, approve: boolean): Promise<Approval> {
+    const by = { playerId: this.author.playerId, displayName: this.author.displayName };
+    return this.nudge.approvals.decide(this.room.id, id, { approve, by }, context);
+  }
+
   async close(): Promise<void> {
     this.stopReloading();
     await this.stream?.stop();
@@ -301,6 +316,18 @@ class RemoteSession implements ChatSession {
     if (!(await this.memory()).some((fact) => fact.id === id)) return false;
     await this.call(`${this.roomPath}/memory/${encodeURIComponent(id)}`, { method: "DELETE" });
     return true;
+  }
+
+  async approvals(): Promise<Approval[]> {
+    return [...(await this.call<ApprovalsResponse>(`${this.roomPath}/approvals`)).approvals];
+  }
+
+  decide(id: string, approve: boolean): Promise<Approval> {
+    const body = JSON.stringify({ approve });
+    return this.call<Approval>(`${this.roomPath}/approvals/${encodeURIComponent(id)}`, {
+      method: "POST",
+      body,
+    });
   }
 
   private get roomPath(): string {

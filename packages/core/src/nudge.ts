@@ -19,6 +19,7 @@ import {
   type Submission,
 } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
+import { Approvals } from "./approvals/approvals.ts";
 import { createBuiltinExtension } from "./extensions/builtin.ts";
 import {
   type HostBase,
@@ -92,6 +93,7 @@ export class Nudge {
   readonly rooms: Rooms;
   readonly nudges: Nudges;
   readonly memory: Memory;
+  readonly approvals: Approvals;
   private readonly models: RedactingModels;
   private readonly now: () => number;
   private readonly unlock: () => Promise<void>;
@@ -117,6 +119,14 @@ export class Nudge {
     this.rooms = new Rooms(harness, () => agent, now);
     this.nudges = new Nudges(harness, this.rooms, now);
     this.memory = new Memory(harness, this.rooms, now);
+    // Looked up when an approval runs, so a reload's handlers take over.
+    this.approvals = new Approvals(
+      harness,
+      this.rooms,
+      now,
+      (extension, kind) =>
+        this.installed.find((installed) => installed.extension.name === extension)?.approvals[kind],
+    );
   }
 
   static async open(options: NudgeOptions, context: Context): Promise<Nudge> {
@@ -209,6 +219,7 @@ export class Nudge {
       opened = nudge;
       // Pending nudge timers rearm here; those whose time passed while the host was down fire now.
       harness.resume();
+      await nudge.approvals.recover(context);
       return nudge;
     } catch (error) {
       await harness.close(context);
