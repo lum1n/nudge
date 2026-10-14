@@ -76,7 +76,7 @@ function Room() {
               {view.room.members.map((member) => member.displayName).join(", ")}
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Link
               to="/$assistant/$room/browser"
               params={{ assistant, room }}
@@ -97,6 +97,13 @@ function Room() {
               className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
             >
               Lists
+            </Link>
+            <Link
+              to="/$assistant/$room/documents"
+              params={{ assistant, room }}
+              className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
+            >
+              Documents
             </Link>
             <Link
               to="/$assistant/$room/model"

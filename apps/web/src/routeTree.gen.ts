@@ -16,6 +16,7 @@ import { Route as AssistantIndexRouteImport } from './routes/$assistant/index'
 import { Route as AssistantRoomRouteImport } from './routes/$assistant/$room'
 import { Route as AssistantRoomBrowserRouteImport } from './routes/$assistant/$room_.browser'
 import { Route as AssistantRoomConnectorsRouteImport } from './routes/$assistant/$room_.connectors'
+import { Route as AssistantRoomDocumentsRouteImport } from './routes/$assistant/$room_.documents'
 import { Route as AssistantRoomListsRouteImport } from './routes/$assistant/$room_.lists'
 import { Route as AssistantRoomModelRouteImport } from './routes/$assistant/$room_.model'
 
@@ -54,6 +55,11 @@ const AssistantRoomConnectorsRoute = AssistantRoomConnectorsRouteImport.update({
   path: '/$room/connectors',
   getParentRoute: () => AssistantRouteRoute,
 } as any)
+const AssistantRoomDocumentsRoute = AssistantRoomDocumentsRouteImport.update({
+  id: '/$room_/documents',
+  path: '/$room/documents',
+  getParentRoute: () => AssistantRouteRoute,
+} as any)
 const AssistantRoomListsRoute = AssistantRoomListsRouteImport.update({
   id: '/$room_/lists',
   path: '/$room/lists',
@@ -73,6 +79,7 @@ export interface FileRoutesByFullPath {
   '/$assistant/': typeof AssistantIndexRoute
   '/$assistant/$room/browser': typeof AssistantRoomBrowserRoute
   '/$assistant/$room/connectors': typeof AssistantRoomConnectorsRoute
+  '/$assistant/$room/documents': typeof AssistantRoomDocumentsRoute
   '/$assistant/$room/lists': typeof AssistantRoomListsRoute
   '/$assistant/$room/model': typeof AssistantRoomModelRoute
 }
@@ -83,6 +90,7 @@ export interface FileRoutesByTo {
   '/$assistant': typeof AssistantIndexRoute
   '/$assistant/$room/browser': typeof AssistantRoomBrowserRoute
   '/$assistant/$room/connectors': typeof AssistantRoomConnectorsRoute
+  '/$assistant/$room/documents': typeof AssistantRoomDocumentsRoute
   '/$assistant/$room/lists': typeof AssistantRoomListsRoute
   '/$assistant/$room/model': typeof AssistantRoomModelRoute
 }
@@ -95,6 +103,7 @@ export interface FileRoutesById {
   '/$assistant/': typeof AssistantIndexRoute
   '/$assistant/$room_/browser': typeof AssistantRoomBrowserRoute
   '/$assistant/$room_/connectors': typeof AssistantRoomConnectorsRoute
+  '/$assistant/$room_/documents': typeof AssistantRoomDocumentsRoute
   '/$assistant/$room_/lists': typeof AssistantRoomListsRoute
   '/$assistant/$room_/model': typeof AssistantRoomModelRoute
 }
@@ -108,6 +117,7 @@ export interface FileRouteTypes {
     | '/$assistant/'
     | '/$assistant/$room/browser'
     | '/$assistant/$room/connectors'
+    | '/$assistant/$room/documents'
     | '/$assistant/$room/lists'
     | '/$assistant/$room/model'
   fileRoutesByTo: FileRoutesByTo
@@ -118,6 +128,7 @@ export interface FileRouteTypes {
     | '/$assistant'
     | '/$assistant/$room/browser'
     | '/$assistant/$room/connectors'
+    | '/$assistant/$room/documents'
     | '/$assistant/$room/lists'
     | '/$assistant/$room/model'
   id:
@@ -129,6 +140,7 @@ export interface FileRouteTypes {
     | '/$assistant/'
     | '/$assistant/$room_/browser'
     | '/$assistant/$room_/connectors'
+    | '/$assistant/$room_/documents'
     | '/$assistant/$room_/lists'
     | '/$assistant/$room_/model'
   fileRoutesById: FileRoutesById
@@ -190,6 +202,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AssistantRoomConnectorsRouteImport
       parentRoute: typeof AssistantRouteRoute
     }
+    '/$assistant/$room_/documents': {
+      id: '/$assistant/$room_/documents'
+      path: '/$room/documents'
+      fullPath: '/$assistant/$room/documents'
+      preLoaderRoute: typeof AssistantRoomDocumentsRouteImport
+      parentRoute: typeof AssistantRouteRoute
+    }
     '/$assistant/$room_/lists': {
       id: '/$assistant/$room_/lists'
       path: '/$room/lists'
@@ -212,6 +231,7 @@ interface AssistantRouteRouteChildren {
   AssistantIndexRoute: typeof AssistantIndexRoute
   AssistantRoomBrowserRoute: typeof AssistantRoomBrowserRoute
   AssistantRoomConnectorsRoute: typeof AssistantRoomConnectorsRoute
+  AssistantRoomDocumentsRoute: typeof AssistantRoomDocumentsRoute
   AssistantRoomListsRoute: typeof AssistantRoomListsRoute
   AssistantRoomModelRoute: typeof AssistantRoomModelRoute
 }
@@ -221,6 +241,7 @@ const AssistantRouteRouteChildren: AssistantRouteRouteChildren = {
   AssistantIndexRoute: AssistantIndexRoute,
   AssistantRoomBrowserRoute: AssistantRoomBrowserRoute,
   AssistantRoomConnectorsRoute: AssistantRoomConnectorsRoute,
+  AssistantRoomDocumentsRoute: AssistantRoomDocumentsRoute,
   AssistantRoomListsRoute: AssistantRoomListsRoute,
   AssistantRoomModelRoute: AssistantRoomModelRoute,
 }

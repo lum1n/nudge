@@ -255,6 +255,14 @@ An entry's `rooms` lists the kinds of room it is on in by default (`"lobby"`, `"
 
 `extensions/lists` gives each room shared lists, such as shopping or packing. The model keeps them with `list_add`, `list_show`, `list_check`, `list_remove` and `list_clear`, and does not add an item twice. People see and change the same lists on the room's **Lists** page in the web UI, live: tick off, add, remove, clear what's done.
 
+### Documents
+
+`extensions/documents` keeps a room's receipts, warranties, contracts and letters. People upload them on the room's **Documents** page (PDF, text files, mail, images; 20 MB each by default) and download or delete them there. The model finds things in them with `search_documents` and `read_document`, and `list_documents` lists them.
+
+- Text is read on the host: PDFs with pdf.js, text formats as they are. What the model gets of it passes through redaction like any tool output.
+- Images and scanned PDFs without a text layer are kept but not read: reading them would mean sending the picture to a provider, which redaction can't cover.
+- The original files are stored encrypted (AES-256-GCM) under the extension's data directory, with the key in its secret store. The text sits in the assistant's database.
+
 ### Telegram
 
 `extensions/telegram` lets people talk to the assistant from Telegram. Make a bot with @BotFather, put its token in `TELEGRAM_BOT_TOKEN` (or set `token` in the extension's settings, `${NAME}` taking it from the environment), and install the extension. It long-polls Telegram, so the host needs no open port.

@@ -23,6 +23,11 @@
           "rooms": ["personal", "shared"]
         },
         {
+          "$comment": "Receipts and other documents per room: uploaded on the room's Documents page, text read on the host, files stored encrypted.",
+          "from": "./extensions/documents",
+          "settings": { "maxMegabytes": 20 }
+        },
+        {
           "$comment": "Shared lists per room (shopping, packing), for the model and on the room's Lists page.",
           "from": "./extensions/lists"
         },

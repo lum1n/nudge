@@ -30,7 +30,7 @@ function Lists() {
     setDraft("");
   }
 
-  const lists = state.lists ?? [];
+  const lists = state.view ?? [];
   const pending = started !== "" && !lists.some((list) => list.name === started);
   return (
     <section className="mx-auto flex max-w-3xl flex-col gap-3 p-4">
@@ -54,7 +54,7 @@ function Lists() {
             ? "This assistant has no lists extension here, or you are not in this room."
             : `Disconnected${state.error ? `: ${state.error}` : ""}.`}
         </p>
-      ) : socket === undefined || state.lists === undefined ? (
+      ) : socket === undefined || state.view === undefined ? (
         <p className="text-stone-500">Connecting…</p>
       ) : (
         <>
