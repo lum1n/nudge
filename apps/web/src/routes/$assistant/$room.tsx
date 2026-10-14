@@ -11,151 +11,143 @@ import {
   useExternalStoreRuntime,
 } from "@assistant-ui/react";
 import { MarkdownTextPrimitive } from "@assistant-ui/react-markdown";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type {
+  Approval,
+  PendingMessage,
+  RoomState,
+  RoomStore,
+  RoomView,
+  Status,
+} from "@nudge/client";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { createContext, type FormEvent, useCallback, useContext, useEffect, useState } from "react";
+import { clientFor, forgetToken, useConnection, useRoom } from "../../api.ts";
 import {
   appendText,
   buildQueueAdapter,
-  type PendingSend,
+  type Lane,
   toThreadMessageLike,
 } from "../../assistant-runtime.ts";
-import {
-  type Approval,
-  cancelNudge,
-  decideApproval,
-  forget,
-  forgetToken,
-  remember,
-} from "../../api.ts";
-import { useEarlierHistory } from "../../earlier.ts";
-import { approvalsQuery, memoryQuery, meQuery, nudgesQuery, roomQuery } from "../../queries.ts";
-import { type RoomSocket, useRoomSocket, useRoomState } from "../../room-socket.ts";
-import { type RoomStatus, type ThreadMessage, ThreadReader } from "../../thread.ts";
-import { newlyDoneToolCalls } from "../../tool-watch.ts";
-
-const MEMORY_TOOLS = new Set(["remember", "forget"]);
-const NUDGE_TOOLS = new Set(["schedule_nudge", "cancel_nudge"]);
-const WATCHED_TOOLS = new Set([...MEMORY_TOOLS, ...NUDGE_TOOLS]);
+import { meQuery } from "../../queries.ts";
 
 export const Route = createFileRoute("/$assistant/$room")({ component: Room });
 
-/** `CLOSE.unauthorized` in `@nudge/server`'s protocol: the token the tab has no longer works. */
+/** `CLOSE.unauthorized` in the protocol: the token the tab has no longer works. */
 const UNAUTHORIZED = 4401;
+
+/** The room's view, for the parts deep in the chat that need it, such as approval cards. */
+const ViewContext = createContext<RoomView | undefined>(undefined);
 
 function Room() {
   const { assistant, room } = Route.useParams();
-  const query = useQuery(roomQuery(assistant, room));
-  const { socket, retrying } = useRoomSocket(assistant, room);
-  const state = useRoomState(socket);
+  const held = useRoom(assistant, room);
+  const connection = useConnection(assistant);
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (state.status === "closed" && state.closeCode === UNAUTHORIZED) {
+    if (connection.kind === "closed" && connection.code === UNAUTHORIZED) {
       forgetToken(assistant);
       void navigate({ to: "/login" });
     }
-  }, [assistant, navigate, state.status, state.closeCode]);
+  }, [assistant, navigate, connection]);
 
-  if (query.isPending) return <p className="text-stone-500">Loading…</p>;
-  if (query.error) return <p className="text-red-700">{query.error.message}</p>;
-  const { room: info, members } = query.data;
+  const view = held?.state.view;
+  if (held?.state.status === "gone")
+    return (
+      <p className="p-4 text-red-700">
+        {held.state.reason === "removed" ? "You were removed from this room." : "No such room."}
+      </p>
+    );
+  if (held === undefined || view === undefined)
+    return (
+      <p className="p-4 text-stone-500">
+        {connection.kind === "closed" ? `Disconnected: ${connection.reason}.` : "Connecting…"}
+      </p>
+    );
 
   return (
-    <div className="flex h-full min-h-0">
-      <aside className="flex w-80 shrink-0 flex-col gap-4 overflow-y-auto border-r border-stone-200 p-4">
-        <div>
-          <h2 className="text-lg font-medium">{info.name}</h2>
-          <p className="text-sm text-stone-600">
-            {members.map((member) => member.displayName).join(", ")}
-          </p>
+    <ViewContext value={view}>
+      <div className="flex h-full min-h-0">
+        <aside className="flex w-80 shrink-0 flex-col gap-4 overflow-y-auto border-r border-stone-200 p-4">
+          <div>
+            <h2 className="text-lg font-medium">{view.room.name}</h2>
+            <p className="text-sm text-stone-600">
+              {view.room.members.map((member) => member.displayName).join(", ")}
+            </p>
+          </div>
+          <Link
+            to="/$assistant/$room/browser"
+            params={{ assistant, room }}
+            className="self-start rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
+          >
+            Browser
+          </Link>
+          <ApprovalsPanel approvals={view.approvals} />
+          <MemoryPanel view={view} />
+          <NudgesPanel view={view} />
+        </aside>
+        <div className="flex min-h-0 flex-1 flex-col p-4">
+          {connection.kind === "waiting" ? (
+            <p className="text-sm text-stone-500">Reconnecting…</p>
+          ) : connection.kind === "closed" ? (
+            <p className="text-sm text-red-700">Disconnected: {connection.reason}.</p>
+          ) : null}
+          <Chat store={held.store} state={held.state} view={view} />
         </div>
-        <Link
-          to="/$assistant/$room/browser"
-          params={{ assistant, room }}
-          className="self-start rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
-        >
-          Browser
-        </Link>
-        <ApprovalsPanel assistant={assistant} room={room} />
-        <MemoryPanel assistant={assistant} room={room} />
-        <NudgesPanel assistant={assistant} room={room} />
-      </aside>
-      <div className="flex min-h-0 flex-1 flex-col p-4">
-        {socket === undefined ? (
-          <p className="text-stone-500">Connecting…</p>
-        ) : state.status === "closed" ? (
-          retrying ? (
-            <p className="text-stone-500">Reconnecting…</p>
-          ) : (
-            <p className="text-red-700">Disconnected{state.error ? `: ${state.error}` : ""}.</p>
-          )
-        ) : (
-          <Chat socket={socket} />
-        )}
       </div>
-    </div>
+    </ViewContext>
   );
 }
 
-function Chat({ socket }: { socket: RoomSocket }) {
+function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view: RoomView }) {
   const { assistant, room } = Route.useParams();
   const me = useQuery(meQuery(assistant)).data?.player.id ?? "";
-  const state = useRoomState(socket);
-  const reader = useMemo(() => new ThreadReader(), [socket]);
-  const earlier = useEarlierHistory(assistant, room, state.view);
-  const thread = useMemo(
-    () => (state.view === undefined ? undefined : reader.read(state.view, me, earlier.entries)),
-    [reader, state.view, me, earlier.entries],
+  const dispatch = useCallback(
+    (message: AppendMessage, lane: Lane) => {
+      const text = appendText(message).trim();
+      if (text === "") return;
+      // A failed send stays in the store's `pending` with its error; the page offers it again.
+      clientFor(assistant)
+        .send(room, text, lane === "steer" ? { whenBusy: "steer" } : {})
+        .catch(() => {});
+    },
+    [assistant, room],
   );
-  const { pending, dispatch } = usePendingSends(socket);
-  const queryClient = useQueryClient();
-  const seenToolCalls = useMemo(() => new Set<string>(), [socket]);
-
-  // The only signal in the browser for "a remember/forget/nudge tool result landed": a completed
-  // tool call in the thread. Refetches the panel it affects instead of rendering from the call.
-  useEffect(() => {
-    if (thread === undefined) return;
-    const done = newlyDoneToolCalls(thread.messages, WATCHED_TOOLS, seenToolCalls);
-    if (done.length === 0) return;
-    for (const call of done) seenToolCalls.add(call.toolCallId);
-    if (done.some((call) => MEMORY_TOOLS.has(call.toolName)))
-      void queryClient.invalidateQueries({ queryKey: [assistant, "rooms", room, "memory"] });
-    if (done.some((call) => NUDGE_TOOLS.has(call.toolName)))
-      void queryClient.invalidateQueries({ queryKey: [assistant, "nudges"] });
-  }, [thread, seenToolCalls, queryClient, assistant, room]);
-
-  // A tool that asked for approval, or an approval that ended, changes the room's approvals.
-  const approvalSignal = useMemo(() => approvalCount(thread?.messages ?? []), [thread]);
-  useEffect(() => {
-    void queryClient.invalidateQueries({ queryKey: [assistant, "rooms", room, "approvals"] });
-  }, [approvalSignal, queryClient, assistant, room]);
+  const convertMessage = useCallback(
+    (item: RoomView["timeline"][number]) => toThreadMessageLike(item, me),
+    [me],
+  );
 
   const runtime = useExternalStoreRuntime({
-    messages: thread?.messages ?? [],
-    convertMessage: toThreadMessageLike,
-    isRunning: thread?.isRunning ?? false,
-    hasEarlier: earlier.hasEarlier,
-    onLoadEarlier: earlier.loadEarlier,
+    messages: state.timeline,
+    convertMessage,
+    isRunning: view.live.running,
+    hasEarlier: state.canLoadEarlier,
+    onLoadEarlier: () => store.loadEarlier(),
     onNew: async (message) => dispatch(message, message.steer ? "steer" : "queue"),
-    onCancel: async () => socket.abort(),
-    queue: buildQueueAdapter(thread?.queue ?? [], pending, dispatch),
+    onCancel: async () => {
+      await clientFor(assistant).api.abort(room);
+    },
+    queue: buildQueueAdapter(view.queue, state.pending, dispatch),
   });
-
-  if (thread === undefined) return <p className="text-stone-500">Connecting…</p>;
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <div className="flex h-full min-h-0 flex-col gap-3">
-        <StatusLine status={thread.status} />
+        <StatusLine status={view.live.status} />
         <ThreadPrimitive.Viewport className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
           <ThreadPrimitive.LoadEarlier className="self-center text-sm text-stone-500 underline disabled:text-stone-300 disabled:no-underline">
             Load earlier
           </ThreadPrimitive.LoadEarlier>
+          {state.earlierError !== undefined && (
+            <p className="self-center text-sm text-red-700">{state.earlierError}</p>
+          )}
           <ThreadPrimitive.Messages>
             {({ message }) => <MessageRow message={message} />}
           </ThreadPrimitive.Messages>
         </ThreadPrimitive.Viewport>
+        <FailedSends store={store} pending={state.pending} />
         <ComposerPrimitive.Root className="flex shrink-0 flex-col gap-2">
           <ComposerPrimitive.Queue>
             {({ queueItem }) => (
@@ -169,7 +161,7 @@ function Chat({ socket }: { socket: RoomSocket }) {
               placeholder="Message"
               className="flex-1 rounded border border-stone-300 px-2 py-1"
             />
-            {thread.isRunning ? (
+            {view.live.running ? (
               <ComposerPrimitive.Cancel className="rounded border px-3">
                 Stop
               </ComposerPrimitive.Cancel>
@@ -183,27 +175,48 @@ function Chat({ socket }: { socket: RoomSocket }) {
   );
 }
 
-/** Tracks our own sends from the moment they're typed until the server acknowledges them. */
-function usePendingSends(socket: RoomSocket) {
-  const [pending, setPending] = useState<readonly PendingSend[]>([]);
-
-  const dispatch = useCallback(
-    (message: AppendMessage, lane: "queue" | "steer") => {
-      const text = appendText(message).trim();
-      if (text === "") return;
-      const localId = `local:${Math.random().toString(36).slice(2)}`;
-      setPending((current) => [...current, { localId, text, lane }]);
-      const settle = () =>
-        setPending((current) => current.filter((item) => item.localId !== localId));
-      void socket.submit(text, lane === "steer" ? "steer" : undefined).then(settle, settle);
-    },
-    [socket],
+/** Messages the server didn't take, with a way to send each again or let it go. */
+function FailedSends({ store, pending }: { store: RoomStore; pending: readonly PendingMessage[] }) {
+  const { assistant, room } = Route.useParams();
+  const failed = pending.filter((message) => message.error !== undefined);
+  if (failed.length === 0) return null;
+  return (
+    <ul className="flex shrink-0 flex-col gap-1">
+      {failed.map((message) => (
+        <li
+          key={message.requestId}
+          className="flex items-baseline justify-between gap-2 rounded border border-red-200 bg-red-50 px-3 py-1 text-sm"
+        >
+          <span>
+            Not sent: {message.text} <span className="text-red-700">({message.error})</span>
+          </span>
+          <span className="flex shrink-0 gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                void clientFor(assistant)
+                  .resend(room, message.requestId)
+                  .catch(() => {})
+              }
+              className="underline"
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              onClick={() => store.dismiss(message.requestId)}
+              className="text-stone-500 underline"
+            >
+              Dismiss
+            </button>
+          </span>
+        </li>
+      ))}
+    </ul>
   );
-
-  return { pending, dispatch };
 }
 
-function StatusLine({ status }: { status?: RoomStatus }) {
+function StatusLine({ status }: { status?: Status }) {
   if (status === undefined) return null;
   switch (status.kind) {
     case "retrying":
@@ -333,8 +346,7 @@ function ToolCallPart({ toolName, status, result, isError, artifact }: ToolCallM
       </p>
     );
   const approval = (artifact as { approval?: string } | undefined)?.approval;
-  if (typeof approval === "string")
-    return <ApprovalCard assistant={assistant} room={room} id={approval} />;
+  if (typeof approval === "string") return <ApprovalCard id={approval} />;
   return (
     <p className="text-sm text-stone-500">
       {toolName} — {result !== undefined ? (isError ? "failed" : "done") : status.type}
@@ -355,41 +367,19 @@ function statusLabel(status: MessageStatus): string {
   }
 }
 
-/** Tool calls that asked for approval plus approvals that ended: changes when the list does. */
-function approvalCount(messages: readonly ThreadMessage[]): number {
-  let count = 0;
-  for (const message of messages) {
-    if (message.role === "approval") count += 1;
-    if (message.role === "assistant")
-      for (const part of message.parts)
-        if (part.type === "tool-call" && (part.details as { approval?: unknown })?.approval)
-          count += 1;
-  }
-  return count;
-}
-
 /** Approve and Deny for one approval, where the tool asked for it in the chat. */
-function ApprovalCard({ assistant, room, id }: { assistant: string; room: string; id: string }) {
-  const query = useQuery(approvalsQuery(assistant, room));
-  const approval = query.data?.approvals.find((item) => item.id === id);
+function ApprovalCard({ id }: { id: string }) {
+  const approval = useContext(ViewContext)?.approvals.find((item) => item.id === id);
   if (approval === undefined) return <p className="text-sm text-stone-500">Asked for approval</p>;
   return (
     <div className="my-1 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm">
-      <ApprovalRow assistant={assistant} room={room} approval={approval} />
+      <ApprovalRow approval={approval} />
     </div>
   );
 }
 
-function ApprovalRow({
-  assistant,
-  room,
-  approval,
-}: {
-  assistant: string;
-  room: string;
-  approval: Approval;
-}) {
-  const queryClient = useQueryClient();
+function ApprovalRow({ approval }: { approval: Approval }) {
+  const { assistant, room } = Route.useParams();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -397,12 +387,11 @@ function ApprovalRow({
     setBusy(true);
     setError(undefined);
     try {
-      await decideApproval(assistant, room, approval.id, approve);
+      await clientFor(assistant).api.decide(room, approval.id, approve);
     } catch (caught) {
       setError((caught as Error).message);
     } finally {
       setBusy(false);
-      await queryClient.invalidateQueries({ queryKey: [assistant, "rooms", room, "approvals"] });
     }
   }
 
@@ -442,9 +431,8 @@ function ApprovalRow({
 }
 
 /** What waits for someone in the room to approve it; hidden while nothing does. */
-function ApprovalsPanel({ assistant, room }: { assistant: string; room: string }) {
-  const query = useQuery(approvalsQuery(assistant, room));
-  const pending = query.data?.approvals.filter((item) => item.status === "pending") ?? [];
+function ApprovalsPanel({ approvals }: { approvals: readonly Approval[] }) {
+  const pending = approvals.filter((item) => item.status === "pending");
   if (pending.length === 0) return null;
   return (
     <section className="flex flex-col gap-2 rounded border border-amber-300 bg-amber-50 p-3">
@@ -452,21 +440,17 @@ function ApprovalsPanel({ assistant, room }: { assistant: string; room: string }
         Waiting for approval
       </h3>
       {pending.map((approval) => (
-        <ApprovalRow key={approval.id} assistant={assistant} room={room} approval={approval} />
+        <ApprovalRow key={approval.id} approval={approval} />
       ))}
     </section>
   );
 }
 
-function MemoryPanel({ assistant, room }: { assistant: string; room: string }) {
-  const query = useQuery(memoryQuery(assistant, room));
-  const queryClient = useQueryClient();
+function MemoryPanel({ view }: { view: RoomView }) {
+  const { assistant, room } = Route.useParams();
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: [assistant, "rooms", room, "memory"] });
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -475,9 +459,8 @@ function MemoryPanel({ assistant, room }: { assistant: string; room: string }) {
     setBusy(true);
     setError(undefined);
     try {
-      await remember(assistant, room, value);
+      await clientFor(assistant).api.remember(room, value);
       setText("");
-      await invalidate();
     } catch (caught) {
       setError((caught as Error).message);
     } finally {
@@ -486,21 +469,22 @@ function MemoryPanel({ assistant, room }: { assistant: string; room: string }) {
   }
 
   async function onForget(id: string) {
+    setError(undefined);
     try {
-      await forget(assistant, room, id);
-    } finally {
-      await invalidate();
+      await clientFor(assistant).api.forget(room, id);
+    } catch (caught) {
+      setError((caught as Error).message);
     }
   }
 
   return (
     <section className="flex flex-col gap-2 rounded border border-stone-200 bg-white p-3">
       <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">Memory</h3>
-      {query.data?.facts.length === 0 && (
+      {view.memory.length === 0 && (
         <p className="text-sm text-stone-500">Nothing remembered yet.</p>
       )}
       <ul className="flex flex-col gap-1">
-        {query.data?.facts.map((fact) => (
+        {view.memory.map((fact) => (
           <li key={fact.id} className="flex items-baseline justify-between gap-2 text-sm">
             <span>{fact.text}</span>
             <button
@@ -533,28 +517,28 @@ function MemoryPanel({ assistant, room }: { assistant: string; room: string }) {
   );
 }
 
-function NudgesPanel({ assistant, room }: { assistant: string; room: string }) {
-  const query = useQuery(nudgesQuery(assistant));
-  const queryClient = useQueryClient();
-  const nudges = query.data?.nudges.filter((nudge) => nudge.roomId === room) ?? [];
+function NudgesPanel({ view }: { view: RoomView }) {
+  const { assistant } = Route.useParams();
+  const [error, setError] = useState<string>();
 
   async function onCancel(id: string) {
+    setError(undefined);
     try {
-      await cancelNudge(assistant, id);
-    } finally {
-      await queryClient.invalidateQueries({ queryKey: [assistant, "nudges"] });
+      await clientFor(assistant).api.cancelNudge(id);
+    } catch (caught) {
+      setError((caught as Error).message);
     }
   }
 
   // Nudges can only be scheduled from chat, not this panel, so there's nothing to show for an
   // empty list beyond the chat itself already being silent about it.
-  if (nudges.length === 0) return null;
+  if (view.nudges.length === 0) return null;
 
   return (
     <section className="flex flex-col gap-2 rounded border border-stone-200 bg-white p-3">
       <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">Nudges</h3>
       <ul className="flex flex-col gap-1">
-        {nudges.map((nudge) => (
+        {view.nudges.map((nudge) => (
           <li key={nudge.id} className="flex items-baseline justify-between gap-2 text-sm">
             <span>
               {new Date(nudge.fireAt).toLocaleString()} — {nudge.message}
@@ -569,6 +553,7 @@ function NudgesPanel({ assistant, room }: { assistant: string; room: string }) {
           </li>
         ))}
       </ul>
+      {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
     </section>
   );
 }

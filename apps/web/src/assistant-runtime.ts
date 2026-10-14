@@ -5,22 +5,22 @@ import type {
   QueueItemState,
   ThreadMessageLike,
 } from "@assistant-ui/react";
-import type { AssistantPart, QueuedMessage, ThreadMessage } from "./thread.ts";
+import type { Part, PendingMessage, QueuedMessage, TimelineItem } from "@nudge/client";
 
-/** A `ThreadMessage` (from `thread.ts`) as the `ThreadMessageLike` assistant-ui renders. */
-export function toThreadMessageLike(message: ThreadMessage): ThreadMessageLike {
-  switch (message.role) {
+/** A timeline item as the `ThreadMessageLike` assistant-ui renders; `me` is the player's id. */
+export function toThreadMessageLike(item: TimelineItem, me: string): ThreadMessageLike {
+  switch (item.type) {
     case "user":
       return {
-        id: message.id,
+        id: item.id,
         role: "user",
-        content: message.text,
-        ...(message.sentAt === undefined ? {} : { createdAt: new Date(message.sentAt) }),
-        ...(message.author === undefined
+        content: item.text,
+        ...(item.sentAt === undefined ? {} : { createdAt: new Date(item.sentAt) }),
+        ...(item.author === undefined
           ? {}
           : {
               metadata: {
-                custom: { author: message.author.displayName, mine: message.mine },
+                custom: { author: item.author.displayName, mine: item.author.id === me },
               },
             }),
       };
@@ -28,59 +28,57 @@ export function toThreadMessageLike(message: ThreadMessage): ThreadMessageLike {
     // is and its data ride along in `metadata.custom`.
     case "nudge":
       return {
-        id: message.id,
+        id: item.id,
         role: "system",
-        content: [{ type: "text", text: message.text }],
-        createdAt: new Date(message.firedAt),
-        metadata: { custom: { kind: "nudge", text: message.text } },
+        content: [{ type: "text", text: item.text }],
+        createdAt: new Date(item.firedAt),
+        metadata: { custom: { kind: "nudge", text: item.text } },
       };
     case "approval":
       return {
-        id: message.id,
+        id: item.id,
         role: "system",
-        content: [
-          { type: "text", text: `${message.approvalId} ${message.status}: ${message.summary}` },
-        ],
+        content: [{ type: "text", text: `${item.approvalId} ${item.status}: ${item.summary}` }],
         metadata: {
           custom: {
             kind: "approval",
-            id: message.approvalId,
-            summary: message.summary,
-            status: message.status,
-            ...(message.decidedBy === undefined ? {} : { decidedBy: message.decidedBy }),
+            id: item.approvalId,
+            summary: item.summary,
+            status: item.status,
+            ...(item.decidedBy === undefined ? {} : { decidedBy: item.decidedBy }),
           },
         },
       };
     case "marker":
       return {
-        id: message.id,
+        id: item.id,
         role: "system",
-        content: [{ type: "text", text: message.kind }],
-        metadata: { custom: { kind: "marker", marker: message.kind } },
+        content: [{ type: "text", text: item.kind }],
+        metadata: { custom: { kind: "marker", marker: item.kind } },
       };
-    case "assistant":
+    case "answer":
       return {
-        id: message.id,
+        id: item.id,
         role: "assistant",
-        // The tool-call parts' `args` is JSON from the model; cast past the index-signature
-        // mismatch between our `unknown`-valued `Record` and assistant-ui's `ReadonlyJSONObject`.
-        content: message.parts.map(toPart) as ThreadMessageLike["content"],
-        status: toStatus(message),
+        // The tool parts' `args` is JSON from the model; cast past the index-signature mismatch
+        // between our `unknown`-valued `Record` and assistant-ui's `ReadonlyJSONObject`.
+        content: item.parts.map(toPart) as ThreadMessageLike["content"],
+        status: toStatus(item),
       };
   }
 }
 
-function toPart(part: AssistantPart) {
+function toPart(part: Part) {
   switch (part.type) {
     case "text":
       return { type: "text" as const, text: part.text };
     case "reasoning":
       return { type: "reasoning" as const, text: part.text };
-    case "tool-call":
+    case "tool":
       return {
         type: "tool-call" as const,
-        toolCallId: part.toolCallId,
-        toolName: part.toolName,
+        toolCallId: part.callId,
+        toolName: part.name,
         args: part.args,
         argsText: JSON.stringify(part.args),
         ...(part.result === undefined ? {} : { result: part.result }),
@@ -90,8 +88,8 @@ function toPart(part: AssistantPart) {
   }
 }
 
-function toStatus(message: Extract<ThreadMessage, { role: "assistant" }>): MessageStatus {
-  switch (message.status) {
+function toStatus(answer: Extract<TimelineItem, { type: "answer" }>): MessageStatus {
+  switch (answer.status) {
     case "running":
       return { type: "running" };
     case "done":
@@ -102,7 +100,7 @@ function toStatus(message: Extract<ThreadMessage, { role: "assistant" }>): Messa
       return {
         type: "incomplete",
         reason: "error",
-        ...(message.error === undefined ? {} : { error: message.error }),
+        ...(answer.error === undefined ? {} : { error: answer.error }),
       };
   }
 }
@@ -116,30 +114,26 @@ export function appendText(message: AppendMessage): string {
   return message.content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("");
 }
 
-/** A send not yet acknowledged by the server: no submission id, so no real queue item to match. */
-export type PendingSend = {
-  readonly localId: string;
-  readonly text: string;
-  readonly lane: "queue" | "steer";
-};
+export type Lane = "queue" | "steer";
 
 /**
- * The composer's queue, straight from the room's real `Thread.queue` (every player's pending
- * sends), plus our own sends still in flight to the server. `move`/`edit`/`remove` are no-ops: the
- * server has no way yet to change or withdraw one item of an already-queued submission.
+ * The composer's queue: the room's queue (every player's waiting messages) plus this client's
+ * sends the view doesn't show yet. Failed sends are left out; the room page offers them again.
+ * `move`/`edit`/`remove` are no-ops: the server can't change or withdraw one queued message.
  */
 export function buildQueueAdapter(
   queue: readonly QueuedMessage[],
-  pending: readonly PendingSend[],
-  dispatch: (message: AppendMessage, lane: "queue" | "steer") => void,
+  pending: readonly PendingMessage[],
+  dispatch: (message: AppendMessage, lane: Lane) => void,
 ): ExternalThreadQueueAdapter {
-  const items = (lane: "queue" | "steer") => [
+  const items = (lane: Lane) => [
     ...queue
       .filter((item) => (item.mode === "steer" ? "steer" : "queue") === lane)
       .map((item) => queueItem(item.id, item.text)),
     ...pending
-      .filter((item) => item.lane === lane)
-      .map((item) => queueItem(item.localId, item.text)),
+      .filter((item) => item.error === undefined)
+      .filter((item) => (item.whenBusy === "steer" ? "steer" : "queue") === lane)
+      .map((item) => queueItem(item.requestId, item.text)),
   ];
   return {
     items: items("queue"),

@@ -1,38 +1,36 @@
 import { type AppendMessage, fromThreadMessageLike } from "@assistant-ui/react";
 import { describe, expect, it } from "vitest";
 import { appendText, buildQueueAdapter, toThreadMessageLike } from "../src/assistant-runtime.ts";
-import type { QueuedMessage, ThreadMessage } from "../src/thread.ts";
+import type { QueuedMessage, TimelineItem } from "@nudge/client";
 
 describe("toThreadMessageLike", () => {
   it("names the author, and marks my own messages", () => {
-    const mine: ThreadMessage = {
-      role: "user",
-      id: "entry:1",
+    const message: TimelineItem = {
+      type: "user",
+      id: "user:1",
       text: "hi",
-      author: { playerId: "ann", displayName: "Ann" },
-      mine: true,
+      author: { id: "ann", displayName: "Ann" },
       sentAt: 1000,
     };
-    expect(toThreadMessageLike(mine)).toMatchObject({
+    expect(toThreadMessageLike(message, "ann")).toMatchObject({
       role: "user",
       content: "hi",
       metadata: { custom: { author: "Ann", mine: true } },
     });
-    const someoneElse: ThreadMessage = { ...mine, mine: false };
-    expect(toThreadMessageLike(someoneElse)).toMatchObject({
+    expect(toThreadMessageLike(message, "bo")).toMatchObject({
       metadata: { custom: { author: "Ann", mine: false } },
     });
   });
 
   // assistant-ui's own conversion runs too: it refuses system messages that aren't one text part.
-  const accepted = (message: ThreadMessage) =>
-    fromThreadMessageLike(toThreadMessageLike(message), message.id, {
+  const accepted = (item: TimelineItem) =>
+    fromThreadMessageLike(toThreadMessageLike(item, "ann"), item.id, {
       type: "complete",
       reason: "unknown",
     });
 
   it("carries a fired nudge as a system line with its kind in metadata", () => {
-    const nudge: ThreadMessage = { role: "nudge", id: "entry:2", text: "Kettle", firedAt: 2000 };
+    const nudge: TimelineItem = { type: "nudge", id: "nudge:2", text: "Kettle", firedAt: 2000 };
     expect(accepted(nudge)).toMatchObject({
       role: "system",
       content: [{ type: "text", text: "Kettle" }],
@@ -42,7 +40,7 @@ describe("toThreadMessageLike", () => {
   });
 
   it("carries a marker as a system line with its kind in metadata", () => {
-    const marker: ThreadMessage = { role: "marker", id: "entry:3", kind: "reset" };
+    const marker: TimelineItem = { type: "marker", id: "marker:3", kind: "reset" };
     expect(accepted(marker)).toMatchObject({
       role: "system",
       metadata: { custom: { kind: "marker", marker: "reset" } },
@@ -50,9 +48,9 @@ describe("toThreadMessageLike", () => {
   });
 
   it("carries how an approval ended as a system line", () => {
-    const approval: ThreadMessage = {
-      role: "approval",
-      id: "entry:4",
+    const approval: TimelineItem = {
+      type: "approval",
+      id: "approval:4",
       approvalId: "a1",
       summary: "Send a mail",
       status: "done",
@@ -73,16 +71,16 @@ describe("toThreadMessageLike", () => {
   });
 
   it("maps assistant parts and status, including a failed answer's error", () => {
-    const answer: ThreadMessage = {
-      role: "assistant",
+    const answer: TimelineItem = {
+      type: "answer",
       id: "answer:1",
       parts: [
         { type: "reasoning", text: "thinking" },
         { type: "text", text: "hello" },
         {
-          type: "tool-call",
-          toolCallId: "c1",
-          toolName: "remember",
+          type: "tool",
+          callId: "c1",
+          name: "remember",
           args: { fact: "x" },
           status: "done",
           result: "ok",
@@ -93,7 +91,7 @@ describe("toThreadMessageLike", () => {
       status: "failed",
       error: "Overloaded",
     };
-    expect(toThreadMessageLike(answer)).toMatchObject({
+    expect(toThreadMessageLike(answer, "ann")).toMatchObject({
       role: "assistant",
       content: [
         { type: "reasoning", text: "thinking" },
@@ -112,12 +110,12 @@ describe("toThreadMessageLike", () => {
   });
 
   it("maps a running answer to a running status, and a stopped one to incomplete/cancelled", () => {
-    const base: ThreadMessage = { role: "assistant", id: "a", parts: [], status: "running" };
-    expect(toThreadMessageLike(base)).toMatchObject({ status: { type: "running" } });
-    expect(toThreadMessageLike({ ...base, status: "stopped" })).toMatchObject({
+    const base: TimelineItem = { type: "answer", id: "a", parts: [], status: "running" };
+    expect(toThreadMessageLike(base, "ann")).toMatchObject({ status: { type: "running" } });
+    expect(toThreadMessageLike({ ...base, status: "stopped" }, "ann")).toMatchObject({
       status: { type: "incomplete", reason: "cancelled" },
     });
-    expect(toThreadMessageLike({ ...base, status: "done" })).toMatchObject({
+    expect(toThreadMessageLike({ ...base, status: "done" }, "ann")).toMatchObject({
       status: { type: "complete", reason: "stop" },
     });
   });
@@ -140,22 +138,26 @@ describe("buildQueueAdapter", () => {
 
   it("sorts the real queue into lanes by mode", () => {
     const queue: QueuedMessage[] = [
-      { id: 1, mode: "followUp", text: "a", mine: false, nudge: false },
-      { id: 2, mode: "steer", text: "b", mine: false, nudge: false },
+      { id: 1, mode: "followUp", text: "a", nudge: false },
+      { id: 2, mode: "steer", text: "b", nudge: false },
     ];
     const adapter = buildQueueAdapter(queue, [], dispatch);
     expect(adapter.items).toMatchObject([{ id: "1", prompt: "a" }]);
     expect(adapter.steerItems).toMatchObject([{ id: "2", prompt: "b" }]);
   });
 
-  it("adds a pending send not yet in the real queue", () => {
+  it("adds pending sends not yet in the view, by lane, but not failed ones", () => {
     const adapter = buildQueueAdapter(
       [],
-      [{ localId: "local:1", text: "c", lane: "queue" }],
+      [
+        { requestId: "r1", text: "c" },
+        { requestId: "r2", text: "d", whenBusy: "steer" },
+        { requestId: "r3", text: "e", error: "Offline" },
+      ],
       dispatch,
     );
-    expect(adapter.items).toMatchObject([{ id: "local:1", prompt: "c" }]);
-    expect(adapter.steerItems).toEqual([]);
+    expect(adapter.items).toMatchObject([{ id: "r1", prompt: "c" }]);
+    expect(adapter.steerItems).toMatchObject([{ id: "r2", prompt: "d" }]);
   });
 
   it("dispatches enqueue and steer to the given lane", () => {

@@ -1,12 +1,11 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { RoomKind } from "@nudge/client";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
-import { createSharedRoom, type MeResponse, openPersonalRoom } from "../../api.ts";
-import { meQuery } from "../../queries.ts";
+import { clientFor, useHome } from "../../api.ts";
 
 export const Route = createFileRoute("/$assistant/")({ component: Rooms });
 
-const KIND_LABEL: Record<MeResponse["rooms"][number]["kind"], string> = {
+const KIND_LABEL: Record<RoomKind, string> = {
   lobby: "Everyone",
   personal: "Personal",
   shared: "Shared",
@@ -14,8 +13,7 @@ const KIND_LABEL: Record<MeResponse["rooms"][number]["kind"], string> = {
 
 function Rooms() {
   const { assistant } = Route.useParams();
-  const me = useQuery(meQuery(assistant));
-  const queryClient = useQueryClient();
+  const home = useHome(assistant);
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [members, setMembers] = useState("");
@@ -27,7 +25,6 @@ function Rooms() {
     setError(undefined);
     try {
       const room = await open();
-      await queryClient.invalidateQueries({ queryKey: [assistant, "me"] });
       await navigate({ to: "/$assistant/$room", params: { assistant, room: room.id } });
       return true;
     } catch (caught) {
@@ -45,28 +42,41 @@ function Rooms() {
       .split(",")
       .map((id) => id.trim())
       .filter((id) => id !== "");
-    if (await enter(() => createSharedRoom(assistant, name.trim(), ids))) {
+    if (
+      await enter(() =>
+        clientFor(assistant).api.createRoom({
+          name: name.trim(),
+          ...(ids.length === 0 ? {} : { members: ids }),
+        }),
+      )
+    ) {
       setName("");
       setMembers("");
     }
   }
 
-  if (me.isPending) return <p className="p-4 text-stone-500">Loading…</p>;
-  if (!me.data) return null;
+  const view = home?.view;
+  if (view === undefined) return <p className="p-4 text-stone-500">Loading…</p>;
   return (
     <section className="mx-auto flex max-w-2xl flex-col gap-4 p-4">
       <div className="flex flex-col gap-2">
         <h2 className="text-sm font-medium tracking-wide text-stone-500 uppercase">Rooms</h2>
         <ul className="divide-y divide-stone-200 rounded border border-stone-200 bg-white">
-          {me.data.rooms.map((room) => (
+          {view.rooms.map(({ room, running, pendingApprovals }) => (
             <li key={room.id}>
               <Link
                 to="/$assistant/$room"
                 params={{ assistant, room: room.id }}
-                className="flex items-baseline justify-between px-4 py-3 hover:bg-stone-100"
+                className="flex items-baseline justify-between gap-2 px-4 py-3 hover:bg-stone-100"
               >
                 <span>{room.name}</span>
-                <span className="text-sm text-stone-500">{KIND_LABEL[room.kind]}</span>
+                <span className="flex items-baseline gap-3 text-sm text-stone-500">
+                  {pendingApprovals > 0 && (
+                    <span className="text-amber-700">{pendingApprovals} to approve</span>
+                  )}
+                  {running && <span>answering…</span>}
+                  <span>{KIND_LABEL[room.kind]}</span>
+                </span>
               </Link>
             </li>
           ))}
@@ -75,7 +85,7 @@ function Rooms() {
       <div className="flex flex-col gap-3">
         <button
           type="button"
-          onClick={() => void enter(() => openPersonalRoom(assistant))}
+          onClick={() => void enter(() => clientFor(assistant).api.personalRoom())}
           disabled={busy}
           className="self-start rounded border px-3 py-1 text-sm disabled:opacity-50"
         >

@@ -13,7 +13,8 @@
     "noEmit": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    "customConditions": ["@nudge/source"]
   },
   "include": ["src", "test"]
 }

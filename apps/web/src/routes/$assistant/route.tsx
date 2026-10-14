@@ -1,8 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, Outlet, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { ApiError, forgetToken, tokenFor } from "../../api.ts";
-import { meQuery } from "../../queries.ts";
+import { ApiError, forgetToken, tokenFor, useConnection } from "../../api.ts";
+import { assistantsQuery, meQuery } from "../../queries.ts";
 
 export const Route = createFileRoute("/$assistant")({
   beforeLoad: ({ params }) => {
@@ -11,9 +11,14 @@ export const Route = createFileRoute("/$assistant")({
   component: Assistant,
 });
 
+/** `CLOSE.unauthorized` in the protocol: the token was revoked, or the database is new. */
+const UNAUTHORIZED = 4401;
+
 function Assistant() {
   const { assistant } = Route.useParams();
   const me = useQuery(meQuery(assistant));
+  const assistants = useQuery(assistantsQuery());
+  const connection = useConnection(assistant);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -27,12 +32,16 @@ function Assistant() {
   useEffect(() => {
     if (me.error instanceof ApiError && me.error.status === 401) signOut();
   }, [me.error]);
+  useEffect(() => {
+    if (connection.kind === "closed" && connection.code === UNAUTHORIZED) signOut();
+  }, [connection]);
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
       <header className="flex shrink-0 items-baseline justify-between gap-4 border-b border-stone-200 px-4 py-3">
         <Link to="/$assistant" params={{ assistant }} className="text-lg font-semibold">
-          {me.data?.assistant.displayName ?? assistant}
+          {assistants.data?.assistants.find((item) => item.name === assistant)?.displayName ??
+            assistant}
         </Link>
         <div className="flex items-baseline gap-3 text-sm text-stone-600">
           {me.data && <span>{me.data.player.displayName}</span>}

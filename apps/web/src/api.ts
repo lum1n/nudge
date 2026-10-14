@@ -1,40 +1,16 @@
-import type {
-  ApprovalsResponse,
-  AssistantsResponse,
-  ErrorResponse,
-  MeResponse,
-  MemoryResponse,
-  NudgesResponse,
-  RoomResponse,
-  TranscriptResponse,
-} from "@nudge/server";
+import {
+  Api,
+  ApiError,
+  type HomeStore,
+  listAssistants,
+  NudgeClient,
+  type RoomState,
+  type RoomStore,
+  type TokenStore,
+} from "@nudge/client";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
-export type {
-  ApprovalsResponse,
-  AssistantsResponse,
-  MeResponse,
-  MemoryResponse,
-  NudgesResponse,
-  RoomResponse,
-  TranscriptResponse,
-};
-
-// `Room`, `Fact` and `ScheduledNudge` aren't re-exported by name from `@nudge/server`: read them
-// off a response type that already has one, same as `$assistant/index.tsx` does for `RoomKind`.
-export type Room = RoomResponse["room"];
-export type Fact = MemoryResponse["facts"][number];
-export type ScheduledNudge = NudgesResponse["nudges"][number];
-export type Approval = ApprovalsResponse["approvals"][number];
-
-/** A non-2xx answer from the Nudge API. */
-export class ApiError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
+export { ApiError, listAssistants };
 
 // Tokens live for the browser tab only: one per assistant, keyed by the assistant's URL name.
 const TOKENS = "nudge.tokens";
@@ -56,113 +32,139 @@ export function signedIn(): string[] {
   return Object.keys(readTokens());
 }
 
-export function saveToken(assistant: string, token: string): void {
+function saveToken(assistant: string, token: string): void {
   sessionStorage.setItem(TOKENS, JSON.stringify({ ...readTokens(), [assistant]: token }));
 }
 
+/**
+ * Forgets the assistant's token and closes its client. The client stays, so pages still mounted
+ * don't make a new one (which, without a token, would close with 4401 and sign out again).
+ */
 export function forgetToken(assistant: string): void {
   const { [assistant]: _, ...rest } = readTokens();
   sessionStorage.setItem(TOKENS, JSON.stringify(rest));
+  clients.get(assistant)?.close();
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(path, init);
-  if (!response.ok) {
-    const body = (await response.json().catch(() => undefined)) as ErrorResponse | undefined;
-    throw new ApiError(response.status, body?.error ?? response.statusText);
+/** Keeps a token, and connects the assistant's client with it. */
+function signedInWith(assistant: string, token: string): void {
+  saveToken(assistant, token);
+  clients.get(assistant)?.open();
+}
+
+function tokenStore(assistant: string): TokenStore {
+  return {
+    get: () => tokenFor(assistant),
+    set: (token) => (token === undefined ? forgetToken(assistant) : signedInWith(assistant, token)),
+  };
+}
+
+const CLIENT = { name: "nudge-web", version: "0.0.0", platform: "web" } as const;
+
+const clients = new Map<string, NudgeClient>();
+
+/** The tab's client of `assistant`, its socket opened on first use; `""` is the page's origin. */
+export function clientFor(assistant: string): NudgeClient {
+  let client = clients.get(assistant);
+  if (client === undefined) {
+    client = new NudgeClient({
+      server: "",
+      assistant,
+      tokens: tokenStore(assistant),
+      client: CLIENT,
+    });
+    clients.set(assistant, client);
+    client.open();
   }
-  return (response.status === 204 ? undefined : await response.json()) as T;
+  return client;
 }
 
-/** The assistants this server hosts; needs no token. */
-export function listAssistants(): Promise<AssistantsResponse> {
-  return request("/a");
+/** The connection's status, re-rendering on every change. */
+export function useConnection(assistant: string) {
+  const { connection } = clientFor(assistant);
+  return useSyncExternalStore(connection.subscribe, connection.getStatus);
 }
 
-/** Calls `/a/<assistant><path>` with the tab's token, or `token` when given. */
-export function api<T>(
-  assistant: string,
-  path: string,
-  init: RequestInit & { readonly token?: string } = {},
-): Promise<T> {
-  const { token = tokenFor(assistant), ...rest } = init;
-  if (token === undefined) return Promise.reject(new ApiError(401, "Not signed in"));
-  const headers = new Headers(rest.headers);
-  headers.set("authorization", `Bearer ${token}`);
-  if (rest.body !== undefined) headers.set("content-type", "application/json");
-  return request(`/a/${encodeURIComponent(assistant)}${path}`, { ...rest, headers });
+/** Holds the player's home view while mounted; undefined until the lease is taken. */
+export function useHome(assistant: string): HomeState | undefined {
+  return useStoreState(useLease(assistant, "home", (client) => client.home()));
 }
 
-/** A page of a room's transcript, newest first; `before` continues from a page's `next`. */
-export function transcript(
+/** Holds a room's view while mounted; undefined until the lease is taken. */
+export function useRoom(
   assistant: string,
   room: string,
-  before?: string,
-): Promise<TranscriptResponse> {
-  const query = before === undefined ? "" : `?before=${encodeURIComponent(before)}`;
-  return api(assistant, `/rooms/${encodeURIComponent(room)}/transcript${query}`);
+): { store: RoomStore; state: RoomState } | undefined {
+  const store = useLease(assistant, `room:${room}`, (client) => client.room(room));
+  const state = useStoreState(store);
+  return store === undefined || state === undefined ? undefined : { store, state };
 }
 
-export function createSharedRoom(
+type HomeState = ReturnType<HomeStore["getState"]>;
+
+function useLease<S>(
   assistant: string,
-  name: string,
-  members: readonly string[] = [],
-): Promise<Room> {
-  return api(assistant, "/rooms", {
-    method: "POST",
-    body: JSON.stringify({ name, ...(members.length === 0 ? {} : { members }) }),
-  });
+  target: string,
+  take: (client: NudgeClient) => { store: S; release(): void },
+): S | undefined {
+  const [store, setStore] = useState<S>();
+  useEffect(() => {
+    const lease = take(clientFor(assistant));
+    setStore(lease.store);
+    return () => {
+      lease.release();
+      setStore(undefined);
+    };
+  }, [assistant, target]);
+  return store;
 }
 
-/** Creates the caller's own room with this assistant, or returns it if it already exists. */
-export function openPersonalRoom(assistant: string): Promise<Room> {
-  return api(assistant, "/rooms/personal", { method: "POST" });
-}
+const noStore = { subscribe: () => () => {}, getState: () => undefined };
 
-export function remember(assistant: string, room: string, text: string): Promise<Fact> {
-  return api(assistant, `/rooms/${encodeURIComponent(room)}/memory`, {
-    method: "POST",
-    body: JSON.stringify({ text }),
-  });
-}
-
-export function forget(assistant: string, room: string, id: string): Promise<void> {
-  return api(assistant, `/rooms/${encodeURIComponent(room)}/memory/${encodeURIComponent(id)}`, {
-    method: "DELETE",
-  });
-}
-
-/** Approves or denies an approval; an approved action has run when this resolves. */
-export function decideApproval(
-  assistant: string,
-  room: string,
-  id: string,
-  approve: boolean,
-): Promise<Approval> {
-  return api(assistant, `/rooms/${encodeURIComponent(room)}/approvals/${encodeURIComponent(id)}`, {
-    method: "POST",
-    body: JSON.stringify({ approve }),
-  });
-}
-
-export function cancelNudge(assistant: string, id: string): Promise<void> {
-  return api(assistant, `/nudges/${encodeURIComponent(id)}`, { method: "DELETE" });
+function useStoreState<T>(
+  store: { subscribe(listener: () => void): () => void; getState(): T } | undefined,
+): T | undefined {
+  const { subscribe, getState } = store ?? noStore;
+  return useSyncExternalStore(subscribe, getState);
 }
 
 /**
  * Finds the assistant a token belongs to by asking each one who the token is, and keeps it.
  * Undefined when no assistant knows it.
  */
-export async function signIn(token: string): Promise<MeResponse | undefined> {
-  const { assistants } = await listAssistants();
+export async function signIn(token: string): Promise<string | undefined> {
+  return firstAssistant(async (assistant) => {
+    await new Api({ server: "", assistant, tokens: fixedToken(token) }).me();
+    signedInWith(assistant, token);
+  });
+}
+
+/** Trades a pairing code from `nudge pair` for a token of whichever assistant made it. */
+export async function pair(code: string): Promise<string | undefined> {
+  return firstAssistant(async (assistant) => {
+    await new Api({ server: "", assistant, tokens: tokenStore(assistant) }).pair(code, {
+      name: CLIENT.name,
+      platform: CLIENT.platform,
+    });
+  });
+}
+
+/** Runs `attempt` for each assistant until one doesn't answer 401, and names that one. */
+async function firstAssistant(
+  attempt: (assistant: string) => Promise<void>,
+): Promise<string | undefined> {
+  const { assistants } = await listAssistants("");
   for (const { name } of assistants) {
     try {
-      const me = await api<MeResponse>(name, "/me", { token });
-      saveToken(name, token);
-      return me;
+      await attempt(name);
+      return name;
     } catch (error) {
       if (!(error instanceof ApiError) || error.status !== 401) throw error;
     }
   }
   return undefined;
+}
+
+function fixedToken(token: string): TokenStore {
+  return { get: () => token, set: () => {} };
 }

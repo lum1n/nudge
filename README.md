@@ -80,9 +80,9 @@ Native apps use [protocol v1](docs/protocol/v1.md) under `/v1`: one WebSocket fo
 
 ## Web UI
 
-Sign in at `/login` with a token, or the link `nudge invite` prints (`/login#token=…`, which never reaches the server or its logs). The token lives in that browser tab's `sessionStorage` only; opening another tab or browser needs its own sign-in.
+Sign in at `/login` with a token, the link `nudge invite` prints (`/login#token=…`, which never reaches the server or its logs), or a pairing code from `nudge pair`. The token lives in that browser tab's `sessionStorage` only; opening another tab or browser needs its own sign-in.
 
-A room page shows the same conversation the CLI and the API see, live, for everyone in it: each message with who sent it, the assistant's answer streaming in with its tool calls, and fired nudges, rendered as markdown. Send a follow-up or steer while it's still answering — it queues the same way a second CLI client's would — or stop it; "Load earlier" fetches older history past what first loaded. A room's Memory and Nudges panels list, add, forget and cancel the same things `/memory` and `/nudges` do in the terminal. "Open my room" and "New shared room" on the room list open the same rooms `nudge chat me` and `nudge room` do.
+A room page shows the same conversation the CLI and the API see, live, for everyone in it: each message with who sent it, the assistant's answer streaming in with its tool calls, and fired nudges, rendered as markdown. Send a follow-up or steer while it's still answering — it queues the same way a second CLI client's would — or stop it; "Load earlier" fetches older history past what first loaded. A room's Memory, Nudges and approval panels list, add, forget, cancel and decide the same things `/memory`, `/nudges` and `/approve` do in the terminal, and update live whoever made the change. The web UI talks [protocol v1](docs/protocol/v1.md) through `@nudge/client`, like the native apps will. "Open my room" and "New shared room" on the room list open the same rooms `nudge chat me` and `nudge room` do.
 
 No mobile app or notifications: a fired nudge only shows up in a tab that already has that room open.
 
@@ -190,4 +190,4 @@ pnpm check   # typecheck, lint, test
 pnpm build   # every package, and the web UI into apps/web/dist
 ```
 
-For the web UI with hot reload, run `nudge serve` and then `pnpm -C apps/web dev`: Vite proxies `/a` (HTTP and WebSocket) to `127.0.0.1:8787`, or to `$NUDGE_SERVER`.
+For the web UI with hot reload, run `nudge serve` and then `pnpm -C apps/web dev`: Vite proxies `/v1` and `/a` (HTTP and WebSocket) to `127.0.0.1:8787`, or to `$NUDGE_SERVER`.
