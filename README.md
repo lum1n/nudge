@@ -18,6 +18,7 @@ An extendable, multiplayer personal assistant that keeps personal data away from
 - `@nudge/web`: the web UI (`apps/web`), served by `nudge serve`.
 - `@nudge/ext-hello`: a sample extension (`extensions/hello`).
 - `@nudge/ext-browser`: lets the assistant use the web (`extensions/browser`).
+- `@nudge/ext-mcp`: gives the assistant the tools of MCP servers (`extensions/mcp`).
 
 ## Use
 
@@ -144,6 +145,35 @@ An entry's `rooms` lists the kinds of room it is on in by default (`"lobby"`, `"
 - `nudge doctor` also checks the browser model's credentials.
 - Install its browser once with `pnpm -C extensions/browser exec patchright install chromium`.
 - `pnpm -C extensions/browser eval -- --model anthropic/claude-haiku-5-5,openai/gpt-5-mini` runs a set of everyday tasks against each model and writes results to `extensions/browser/.eval/`. Keys come only from your environment.
+
+### MCP servers
+
+`extensions/mcp` gives the assistant the tools of [MCP](https://modelcontextprotocol.io) servers, started as programs or reached over HTTP:
+
+```json
+{
+  "from": "./extensions/mcp",
+  "settings": {
+    "servers": {
+      "github": {
+        "command": "github-mcp-server",
+        "args": ["stdio"],
+        "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}" }
+      },
+      "docs": {
+        "url": "https://mcp.example.com/mcp",
+        "headers": { "Authorization": "Bearer ${DOCS_KEY}" }
+      }
+    }
+  }
+}
+```
+
+- Each tool becomes `mcp__<server>__<tool>`. They are not offered to the model up front: it finds the ones a task needs with `tool_search`, so a server with many tools doesn't fill the prompt.
+- Calls to tools the server doesn't mark read-only wait for someone in the room to approve them, like the connectors' writes. Set a server's `approval` to `"always"` or `"never"` to change that, and `tools` to offer only some of its tools.
+- `${NAME}` in `env` and `headers` comes from Nudge's environment, so keys stay out of `nudge.json`. A started program gets only those variables plus `PATH`, `HOME` and the locale, not Nudge's own keys.
+- Results reach the model through the same redaction as everything else. Images in results are left out unless a server sets `"images": true`, since redaction only reads text.
+- The tool lists are read when the extension is installed; `nudge reload` reads them again. A server that can't be reached then is left out and reported. Connections close after `idleMinutes` (default 5) unused, and on reload and shutdown.
 
 ### Write an extension
 

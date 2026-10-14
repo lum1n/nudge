@@ -62,7 +62,8 @@ export async function checkExtensions(
   };
   const checked: Awaited<ReturnType<typeof checkExtensions>> = [];
   for (const input of await loadExtensions(entries)) {
-    const { extension, version, models } = await setUpExtension(input, host);
+    const { extension, version, models, close } = await setUpExtension(input, host);
+    await close?.();
     checked.push({ name: extension.name, ...(version === undefined ? {} : { version }), models });
   }
   return checked;
