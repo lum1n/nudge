@@ -1,0 +1,30 @@
+{
+  "name": "@nudge/ext-calendar",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Read CalDAV calendars, and add or remove events once someone in the room approves",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "@nudge/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@nudge/bridge": "workspace:*",
+    "@nudge/core": "workspace:*",
+    "ical.js": "2.2.1",
+    "tsdav": "2.4.0"
+  },
+  "devDependencies": {
+    "@earendil-works/chord": "1.2.0",
+    "@earendil-works/pi-ai": "1.2.0"
+  }
+}

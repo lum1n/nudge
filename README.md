@@ -236,6 +236,13 @@ An entry's `rooms` lists the kinds of room it is on in by default (`"lobby"`, `"
 - Mail goes to the model like any tool output: addresses, phone numbers and the like as placeholders. Other names in a message are not detected.
 - Some servers don't keep a copy of sent mail in Sent by themselves.
 
+### Calendar
+
+`extensions/calendar` reads CalDAV calendars (Fastmail, iCloud, Nextcloud, Radicale, Google through its CalDAV address) and adds or removes events once someone approves. Accounts are set like mail's: `{ "id": "family", "url": "https://caldav.example.org", "user": "…", "password": "${FAMILY_CALDAV_PASSWORD}", "calendars": ["Family"], "rooms": ["family"] }`. Leave out `calendars` to use all of them.
+
+- `calendar_events` lists a span of days, recurring events expanded and moved occurrences shown where they moved, in the assistant's time zone. `calendar_add` (a day without a time makes an all-day event) and `calendar_remove` (a whole series for a recurring event) wait for approval.
+- For "remind us the evening before", the model schedules a nudge, say daily at 18:00, that looks at the next day's events.
+
 ### Watches
 
 `extensions/watches` lets a room ask the assistant to keep an eye on something: "tell me when a 2027 GLC under 800 000 kr shows up on Finn", "when tomorrow's power price goes above 2 kr". The model adds a watch with `add_watch` (what to check, and how often), and `list_watches` and `remove_watch` show and stop them.
