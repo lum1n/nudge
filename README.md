@@ -209,6 +209,10 @@ An entry's `rooms` lists the kinds of room it is on in by default (`"lobby"`, `"
 - **What comes back:** the room's answers, also those to fired nudges and to approvals, wherever they were asked. Approvals come with Approve and Deny buttons, which only members of the room can use. `/approve <id>`, `/deny <id>` and `/stop` work too.
 - **Privacy:** what goes through the bot is readable by Telegram. Placeholders protect what the model sees, not what the chat service sees. Turn the extension off in rooms that shouldn't reach Telegram (`/extensions off telegram`).
 
+### Signal
+
+`extensions/signal` does the same over Signal, through a [signal-cli](https://github.com/AsamK/signal-cli) daemon on the host. Give the bot a number of its own, register or link it with signal-cli, and run `signal-cli -a +47… daemon --tcp 127.0.0.1:7583 --receive-mode=on-connection`, so messages wait on Signal's servers while Nudge isn't connected. The extension's `daemon` setting says where it listens; `account` picks the number when one daemon serves several. Linking, rooms and commands work as on Telegram. Signal has no buttons, so approvals say to send `/approve <id>` or `/deny <id>`. Messages are end-to-end encrypted up to the host, which is where they are decrypted.
+
 The shared parts (links, chats to rooms, commands, relaying) live in `packages/bridge` for other chat services.
 
 ### Write an extension
