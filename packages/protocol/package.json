@@ -1,0 +1,36 @@
+{
+  "name": "@nudge/protocol",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Nudge's client protocol v1: its types and JSON schema, the room projector, and the patches clients apply",
+  "files": [
+    "dist",
+    "schema"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "@nudge/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./project": {
+      "@nudge/source": "./src/project.ts",
+      "types": "./dist/project.d.ts",
+      "default": "./dist/project.js"
+    },
+    "./schema/v1.json": "./schema/v1.json"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "schema": "node scripts/schema.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-durable": "1.2.0",
+    "@nudge/core": "workspace:*",
+    "typebox": "1.3.27"
+  },
+  "devDependencies": {
+    "@earendil-works/chord": "1.2.0"
+  }
+}

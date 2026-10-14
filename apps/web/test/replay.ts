@@ -1,6 +1,6 @@
 import type { WireOp } from "@earendil-works/chord/delta";
 import type { ServerFrame } from "@nudge/server";
-import recording from "./fixtures/room-view.json" with { type: "json" };
+import recording from "../../../packages/protocol/test/fixtures/conversation-view.json" with { type: "json" };
 import { type ConversationView, ViewMirror } from "../src/mirror.ts";
 
 /**

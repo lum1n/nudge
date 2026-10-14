@@ -11,6 +11,7 @@
   "include": [
     "packages/*/src",
     "packages/*/test",
+    "packages/*/scripts",
     "extensions/*/src",
     "extensions/*/test",
     "extensions/*/eval",

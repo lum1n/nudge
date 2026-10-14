@@ -1,0 +1,463 @@
+import type {
+  ConversationView,
+  EntryRecord,
+  InboxItem,
+  InboxState,
+  LiveState,
+  ToolSlot,
+} from "@earendil-works/pi-durable";
+import type {
+  ApprovalEntryData,
+  Approval as CoreApproval,
+  Fact as CoreFact,
+  FireEntryData,
+  MessageEntryData,
+  Player as CorePlayer,
+  Room as CoreRoom,
+  ScheduledNudge,
+} from "@nudge/core";
+import type {
+  Approval,
+  Fact,
+  HomeNudge,
+  HomeRoom,
+  HomeView,
+  Part,
+  Player,
+  QueuedMessage,
+  Room,
+  RoomNudge,
+  RoomView,
+  Status,
+  TimelineItem,
+  ToolPart,
+} from "./schema.ts";
+
+/**
+ * How a host turns its rooms into protocol views. This is the one place that reads pi-durable's
+ * shapes; clients only see what comes out.
+ */
+
+// Entry kinds of @nudge/core, kept here so this module needs no runtime import of it. A test
+// checks them against core's.
+export const MESSAGE_ENTRY = "nudge.message";
+export const FIRE_ENTRY = "nudge.fire";
+export const APPROVAL_ENTRY = "nudge.approval";
+
+/** Items a room view holds at most; older ones come from `GET /rooms/<id>/timeline`. */
+export const TIMELINE_LIMIT = 100;
+
+/** Tool results and details longer than this many characters are cut. */
+export const TOOL_OUTPUT_LIMIT = 8 * 1024;
+
+/** Decided approvals a room view keeps, besides the pending ones. */
+const DECIDED_APPROVALS = 10;
+
+export type RoomSources = {
+  readonly room: Room;
+  readonly view: ConversationView;
+  /** Newest first, as `Approvals.list` gives them. */
+  readonly approvals: readonly CoreApproval[];
+  readonly memory: readonly CoreFact[];
+  readonly nudges: readonly ScheduledNudge[];
+};
+
+type Kept<T> = { readonly sources: readonly unknown[]; readonly value: T };
+
+/**
+ * One room's view, projected again for each new set of sources. Parts whose sources are the same
+ * objects as last time come back as the same objects, so `diff` against the previous view skips
+ * them without a look inside. Use one projector per room.
+ */
+export class RoomProjector {
+  private items = new Map<string, Kept<TimelineItem>>();
+  private parts = new Map<string, Kept<unknown>>();
+
+  constructor(private readonly limit = TIMELINE_LIMIT) {}
+
+  project(sources: RoomSources): RoomView {
+    const live = sources.view.docs["pi.live"] as LiveState | undefined;
+    const inbox = sources.view.docs["pi.inbox"] as InboxState | undefined;
+    const next = new Map<string, Kept<TimelineItem>>();
+    const all = items(sources.view.entries, live?.run === undefined ? undefined : live, {
+      keep: (id, itemSources, build) => {
+        const value = reuse(this.items.get(id), itemSources, build);
+        next.set(id, { sources: itemSources, value });
+        return value;
+      },
+    });
+    this.items = next;
+
+    const first = sources.view.entries[0]?.kind;
+    const status = statusOf(live);
+    return {
+      room: sources.room,
+      timeline: all.length > this.limit ? all.slice(-this.limit) : all,
+      hasEarlier: all.length > this.limit || first === "pi.compaction" || first === "pi.reset",
+      live: { running: live?.run !== undefined, ...(status === undefined ? {} : { status }) },
+      queue: this.part("queue", [inbox?.items], () =>
+        (inbox?.items ?? []).flatMap((item) => queued(item)),
+      ),
+      approvals: this.part("approvals", [sources.approvals], () => approvals(sources.approvals)),
+      memory: this.part("memory", [sources.memory], () => sources.memory.map(toFact)),
+      nudges: this.part("nudges", [sources.nudges], () =>
+        [...sources.nudges].sort((a, b) => a.fireAt - b.fireAt).map(toRoomNudge),
+      ),
+    };
+  }
+
+  private part<T>(name: string, sources: readonly unknown[], build: () => T): T {
+    const value = reuse(this.parts.get(name) as Kept<T> | undefined, sources, build);
+    this.parts.set(name, { sources, value });
+    return value;
+  }
+}
+
+function reuse<T>(before: Kept<T> | undefined, sources: readonly unknown[], build: () => T): T {
+  return before !== undefined && sameItems(before.sources, sources) ? before.value : build();
+}
+
+/**
+ * Timeline items for a run of finished entries, oldest first, such as a page of history. `after`
+ * names the item before the first entry, so an answer there gets the id it has in the room view.
+ */
+export function projectTimeline(
+  entries: readonly EntryRecord[],
+  options: { readonly after?: string } = {},
+): TimelineItem[] {
+  return items(entries, undefined, { after: options.after });
+}
+
+function items(
+  entries: readonly EntryRecord[],
+  live: LiveState | undefined,
+  options: {
+    readonly after?: string | undefined;
+    readonly keep?: (
+      id: string,
+      sources: readonly unknown[],
+      build: () => TimelineItem,
+    ) => TimelineItem;
+  },
+): TimelineItem[] {
+  const keep = options.keep ?? ((_id, _sources, build) => build());
+  const results = new Map<string, EntryRecord>();
+  for (const entry of entries)
+    if (entry.kind === "pi.tool-result") {
+      const id = toolResult(entry)?.toolCallId;
+      if (id !== undefined) results.set(id, entry);
+    }
+
+  const timeline: TimelineItem[] = [];
+  // An answer collects assistant entries until the next message. It is named after the item
+  // before it, so the answer in flight keeps its id once its entry is written.
+  let answer: EntryRecord[] = [];
+  let after = options.after ?? "start";
+  const endAnswer = (live?: LiveState) => {
+    const generated = live?.generation?.message as AssistantMessage | undefined;
+    if (answer.length === 0 && generated === undefined && !(live?.tools?.length ?? 0)) return;
+    const answerEntries = answer;
+    const callResults = answerEntries.flatMap((entry) =>
+      toolCalls(entry).map((call) => results.get(call.id)),
+    );
+    const sources = [...answerEntries, ...callResults, generated, live?.tools, live !== undefined];
+    const id = `answer:${after}`;
+    timeline.push(
+      keep(id, sources, () => buildAnswer(id, answerEntries, results, live, generated)),
+    );
+    answer = [];
+  };
+
+  for (const entry of entries) {
+    switch (entry.kind) {
+      case "pi.assistant":
+        answer.push(entry);
+        continue;
+      case MESSAGE_ENTRY:
+      case "pi.user":
+      case FIRE_ENTRY:
+      case APPROVAL_ENTRY:
+      case "pi.compaction":
+      case "pi.reset": {
+        endAnswer();
+        const id = `entry:${entry.id}`;
+        timeline.push(keep(id, [entry], () => entryItem(id, entry)));
+        after = id;
+        continue;
+      }
+      default:
+        // System prompts, tool results (shown with their calls) and extension bookkeeping.
+        continue;
+    }
+  }
+  endAnswer(live);
+  return timeline;
+}
+
+type Message = NonNullable<EntryRecord["model"]>[number];
+type AssistantMessage = Extract<Message, { role: "assistant" }>;
+type ToolResultMessage = Extract<Message, { role: "toolResult" }>;
+type Content = AssistantMessage["content"][number];
+
+function entryItem(id: string, entry: EntryRecord): TimelineItem {
+  switch (entry.kind) {
+    case MESSAGE_ENTRY: {
+      const data = entry.data as MessageEntryData;
+      return {
+        type: "user",
+        id,
+        text: data.text,
+        author: { id: data.playerId, displayName: data.displayName },
+        sentAt: data.sentAt,
+        ...(data.clientId === undefined ? {} : { clientId: data.clientId }),
+        ...(data.requestId === undefined ? {} : { requestId: data.requestId }),
+      };
+    }
+    case FIRE_ENTRY: {
+      const data = entry.data as FireEntryData;
+      return { type: "nudge", id, text: data.message, firedAt: data.fireAt };
+    }
+    case APPROVAL_ENTRY: {
+      const data = entry.data as ApprovalEntryData;
+      return {
+        type: "approval",
+        id,
+        approvalId: data.id,
+        summary: data.summary,
+        status: data.status,
+        ...(data.decidedBy === undefined ? {} : { decidedBy: data.decidedBy }),
+      };
+    }
+    case "pi.compaction":
+    case "pi.reset":
+      return { type: "marker", id, kind: entry.kind === "pi.reset" ? "reset" : "compacted" };
+    default: {
+      const message = entry.model?.find((m) => m.role === "user");
+      return { type: "user", id, text: message === undefined ? "" : text(message.content) };
+    }
+  }
+}
+
+function buildAnswer(
+  id: string,
+  entries: readonly EntryRecord[],
+  results: ReadonlyMap<string, EntryRecord>,
+  live: LiveState | undefined,
+  generated: AssistantMessage | undefined,
+): TimelineItem {
+  const slots = new Map((live?.tools ?? []).map((slot) => [slot.callId, slot]));
+  const parts: Part[] = [];
+  let last: AssistantMessage | undefined;
+  for (const entry of entries)
+    for (const message of entry.model ?? [])
+      if (message.role === "assistant") {
+        last = message;
+        for (const content of message.content) {
+          const part = toPart(content, results, slots);
+          if (part !== undefined) parts.push(part);
+        }
+      }
+  if (generated !== undefined)
+    for (const content of generated.content) {
+      const part = toPart(content, results, slots);
+      if (part !== undefined) parts.push(part);
+    }
+  if (live !== undefined) return { type: "answer", id, status: "running", parts };
+  if (last?.stopReason === "aborted") return { type: "answer", id, status: "stopped", parts };
+  if (last?.stopReason === "error")
+    return {
+      type: "answer",
+      id,
+      status: "failed",
+      ...(last.errorMessage === undefined ? {} : { error: last.errorMessage }),
+      parts,
+    };
+  return { type: "answer", id, status: "done", parts };
+}
+
+function toPart(
+  content: Content,
+  results: ReadonlyMap<string, EntryRecord>,
+  slots: ReadonlyMap<string, ToolSlot>,
+): Part | undefined {
+  switch (content.type) {
+    case "text":
+      return content.text === "" ? undefined : { type: "text", text: content.text };
+    case "thinking":
+      return content.thinking === "" ? undefined : { type: "reasoning", text: content.thinking };
+    case "toolCall": {
+      const entry = results.get(content.id);
+      const result = entry === undefined ? undefined : toolResult(entry);
+      const slot = slots.get(content.id);
+      const part: ToolPart = {
+        type: "tool",
+        callId: content.id,
+        name: content.name,
+        args: content.arguments,
+        status: result !== undefined ? "done" : (slot?.status ?? "pending"),
+      };
+      if (result === undefined)
+        return slot?.output === undefined ? part : { ...part, output: slot.output };
+      return { ...part, ...cut(text(result.content), result.details), isError: result.isError };
+    }
+    default:
+      return undefined;
+  }
+}
+
+/** A tool's result and details, cut down to what a view carries. */
+function cut(result: string, details: unknown): Partial<ToolPart> {
+  const long = result.length > TOOL_OUTPUT_LIMIT;
+  const keepDetails =
+    details !== undefined && (JSON.stringify(details)?.length ?? 0) <= TOOL_OUTPUT_LIMIT;
+  return {
+    result: long ? result.slice(0, TOOL_OUTPUT_LIMIT) : result,
+    ...(keepDetails ? { details } : {}),
+    ...(long || (details !== undefined && !keepDetails) ? { truncated: true } : {}),
+  };
+}
+
+function queued(item: InboxItem): QueuedMessage[] {
+  if (item.mode === "write") return [];
+  const entry = item.entry as { kind?: string; data?: unknown } | undefined;
+  const base = { id: item.id, mode: item.mode };
+  if (entry?.kind === MESSAGE_ENTRY) {
+    const data = entry.data as MessageEntryData;
+    return [
+      {
+        ...base,
+        text: data.text,
+        author: { id: data.playerId, displayName: data.displayName },
+        nudge: false,
+      },
+    ];
+  }
+  if (entry?.kind === FIRE_ENTRY)
+    return [{ ...base, text: (entry.data as FireEntryData).message, nudge: true }];
+  if (entry?.kind === APPROVAL_ENTRY) {
+    const data = entry.data as ApprovalEntryData;
+    return [{ ...base, text: `${data.id} ${data.status}: ${data.summary}`, nudge: true }];
+  }
+  return [
+    {
+      ...base,
+      text: text(item.content as Extract<Message, { role: "user" }>["content"]),
+      nudge: false,
+    },
+  ];
+}
+
+function statusOf(live: LiveState | undefined): Status | undefined {
+  const generation = live?.generation;
+  if (generation?.retry !== undefined)
+    return {
+      kind: "retrying",
+      attempt: generation.attempt,
+      at: generation.retry.at,
+      error: generation.retry.error,
+    };
+  if (live?.compactions?.some((compaction) => compaction.blocking)) return { kind: "compacting" };
+  if (live?.compactionFailure !== undefined)
+    return { kind: "compaction-failed", error: live.compactionFailure.error };
+  return undefined;
+}
+
+function approvals(list: readonly CoreApproval[]): Approval[] {
+  let decided = 0;
+  return list
+    .filter((approval) => approval.status === "pending" || decided++ < DECIDED_APPROVALS)
+    .map(toApproval);
+}
+
+// Core's records as protocol shapes, for hosts building views.
+
+export function toPlayer(player: Pick<CorePlayer, "id" | "displayName">): Player {
+  return { id: player.id, displayName: player.displayName };
+}
+
+/** `players` looks up members by id; members it can't find are left out. */
+export function toRoom(room: CoreRoom, players: (id: string) => CorePlayer | undefined): Room {
+  return {
+    id: room.id,
+    kind: room.kind,
+    name: room.name,
+    members: room.members.flatMap((id) => {
+      const player = players(id);
+      return player === undefined ? [] : [toPlayer(player)];
+    }),
+  };
+}
+
+export function toApproval(approval: CoreApproval): Approval {
+  return {
+    id: approval.id,
+    summary: approval.summary,
+    status: approval.status,
+    requestedAt: approval.requestedAt,
+    ...(approval.decidedBy === undefined
+      ? {}
+      : {
+          decidedBy: {
+            id: approval.decidedBy.playerId,
+            displayName: approval.decidedBy.displayName,
+          },
+        }),
+    ...(approval.decidedAt === undefined ? {} : { decidedAt: approval.decidedAt }),
+    ...(approval.result === undefined ? {} : { result: approval.result }),
+  };
+}
+
+export function toFact(fact: CoreFact): Fact {
+  return { id: fact.id, text: fact.text, createdAt: fact.createdAt };
+}
+
+export function toRoomNudge(nudge: ScheduledNudge): RoomNudge {
+  return {
+    id: nudge.id,
+    message: nudge.message,
+    fireAt: nudge.fireAt,
+    ...(nudge.every === undefined ? {} : { every: nudge.every }),
+  };
+}
+
+export function toHomeNudge(nudge: ScheduledNudge): HomeNudge {
+  return { ...toRoomNudge(nudge), roomId: nudge.roomId };
+}
+
+export type HomeSources = {
+  readonly player: Player;
+  readonly rooms: readonly HomeRoom[];
+  readonly nudges: readonly ScheduledNudge[];
+};
+
+export function projectHome(sources: HomeSources): HomeView {
+  return {
+    player: sources.player,
+    rooms: [...sources.rooms],
+    nudges: [...sources.nudges].sort((a, b) => a.fireAt - b.fireAt).map(toHomeNudge),
+  };
+}
+
+function toolCalls(entry: EntryRecord): { id: string }[] {
+  return (entry.model ?? []).flatMap((message) =>
+    message.role === "assistant"
+      ? message.content.flatMap((content) => (content.type === "toolCall" ? [content] : []))
+      : [],
+  );
+}
+
+function toolResult(entry: EntryRecord): ToolResultMessage | undefined {
+  return entry.model?.find(
+    (message): message is ToolResultMessage => message.role === "toolResult",
+  );
+}
+
+/** The text parts of a message's content, joined. */
+function text(content: string | readonly { type: string; text?: string }[]): string {
+  if (typeof content === "string") return content;
+  return content.flatMap((part) => (part.type === "text" ? [part.text ?? ""] : [])).join("");
+}
+
+function sameItems(a: readonly unknown[], b: readonly unknown[]): boolean {
+  return a.length === b.length && a.every((item, index) => item === b[index]);
+}

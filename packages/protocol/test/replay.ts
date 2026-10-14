@@ -1,0 +1,17 @@
+import { applyImmutable, decoder, type WireOp } from "@earendil-works/chord/delta";
+import type { ConversationView } from "@earendil-works/pi-durable";
+import recording from "./fixtures/conversation-view.json" with { type: "json" };
+
+/**
+ * Ann's view of a recorded run in room "trip" (Ann and Bo), after each commit, oldest first: Ann
+ * asks the assistant to remember something, it thinks, calls `remember` and answers; Bo writes
+ * meanwhile and waits in the inbox; then a scheduled nudge fires and is answered. The server's
+ * `view.test.ts` records it again with `NUDGE_RECORD=1`.
+ */
+export function replay(): ConversationView[] {
+  const ops = decoder();
+  const views = [recording.view as unknown as ConversationView];
+  for (const frame of recording.frames)
+    views.push(applyImmutable(views.at(-1)!, ops.decode(frame as unknown as WireOp[])));
+  return views;
+}

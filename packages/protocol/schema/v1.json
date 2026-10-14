@@ -1,0 +1,2430 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nudge.dev/protocol/v1.json",
+  "title": "Nudge protocol v1",
+  "$defs": {
+    "Player": {
+      "type": "object",
+      "required": ["id", "displayName"],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        }
+      }
+    },
+    "RoomKind": {
+      "anyOf": [
+        {
+          "type": "string",
+          "const": "lobby"
+        },
+        {
+          "type": "string",
+          "const": "personal"
+        },
+        {
+          "type": "string",
+          "const": "shared"
+        }
+      ]
+    },
+    "Room": {
+      "type": "object",
+      "required": ["id", "kind", "name", "members"],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "lobby"
+            },
+            {
+              "type": "string",
+              "const": "personal"
+            },
+            {
+              "type": "string",
+              "const": "shared"
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "displayName"],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "displayName": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "ApprovalStatus": {
+      "anyOf": [
+        {
+          "type": "string",
+          "const": "pending"
+        },
+        {
+          "type": "string",
+          "const": "approved"
+        },
+        {
+          "type": "string",
+          "const": "denied"
+        },
+        {
+          "type": "string",
+          "const": "done"
+        },
+        {
+          "type": "string",
+          "const": "failed"
+        }
+      ]
+    },
+    "ToolPart": {
+      "type": "object",
+      "required": ["type", "callId", "name", "args", "status"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "tool"
+        },
+        "callId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "args": {
+          "type": "object",
+          "patternProperties": {
+            "^.*$": {}
+          }
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "pending"
+            },
+            {
+              "type": "string",
+              "const": "running"
+            },
+            {
+              "type": "string",
+              "const": "done"
+            }
+          ]
+        },
+        "result": {
+          "type": "string"
+        },
+        "isError": {
+          "type": "boolean"
+        },
+        "details": {},
+        "output": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      }
+    },
+    "Part": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": ["type", "text"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "text"
+            },
+            "text": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "text"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "reasoning"
+            },
+            "text": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "callId", "name", "args", "status"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "tool"
+            },
+            "callId": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "args": {
+              "type": "object",
+              "patternProperties": {
+                "^.*$": {}
+              }
+            },
+            "status": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "pending"
+                },
+                {
+                  "type": "string",
+                  "const": "running"
+                },
+                {
+                  "type": "string",
+                  "const": "done"
+                }
+              ]
+            },
+            "result": {
+              "type": "string"
+            },
+            "isError": {
+              "type": "boolean"
+            },
+            "details": {},
+            "output": {
+              "type": "string"
+            },
+            "truncated": {
+              "type": "boolean"
+            }
+          }
+        }
+      ]
+    },
+    "TimelineItem": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": ["type", "id", "text"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "user"
+            },
+            "id": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "author": {
+              "type": "object",
+              "required": ["id", "displayName"],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "displayName": {
+                  "type": "string"
+                }
+              }
+            },
+            "sentAt": {
+              "type": "number"
+            },
+            "clientId": {
+              "type": "string"
+            },
+            "requestId": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "id", "text", "firedAt"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "nudge"
+            },
+            "id": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "firedAt": {
+              "type": "number"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "id", "approvalId", "summary", "status"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "approval"
+            },
+            "id": {
+              "type": "string"
+            },
+            "approvalId": {
+              "type": "string"
+            },
+            "summary": {
+              "type": "string"
+            },
+            "status": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "pending"
+                },
+                {
+                  "type": "string",
+                  "const": "approved"
+                },
+                {
+                  "type": "string",
+                  "const": "denied"
+                },
+                {
+                  "type": "string",
+                  "const": "done"
+                },
+                {
+                  "type": "string",
+                  "const": "failed"
+                }
+              ]
+            },
+            "decidedBy": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "id", "status", "parts"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "answer"
+            },
+            "id": {
+              "type": "string"
+            },
+            "status": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "running"
+                },
+                {
+                  "type": "string",
+                  "const": "done"
+                },
+                {
+                  "type": "string",
+                  "const": "stopped"
+                },
+                {
+                  "type": "string",
+                  "const": "failed"
+                }
+              ]
+            },
+            "error": {
+              "type": "string"
+            },
+            "parts": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "required": ["type", "text"],
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "text"
+                      },
+                      "text": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": ["type", "text"],
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "reasoning"
+                      },
+                      "text": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": ["type", "callId", "name", "args", "status"],
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "tool"
+                      },
+                      "callId": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "args": {
+                        "type": "object",
+                        "patternProperties": {
+                          "^.*$": {}
+                        }
+                      },
+                      "status": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "const": "pending"
+                          },
+                          {
+                            "type": "string",
+                            "const": "running"
+                          },
+                          {
+                            "type": "string",
+                            "const": "done"
+                          }
+                        ]
+                      },
+                      "result": {
+                        "type": "string"
+                      },
+                      "isError": {
+                        "type": "boolean"
+                      },
+                      "details": {},
+                      "output": {
+                        "type": "string"
+                      },
+                      "truncated": {
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "id", "kind"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "marker"
+            },
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "compacted"
+                },
+                {
+                  "type": "string",
+                  "const": "reset"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "Status": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": ["kind", "attempt", "at", "error"],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "retrying"
+            },
+            "attempt": {
+              "type": "integer"
+            },
+            "at": {
+              "type": "number"
+            },
+            "error": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind"],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "compacting"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "error"],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "compaction-failed"
+            },
+            "error": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "QueuedMessage": {
+      "type": "object",
+      "required": ["id", "mode", "text", "nudge"],
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "steer"
+            },
+            {
+              "type": "string",
+              "const": "followUp"
+            }
+          ]
+        },
+        "text": {
+          "type": "string"
+        },
+        "author": {
+          "type": "object",
+          "required": ["id", "displayName"],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "displayName": {
+              "type": "string"
+            }
+          }
+        },
+        "nudge": {
+          "type": "boolean"
+        }
+      }
+    },
+    "Approval": {
+      "type": "object",
+      "required": ["id", "summary", "status", "requestedAt"],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "pending"
+            },
+            {
+              "type": "string",
+              "const": "approved"
+            },
+            {
+              "type": "string",
+              "const": "denied"
+            },
+            {
+              "type": "string",
+              "const": "done"
+            },
+            {
+              "type": "string",
+              "const": "failed"
+            }
+          ]
+        },
+        "requestedAt": {
+          "type": "number"
+        },
+        "decidedBy": {
+          "type": "object",
+          "required": ["id", "displayName"],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "displayName": {
+              "type": "string"
+            }
+          }
+        },
+        "decidedAt": {
+          "type": "number"
+        },
+        "result": {
+          "type": "string"
+        }
+      }
+    },
+    "Fact": {
+      "type": "object",
+      "required": ["id", "text", "createdAt"],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "number"
+        }
+      }
+    },
+    "RoomNudge": {
+      "type": "object",
+      "required": ["id", "message", "fireAt"],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "fireAt": {
+          "type": "number"
+        },
+        "every": {
+          "type": "number"
+        }
+      }
+    },
+    "RoomView": {
+      "type": "object",
+      "required": [
+        "room",
+        "timeline",
+        "hasEarlier",
+        "live",
+        "queue",
+        "approvals",
+        "memory",
+        "nudges"
+      ],
+      "properties": {
+        "room": {
+          "type": "object",
+          "required": ["id", "kind", "name", "members"],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "lobby"
+                },
+                {
+                  "type": "string",
+                  "const": "personal"
+                },
+                {
+                  "type": "string",
+                  "const": "shared"
+                }
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "members": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["id", "displayName"],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "timeline": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "object",
+                "required": ["type", "id", "text"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "user"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "author": {
+                    "type": "object",
+                    "required": ["id", "displayName"],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "displayName": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "sentAt": {
+                    "type": "number"
+                  },
+                  "clientId": {
+                    "type": "string"
+                  },
+                  "requestId": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": ["type", "id", "text", "firedAt"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "nudge"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "firedAt": {
+                    "type": "number"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": ["type", "id", "approvalId", "summary", "status"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "approval"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "approvalId": {
+                    "type": "string"
+                  },
+                  "summary": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "pending"
+                      },
+                      {
+                        "type": "string",
+                        "const": "approved"
+                      },
+                      {
+                        "type": "string",
+                        "const": "denied"
+                      },
+                      {
+                        "type": "string",
+                        "const": "done"
+                      },
+                      {
+                        "type": "string",
+                        "const": "failed"
+                      }
+                    ]
+                  },
+                  "decidedBy": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": ["type", "id", "status", "parts"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "answer"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "running"
+                      },
+                      {
+                        "type": "string",
+                        "const": "done"
+                      },
+                      {
+                        "type": "string",
+                        "const": "stopped"
+                      },
+                      {
+                        "type": "string",
+                        "const": "failed"
+                      }
+                    ]
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "parts": {
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": ["type", "text"],
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "text"
+                            },
+                            "text": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "required": ["type", "text"],
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "reasoning"
+                            },
+                            "text": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "required": ["type", "callId", "name", "args", "status"],
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "tool"
+                            },
+                            "callId": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "args": {
+                              "type": "object",
+                              "patternProperties": {
+                                "^.*$": {}
+                              }
+                            },
+                            "status": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "const": "pending"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "running"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "done"
+                                }
+                              ]
+                            },
+                            "result": {
+                              "type": "string"
+                            },
+                            "isError": {
+                              "type": "boolean"
+                            },
+                            "details": {},
+                            "output": {
+                              "type": "string"
+                            },
+                            "truncated": {
+                              "type": "boolean"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": ["type", "id", "kind"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "marker"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "compacted"
+                      },
+                      {
+                        "type": "string",
+                        "const": "reset"
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "hasEarlier": {
+          "type": "boolean"
+        },
+        "live": {
+          "type": "object",
+          "required": ["running"],
+          "properties": {
+            "running": {
+              "type": "boolean"
+            },
+            "status": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "required": ["kind", "attempt", "at", "error"],
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "retrying"
+                    },
+                    "attempt": {
+                      "type": "integer"
+                    },
+                    "at": {
+                      "type": "number"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "required": ["kind"],
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "compacting"
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "required": ["kind", "error"],
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "compaction-failed"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "queue": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "mode", "text", "nudge"],
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "mode": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "steer"
+                  },
+                  {
+                    "type": "string",
+                    "const": "followUp"
+                  }
+                ]
+              },
+              "text": {
+                "type": "string"
+              },
+              "author": {
+                "type": "object",
+                "required": ["id", "displayName"],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "type": "string"
+                  }
+                }
+              },
+              "nudge": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "approvals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "summary", "status", "requestedAt"],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "pending"
+                  },
+                  {
+                    "type": "string",
+                    "const": "approved"
+                  },
+                  {
+                    "type": "string",
+                    "const": "denied"
+                  },
+                  {
+                    "type": "string",
+                    "const": "done"
+                  },
+                  {
+                    "type": "string",
+                    "const": "failed"
+                  }
+                ]
+              },
+              "requestedAt": {
+                "type": "number"
+              },
+              "decidedBy": {
+                "type": "object",
+                "required": ["id", "displayName"],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "type": "string"
+                  }
+                }
+              },
+              "decidedAt": {
+                "type": "number"
+              },
+              "result": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "memory": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "text", "createdAt"],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "nudges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "message", "fireAt"],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "fireAt": {
+                "type": "number"
+              },
+              "every": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    "HomeRoom": {
+      "type": "object",
+      "required": ["room", "running", "pendingApprovals"],
+      "properties": {
+        "room": {
+          "type": "object",
+          "required": ["id", "kind", "name", "members"],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "lobby"
+                },
+                {
+                  "type": "string",
+                  "const": "personal"
+                },
+                {
+                  "type": "string",
+                  "const": "shared"
+                }
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "members": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["id", "displayName"],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "running": {
+          "type": "boolean"
+        },
+        "pendingApprovals": {
+          "type": "integer"
+        },
+        "lastItemAt": {
+          "type": "number"
+        }
+      }
+    },
+    "HomeNudge": {
+      "type": "object",
+      "required": ["id", "roomId", "message", "fireAt"],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "roomId": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "fireAt": {
+          "type": "number"
+        },
+        "every": {
+          "type": "number"
+        }
+      }
+    },
+    "HomeView": {
+      "type": "object",
+      "required": ["player", "rooms", "nudges"],
+      "properties": {
+        "player": {
+          "type": "object",
+          "required": ["id", "displayName"],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "displayName": {
+              "type": "string"
+            }
+          }
+        },
+        "rooms": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["room", "running", "pendingApprovals"],
+            "properties": {
+              "room": {
+                "type": "object",
+                "required": ["id", "kind", "name", "members"],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "lobby"
+                      },
+                      {
+                        "type": "string",
+                        "const": "personal"
+                      },
+                      {
+                        "type": "string",
+                        "const": "shared"
+                      }
+                    ]
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "members": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["id", "displayName"],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "displayName": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "running": {
+                "type": "boolean"
+              },
+              "pendingApprovals": {
+                "type": "integer"
+              },
+              "lastItemAt": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "nudges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "roomId", "message", "fireAt"],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "roomId": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "fireAt": {
+                "type": "number"
+              },
+              "every": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    "Path": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer",
+            "minimum": 0
+          }
+        ]
+      }
+    },
+    "Op": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": ["op", "path", "value"],
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "set"
+            },
+            "path": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                ]
+              }
+            },
+            "value": {}
+          }
+        },
+        {
+          "type": "object",
+          "required": ["op", "path"],
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "del"
+            },
+            "path": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["op", "path", "text"],
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "append"
+            },
+            "path": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                ]
+              }
+            },
+            "text": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["op", "path", "index", "remove", "insert"],
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "splice"
+            },
+            "path": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                ]
+              }
+            },
+            "index": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "remove": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "insert": {
+              "type": "array",
+              "items": {}
+            }
+          }
+        }
+      ]
+    },
+    "Target": {
+      "type": "string",
+      "pattern": "^(home|room:.+)$"
+    },
+    "ClientFrame": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": ["type", "protocol", "token", "client"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "hello"
+            },
+            "protocol": {
+              "type": "number",
+              "const": 1
+            },
+            "token": {
+              "type": "string"
+            },
+            "client": {
+              "type": "object",
+              "required": ["name", "version", "platform"],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "string"
+                },
+                "platform": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "target"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "subscribe"
+            },
+            "target": {
+              "type": "string",
+              "pattern": "^(home|room:.+)$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "target"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "unsubscribe"
+            },
+            "target": {
+              "type": "string",
+              "pattern": "^(home|room:.+)$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "ping"
+            }
+          }
+        }
+      ]
+    },
+    "ServerFrame": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": ["type", "protocol", "server", "epoch", "player", "clientId", "heartbeatMs"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "welcome"
+            },
+            "protocol": {
+              "type": "integer"
+            },
+            "server": {
+              "type": "object",
+              "required": ["version"],
+              "properties": {
+                "version": {
+                  "type": "string"
+                }
+              }
+            },
+            "epoch": {
+              "type": "string"
+            },
+            "player": {
+              "type": "object",
+              "required": ["id", "displayName"],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "displayName": {
+                  "type": "string"
+                }
+              }
+            },
+            "clientId": {
+              "type": "string"
+            },
+            "heartbeatMs": {
+              "type": "integer"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "target", "seq", "view"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "snapshot"
+            },
+            "target": {
+              "type": "string",
+              "pattern": "^(home|room:.+)$"
+            },
+            "seq": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "view": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "required": [
+                    "room",
+                    "timeline",
+                    "hasEarlier",
+                    "live",
+                    "queue",
+                    "approvals",
+                    "memory",
+                    "nudges"
+                  ],
+                  "properties": {
+                    "room": {
+                      "type": "object",
+                      "required": ["id", "kind", "name", "members"],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "const": "lobby"
+                            },
+                            {
+                              "type": "string",
+                              "const": "personal"
+                            },
+                            {
+                              "type": "string",
+                              "const": "shared"
+                            }
+                          ]
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "members": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": ["id", "displayName"],
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "displayName": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "timeline": {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "required": ["type", "id", "text"],
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "const": "user"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "author": {
+                                "type": "object",
+                                "required": ["id", "displayName"],
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "displayName": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "sentAt": {
+                                "type": "number"
+                              },
+                              "clientId": {
+                                "type": "string"
+                              },
+                              "requestId": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          {
+                            "type": "object",
+                            "required": ["type", "id", "text", "firedAt"],
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "const": "nudge"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "firedAt": {
+                                "type": "number"
+                              }
+                            }
+                          },
+                          {
+                            "type": "object",
+                            "required": ["type", "id", "approvalId", "summary", "status"],
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "const": "approval"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "approvalId": {
+                                "type": "string"
+                              },
+                              "summary": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "const": "pending"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "const": "approved"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "const": "denied"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "const": "done"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "const": "failed"
+                                  }
+                                ]
+                              },
+                              "decidedBy": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          {
+                            "type": "object",
+                            "required": ["type", "id", "status", "parts"],
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "const": "answer"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "const": "running"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "const": "done"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "const": "stopped"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "const": "failed"
+                                  }
+                                ]
+                              },
+                              "error": {
+                                "type": "string"
+                              },
+                              "parts": {
+                                "type": "array",
+                                "items": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "required": ["type", "text"],
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "const": "text"
+                                        },
+                                        "text": {
+                                          "type": "string"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "type": "object",
+                                      "required": ["type", "text"],
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "const": "reasoning"
+                                        },
+                                        "text": {
+                                          "type": "string"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "type": "object",
+                                      "required": ["type", "callId", "name", "args", "status"],
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "const": "tool"
+                                        },
+                                        "callId": {
+                                          "type": "string"
+                                        },
+                                        "name": {
+                                          "type": "string"
+                                        },
+                                        "args": {
+                                          "type": "object",
+                                          "patternProperties": {
+                                            "^.*$": {}
+                                          }
+                                        },
+                                        "status": {
+                                          "anyOf": [
+                                            {
+                                              "type": "string",
+                                              "const": "pending"
+                                            },
+                                            {
+                                              "type": "string",
+                                              "const": "running"
+                                            },
+                                            {
+                                              "type": "string",
+                                              "const": "done"
+                                            }
+                                          ]
+                                        },
+                                        "result": {
+                                          "type": "string"
+                                        },
+                                        "isError": {
+                                          "type": "boolean"
+                                        },
+                                        "details": {},
+                                        "output": {
+                                          "type": "string"
+                                        },
+                                        "truncated": {
+                                          "type": "boolean"
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "type": "object",
+                            "required": ["type", "id", "kind"],
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "const": "marker"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "const": "compacted"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "const": "reset"
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    "hasEarlier": {
+                      "type": "boolean"
+                    },
+                    "live": {
+                      "type": "object",
+                      "required": ["running"],
+                      "properties": {
+                        "running": {
+                          "type": "boolean"
+                        },
+                        "status": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "required": ["kind", "attempt", "at", "error"],
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "retrying"
+                                },
+                                "attempt": {
+                                  "type": "integer"
+                                },
+                                "at": {
+                                  "type": "number"
+                                },
+                                "error": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            {
+                              "type": "object",
+                              "required": ["kind"],
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "compacting"
+                                }
+                              }
+                            },
+                            {
+                              "type": "object",
+                              "required": ["kind", "error"],
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "compaction-failed"
+                                },
+                                "error": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "queue": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": ["id", "mode", "text", "nudge"],
+                        "properties": {
+                          "id": {
+                            "type": "integer"
+                          },
+                          "mode": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "const": "steer"
+                              },
+                              {
+                                "type": "string",
+                                "const": "followUp"
+                              }
+                            ]
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "author": {
+                            "type": "object",
+                            "required": ["id", "displayName"],
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "displayName": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "nudge": {
+                            "type": "boolean"
+                          }
+                        }
+                      }
+                    },
+                    "approvals": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": ["id", "summary", "status", "requestedAt"],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "summary": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "const": "pending"
+                              },
+                              {
+                                "type": "string",
+                                "const": "approved"
+                              },
+                              {
+                                "type": "string",
+                                "const": "denied"
+                              },
+                              {
+                                "type": "string",
+                                "const": "done"
+                              },
+                              {
+                                "type": "string",
+                                "const": "failed"
+                              }
+                            ]
+                          },
+                          "requestedAt": {
+                            "type": "number"
+                          },
+                          "decidedBy": {
+                            "type": "object",
+                            "required": ["id", "displayName"],
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "displayName": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "decidedAt": {
+                            "type": "number"
+                          },
+                          "result": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "memory": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": ["id", "text", "createdAt"],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "number"
+                          }
+                        }
+                      }
+                    },
+                    "nudges": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": ["id", "message", "fireAt"],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          },
+                          "fireAt": {
+                            "type": "number"
+                          },
+                          "every": {
+                            "type": "number"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "required": ["player", "rooms", "nudges"],
+                  "properties": {
+                    "player": {
+                      "type": "object",
+                      "required": ["id", "displayName"],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "displayName": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "rooms": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": ["room", "running", "pendingApprovals"],
+                        "properties": {
+                          "room": {
+                            "type": "object",
+                            "required": ["id", "kind", "name", "members"],
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "const": "lobby"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "const": "personal"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "const": "shared"
+                                  }
+                                ]
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "members": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "required": ["id", "displayName"],
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "displayName": {
+                                      "type": "string"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "running": {
+                            "type": "boolean"
+                          },
+                          "pendingApprovals": {
+                            "type": "integer"
+                          },
+                          "lastItemAt": {
+                            "type": "number"
+                          }
+                        }
+                      }
+                    },
+                    "nudges": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": ["id", "roomId", "message", "fireAt"],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "roomId": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          },
+                          "fireAt": {
+                            "type": "number"
+                          },
+                          "every": {
+                            "type": "number"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "target", "seq", "ops"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "patch"
+            },
+            "target": {
+              "type": "string",
+              "pattern": "^(home|room:.+)$"
+            },
+            "seq": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "ops": {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "required": ["op", "path", "value"],
+                    "properties": {
+                      "op": {
+                        "type": "string",
+                        "const": "set"
+                      },
+                      "path": {
+                        "type": "array",
+                        "items": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          ]
+                        }
+                      },
+                      "value": {}
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": ["op", "path"],
+                    "properties": {
+                      "op": {
+                        "type": "string",
+                        "const": "del"
+                      },
+                      "path": {
+                        "type": "array",
+                        "items": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": ["op", "path", "text"],
+                    "properties": {
+                      "op": {
+                        "type": "string",
+                        "const": "append"
+                      },
+                      "path": {
+                        "type": "array",
+                        "items": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          ]
+                        }
+                      },
+                      "text": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": ["op", "path", "index", "remove", "insert"],
+                    "properties": {
+                      "op": {
+                        "type": "string",
+                        "const": "splice"
+                      },
+                      "path": {
+                        "type": "array",
+                        "items": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          ]
+                        }
+                      },
+                      "index": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "remove": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "insert": {
+                        "type": "array",
+                        "items": {}
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "target", "reason"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "unsubscribed"
+            },
+            "target": {
+              "type": "string",
+              "pattern": "^(home|room:.+)$"
+            },
+            "reason": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "not-found"
+                },
+                {
+                  "type": "string",
+                  "const": "removed"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "pong"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "message"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "error"
+            },
+            "message": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

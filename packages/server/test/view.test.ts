@@ -24,10 +24,11 @@ import { publicOps } from "../src/view.ts";
 const context = BACKGROUND_CONTEXT;
 
 /**
- * What one `?format=view` client received, replayed by the web UI's tests. `NUDGE_RECORD=1` writes
- * it again from a fresh run; the shape test below says when pi-durable changed the view under it.
+ * What one `?format=view` client received, replayed by the web UI's and the projector's tests.
+ * `NUDGE_RECORD=1` writes it again from a fresh run; the shape test below says when pi-durable
+ * changed the view under it.
  */
-const FIXTURE = new URL("../../../apps/web/test/fixtures/room-view.json", import.meta.url);
+const FIXTURE = new URL("../../protocol/test/fixtures/conversation-view.json", import.meta.url);
 
 type Recording = {
   readonly me: string;
@@ -200,7 +201,7 @@ describe("view stream", () => {
       );
     }
 
-    // The web UI's fixture still has the shape a run has today.
+    // The recorded fixture still has the shape a run has today.
     const recording = JSON.parse(await readFile(FIXTURE, "utf8")) as Recording;
     const replay = decoder();
     const recorded = [recording.view];
