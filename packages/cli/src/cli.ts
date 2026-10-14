@@ -46,7 +46,7 @@ Options:
   -n, --name <name>        Your display name in chat
   -p, --player <id>        Chat in this process as this player (default: owner)
   -m, --members <ids>      Comma-separated player ids for a new room
-  -u, --url <url>          Chat through a server: http://host:port/a/<assistant>
+  -u, --url <url>          Chat through a server: http://host:port (-a picks the assistant)
   -t, --token <token>      Token for --url (default: $NUDGE_TOKEN)
       --port <port>        serve: port (default: 8787)
       --host <host>        serve: interface (default: 127.0.0.1)

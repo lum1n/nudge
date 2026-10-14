@@ -1,53 +1,36 @@
 import { randomUUID } from "node:crypto";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { AgentEvent, SnapshotEvent } from "@earendil-works/pi-durable";
+import { ApiError, listAssistants, memoryTokens, NudgeClient } from "@nudge/client";
 import {
-  type Approval,
   type Author,
   canUse,
-  type Fact,
   findAssistant,
   loadConfig,
   type Nudge,
   openAssistant,
-  type Room,
-  type ScheduledNudge,
+  type Room as CoreRoom,
 } from "@nudge/core";
-import type {
-  ApprovalsResponse,
-  ClientFrame,
-  MemoryResponse,
-  MeResponse,
-  NudgesResponse,
-  ProtectResponse,
-  RoomResponse,
-  ServerFrame,
-} from "@nudge/server";
+import type { Approval, Fact, RoomView } from "@nudge/protocol";
+import { toApproval, toFact } from "@nudge/protocol/project";
+import { Hubs } from "@nudge/server";
 import { UsageError } from "./errors.ts";
 import { hostOptions, reloadOnHangup } from "./host.ts";
 
-/** One client in one room, in this process or over the network. */
+/**
+ * One client in one room, in this process or over the network. Both give the room's protocol v1
+ * view, so a chat renders the same either way.
+ */
 export interface ChatSession {
   readonly assistantName: string;
   readonly clientId: string;
-  readonly room: Room;
-  /** Resolves with the room so far; `listener` then gets every later batch. */
-  attach(listener: (events: readonly AgentEvent[]) => void): Promise<SnapshotEvent>;
-  submit(text: string, whenBusy: "steer" | "followUp"): Promise<void>;
+  /** Resolves with the room's view now; `listener` then gets every later one. */
+  watch(listener: (view: RoomView) => void): Promise<RoomView>;
+  send(text: string, whenBusy: "steer" | "followUp"): Promise<void>;
   abort(): Promise<void>;
   protect(value: string): Promise<string>;
-  members(): Promise<string[]>;
-  /** Pending nudges of this room, soonest first. */
-  nudges(): Promise<ScheduledNudge[]>;
-  /** False when this room has no pending nudge with that id. */
-  cancelNudge(id: string): Promise<boolean>;
-  /** What the assistant remembers in this room, oldest first. */
-  memory(): Promise<Fact[]>;
+  cancelNudge(id: string): Promise<void>;
   remember(text: string): Promise<Fact>;
-  /** False when this room remembers no fact with that id. */
-  forget(id: string): Promise<boolean>;
-  /** Actions waiting for approval in this room, and recently decided ones; newest first. */
-  approvals(): Promise<Approval[]>;
+  forget(id: string): Promise<void>;
   /** Approves or denies one; an approved action runs before this resolves. */
   decide(id: string, approve: boolean): Promise<Approval>;
   close(): Promise<void>;
@@ -71,8 +54,10 @@ export type LocalTarget = ChatTarget & {
 };
 
 export type RemoteTarget = ChatTarget & {
-  /** `http(s)://host:port/a/<assistant>` */
+  /** `http(s)://host:port`, or the older `http(s)://host:port/a/<assistant>`. */
   readonly url: string;
+  /** Default: the one in `url`, or the server's first. */
+  readonly assistant?: string;
   readonly token: string;
 };
 
@@ -101,7 +86,6 @@ export async function openLocal(target: LocalTarget): Promise<ChatSession> {
     );
     return new LocalSession(
       nudge,
-      nudge.displayName,
       { playerId: player.id, displayName: player.displayName, clientId: `cli-${randomUUID()}` },
       room,
       target.onProblem,
@@ -113,35 +97,49 @@ export async function openLocal(target: LocalTarget): Promise<ChatSession> {
   }
 }
 
-async function resolveLocalRoom(nudge: Nudge, playerId: string, id = "lobby"): Promise<Room> {
+async function resolveLocalRoom(nudge: Nudge, playerId: string, id = "lobby"): Promise<CoreRoom> {
   if (id === "me") return nudge.rooms.ensurePersonal(playerId, context);
   const room = await nudge.rooms.get(id, context);
   if (room === undefined || !canUse(room, playerId)) throw new UsageError(`No room "${id}"`);
   return room;
 }
 
+/** The room's view from a `RoomHub` in this process, as the server would send it. */
 class LocalSession implements ChatSession {
+  readonly assistantName: string;
   readonly clientId: string;
-  private stream: Awaited<ReturnType<Nudge["attach"]>> | undefined;
+  private readonly hubs: Hubs;
+  private stop: (() => void) | undefined;
 
   constructor(
     private readonly nudge: Nudge,
-    readonly assistantName: string,
     private readonly author: Author & { clientId: string },
-    readonly room: Room,
+    private readonly room: CoreRoom,
     private readonly onProblem: (message: string) => void,
     private readonly stopReloading: () => void,
   ) {
+    this.assistantName = nudge.displayName;
     this.clientId = author.clientId;
+    this.hubs = new Hubs(nudge, (error) => onProblem((error as Error).message));
   }
 
-  async attach(listener: (events: readonly AgentEvent[]) => void): Promise<SnapshotEvent> {
-    this.stream = await this.nudge.attach(this.room.id, context);
-    this.stream.start(async (events) => listener(events));
-    return this.stream.snapshot;
+  async watch(listener: (view: RoomView) => void): Promise<RoomView> {
+    const lease = await this.hubs.room(this.room.id);
+    if (lease === undefined) throw new UsageError(`No room "${this.room.id}"`);
+    const { hub } = lease;
+    const unlisten = hub.listen({
+      changed: () => listener(hub.view()),
+      ended: (reason) =>
+        this.onProblem(reason === "gone" ? "this room is gone" : "the assistant shut down"),
+    });
+    this.stop = () => {
+      unlisten();
+      lease.release();
+    };
+    return hub.view();
   }
 
-  async submit(text: string, whenBusy: "steer" | "followUp"): Promise<void> {
+  async send(text: string, whenBusy: "steer" | "followUp"): Promise<void> {
     const submission = await this.nudge.submit(
       this.room.id,
       { text, author: this.author, requestId: randomUUID(), whenBusy },
@@ -164,184 +162,194 @@ class LocalSession implements ChatSession {
     return this.nudge.protect(value);
   }
 
-  async members(): Promise<string[]> {
-    return (await this.nudge.rooms.members(this.room.id, context)).map((p) => p.displayName);
-  }
-
-  nudges(): Promise<ScheduledNudge[]> {
-    return this.nudge.nudges.list(context, [this.room.id]);
-  }
-
-  async cancelNudge(id: string): Promise<boolean> {
+  async cancelNudge(id: string): Promise<void> {
     const nudge = await this.nudge.nudges.get(id, context);
-    if (nudge?.roomId !== this.room.id) return false;
-    return this.nudge.nudges.cancel(id, context);
+    if (nudge?.roomId !== this.room.id || !(await this.nudge.nudges.cancel(id, context)))
+      throw new UsageError(`No nudge ${id} here`);
   }
 
-  memory(): Promise<Fact[]> {
-    return this.nudge.memory.list(this.room.id, context);
+  async remember(text: string): Promise<Fact> {
+    return toFact(await this.nudge.memory.remember(this.room.id, text, context));
   }
 
-  remember(text: string): Promise<Fact> {
-    return this.nudge.memory.remember(this.room.id, text, context);
+  async forget(id: string): Promise<void> {
+    if (!(await this.nudge.memory.forget(this.room.id, id, context)))
+      throw new UsageError(`No fact ${id} here`);
   }
 
-  forget(id: string): Promise<boolean> {
-    return this.nudge.memory.forget(this.room.id, id, context);
-  }
-
-  approvals(): Promise<Approval[]> {
-    return this.nudge.approvals.list(this.room.id, context);
-  }
-
-  decide(id: string, approve: boolean): Promise<Approval> {
+  async decide(id: string, approve: boolean): Promise<Approval> {
     const by = { playerId: this.author.playerId, displayName: this.author.displayName };
-    return this.nudge.approvals.decide(this.room.id, id, { approve, by }, context);
+    return toApproval(
+      await this.nudge.approvals.decide(this.room.id, id, { approve, by }, context),
+    );
   }
 
   async close(): Promise<void> {
+    this.stop?.();
     this.stopReloading();
-    await this.stream?.stop();
     await this.nudge.close(context);
   }
 }
 
-/** Talks to `nudge serve`. */
+const CLIENT = { name: "nudge-cli", version: "0.0.0", platform: process.platform };
+
+/** Talks to `nudge serve` over protocol v1. */
 export async function openRemote(target: RemoteTarget): Promise<ChatSession> {
-  const base = target.url.replace(/\/+$/, "");
-  const call = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
-    const response = await fetch(`${base}${path}`, {
-      ...init,
-      headers: {
-        authorization: `Bearer ${target.token}`,
-        ...(init.body === undefined ? {} : { "content-type": "application/json" }),
-      },
-    });
-    const body = (await response.json().catch(() => ({}))) as T & { error?: string };
-    if (!response.ok) throw new UsageError(`${base}${path}: ${body.error ?? response.statusText}`);
-    return body;
-  };
-  const me = await call<MeResponse>("/me");
-  const room =
-    target.room === "me"
-      ? await call<Room>("/rooms/personal", { method: "POST", body: "{}" })
-      : (await call<RoomResponse>(`/rooms/${encodeURIComponent(target.room ?? "lobby")}`)).room;
-  return new RemoteSession(base, target.token, me, room, call, target.onProblem);
+  const { server, assistant } = await resolveServer(target.url, target.assistant);
+  const client = new NudgeClient({
+    server,
+    assistant: assistant.name,
+    tokens: memoryTokens(target.token),
+    client: CLIENT,
+    onError: target.onProblem,
+  });
+  try {
+    const me = await client.api.me();
+    const room =
+      target.room === "me" ? (await client.api.personalRoom()).id : (target.room ?? "lobby");
+    return new RemoteSession(client, assistant.displayName, me.clientId, room, target.onProblem);
+  } catch (error) {
+    if (error instanceof ApiError) throw new UsageError(`${server}: ${error.message}`);
+    throw error;
+  }
 }
 
+/** The server's base address and the assistant to talk to there. */
+async function resolveServer(
+  url: string,
+  name: string | undefined,
+): Promise<{ server: string; assistant: { name: string; displayName: string } }> {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new UsageError(`--url ${url} is not a URL`);
+  }
+  // Addresses from before protocol v1 named the assistant in the path.
+  const old = /^(.*?)\/(?:v1\/)?a\/([^/]+)\/*$/.exec(parsed.pathname);
+  const server = `${parsed.origin}${old?.[1] ?? parsed.pathname.replace(/\/+$/, "")}`;
+  const wanted = name ?? (old?.[2] === undefined ? undefined : decodeURIComponent(old[2]));
+  let assistants: { name: string; displayName: string }[];
+  try {
+    ({ assistants } = await listAssistants(server));
+  } catch (error) {
+    throw new UsageError(`Could not reach ${server}: ${(error as Error).message}`);
+  }
+  const assistant =
+    wanted === undefined ? assistants[0] : assistants.find((a) => a.name === wanted);
+  if (assistant === undefined)
+    throw new UsageError(
+      wanted === undefined
+        ? `${server} hosts no assistants`
+        : `${server} has no assistant "${wanted}"; it has: ${assistants.map((a) => a.name).join(", ")}`,
+    );
+  return { server, assistant };
+}
+
+/** A room's view through `@nudge/client`: one socket, resubscribed after every reconnect. */
 class RemoteSession implements ChatSession {
-  readonly assistantName: string;
-  readonly clientId: string;
-  private socket: WebSocket | undefined;
+  private stop: (() => void) | undefined;
   private closing = false;
 
   constructor(
-    private readonly base: string,
-    private readonly token: string,
-    me: MeResponse,
-    readonly room: Room,
-    private readonly call: <T>(path: string, init?: RequestInit) => Promise<T>,
+    private readonly client: NudgeClient,
+    readonly assistantName: string,
+    readonly clientId: string,
+    private readonly room: string,
     private readonly onProblem: (message: string) => void,
-  ) {
-    this.assistantName = me.assistant.displayName;
-    this.clientId = me.clientId;
-  }
+  ) {}
 
-  attach(listener: (events: readonly AgentEvent[]) => void): Promise<SnapshotEvent> {
-    const url = `${this.base.replace(/^http/, "ws")}/rooms/${encodeURIComponent(this.room.id)}/stream`;
-    const socket = new WebSocket(url);
-    this.socket = socket;
+  watch(listener: (view: RoomView) => void): Promise<RoomView> {
+    const { client } = this;
+    const lease = client.room(this.room);
+    const { store } = lease;
+    client.open();
     return new Promise((resolve, reject) => {
-      let attached = false;
-      socket.addEventListener("open", () =>
-        this.send({ type: "hello", token: this.token } satisfies ClientFrame),
-      );
-      socket.addEventListener("message", (event) => {
-        const frame = JSON.parse(String(event.data)) as ServerFrame;
-        if (frame.type === "snapshot" && !attached) {
-          attached = true;
-          resolve(frame);
-        } else if (frame.type === "events") listener(frame.events);
-        else if (frame.type === "error") this.onProblem(frame.message);
+      let first: RoomView | undefined;
+      let connected = false;
+      const fail = (message: string) => {
+        stopStore();
+        stopConnection();
+        lease.release();
+        client.close();
+        reject(new UsageError(message));
+      };
+      const stopStore = store.subscribe(() => {
+        const state = store.getState();
+        if (state.status === "gone") {
+          if (first === undefined) return fail(`No room "${this.room}"`);
+          this.onProblem(
+            state.reason === "removed" ? "you were removed from this room" : "this room is gone",
+          );
+          return;
+        }
+        if (state.view === undefined) return;
+        if (first === undefined) {
+          first = state.view;
+          resolve(first);
+        } else listener(state.view);
       });
-      socket.addEventListener("close", (event) => {
-        if (!attached) reject(new Error(`Could not join: ${event.reason || event.code}`));
-        else if (!this.closing) this.onProblem(`disconnected (${event.reason || event.code})`);
+      const stopConnection = client.connection.subscribe(() => {
+        const status = client.connection.getStatus();
+        if (status.kind === "open") connected = true;
+        else if (status.kind === "waiting" && connected) {
+          connected = false;
+          this.onProblem("disconnected; reconnecting…");
+        } else if (status.kind === "closed" && !this.closing) {
+          const why = `${status.reason || "closed"} (${status.code})`;
+          if (first === undefined) fail(`Could not connect: ${why}`);
+          else this.onProblem(`disconnected: ${why}`);
+        }
       });
-      socket.addEventListener("error", () => {
-        if (!attached) reject(new Error(`Could not connect to ${url}`));
-      });
+      this.stop = () => {
+        stopStore();
+        stopConnection();
+        lease.release();
+      };
     });
   }
 
-  async submit(text: string, whenBusy: "steer" | "followUp"): Promise<void> {
-    this.send({ type: "submit", text, whenBusy, requestId: randomUUID() });
+  async send(text: string, whenBusy: "steer" | "followUp"): Promise<void> {
+    await this.client.send(this.room, text, { whenBusy });
   }
 
-  async abort(): Promise<void> {
-    this.send({ type: "abort" });
+  abort(): Promise<void> {
+    return this.client.api.abort(this.room);
   }
 
-  async protect(value: string): Promise<string> {
-    const body = JSON.stringify({ value });
-    return (await this.call<ProtectResponse>("/protect", { method: "POST", body })).placeholder;
+  protect(value: string): Promise<string> {
+    return this.client.api.protect(value);
   }
 
-  async members(): Promise<string[]> {
-    const { members } = await this.call<RoomResponse>(`/rooms/${encodeURIComponent(this.room.id)}`);
-    return members.map((p) => p.displayName);
-  }
-
-  async nudges(): Promise<ScheduledNudge[]> {
-    const { nudges } = await this.call<NudgesResponse>("/nudges");
-    return nudges.filter((nudge) => nudge.roomId === this.room.id);
-  }
-
-  async cancelNudge(id: string): Promise<boolean> {
-    if (!(await this.nudges()).some((nudge) => nudge.id === id)) return false;
-    await this.call(`/nudges/${encodeURIComponent(id)}`, { method: "DELETE" });
-    return true;
-  }
-
-  async memory(): Promise<Fact[]> {
-    return [...(await this.call<MemoryResponse>(`${this.roomPath}/memory`)).facts];
+  async cancelNudge(id: string): Promise<void> {
+    await this.notFound(this.client.api.cancelNudge(id), `No nudge ${id} here`);
   }
 
   remember(text: string): Promise<Fact> {
-    const body = JSON.stringify({ text });
-    return this.call<Fact>(`${this.roomPath}/memory`, { method: "POST", body });
+    return this.client.api.remember(this.room, text);
   }
 
-  async forget(id: string): Promise<boolean> {
-    if (!(await this.memory()).some((fact) => fact.id === id)) return false;
-    await this.call(`${this.roomPath}/memory/${encodeURIComponent(id)}`, { method: "DELETE" });
-    return true;
-  }
-
-  async approvals(): Promise<Approval[]> {
-    return [...(await this.call<ApprovalsResponse>(`${this.roomPath}/approvals`)).approvals];
+  async forget(id: string): Promise<void> {
+    await this.notFound(this.client.api.forget(this.room, id), `No fact ${id} here`);
   }
 
   decide(id: string, approve: boolean): Promise<Approval> {
-    const body = JSON.stringify({ approve });
-    return this.call<Approval>(`${this.roomPath}/approvals/${encodeURIComponent(id)}`, {
-      method: "POST",
-      body,
-    });
-  }
-
-  private get roomPath(): string {
-    return `/rooms/${encodeURIComponent(this.room.id)}`;
+    return this.client.api.decide(this.room, id, approve);
   }
 
   async close(): Promise<void> {
     this.closing = true;
-    this.socket?.close();
+    this.stop?.();
+    this.client.close();
   }
 
-  private send(frame: ClientFrame): void {
-    if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(frame));
-    else this.onProblem("not connected");
+  private async notFound<T>(call: Promise<T>, message: string): Promise<T> {
+    try {
+      return await call;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) throw new UsageError(message);
+      throw error;
+    }
   }
 }
 

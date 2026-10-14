@@ -1,45 +1,7 @@
-import type { Message } from "@earendil-works/pi-ai";
-import type { AgentEvent, EntryRecord, SnapshotEvent } from "@earendil-works/pi-durable";
-import {
-  APPROVAL_ENTRY,
-  type Approval,
-  type ApprovalEntryData,
-  FIRE_ENTRY,
-  type FireEntryData,
-  MESSAGE_ENTRY,
-  type MessageEntryData,
-  type ScheduledNudge,
-} from "@nudge/core";
-
-export type Line = { readonly who: string; readonly text: string };
+import type { Approval, RoomNudge, RoomView, Status, TimelineItem } from "@nudge/protocol";
 
 const dim = (text: string) => `\x1b[2m${text}\x1b[22m`;
 const bold = (text: string) => `\x1b[1m${text}\x1b[22m`;
-
-/** What a transcript entry shows in a chat, or undefined for entries a chat hides. */
-export function entryLine(entry: EntryRecord, assistantName: string): Line | undefined {
-  if (entry.kind === MESSAGE_ENTRY) {
-    const data = entry.data as MessageEntryData;
-    return { who: data.displayName, text: data.text };
-  }
-  if (entry.kind === FIRE_ENTRY)
-    return { who: "nudge", text: (entry.data as FireEntryData).message };
-  if (entry.kind === APPROVAL_ENTRY) {
-    const data = entry.data as ApprovalEntryData;
-    return {
-      who: data.id,
-      text: `${data.status} by ${data.decidedBy ?? "nobody"}: ${data.summary}`,
-    };
-  }
-  const message = entry.model?.[0];
-  if (message === undefined) return undefined;
-  if (entry.kind === "pi.user") return { who: "you", text: messageText(message).trim() };
-  if (entry.kind === "pi.assistant") {
-    const text = messageText(message).trim();
-    return text === "" ? undefined : { who: assistantName, text };
-  }
-  return undefined;
-}
 
 /** `a3 pending  Send a mail to Ann`, with who decided and what came of it once decided. */
 export function describeApproval(approval: Approval): string {
@@ -49,7 +11,7 @@ export function describeApproval(approval: Approval): string {
 }
 
 /** `12  Tue 13 Oct, 14:30, every 60 min  Water the plants`, in this machine's time zone. */
-export function describeNudge(nudge: ScheduledNudge): string {
+export function describeNudge(nudge: RoomNudge): string {
   const when = new Date(nudge.fireAt).toLocaleString("en-GB", {
     weekday: "short",
     day: "numeric",
@@ -61,20 +23,24 @@ export function describeNudge(nudge: ScheduledNudge): string {
   return `${nudge.id}\t${when}${every}\t${nudge.message}`;
 }
 
-export function messageText(message: Message): string {
-  if (message.role === "toolResult") return "";
-  if (typeof message.content === "string") return message.content;
-  return message.content.map((block) => (block.type === "text" ? block.text : "")).join("");
-}
+type Answer = Extract<TimelineItem, { type: "answer" }>;
 
 /**
- * Turns an agent event stream into terminal text. Answers stream in as their deltas arrive;
+ * Turns a room's successive views into terminal text. Answers stream in as their text grows;
  * messages from other clients print whole. Our own messages are already on screen.
  */
 export class ChatRenderer {
-  private streaming = false;
-  /** Text of the current answer already on screen. */
+  /** Items printed for good. */
+  private readonly done = new Set<string>();
+  /** Per answer still running: how many of its parts are finished and printed. */
+  private readonly progress = new Map<string, number>();
+  /** Tool calls already announced. */
+  private readonly tools = new Set<string>();
+  /** The text part on screen now (`<answer id>/<index>`), and its text so far. */
+  private streaming: string | undefined;
   private shown = "";
+  private running = false;
+  private status: string | undefined;
 
   constructor(
     private readonly write: (text: string) => void,
@@ -82,110 +48,128 @@ export class ChatRenderer {
     private readonly ownClientId: string,
   ) {}
 
-  history(snapshot: SnapshotEvent, limit = 20): void {
-    const lines = snapshot.entries
-      .map((entry) => entryLine(entry, this.assistantName))
-      .filter((line) => line !== undefined)
-      .slice(-limit);
-    for (const line of lines) this.write(`${dim(`${line.who}:`)} ${dim(line.text)}\n`);
-    const partial = snapshot.generation?.message;
-    if (partial !== undefined) {
-      this.startAnswer();
-      this.show(messageText(partial));
-    }
+  /** The first view: up to `limit` settled items, dimmed, then whatever is still streaming. */
+  history(view: RoomView, limit = 20): void {
+    const settled = view.timeline.filter(
+      (item) => item.type !== "answer" || item.status !== "running",
+    );
+    for (const item of settled) this.done.add(item.id);
+    const lines = settled.flatMap((item) => this.line(item) ?? []).slice(-limit);
+    for (const line of lines) this.write(`${dim(line)}\n`);
+    this.update(view);
   }
 
+  /** Whether the assistant is answering. */
   get busy(): boolean {
-    return this.streaming;
+    return this.running;
   }
 
-  event(event: AgentEvent): void {
-    switch (event.type) {
-      case "message_start":
-        if (event.message.role !== "assistant") break;
-        this.startAnswer();
-        this.show(messageText(event.message));
-        break;
-      case "message_update":
-        for (const change of event.changes) {
-          if (change.type === "text_delta") this.show(this.shown + change.delta);
-          else if (change.type === "text_start" && change.block.type === "text")
-            this.show(this.shown + change.block.text);
-        }
-        break;
-      case "message_end":
-        this.endMessage(event.entry);
-        break;
-      case "tool_execution_start":
-        this.endAnswer();
-        this.write(dim(`  · ${event.toolName}\n`));
-        break;
-      case "auto_retry_start":
-        this.endAnswer();
-        this.write(dim(`  · retrying (${event.errorMessage})\n`));
-        break;
-      case "task_failed":
-        this.endAnswer();
-        this.write(`  ! ${event.kind} failed: ${event.message}\n`);
-        break;
-      case "entry_appended":
-        this.endMessage(event.entry);
-        break;
-      default:
-        break;
-    }
+  /** Prints what `view` adds; true when an answer just ended. */
+  update(view: RoomView): boolean {
+    for (const item of view.timeline) if (!this.done.has(item.id)) this.item(item);
+    this.showStatus(view.live.status);
+    const ended = this.running && !view.live.running;
+    this.running = view.live.running;
+    if (ended) this.endText();
+    return ended;
   }
 
-  private endMessage(entry: EntryRecord): void {
-    if (entry.kind === "pi.assistant") {
-      const message = entry.model?.[0];
-      const text = message === undefined ? "" : messageText(message);
-      if (text !== "") {
-        this.startAnswer();
-        this.show(text);
+  /** A settled item as one history line, or undefined for one a chat hides. */
+  private line(item: TimelineItem): string | undefined {
+    switch (item.type) {
+      case "user":
+        return `${item.author?.displayName ?? "you"}: ${item.text}`;
+      case "nudge":
+        return `nudge: ${item.text}`;
+      case "approval":
+        return `${item.approvalId} ${item.status} by ${item.decidedBy ?? "nobody"}: ${item.summary}`;
+      case "marker":
+        return item.kind === "compacted" ? "· earlier messages summarized" : "· started over";
+      case "answer": {
+        const text = item.parts
+          .map((part) => (part.type === "text" ? part.text : ""))
+          .join("")
+          .trim();
+        return text === "" ? undefined : `${this.assistantName}: ${text}`;
       }
-      this.endAnswer();
-      return;
     }
-    if (entry.kind === FIRE_ENTRY) {
-      this.endAnswer();
-      this.write(dim(`  · nudge: ${(entry.data as FireEntryData).message}\n`));
-      return;
-    }
-    if (entry.kind === APPROVAL_ENTRY) {
-      const data = entry.data as ApprovalEntryData;
-      this.endAnswer();
-      this.write(
-        dim(`  · ${data.id} ${data.status} by ${data.decidedBy ?? "nobody"}: ${data.summary}\n`),
-      );
-      return;
-    }
-    if (entry.kind !== MESSAGE_ENTRY) return;
-    const data = entry.data as MessageEntryData;
-    if (data.clientId === this.ownClientId) return;
-    this.endAnswer();
-    this.write(`${bold(`${data.displayName}:`)} ${data.text}\n`);
   }
 
-  /** Prints what `text` adds to the answer on screen; a rewrite (a retry) starts a new line. */
-  private show(text: string): void {
-    if (text.startsWith(this.shown)) {
-      this.write(text.slice(this.shown.length));
-    } else {
-      this.write(`\n${text}`);
+  private item(item: TimelineItem): void {
+    if (item.type === "answer") return this.answer(item);
+    this.done.add(item.id);
+    if (item.type === "user") {
+      if (item.clientId === this.ownClientId) return;
+      this.endText();
+      this.write(`${bold(`${item.author?.displayName ?? "someone"}:`)} ${item.text}\n`);
+      return;
     }
+    const line = this.line(item);
+    if (line === undefined) return;
+    this.endText();
+    this.write(`${dim(`  · ${line}`)}\n`);
+  }
+
+  private answer(item: Answer): void {
+    const settled = item.status !== "running";
+    let next = this.progress.get(item.id) ?? 0;
+    for (let index = next; index < item.parts.length; index++) {
+      const part = item.parts[index]!;
+      // A part is finished once another follows it, or the answer ended.
+      const finished = settled || index < item.parts.length - 1;
+      if (part.type === "text") {
+        this.showText(`${item.id}/${index}`, part.text);
+        if (finished) this.endText();
+      } else if (part.type === "tool" && !this.tools.has(part.callId)) {
+        this.tools.add(part.callId);
+        this.endText();
+        this.write(`${dim(`  · ${part.name}`)}\n`);
+      }
+      if (finished) next = index + 1;
+    }
+    if (!settled) {
+      this.progress.set(item.id, next);
+      return;
+    }
+    this.progress.delete(item.id);
+    this.done.add(item.id);
+    this.endText();
+    if (item.status === "failed") this.write(`  ! failed: ${item.error ?? "unknown error"}\n`);
+    else if (item.status === "stopped") this.write(`${dim("  · stopped")}\n`);
+  }
+
+  private showStatus(status: Status | undefined): void {
+    const key =
+      status === undefined
+        ? undefined
+        : status.kind === "retrying"
+          ? `retrying ${status.attempt}`
+          : status.kind;
+    if (key === this.status) return;
+    this.status = key;
+    if (status === undefined || status.kind === "compacting") return;
+    this.endText();
+    if (status.kind === "retrying") this.write(`${dim(`  · retrying (${status.error})`)}\n`);
+    else this.write(`  ! compaction failed: ${status.error}\n`);
+  }
+
+  /** Prints what `text` adds to the part on screen; a rewrite (a retry) starts a new line. */
+  private showText(part: string, text: string): void {
+    if (this.streaming !== part) {
+      this.endText();
+      if (text === "") return;
+      this.streaming = part;
+      this.shown = "";
+      this.write(`${bold(`${this.assistantName}:`)} `);
+    }
+    if (text.startsWith(this.shown)) this.write(text.slice(this.shown.length));
+    else this.write(`\n${text}`);
     this.shown = text;
   }
 
-  private startAnswer(): void {
-    if (this.streaming) return;
-    this.streaming = true;
-    this.write(`${bold(`${this.assistantName}:`)} `);
-  }
-
-  private endAnswer(): void {
-    if (!this.streaming) return;
-    this.streaming = false;
+  private endText(): void {
+    if (this.streaming === undefined) return;
+    this.streaming = undefined;
     this.shown = "";
     this.write("\n");
   }

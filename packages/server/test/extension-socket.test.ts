@@ -69,7 +69,7 @@ describe("extension room sockets", () => {
       tokens[name] = (await nudge.players.invite(name, context)).token;
     await nudge.rooms.createShared({ id: "trip", name: "Trip", members: ["ann"] }, context);
     server = await serveNudge({ assistants: new Map([["robin", nudge]]), port: 0 });
-    base = `${server.url.replace(/^http/, "ws")}/a/robin/rooms`;
+    base = `${server.url.replace(/^http/, "ws")}/v1/a/robin/rooms`;
   });
 
   afterEach(async () => {
@@ -90,6 +90,8 @@ describe("extension room sockets", () => {
     expect((await connect(`${base}/trip/ext/echo`, "nudge_nope").closed).code).toBe(4401);
     expect((await connect(`${base}/trip/ext/echo`, tokens.Cy!).closed).code).toBe(4404);
     expect((await connect(`${base}/trip/ext/nothing`, tokens.Ann!).closed).code).toBe(4404);
+    const elsewhere = base.replace("/a/robin/", "/a/nobody/");
+    expect((await connect(`${elsewhere}/trip/ext/echo`, tokens.Ann!).closed).code).toBe(4404);
     const lobby = connect(`${base}/lobby/ext/echo`, tokens.Cy!);
     await eventually(() => lobby.frames.length > 0);
     lobby.close();

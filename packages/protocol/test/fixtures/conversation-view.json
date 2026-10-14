@@ -12,44 +12,69 @@
   },
   "frames": [
     [
-      ["s", ["docs", "pi.live", "run"], { "taskId": 17, "inputs": [16] }],
-      [
-        "p",
-        ["entries"],
-        0,
-        0,
-        [
+      {
+        "op": "splice",
+        "path": ["entries"],
+        "index": 0,
+        "remove": 0,
+        "insert": [
           {
             "kind": "nudge.message",
             "data": {
               "text": "Remember that I like tea",
               "playerId": "ann",
               "displayName": "Ann",
-              "clientId": "client-b7d49f81-8416-404e-8384-8ccfa8c1b192",
+              "clientId": "client-82896f4c-6247-4345-b1bd-828a7a7c0afe",
               "requestId": "1",
-              "sentAt": 1791971455945
+              "sentAt": 1791982772243
             },
             "model": [
               {
                 "role": "user",
                 "content": "Ann: Remember that I like tea",
-                "timestamp": 1791971455945
+                "timestamp": 1791982772243
               }
             ],
             "id": 15,
             "conversationId": 9
           }
         ]
-      ]
+      },
+      { "op": "set", "path": ["docs", "pi.live", "run"], "value": { "taskId": 17, "inputs": [16] } }
     ],
     [
-      ["#", 0, ["entries"]],
-      [
-        "p",
-        0,
-        1,
-        0,
-        [
+      {
+        "op": "splice",
+        "path": ["docs", "pi.inbox", "items"],
+        "index": 0,
+        "remove": 0,
+        "insert": [
+          {
+            "id": 18,
+            "mode": "followUp",
+            "content": "Bo: I like coffee",
+            "entry": {
+              "kind": "nudge.message",
+              "data": {
+                "text": "I like coffee",
+                "playerId": "bo",
+                "displayName": "Bo",
+                "clientId": "client-32c182f3-16d1-4d70-bf4c-d6875e00a742",
+                "requestId": "1",
+                "sentAt": 1791982772244
+              }
+            }
+          }
+        ]
+      }
+    ],
+    [
+      {
+        "op": "splice",
+        "path": ["entries"],
+        "index": 1,
+        "remove": 0,
+        "insert": [
           {
             "model": [
               {
@@ -58,7 +83,7 @@
                 "sections": {
                   "identity": "You are Nudge, a personal assistant. Be brief and concrete. Several people may share a conversation; each message starts with the name of who wrote it.",
                   "members": "<members>\nPeople who can read this conversation: Ann, Bo.\n</members>",
-                  "time": "<time>\nIt is Wednesday, 14 October 2026 at 11:00 (Europe/Oslo), give or take an hour.\n</time>"
+                  "time": "<time>\nIt is Wednesday, 14 October 2026 at 14:00 (Europe/Oslo), give or take an hour.\n</time>"
                 },
                 "toolsAdded": [
                   {
@@ -121,52 +146,26 @@
                     }
                   }
                 ],
-                "timestamp": 1791971455948
+                "timestamp": 1791982772246
               }
             ],
             "kind": "pi.system",
-            "id": 18,
+            "id": 19,
             "conversationId": 9,
             "byTaskId": 17
           }
         ]
-      ]
+      }
     ],
-    [["s", ["docs", "pi.live", "generation"], { "attempt": 1 }]],
+    [{ "op": "set", "path": ["docs", "pi.live", "generation"], "value": { "attempt": 1 } }],
     [
-      [
-        "p",
-        ["docs", "pi.inbox", "items"],
-        0,
-        0,
-        [
-          {
-            "id": 19,
-            "mode": "followUp",
-            "content": "Bo: I like coffee",
-            "entry": {
-              "kind": "nudge.message",
-              "data": {
-                "text": "I like coffee",
-                "playerId": "bo",
-                "displayName": "Bo",
-                "clientId": "client-10403eb2-c1c8-491b-994f-a91d722ed208",
-                "requestId": "1",
-                "sentAt": 1791971455955
-              }
-            }
-          }
-        ]
-      ]
-    ],
-    [
-      [
-        "s",
-        ["docs", "pi.live", "generation", "message"],
-        {
+      {
+        "op": "set",
+        "path": ["docs", "pi.live", "generation", "message"],
+        "value": {
           "role": "assistant",
-          "content": [{ "type": "thinking", "thinking": "Ann wants th" }],
-          "api": "faux:1791971455913:ihd5jxeqspr",
+          "content": [{ "type": "thinking", "thinking": "Ann wants this k" }],
+          "api": "faux:1791982772225:xe9ekj51bi",
           "provider": "faux",
           "model": "faux-1",
           "usage": {
@@ -178,61 +177,39 @@
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
           },
           "stopReason": "pending",
-          "timestamp": 1791971455914
+          "timestamp": 1791982772225
         }
-      ]
+      }
     ],
     [
-      [
-        "p",
-        ["docs", "pi.live", "generation", "message", "content"],
-        1,
-        0,
-        [
+      {
+        "op": "append",
+        "path": ["docs", "pi.live", "generation", "message", "content", 0, "thinking"],
+        "text": "ept."
+      },
+      {
+        "op": "splice",
+        "path": ["docs", "pi.live", "generation", "message", "content"],
+        "index": 1,
+        "remove": 0,
+        "insert": [
           { "type": "text", "text": "I'll note that." },
           {
             "type": "toolCall",
-            "id": "tool:1791971455913:ph95jph94ep",
+            "id": "tool:1791982772225:g2p9abud2xf",
             "name": "remember",
             "arguments": {}
           }
         ]
-      ],
-      ["a", ["docs", "pi.live", "generation", "message", "content", 0, "thinking"], "is kept."]
+      }
     ],
     [
-      [
-        "s",
-        ["docs", "pi.live", "tools"],
-        [
-          {
-            "callId": "tool:1791971455913:ph95jph94ep",
-            "name": "remember",
-            "taskId": 21,
-            "status": "pending"
-          }
-        ]
-      ],
-      ["#", 1, ["docs", "pi.live", "generation"]],
-      ["d", 1],
-      [
-        "s",
-        ["docs", "pi.usage", "models", "faux/faux-1"],
-        {
-          "input": 494,
-          "output": 18,
-          "cacheRead": 0,
-          "cacheWrite": 494,
-          "totalTokens": 1006,
-          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
-        }
-      ],
-      [
-        "p",
-        0,
-        2,
-        0,
-        [
+      {
+        "op": "splice",
+        "path": ["entries"],
+        "index": 2,
+        "remove": 0,
+        "insert": [
           {
             "model": [
               {
@@ -242,12 +219,12 @@
                   { "type": "text", "text": "I'll note that." },
                   {
                     "type": "toolCall",
-                    "id": "tool:1791971455913:ph95jph94ep",
+                    "id": "tool:1791982772225:g2p9abud2xf",
                     "name": "remember",
                     "arguments": { "fact": "Ann likes tea" }
                   }
                 ],
-                "api": "faux:1791971455913:ihd5jxeqspr",
+                "api": "faux:1791982772225:xe9ekj51bi",
                 "provider": "faux",
                 "model": "faux-1",
                 "usage": {
@@ -259,7 +236,7 @@
                   "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
                 },
                 "stopReason": "toolUse",
-                "timestamp": 1791971455914
+                "timestamp": 1791982772225
               }
             ],
             "kind": "pi.assistant",
@@ -268,29 +245,51 @@
             "byTaskId": 17
           }
         ]
-      ]
+      },
+      { "op": "del", "path": ["docs", "pi.live", "generation"] },
+      {
+        "op": "set",
+        "path": ["docs", "pi.live", "tools"],
+        "value": [
+          {
+            "callId": "tool:1791982772225:g2p9abud2xf",
+            "name": "remember",
+            "taskId": 21,
+            "status": "pending"
+          }
+        ]
+      },
+      {
+        "op": "set",
+        "path": ["docs", "pi.usage", "models", "faux/faux-1"],
+        "value": {
+          "input": 494,
+          "output": 18,
+          "cacheRead": 0,
+          "cacheWrite": 494,
+          "totalTokens": 1006,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
+        }
+      }
     ],
-    [["s", ["docs", "pi.live", "tools", 0, "status"], "running"]],
+    [{ "op": "set", "path": ["docs", "pi.live", "tools", 0, "status"], "value": "running" }],
     [
-      ["#", 2, ["docs", "pi.live", "tools", 0, "status"]],
-      ["s", 2, "done"],
-      ["s", ["docs", "pi.live", "tools", 0, "entry"], 23],
-      [
-        "p",
-        0,
-        3,
-        0,
-        [
+      {
+        "op": "splice",
+        "path": ["entries"],
+        "index": 3,
+        "remove": 0,
+        "insert": [
           {
             "model": [
               {
                 "role": "toolResult",
-                "toolCallId": "tool:1791971455913:ph95jph94ep",
+                "toolCallId": "tool:1791982772225:g2p9abud2xf",
                 "toolName": "remember",
                 "content": [{ "type": "text", "text": "Remembered m1." }],
                 "isError": false,
                 "durationMs": 0,
-                "timestamp": 1791971456033
+                "timestamp": 1791982772330
               }
             ],
             "data": { "diagnostics": [] },
@@ -300,41 +299,35 @@
             "byTaskId": 21
           }
         ]
-      ]
+      },
+      { "op": "set", "path": ["docs", "pi.live", "tools", 0, "status"], "value": "done" },
+      { "op": "set", "path": ["docs", "pi.live", "tools", 0, "entry"], "value": 23 }
     ],
     [
-      ["#", 3, ["docs", "pi.live", "tools"]],
-      ["d", 3],
-      ["s", ["docs", "pi.live", "run", "taskId"], 24]
+      { "op": "del", "path": ["docs", "pi.live", "tools"] },
+      { "op": "set", "path": ["docs", "pi.live", "run", "taskId"], "value": 24 }
     ],
     [
-      [
-        "p",
-        0,
-        4,
-        0,
-        [
+      {
+        "op": "splice",
+        "path": ["entries"],
+        "index": 4,
+        "remove": 0,
+        "insert": [
           {
             "model": [
               {
                 "role": "system",
                 "content": "",
                 "sections": { "identity": null, "members": null, "time": null },
-                "timestamp": 1791971456035
+                "timestamp": 1791982772332
               }
             ],
             "kind": "pi.system",
             "id": 25,
             "conversationId": 9,
             "byTaskId": 24
-          }
-        ]
-      ],
-      [
-        "p",
-        5,
-        0,
-        [
+          },
           {
             "model": [
               {
@@ -344,9 +337,9 @@
                   "identity": "You are Nudge, a personal assistant. Be brief and concrete. Several people may share a conversation; each message starts with the name of who wrote it.",
                   "members": "<members>\nPeople who can read this conversation: Ann, Bo.\n</members>",
                   "memory": "<memory>\nWhat you were asked to remember in this conversation:\n- m1: Ann likes tea\n</memory>",
-                  "time": "<time>\nIt is Wednesday, 14 October 2026 at 11:00 (Europe/Oslo), give or take an hour.\n</time>"
+                  "time": "<time>\nIt is Wednesday, 14 October 2026 at 14:00 (Europe/Oslo), give or take an hour.\n</time>"
                 },
-                "timestamp": 1791971456035
+                "timestamp": 1791982772332
               }
             ],
             "kind": "pi.system",
@@ -355,18 +348,17 @@
             "byTaskId": 24
           }
         ]
-      ]
+      }
     ],
-    [["s", 1, { "attempt": 1 }]],
+    [{ "op": "set", "path": ["docs", "pi.live", "generation"], "value": { "attempt": 1 } }],
     [
-      ["#", 4, ["docs", "pi.live", "generation", "message"]],
-      [
-        "s",
-        4,
-        {
+      {
+        "op": "set",
+        "path": ["docs", "pi.live", "generation", "message"],
+        "value": {
           "role": "assistant",
-          "content": [{ "type": "text", "text": "" }],
-          "api": "faux:1791971455913:ihd5jxeqspr",
+          "content": [{ "type": "text", "text": "Noted: Ann l" }],
+          "api": "faux:1791982772225:xe9ekj51bi",
           "provider": "faux",
           "model": "faux-1",
           "usage": {
@@ -378,34 +370,23 @@
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
           },
           "stopReason": "pending",
-          "timestamp": 1791971455914
+          "timestamp": 1791982772225
         }
-      ]
+      }
     ],
     [
-      ["#", 5, ["docs", "pi.inbox", "items"]],
-      ["p", 5, 0, 1, []],
-      ["#", 6, ["docs", "pi.live", "run"]],
-      ["d", 6],
-      ["s", { "taskId": 29, "inputs": [19] }],
-      ["d", 1],
-      ["s", ["docs", "pi.usage", "models", "faux/faux-1", "input"], 635],
-      ["s", ["docs", "pi.usage", "models", "faux/faux-1", "output"], 24],
-      ["s", ["docs", "pi.usage", "models", "faux/faux-1", "cacheRead"], 494],
-      ["s", ["docs", "pi.usage", "models", "faux/faux-1", "cacheWrite"], 635],
-      ["s", ["docs", "pi.usage", "models", "faux/faux-1", "totalTokens"], 1788],
-      [
-        "p",
-        0,
-        6,
-        0,
-        [
+      {
+        "op": "splice",
+        "path": ["entries"],
+        "index": 6,
+        "remove": 0,
+        "insert": [
           {
             "model": [
               {
                 "role": "assistant",
                 "content": [{ "type": "text", "text": "Noted: Ann likes tea." }],
-                "api": "faux:1791971455913:ihd5jxeqspr",
+                "api": "faux:1791982772225:xe9ekj51bi",
                 "provider": "faux",
                 "model": "faux-1",
                 "usage": {
@@ -417,50 +398,70 @@
                   "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
                 },
                 "stopReason": "stop",
-                "timestamp": 1791971455914
+                "timestamp": 1791982772225
               }
             ],
             "kind": "pi.assistant",
             "id": 27,
             "conversationId": 9,
             "byTaskId": 24
-          }
-        ]
-      ],
-      [
-        "p",
-        7,
-        0,
-        [
+          },
           {
             "kind": "nudge.message",
             "data": {
               "text": "I like coffee",
               "playerId": "bo",
               "displayName": "Bo",
-              "clientId": "client-10403eb2-c1c8-491b-994f-a91d722ed208",
+              "clientId": "client-32c182f3-16d1-4d70-bf4c-d6875e00a742",
               "requestId": "1",
-              "sentAt": 1791971455955
+              "sentAt": 1791982772244
             },
             "model": [
-              { "role": "user", "content": "Bo: I like coffee", "timestamp": 1791971456066 }
+              { "role": "user", "content": "Bo: I like coffee", "timestamp": 1791982772363 }
             ],
             "id": 28,
             "conversationId": 9,
             "byTaskId": 24
           }
         ]
-      ]
+      },
+      { "op": "del", "path": ["docs", "pi.live", "generation"] },
+      { "op": "set", "path": ["docs", "pi.live", "run", "taskId"], "value": 29 },
+      { "op": "set", "path": ["docs", "pi.live", "run", "inputs", 0], "value": 18 },
+      {
+        "op": "splice",
+        "path": ["docs", "pi.inbox", "items"],
+        "index": 0,
+        "remove": 1,
+        "insert": []
+      },
+      { "op": "set", "path": ["docs", "pi.usage", "models", "faux/faux-1", "input"], "value": 635 },
+      { "op": "set", "path": ["docs", "pi.usage", "models", "faux/faux-1", "output"], "value": 24 },
+      {
+        "op": "set",
+        "path": ["docs", "pi.usage", "models", "faux/faux-1", "cacheRead"],
+        "value": 494
+      },
+      {
+        "op": "set",
+        "path": ["docs", "pi.usage", "models", "faux/faux-1", "cacheWrite"],
+        "value": 635
+      },
+      {
+        "op": "set",
+        "path": ["docs", "pi.usage", "models", "faux/faux-1", "totalTokens"],
+        "value": 1788
+      }
     ],
-    [["s", 1, { "attempt": 1 }]],
+    [{ "op": "set", "path": ["docs", "pi.live", "generation"], "value": { "attempt": 1 } }],
     [
-      [
-        "s",
-        4,
-        {
+      {
+        "op": "set",
+        "path": ["docs", "pi.live", "generation", "message"],
+        "value": {
           "role": "assistant",
           "content": [{ "type": "text", "text": "" }],
-          "api": "faux:1791971455913:ihd5jxeqspr",
+          "api": "faux:1791982772225:xe9ekj51bi",
           "provider": "faux",
           "model": "faux-1",
           "usage": {
@@ -472,35 +473,23 @@
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
           },
           "stopReason": "pending",
-          "timestamp": 1791971455914
+          "timestamp": 1791982772225
         }
-      ]
+      }
     ],
     [
-      ["d", 6],
-      ["d", 1],
-      ["#", 7, ["docs", "pi.usage", "models", "faux/faux-1", "input"]],
-      ["s", 7, 651],
-      ["#", 8, ["docs", "pi.usage", "models", "faux/faux-1", "output"]],
-      ["s", 8, 29],
-      ["#", 9, ["docs", "pi.usage", "models", "faux/faux-1", "cacheRead"]],
-      ["s", 9, 1129],
-      ["#", 10, ["docs", "pi.usage", "models", "faux/faux-1", "cacheWrite"]],
-      ["s", 10, 652],
-      ["#", 11, ["docs", "pi.usage", "models", "faux/faux-1", "totalTokens"]],
-      ["s", 11, 2461],
-      [
-        "p",
-        0,
-        8,
-        0,
-        [
+      {
+        "op": "splice",
+        "path": ["entries"],
+        "index": 8,
+        "remove": 0,
+        "insert": [
           {
             "model": [
               {
                 "role": "assistant",
                 "content": [{ "type": "text", "text": "And Bo likes coffee." }],
-                "api": "faux:1791971455913:ihd5jxeqspr",
+                "api": "faux:1791982772225:xe9ekj51bi",
                 "provider": "faux",
                 "model": "faux-1",
                 "usage": {
@@ -512,7 +501,7 @@
                   "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
                 },
                 "stopReason": "stop",
-                "timestamp": 1791971455914
+                "timestamp": 1791982772225
               }
             ],
             "kind": "pi.assistant",
@@ -521,41 +510,60 @@
             "byTaskId": 29
           }
         ]
-      ]
+      },
+      { "op": "del", "path": ["docs", "pi.live", "run"] },
+      { "op": "del", "path": ["docs", "pi.live", "generation"] },
+      { "op": "set", "path": ["docs", "pi.usage", "models", "faux/faux-1", "input"], "value": 651 },
+      { "op": "set", "path": ["docs", "pi.usage", "models", "faux/faux-1", "output"], "value": 29 },
+      {
+        "op": "set",
+        "path": ["docs", "pi.usage", "models", "faux/faux-1", "cacheRead"],
+        "value": 1129
+      },
+      {
+        "op": "set",
+        "path": ["docs", "pi.usage", "models", "faux/faux-1", "cacheWrite"],
+        "value": 652
+      },
+      {
+        "op": "set",
+        "path": ["docs", "pi.usage", "models", "faux/faux-1", "totalTokens"],
+        "value": 2461
+      }
     ],
     [
-      ["s", 6, { "taskId": 35, "inputs": [34] }],
-      [
-        "p",
-        0,
-        9,
-        0,
-        [
+      {
+        "op": "splice",
+        "path": ["entries"],
+        "index": 9,
+        "remove": 0,
+        "insert": [
           {
             "kind": "nudge.fire",
-            "data": { "nudgeId": "31", "message": "Kettle", "fireAt": 1791971456143 },
+            "data": { "nudgeId": "31", "message": "Kettle", "fireAt": 1791982772440 },
             "model": [
               {
                 "role": "user",
                 "content": "A nudge you scheduled is due now: Kettle\nSay it to the room now, in your own words. Nothing needs scheduling.",
-                "timestamp": 1791971456144
+                "timestamp": 1791982772442
               }
             ],
             "id": 33,
             "conversationId": 9
           }
         ]
-      ]
+      },
+      { "op": "set", "path": ["docs", "pi.live", "run"], "value": { "taskId": 35, "inputs": [34] } }
     ],
-    [["s", 1, { "attempt": 1 }]],
+    [{ "op": "set", "path": ["docs", "pi.live", "generation"], "value": { "attempt": 1 } }],
     [
-      [
-        "s",
-        4,
-        {
+      {
+        "op": "set",
+        "path": ["docs", "pi.live", "generation", "message"],
+        "value": {
           "role": "assistant",
           "content": [{ "type": "text", "text": "" }],
-          "api": "faux:1791971455913:ihd5jxeqspr",
+          "api": "faux:1791982772225:xe9ekj51bi",
           "provider": "faux",
           "model": "faux-1",
           "usage": {
@@ -567,30 +575,23 @@
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
           },
           "stopReason": "pending",
-          "timestamp": 1791971455914
+          "timestamp": 1791982772225
         }
-      ]
+      }
     ],
     [
-      ["d", 6],
-      ["d", 1],
-      ["s", 7, 690],
-      ["s", 8, 36],
-      ["s", 9, 1780],
-      ["s", 10, 691],
-      ["s", 11, 3197],
-      [
-        "p",
-        0,
-        10,
-        0,
-        [
+      {
+        "op": "splice",
+        "path": ["entries"],
+        "index": 10,
+        "remove": 0,
+        "insert": [
           {
             "model": [
               {
                 "role": "assistant",
                 "content": [{ "type": "text", "text": "Time to put the kettle on!" }],
-                "api": "faux:1791971455913:ihd5jxeqspr",
+                "api": "faux:1791982772225:xe9ekj51bi",
                 "provider": "faux",
                 "model": "faux-1",
                 "usage": {
@@ -602,7 +603,7 @@
                   "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
                 },
                 "stopReason": "stop",
-                "timestamp": 1791971455914
+                "timestamp": 1791982772225
               }
             ],
             "kind": "pi.assistant",
@@ -611,7 +612,26 @@
             "byTaskId": 35
           }
         ]
-      ]
+      },
+      { "op": "del", "path": ["docs", "pi.live", "run"] },
+      { "op": "del", "path": ["docs", "pi.live", "generation"] },
+      { "op": "set", "path": ["docs", "pi.usage", "models", "faux/faux-1", "input"], "value": 690 },
+      { "op": "set", "path": ["docs", "pi.usage", "models", "faux/faux-1", "output"], "value": 36 },
+      {
+        "op": "set",
+        "path": ["docs", "pi.usage", "models", "faux/faux-1", "cacheRead"],
+        "value": 1780
+      },
+      {
+        "op": "set",
+        "path": ["docs", "pi.usage", "models", "faux/faux-1", "cacheWrite"],
+        "value": 691
+      },
+      {
+        "op": "set",
+        "path": ["docs", "pi.usage", "models", "faux/faux-1", "totalTokens"],
+        "value": 3197
+      }
     ]
   ]
 }

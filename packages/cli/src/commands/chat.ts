@@ -2,6 +2,7 @@ import { userInfo } from "node:os";
 import { createInterface } from "node:readline/promises";
 import { UsageError } from "../errors.ts";
 import { ChatRenderer, describeApproval, describeNudge } from "../render.ts";
+import type { RoomView } from "@nudge/protocol";
 import { type ChatSession, openLocal, openRemote } from "../session.ts";
 
 export type ChatOptions = {
@@ -12,7 +13,7 @@ export type ChatOptions = {
   /** In-process: the player to chat as. */
   readonly player?: string;
   readonly name?: string;
-  /** Remote: `http(s)://host:port/a/<assistant>`. */
+  /** Remote: `http(s)://host:port`; `assistant` picks one there. */
   readonly url?: string;
   readonly token?: string;
 };
@@ -27,12 +28,17 @@ const HELP =
 
 export async function chat(options: ChatOptions): Promise<void> {
   let rl: ReturnType<typeof createInterface> | undefined;
+  // Input can end while a command still runs, as when it is piped in.
+  let inputEnded = false;
+  const ask = () => {
+    if (!inputEnded) rl?.prompt();
+  };
   const onProblem = (message: string) => {
     console.log(`\n  ! ${message}`);
-    rl?.prompt();
+    ask();
   };
   const session = await open(options, onProblem);
-  const { assistantName, room } = session;
+  const { assistantName } = session;
 
   const renderer = new ChatRenderer(
     (text) => process.stdout.write(text),
@@ -40,13 +46,12 @@ export async function chat(options: ChatOptions): Promise<void> {
     session.clientId,
   );
   rl = createInterface({ input: process.stdin, output: process.stdout, prompt: "> " });
-  const where = room.kind === "lobby" ? "" : ` · ${room.name}`;
-  console.log(`${assistantName}${where} · ${HELP}\n`);
+  rl.on("close", () => (inputEnded = true));
   const prompt = rl;
   // Approvals already announced, so each new one is shown once.
   const announced = new Set<string>();
-  const announce = async () => {
-    const waiting = (await session.approvals()).filter(
+  const announce = (view: RoomView) => {
+    const waiting = view.approvals.filter(
       (approval) => approval.status === "pending" && !announced.has(approval.id),
     );
     for (const approval of waiting.reverse()) {
@@ -55,21 +60,48 @@ export async function chat(options: ChatOptions): Promise<void> {
         `  ? ${describeApproval(approval)} — /approve ${approval.id} or /deny ${approval.id}`,
       );
     }
-    if (waiting.length > 0) prompt.prompt();
+    return waiting.length > 0;
   };
-  const snapshot = await session.attach((events) => {
-    for (const event of events) {
-      renderer.event(event);
-      if (event.type === "run_end") {
-        prompt.prompt();
-        void announce().catch(() => {});
-      }
-    }
+  // Views that arrive before the history is on screen only update `latest`.
+  let latest: RoomView | undefined;
+  let started = false;
+  const waiting = new Set<() => void>();
+  const first = await session.watch((next) => {
+    latest = next;
+    for (const check of waiting) check();
+    if (!started) return;
+    const ended = renderer.update(next);
+    if (announce(next) || ended) ask();
   });
-  renderer.history(snapshot);
-  await announce().catch(() => {});
+  const { room } = first;
+  const where = room.kind === "lobby" ? "" : ` · ${room.name}`;
+  console.log(`${assistantName}${where} · ${HELP}\n`);
+  latest ??= first;
+  renderer.history(latest);
+  announce(latest);
+  started = true;
+  const now = () => latest ?? first;
+  /**
+   * Settles once the view shows what a command changed, or after two seconds, so a list asked
+   * for right after the change has it.
+   */
+  const shown = (done: (view: RoomView) => boolean) =>
+    new Promise<void>((resolve) => {
+      const check = () => {
+        if (!done(now())) return;
+        clearTimeout(timer);
+        waiting.delete(check);
+        resolve();
+      };
+      const timer = setTimeout(() => {
+        waiting.delete(check);
+        resolve();
+      }, 2000);
+      waiting.add(check);
+      check();
+    });
 
-  if (!renderer.busy) rl.prompt();
+  if (!renderer.busy) ask();
 
   let closing = false;
   const quit = async () => {
@@ -91,7 +123,7 @@ export async function chat(options: ChatOptions): Promise<void> {
   for await (const raw of rl) {
     const line = raw.trim();
     if (line === "") {
-      rl.prompt();
+      ask();
       continue;
     }
     if (line === "/quit" || line === "/exit") break;
@@ -101,37 +133,45 @@ export async function chat(options: ChatOptions): Promise<void> {
       } else if (line === "/stop") {
         await session.abort();
       } else if (line === "/who") {
-        console.log(`  ${(await session.members()).join(", ")}`);
+        const members = now().room.members.map((player) => player.displayName);
+        console.log(`  ${room.kind === "lobby" ? "Everyone" : members.join(", ")}`);
       } else if (line === "/nudges") {
-        const nudges = await session.nudges();
-        if (nudges.length === 0) console.log("  No nudges scheduled here.");
-        for (const nudge of nudges) console.log(`  ${describeNudge(nudge)}`);
+        if (now().nudges.length === 0) console.log("  No nudges scheduled here.");
+        for (const nudge of now().nudges) console.log(`  ${describeNudge(nudge)}`);
       } else if (line.startsWith("/nudges ")) {
         const id = /^\/nudges cancel\s+(\S+)$/.exec(line)?.[1];
         if (id === undefined) console.log("  Usage: /nudges cancel <id>");
-        else
-          console.log((await session.cancelNudge(id)) ? "  Cancelled." : `  No nudge ${id} here.`);
+        else {
+          await session.cancelNudge(id);
+          await shown((view) => !view.nudges.some((nudge) => nudge.id === id));
+          console.log("  Cancelled.");
+        }
       } else if (line === "/memory") {
-        const facts = await session.memory();
-        if (facts.length === 0) console.log("  Nothing remembered here.");
-        for (const fact of facts) console.log(`  ${fact.id}: ${fact.text}`);
+        if (now().memory.length === 0) console.log("  Nothing remembered here.");
+        for (const fact of now().memory) console.log(`  ${fact.id}: ${fact.text}`);
       } else if (line.startsWith("/memory ")) {
         const [, verb, rest] = /^\/memory\s+(add|forget)\s+(.+)$/.exec(line) ?? [];
-        if (verb === "add") console.log(`  Remembered ${(await session.remember(rest!)).id}.`);
-        else if (verb === "forget")
-          console.log(
-            (await session.forget(rest!.trim())) ? "  Forgotten." : `  No fact ${rest} here.`,
-          );
-        else console.log("  Usage: /memory add <text> | /memory forget <id>");
+        if (verb === "add") {
+          const { id } = await session.remember(rest!);
+          await shown((view) => view.memory.some((fact) => fact.id === id));
+          console.log(`  Remembered ${id}.`);
+        } else if (verb === "forget") {
+          const id = rest!.trim();
+          await session.forget(id);
+          await shown((view) => !view.memory.some((fact) => fact.id === id));
+          console.log("  Forgotten.");
+        } else console.log("  Usage: /memory add <text> | /memory forget <id>");
       } else if (line === "/approvals") {
-        const approvals = await session.approvals();
-        if (approvals.length === 0) console.log("  Nothing to approve here.");
-        for (const approval of approvals) console.log(`  ${describeApproval(approval)}`);
+        if (now().approvals.length === 0) console.log("  Nothing to approve here.");
+        for (const approval of now().approvals) console.log(`  ${describeApproval(approval)}`);
       } else if (/^\/(approve|deny)(\s|$)/.test(line)) {
         const [, verb, id] = /^\/(approve|deny)\s+(\S+)$/.exec(line) ?? [];
         if (id === undefined) console.log("  Usage: /approve <id> | /deny <id>");
         else {
           const decided = await session.decide(id, verb === "approve");
+          await shown((view) =>
+            view.approvals.some((approval) => approval.id === id && approval.status !== "pending"),
+          );
           console.log(`  ${describeApproval(decided)}`);
         }
       } else if (line.startsWith("/private ")) {
@@ -139,7 +179,7 @@ export async function chat(options: ChatOptions): Promise<void> {
         console.log(`  The model will see ${placeholder} instead.`);
       } else {
         const steer = line.startsWith("/steer ");
-        await session.submit(
+        await session.send(
           steer ? line.slice("/steer ".length) : line,
           steer ? "steer" : "followUp",
         );
@@ -148,7 +188,7 @@ export async function chat(options: ChatOptions): Promise<void> {
     } catch (error) {
       console.log(`  ! ${(error as Error).message}`);
     }
-    rl.prompt();
+    ask();
   }
   await quit();
 }
@@ -157,7 +197,13 @@ function open(options: ChatOptions, onProblem: (message: string) => void): Promi
   if (options.url !== undefined) {
     if (options.token === undefined)
       throw new UsageError("Connecting to a server needs a token: set NUDGE_TOKEN or pass --token");
-    return openRemote({ url: options.url, token: options.token, room: options.room, onProblem });
+    return openRemote({
+      url: options.url,
+      assistant: options.assistant,
+      token: options.token,
+      room: options.room,
+      onProblem,
+    });
   }
   return openLocal({
     config: options.config,

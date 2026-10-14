@@ -45,7 +45,10 @@ export async function invite(
       );
       console.log(`  ${token}\n`);
       console.log(`In a browser: ${new URL("/login", options.server).href}#token=${token}`);
-      console.log("In a terminal: NUDGE_TOKEN=<token> nudge chat --url <server>/a/<assistant>");
+      const pick = options.assistant === undefined ? "" : ` -a ${options.assistant}`;
+      console.log(
+        `In a terminal: NUDGE_TOKEN=<token> nudge chat --url ${new URL(options.server).origin}${pick}`,
+      );
     },
     async (server) => {
       const { player } = await server.call<PlayerResponse>("POST", "/admin/players", {

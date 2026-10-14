@@ -117,7 +117,7 @@ describe("v1 stream", () => {
 
   const open = (name: string) => connect(connectUrl, helloFor(tokens[name]!));
   const post = (path: string, token: string, body: object) =>
-    fetch(`${server.url}/a/robin${path}`, {
+    fetch(`${server.url}/v1/a/robin${path}`, {
       method: "POST",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -369,9 +369,9 @@ describe("v1 stream", () => {
     await eventually(() => ann.view<HomeView>("home")?.rooms[1]?.pendingApprovals === 0);
 
     // A new room shows up at home.
-    await post("/rooms", tokens.Bo!, { id: "dinner", name: "Dinner", members: ["ann"] });
+    await post("/rooms", tokens.Bo!, { name: "Dinner", members: ["ann"] });
     await eventually(() =>
-      (ann.view<HomeView>("home")?.rooms ?? []).some((row) => row.room.id === "dinner"),
+      (ann.view<HomeView>("home")?.rooms ?? []).some((row) => row.room.name === "Dinner"),
     );
     ann.close();
   });
@@ -442,7 +442,7 @@ describe("v1 stream pacing", () => {
       ann.send({ type: "subscribe", target });
       await eventually(() => ann.views.has(target));
       const socketFrames = ann.frames.length;
-      await fetch(`${server.url}/a/robin/rooms/${room.id}/messages`, {
+      await fetch(`${server.url}/v1/a/robin/rooms/${room.id}/messages`, {
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
         body: JSON.stringify({ text: "Talk", requestId: "1" }),

@@ -78,7 +78,7 @@ export class LiveSocket {
 
   constructor(assistant: string, room: string, token: string) {
     const scheme = location.protocol === "https:" ? "wss" : "ws";
-    const path = `/a/${encodeURIComponent(assistant)}/rooms/${encodeURIComponent(room)}/ext/browser`;
+    const path = `/v1/a/${encodeURIComponent(assistant)}/rooms/${encodeURIComponent(room)}/ext/browser`;
     this.socket = new WebSocket(`${scheme}://${location.host}${path}`);
     this.socket.addEventListener("open", () =>
       this.socket.send(JSON.stringify({ type: "hello", token })),

@@ -4,6 +4,7 @@ import { CLOSE } from "@nudge/protocol";
 import { Hono } from "hono";
 import type { UpgradeWebSocket } from "hono/ws";
 import { Connection, type ConnectionOptions } from "./connection.ts";
+import { ExtensionSocket } from "./extension-socket.ts";
 import { Hubs } from "./hub.ts";
 import { restRoutes } from "./rest.ts";
 
@@ -18,7 +19,10 @@ export type V1Options = {
   readonly timing?: Partial<Pick<ConnectionOptions, "heartbeatMs" | "flushMs" | "helloTimeoutMs">>;
 };
 
-/** Protocol v1, to mount at `/v1`: the HTTP commands and each assistant's socket. */
+/**
+ * Protocol v1, to mount at `/v1`: the HTTP commands, each assistant's socket, and the extensions'
+ * own room sockets.
+ */
 export function v1Routes(options: V1Options): Hono {
   const app = new Hono();
   // A new epoch per app, so clients that reconnect after a restart know to subscribe again.
@@ -60,6 +64,31 @@ export function v1Routes(options: V1Options): Hono {
         onMessage: (event) => connection?.receive(String(event.data)),
         onClose: () => connection?.close(),
         onError: () => connection?.close(),
+      };
+    }),
+  );
+
+  // An extension's own socket for a room, such as the browser's live view.
+  app.get(
+    "/a/:assistant/rooms/:room/ext/:extension",
+    options.upgradeWebSocket((c) => {
+      const nudge = options.assistants.get(c.req.param("assistant") ?? "");
+      const socket =
+        nudge === undefined
+          ? undefined
+          : new ExtensionSocket(
+              nudge,
+              c.req.param("room") ?? "",
+              c.req.param("extension") ?? "",
+              options.report,
+            );
+      return {
+        onOpen: (_event, ws) => {
+          if (socket === undefined) ws.close(CLOSE.notFound, "No such assistant");
+        },
+        onMessage: (event, ws) => socket?.receive(String(event.data), ws),
+        onClose: () => socket?.close(),
+        onError: () => socket?.close(),
       };
     }),
   );
