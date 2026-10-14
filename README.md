@@ -213,6 +213,10 @@ An entry's `rooms` lists the kinds of room it is on in by default (`"lobby"`, `"
 
 `extensions/signal` does the same over Signal, through a [signal-cli](https://github.com/AsamK/signal-cli) daemon on the host. Give the bot a number of its own, register or link it with signal-cli, and run `signal-cli -a +47… daemon --tcp 127.0.0.1:7583 --receive-mode=on-connection`, so messages wait on Signal's servers while Nudge isn't connected. The extension's `daemon` setting says where it listens; `account` picks the number when one daemon serves several. Linking, rooms and commands work as on Telegram. Signal has no buttons, so approvals say to send `/approve <id>` or `/deny <id>`. Messages are end-to-end encrypted up to the host, which is where they are decrypted.
 
+### Matrix
+
+`extensions/matrix` does the same as a Matrix bot account. Set `homeserver` in its settings and the account's access token in `MATRIX_ACCESS_TOKEN`. It joins rooms it is invited to, and a room with two members counts as a direct chat. It reads and writes rooms without end-to-end encryption only; encrypted messages are ignored. Like Signal, approvals ask for `/approve <id>` or `/deny <id>`.
+
 The shared parts (links, chats to rooms, commands, relaying) live in `packages/bridge` for other chat services.
 
 ### Write an extension

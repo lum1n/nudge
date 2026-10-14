@@ -383,3 +383,46 @@ function parseAction(
     ? undefined
     : { roomId: match[1]!, id: match[2]!, approve: match[3] === "y" };
 }
+
+/** `${NAME}` replaced from `env`, so tokens stay out of nudge.json; throws naming a missing one. */
+export function fillVariables(
+  value: string,
+  env: Readonly<Record<string, string | undefined>>,
+  extension: string,
+): string {
+  return value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, name: string) => {
+    const filled = env[name];
+    if (filled === undefined || filled === "") throw new Error(`${extension}: $${name} is not set`);
+    return filled;
+  });
+}
+
+/** Settles once the assistant is open, or once `signal` aborts; a bridge's loop starts after. */
+export async function untilOpen(
+  host: Pick<ExtensionHost<unknown>, "assistant">,
+  signal: AbortSignal,
+): Promise<void> {
+  while (!signal.aborted) {
+    try {
+      host.assistant();
+      return;
+    } catch {
+      await sleep(200, signal);
+    }
+  }
+}
+
+/** Waits `ms`, or less if `signal` aborts first. */
+export function sleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+  });
+}

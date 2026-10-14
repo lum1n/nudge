@@ -26,6 +26,12 @@
           "from": "./extensions/signal",
           "settings": { "daemon": "127.0.0.1:7583" },
           "enabled": false
+        },
+        {
+          "$comment": "Talk to the assistant from Matrix rooms without end-to-end encryption, as a bot account whose access token is in MATRIX_ACCESS_TOKEN.",
+          "from": "./extensions/matrix",
+          "settings": { "homeserver": "https://matrix.example.org" },
+          "enabled": false
         }
       ]
     },

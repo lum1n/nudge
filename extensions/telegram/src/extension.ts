@@ -1,4 +1,4 @@
-import { ChatBridge } from "@nudge/bridge";
+import { ChatBridge, fillVariables, sleep, untilOpen } from "@nudge/bridge";
 import { defineNudgeExtension, type ExtensionHost, Type } from "@nudge/core";
 import { TelegramApi, TelegramError, toInbound } from "./telegram.ts";
 
@@ -38,7 +38,7 @@ export function telegramExtension(options: TelegramOptions = {}) {
     settings: Settings,
     setup: (host) => {
       const report = options.report ?? ((error) => console.error("telegram:", error));
-      const token = fillVariables(host.settings.token, process.env);
+      const token = fillVariables(host.settings.token, process.env, "telegram");
       const api = new TelegramApi(token, host.settings.apiBase, options.fetch);
       const bridge = new ChatBridge(host, api, "telegram", report);
       const stop = new AbortController();
@@ -63,14 +63,7 @@ async function poll(
   signal: AbortSignal,
   report: (error: unknown) => void,
 ): Promise<void> {
-  while (!signal.aborted) {
-    try {
-      host.assistant();
-      break;
-    } catch {
-      await sleep(200, signal);
-    }
-  }
+  await untilOpen(host, signal);
   if (signal.aborted) return;
   await api.setCommands(COMMANDS).catch(report);
   let offset = Number((await bridge.state()).cursor ?? 0);
@@ -90,29 +83,6 @@ async function poll(
       await sleep(error instanceof TelegramError && error.code === 401 ? 60_000 : 5_000, signal);
     }
   }
-}
-
-function sleep(ms: number, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(resolve, ms);
-    signal.addEventListener(
-      "abort",
-      () => {
-        clearTimeout(timer);
-        resolve();
-      },
-      { once: true },
-    );
-  });
-}
-
-/** `${NAME}` replaced from `env`; throws naming the first variable that is not set. */
-function fillVariables(value: string, env: Readonly<Record<string, string | undefined>>): string {
-  return value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, name: string) => {
-    const filled = env[name];
-    if (filled === undefined || filled === "") throw new Error(`telegram: $${name} is not set`);
-    return filled;
-  });
 }
 
 export default telegramExtension();
