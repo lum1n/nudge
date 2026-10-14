@@ -29,6 +29,7 @@ import {
   type PairingCodeResponse,
   PairRequest,
   type PairResponse,
+  type PlayerMemoryResponse,
   type PlayerResponse,
   type PlayersResponse,
   ProtectRequest,
@@ -38,6 +39,7 @@ import {
   type RoomExtensionsResponse,
   type RoomsResponse,
   SetAdminRequest,
+  ShareMemoryRequest,
   SetRoomExtensionRequest,
   type TimelineResponse,
   type TokenInfo,
@@ -156,6 +158,48 @@ export function restRoutes(options: RestOptions): Hono {
     } satisfies MeResponse);
   });
 
+  api.get("/me/memory", async (c) => {
+    const memory = await c.var.nudge.memory.ofPlayer(c.var.credential.player.id, context);
+    return c.json({
+      facts: memory.facts.map(toFact),
+      shared: memory.shared,
+    } satisfies PlayerMemoryResponse);
+  });
+
+  api.post("/me/memory", async (c) => {
+    const body = await readBody(c, RememberRequest);
+    if (body.text.trim() === "") throw new HttpError(400, "A fact needs text");
+    const { player } = c.var.credential;
+    const by = { playerId: player.id, displayName: player.displayName };
+    try {
+      return c.json(
+        toFact(await c.var.nudge.memory.rememberFor(player.id, body.text, context, by)),
+        201,
+      );
+    } catch (error) {
+      throw new HttpError(400, (error as Error).message);
+    }
+  });
+
+  api.delete("/me/memory/:fact", async (c) => {
+    const id = c.req.param("fact");
+    if (!(await c.var.nudge.memory.forgetFor(c.var.credential.player.id, id, context)))
+      throw new HttpError(404, `No fact "${id}"`);
+    return c.body(null, 204);
+  });
+
+  // Consent: everyone in the player's rooms, and the model there, then reads these facts.
+  api.put("/me/memory/sharing", async (c) => {
+    const body = await readBody(c, ShareMemoryRequest);
+    const id = c.var.credential.player.id;
+    await c.var.nudge.memory.share(id, body.shared, context);
+    const memory = await c.var.nudge.memory.ofPlayer(id, context);
+    return c.json({
+      facts: memory.facts.map(toFact),
+      shared: memory.shared,
+    } satisfies PlayerMemoryResponse);
+  });
+
   api.post("/rooms", async (c) => {
     const body = await readBody(c, CreateRoomRequest);
     const name = body.name.trim();
@@ -248,7 +292,12 @@ export function restRoutes(options: RestOptions): Hono {
     const body = await readBody(c, RememberRequest);
     if (body.text.trim() === "") throw new HttpError(400, "A fact needs text");
     try {
-      return c.json(toFact(await c.var.nudge.memory.remember(room.id, body.text, context)), 201);
+      const { player } = c.var.credential;
+      const by = { playerId: player.id, displayName: player.displayName };
+      return c.json(
+        toFact(await c.var.nudge.memory.remember(room.id, body.text, context, by)),
+        201,
+      );
     } catch (error) {
       throw new HttpError(400, (error as Error).message);
     }

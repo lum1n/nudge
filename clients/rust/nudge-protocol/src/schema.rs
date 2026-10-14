@@ -255,6 +255,12 @@ pub struct Fact {
     pub id: String,
     pub text: String,
     pub created_at: f64,
+    /// Who remembered it; `None` when the assistant did.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub by: Option<Player>,
+    /// Set on a member's own fact that the room shows because they share their memory.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<Player>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

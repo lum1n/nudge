@@ -159,6 +159,10 @@ export const Fact = Type.Object({
   id: Type.String(),
   text: Type.String(),
   createdAt: Type.Number(),
+  /** Who remembered it; absent when the assistant did. */
+  by: Type.Optional(Player),
+  /** Set on a member's own fact that the room shows because they share their memory. */
+  owner: Type.Optional(Player),
 });
 export type Fact = Static<typeof Fact>;
 
@@ -364,6 +368,16 @@ export type TimelineResponse = Static<typeof TimelineResponse>;
 export const RememberRequest = Type.Object({ text: Type.String() });
 export type RememberRequest = Static<typeof RememberRequest>;
 
+/** The caller's own memory: shown in their personal room, and in all their rooms when `shared`. */
+export const PlayerMemoryResponse = Type.Object({
+  facts: Type.Array(Fact),
+  shared: Type.Boolean(),
+});
+export type PlayerMemoryResponse = Static<typeof PlayerMemoryResponse>;
+
+export const ShareMemoryRequest = Type.Object({ shared: Type.Boolean() });
+export type ShareMemoryRequest = Static<typeof ShareMemoryRequest>;
+
 export const DecideRequest = Type.Object({ approve: Type.Boolean() });
 export type DecideRequest = Static<typeof DecideRequest>;
 
@@ -503,6 +517,8 @@ export const SCHEMAS = {
   MessageResponse,
   TimelineResponse,
   RememberRequest,
+  PlayerMemoryResponse,
+  ShareMemoryRequest,
   DecideRequest,
   RoomExtension,
   RoomExtensionsResponse,

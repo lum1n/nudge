@@ -448,6 +448,11 @@ function ApprovalsPanel({ approvals }: { approvals: readonly Approval[] }) {
 
 function MemoryPanel({ view }: { view: RoomView }) {
   const { assistant, room } = Route.useParams();
+  const me = useQuery(meQuery(assistant)).data?.player.id ?? "";
+  const mine = useQuery({
+    queryKey: ["my-memory", assistant],
+    queryFn: () => clientFor(assistant).api.myMemory(),
+  });
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -468,10 +473,22 @@ function MemoryPanel({ view }: { view: RoomView }) {
     }
   }
 
-  async function onForget(id: string) {
+  async function onForget(fact: RoomView["memory"][number]) {
     setError(undefined);
     try {
-      await clientFor(assistant).api.forget(room, id);
+      if (fact.owner === undefined) await clientFor(assistant).api.forget(room, fact.id);
+      else await clientFor(assistant).api.forgetForMe(fact.id);
+      await mine.refetch();
+    } catch (caught) {
+      setError((caught as Error).message);
+    }
+  }
+
+  async function onShare(shared: boolean) {
+    setError(undefined);
+    try {
+      await clientFor(assistant).api.shareMyMemory(shared);
+      await mine.refetch();
     } catch (caught) {
       setError((caught as Error).message);
     }
@@ -485,15 +502,25 @@ function MemoryPanel({ view }: { view: RoomView }) {
       )}
       <ul className="flex flex-col gap-1">
         {view.memory.map((fact) => (
-          <li key={fact.id} className="flex items-baseline justify-between gap-2 text-sm">
-            <span>{fact.text}</span>
-            <button
-              type="button"
-              onClick={() => void onForget(fact.id)}
-              className="shrink-0 text-stone-500 underline"
-            >
-              Forget
-            </button>
+          <li
+            key={`${fact.owner?.id ?? ""}/${fact.id}`}
+            className="flex items-baseline justify-between gap-2 text-sm"
+          >
+            <span>
+              {fact.text}
+              {fact.owner !== undefined && (
+                <span className="text-stone-500"> · {fact.owner.displayName}'s own</span>
+              )}
+            </span>
+            {(fact.owner === undefined || fact.owner.id === me) && (
+              <button
+                type="button"
+                onClick={() => void onForget(fact)}
+                className="shrink-0 text-stone-500 underline"
+              >
+                Forget
+              </button>
+            )}
           </li>
         ))}
       </ul>
@@ -512,6 +539,16 @@ function MemoryPanel({ view }: { view: RoomView }) {
           Add
         </button>
       </form>
+      {mine.data !== undefined && (
+        <label className="flex items-center gap-2 text-sm text-stone-600">
+          <input
+            type="checkbox"
+            checked={mine.data.shared}
+            onChange={(event) => void onShare(event.target.checked)}
+          />
+          Share my own facts ({mine.data.facts.length}) with all my rooms
+        </label>
+      )}
       {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
     </section>
   );

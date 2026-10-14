@@ -11,6 +11,7 @@ import type {
   PairingCodeResponse,
   PairResponse,
   Player,
+  PlayerMemoryResponse,
   PlayerResponse,
   ProtectResponse,
   Room,
@@ -127,6 +128,24 @@ export class Api {
 
   forget(room: string, fact: string): Promise<void> {
     return this.request("DELETE", `${roomPath(room)}/memory/${encodeURIComponent(fact)}`);
+  }
+
+  /** The caller's own memory, and whether they share it with all their rooms. */
+  myMemory(): Promise<PlayerMemoryResponse> {
+    return this.request("GET", "/me/memory");
+  }
+
+  rememberForMe(text: string): Promise<Fact> {
+    return this.request("POST", "/me/memory", { text });
+  }
+
+  forgetForMe(fact: string): Promise<void> {
+    return this.request("DELETE", `/me/memory/${encodeURIComponent(fact)}`);
+  }
+
+  /** With `shared`, everyone in the caller's rooms, and the model there, sees their own facts. */
+  shareMyMemory(shared: boolean): Promise<PlayerMemoryResponse> {
+    return this.request("PUT", "/me/memory/sharing", { shared });
   }
 
   decide(room: string, approval: string, approve: boolean): Promise<Approval> {

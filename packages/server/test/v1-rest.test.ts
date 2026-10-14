@@ -9,6 +9,7 @@ import {
   NudgesResponse,
   PairingCodeResponse,
   PairResponse,
+  PlayerMemoryResponse,
   PlayersResponse,
   Room,
   RoomsResponse,
@@ -147,7 +148,7 @@ describe("v1 HTTP", () => {
       body: { text: "Ann likes tea" },
     });
     expect(fact).toMatchObject({ status: 201, json: { text: "Ann likes tea" } });
-    expect(Object.keys(fact.json).sort()).toEqual(["createdAt", "id", "text"]);
+    expect(fact.json.by).toEqual({ id: "ann", displayName: "Ann" });
     expect(
       (await call("DELETE", `/rooms/trip/memory/${fact.json.id}`, { token: tokens.Bo })).status,
     ).toBe(204);
@@ -254,6 +255,42 @@ describe("v1 HTTP", () => {
       },
     ]);
     expect((await call("GET", "/admin/tokens", { token: tokens.Ann })).json.tokens).toHaveLength(4);
+  });
+
+  it("keeps a player's own memory, shared with their rooms only when they say so", async () => {
+    const added = await call("POST", "/me/memory", {
+      token: tokens.Ann,
+      body: { text: "Vegetarian" },
+    });
+    expect(added).toMatchObject({
+      status: 201,
+      json: { id: "p1", text: "Vegetarian", by: { id: "ann", displayName: "Ann" } },
+    });
+    expect(
+      (await call("GET", "/me/memory", { token: tokens.Ann, schema: PlayerMemoryResponse })).json,
+    ).toMatchObject({ shared: false, facts: [{ id: "p1" }] });
+    expect((await call("GET", "/me/memory", { token: tokens.Bo })).json).toEqual({
+      facts: [],
+      shared: false,
+    });
+    expect(await nudge.memory.visible("trip", context)).toEqual([]);
+
+    const shared = await call("PUT", "/me/memory/sharing", {
+      token: tokens.Ann,
+      body: { shared: true },
+      schema: PlayerMemoryResponse,
+    });
+    expect(shared.json.shared).toBe(true);
+    expect(await nudge.memory.visible("trip", context)).toMatchObject([
+      { id: "p1", owner: { playerId: "ann" } },
+    ]);
+    // Only the player forgets their own facts.
+    expect((await call("DELETE", "/me/memory/p1", { token: tokens.Bo })).status).toBe(404);
+    expect((await call("DELETE", "/rooms/trip/memory/p1", { token: tokens.Bo })).status).toBe(404);
+    expect((await call("DELETE", "/me/memory/p1", { token: tokens.Ann })).status).toBe(204);
+    expect(
+      (await call("POST", "/me/memory", { token: tokens.Ann, body: { text: " " } })).status,
+    ).toBe(400);
   });
 
   it("lets an admin manage players, tokens, rooms and nudges while serving", async () => {

@@ -9,7 +9,8 @@ import type {
 import type {
   ApprovalEntryData,
   Approval as CoreApproval,
-  Fact as CoreFact,
+  FactPerson,
+  RoomFact as CoreRoomFact,
   FireEntryData,
   MessageEntryData,
   Player as CorePlayer,
@@ -68,7 +69,7 @@ export type RoomSources = {
   readonly view: ConversationView;
   /** Newest first, as `Approvals.list` gives them. */
   readonly approvals: readonly CoreApproval[];
-  readonly memory: readonly CoreFact[];
+  readonly memory: readonly CoreRoomFact[];
   readonly nudges: readonly ScheduledNudge[];
 };
 
@@ -472,8 +473,15 @@ export function toApproval(approval: CoreApproval): Approval {
   };
 }
 
-export function toFact(fact: CoreFact): Fact {
-  return { id: fact.id, text: fact.text, createdAt: fact.createdAt };
+export function toFact(fact: CoreRoomFact): Fact {
+  const person = (who: FactPerson) => ({ id: who.playerId, displayName: who.displayName });
+  return {
+    id: fact.id,
+    text: fact.text,
+    createdAt: fact.createdAt,
+    ...(fact.by === undefined ? {} : { by: person(fact.by) }),
+    ...(fact.owner === undefined ? {} : { owner: person(fact.owner) }),
+  };
 }
 
 export function toRoomNudge(nudge: ScheduledNudge): RoomNudge {

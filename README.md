@@ -57,6 +57,8 @@ Anthropic is the default provider. Any provider [pi-ai](https://www.npmjs.com/pa
 
 Tell the assistant something worth keeping ("I'm vegetarian", "the trip starts on 3 May") and it can save it with its `remember` tool; `forget` drops a fact again. What a room remembers is in the assistant's prompt on every turn there, also after old messages have been summarized away. Memory belongs to the room it was made in: what you tell it in your personal room stays there, and a shared room's memory is seen only by its members. At most 100 facts per room.
 
+You also have a memory of your own, for what matters wherever you are. In your personal room, ask the assistant to remember something everywhere, or add it in the web UI or with `POST /v1/a/<assistant>/me/memory`. Your own facts show in your personal room. They show in your other rooms, to the people there and to the model, only after you turn on sharing ("Share my own facts with all my rooms" in the Memory panel, or `PUT /me/memory/sharing`). Each fact records who remembered it.
+
 ## Several people
 
 Each person is a player with their own token. Everyone shares the lobby; a personal room is for one player; a shared room is for the players it lists. The assistant knows who wrote each message and who can read the room.

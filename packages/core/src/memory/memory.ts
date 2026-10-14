@@ -11,21 +11,37 @@ import {
   type Tx,
 } from "@earendil-works/pi-durable";
 import type { Change } from "../changes.ts";
-import { roomOf } from "../identity/directory.ts";
+import { DirectoryDoc, type Room, roomOf } from "../identity/directory.ts";
 import type { Rooms } from "../identity/rooms.ts";
+
+/** A person, as a fact names them. */
+export type FactPerson = { playerId: string; displayName: string };
 
 // Stored in a document, so plain JSON.
 export type Fact = {
-  /** `m1`, `m2`, … within its room. */
+  /** `m1`, `m2`, … within its room; `p1`, `p2`, … within a player's own memory. */
   id: string;
   text: string;
   createdAt: number;
+  /** Who remembered it; absent when the assistant did. */
+  by?: FactPerson;
+};
+
+/** A fact as a room shows it: the room's own, or one of a member's own facts. */
+export type RoomFact = Fact & {
+  /** Whose own memory it is from; absent for the room's facts. */
+  owner?: FactPerson;
 };
 
 export type MemoryState = {
   /** Oldest first. */
   facts: Fact[];
   next: number;
+};
+
+export type PlayerMemoryState = MemoryState & {
+  /** The player agreed to have these facts in every room they are in, not only their own. */
+  shared: boolean;
 };
 
 /**
@@ -41,6 +57,19 @@ export const MemoryDoc = defineDocFamily<MemoryState, null>({
   initial: () => ({ facts: [], next: 1 }),
 });
 
+/**
+ * A player's own memory, keyed by player id: what they want the assistant to know about them
+ * wherever they are. Shown in their personal room, and in their other rooms only once they share
+ * it, since everyone there, and the model, then reads it.
+ */
+export const PlayerMemoryDoc = defineDocFamily<PlayerMemoryState, null>({
+  kind: "nudge.player-memory",
+  version: 1,
+  scope: "session",
+  family: true,
+  initial: () => ({ facts: [], next: 1, shared: false }),
+});
+
 export const MAX_FACTS = 100;
 export const MAX_FACT_LENGTH = 500;
 
@@ -49,32 +78,69 @@ export class MemoryFull extends Error {
 }
 
 /** Adds a fact to a room's memory inside a commit. */
-export async function addFact(tx: Tx, roomId: string, text: string, now: number): Promise<Fact> {
+export async function addFact(
+  tx: Tx,
+  roomId: string,
+  text: string,
+  now: number,
+  by?: FactPerson,
+): Promise<Fact> {
+  return push(await tx.doc(MemoryDoc, roomId, null), "m", text, now, by);
+}
+
+/** Adds a fact to a player's own memory inside a commit. */
+export async function addPlayerFact(
+  tx: Tx,
+  playerId: string,
+  text: string,
+  now: number,
+  by?: FactPerson,
+): Promise<Fact> {
+  return push(await tx.doc(PlayerMemoryDoc, playerId, null), "p", text, now, by);
+}
+
+function push(
+  memory: MemoryState,
+  prefix: string,
+  text: string,
+  now: number,
+  by: FactPerson | undefined,
+): Fact {
   const fact = text.trim().replace(/\s+/g, " ");
   if (fact === "") throw new Error("A fact needs text");
   if (fact.length > MAX_FACT_LENGTH)
     throw new Error(`A fact is at most ${MAX_FACT_LENGTH} characters`);
-  const memory = await tx.doc(MemoryDoc, roomId, null);
   if (memory.facts.length >= MAX_FACTS)
-    throw new MemoryFull(
-      `This conversation remembers ${MAX_FACTS} facts already; forget one first`,
-    );
-  const added: Fact = { id: `m${memory.next}`, text: fact, createdAt: now };
+    throw new MemoryFull(`This memory holds ${MAX_FACTS} facts already; forget one first`);
+  const added: Fact = {
+    id: `${prefix}${memory.next}`,
+    text: fact,
+    createdAt: now,
+    ...(by === undefined ? {} : { by: { ...by } }),
+  };
   memory.next += 1;
-  memory.facts.push({ ...added });
+  memory.facts.push(structuredClone(added));
   return added;
 }
 
 /** Drops a fact from a room's memory inside a commit. False when it has none with that id. */
 export async function dropFact(tx: Tx, roomId: string, id: string): Promise<boolean> {
-  const memory = await tx.doc(MemoryDoc, roomId, null);
+  return drop(await tx.doc(MemoryDoc, roomId, null), id);
+}
+
+/** Drops a fact from a player's own memory inside a commit. */
+export async function dropPlayerFact(tx: Tx, playerId: string, id: string): Promise<boolean> {
+  return drop(await tx.doc(PlayerMemoryDoc, playerId, null), id);
+}
+
+function drop(memory: MemoryState, id: string): boolean {
   const index = memory.facts.findIndex((fact) => fact.id === id);
   if (index < 0) return false;
   memory.facts.splice(index, 1);
   return true;
 }
 
-/** Each room's memory, for hosts: list, add and forget what the model sees there. */
+/** Each room's memory and each player's own, for hosts: list, add and forget what the model sees. */
 export class Memory {
   constructor(
     private readonly harness: Harness,
@@ -83,14 +149,30 @@ export class Memory {
     private readonly changed: (change: Change) => void = () => {},
   ) {}
 
+  /** The room's own facts. */
   async list(roomId: string, context: Context): Promise<Fact[]> {
     return readFacts(this.harness, roomId, context);
   }
 
-  async remember(roomId: string, text: string, context: Context): Promise<Fact> {
+  /** What the model sees in the room: its own facts, then the facts of members who share theirs. */
+  async visible(roomId: string, context: Context): Promise<RoomFact[]> {
+    const room = await this.rooms.get(roomId, context);
+    if (room === undefined) return [];
+    const own = await readFacts(this.harness, roomId, context);
+    const shared = await sharedFacts(this.harness, room, context);
+    return [
+      ...own,
+      ...shared.flatMap(({ owner, facts }) => facts.map((fact) => ({ ...fact, owner }))),
+    ];
+  }
+
+  async remember(roomId: string, text: string, context: Context, by?: FactPerson): Promise<Fact> {
     if ((await this.rooms.get(roomId, context)) === undefined)
       throw new Error(`No room "${roomId}"`);
-    const fact = await this.harness.commit((tx) => addFact(tx, roomId, text, this.now()), context);
+    const fact = await this.harness.commit(
+      (tx) => addFact(tx, roomId, text, this.now(), by),
+      context,
+    );
     this.changed({ kind: "memory", roomId });
     return fact;
   }
@@ -103,23 +185,106 @@ export class Memory {
     if (dropped) this.changed({ kind: "memory", roomId });
     return dropped;
   }
+
+  /** A player's own memory, and whether they share it with all their rooms. */
+  async ofPlayer(playerId: string, context: Context): Promise<{ facts: Fact[]; shared: boolean }> {
+    const memory = await this.harness.snapshot(PlayerMemoryDoc, playerId, context);
+    return { facts: structuredClone(memory?.facts ?? []), shared: memory?.shared ?? false };
+  }
+
+  async rememberFor(
+    playerId: string,
+    text: string,
+    context: Context,
+    by?: FactPerson,
+  ): Promise<Fact> {
+    await this.knownPlayer(playerId, context);
+    const fact = await this.harness.commit(
+      (tx) => addPlayerFact(tx, playerId, text, this.now(), by),
+      context,
+    );
+    await this.playerChanged(playerId, context);
+    return fact;
+  }
+
+  /** False when the player's own memory has no fact with that id. */
+  async forgetFor(playerId: string, id: string, context: Context): Promise<boolean> {
+    if (!(await this.ofPlayer(playerId, context)).facts.some((fact) => fact.id === id))
+      return false;
+    const dropped = await this.harness.commit((tx) => dropPlayerFact(tx, playerId, id), context);
+    if (dropped) await this.playerChanged(playerId, context);
+    return dropped;
+  }
+
+  /** Shows a player's own memory in all their rooms, or only in their personal room. */
+  async share(playerId: string, shared: boolean, context: Context): Promise<void> {
+    await this.knownPlayer(playerId, context);
+    await this.harness.commit(async (tx) => {
+      (await tx.doc(PlayerMemoryDoc, playerId, null)).shared = shared;
+    }, context);
+    await this.playerChanged(playerId, context);
+  }
+
+  private async knownPlayer(playerId: string, context: Context): Promise<void> {
+    const directory = await this.harness.snapshot(DirectoryDoc, context);
+    if (directory?.players[playerId] === undefined) throw new Error(`No player "${playerId}"`);
+  }
+
+  /** Every room the player is in may show their facts. */
+  private async playerChanged(playerId: string, context: Context): Promise<void> {
+    for (const room of await this.rooms.list(context, playerId))
+      this.changed({ kind: "memory", roomId: room.id });
+  }
 }
 
 async function readFacts(read: DocumentReader, roomId: string, context: Context): Promise<Fact[]> {
   const memory = await read.snapshot(MemoryDoc, roomId, context);
-  return (memory?.facts ?? []).map((fact) => ({ ...fact }));
+  return structuredClone(memory?.facts ?? []);
 }
 
-/** The `memory` section: the calling room's facts, or nothing while there are none. */
+/**
+ * The players whose own facts a room shows, with those facts: a personal room's owner always,
+ * and in other rooms the members who share theirs (in the lobby, every player who does).
+ */
+async function sharedFacts(
+  read: DocumentReader,
+  room: Room,
+  context: Context,
+): Promise<{ owner: FactPerson; facts: Fact[] }[]> {
+  const directory = await read.snapshot(DirectoryDoc, context);
+  const ids = room.kind === "lobby" ? Object.keys(directory?.players ?? {}) : room.members;
+  const found: { owner: FactPerson; facts: Fact[] }[] = [];
+  for (const id of ids) {
+    const player = directory?.players[id];
+    const memory = await read.snapshot(PlayerMemoryDoc, id, context);
+    if (player === undefined || memory === undefined || memory.facts.length === 0) continue;
+    if (room.kind !== "personal" && !memory.shared) continue;
+    found.push({
+      owner: { playerId: id, displayName: player.displayName },
+      facts: structuredClone(memory.facts),
+    });
+  }
+  return found;
+}
+
+/** The `memory` section: the calling room's facts and its members' shared ones, if any. */
 export function memorySection(): PromptSection {
   return section("memory", async (input, context) => {
     const room = await roomOf(input.read, input.conversationId, context);
     const facts = await readFacts(input.read, room.id, context);
-    if (facts.length === 0) return undefined;
-    return (
-      "What you were asked to remember in this conversation:\n" +
-      facts.map((fact) => `- ${fact.id}: ${fact.text}`).join("\n")
-    );
+    const shared = await sharedFacts(input.read, room, context);
+    const parts: string[] = [];
+    if (facts.length > 0)
+      parts.push(
+        "What you were asked to remember in this conversation:\n" +
+          facts.map((fact) => `- ${fact.id}: ${fact.text}`).join("\n"),
+      );
+    for (const { owner, facts } of shared)
+      parts.push(
+        `What ${owner.displayName} asked you to remember about them, in every conversation ` +
+          `they share it with:\n${facts.map((fact) => `- ${fact.id}: ${fact.text}`).join("\n")}`,
+      );
+    return parts.length === 0 ? undefined : parts.join("\n\n");
   });
 }
 
@@ -135,14 +300,31 @@ export function createMemoryTools(now: () => number): ToolRegistration[] {
     description:
       "Remember a lasting fact for this conversation, such as a preference, a plan or a name. " +
       "You will see it in every later turn here, also after older messages are summarized. " +
-      "Only the people in this conversation can see it. One short fact per call.",
+      "Only the people in this conversation can see it. One short fact per call. In someone's " +
+      "personal conversation, set `everywhere` for a fact about them that matters wherever they " +
+      "are: it goes in their own memory, which they can choose to share with all their " +
+      "conversations.",
     parameters: Type.Object({
       fact: Type.String({ description: `At most ${MAX_FACT_LENGTH} characters.` }),
+      everywhere: Type.Optional(
+        Type.Boolean({ description: "Only in a personal conversation. Default false." }),
+      ),
     }),
     execute: async (args, api, context) => {
       const room = await roomOf(api, api.conversationId, context);
+      if (args.everywhere === true && room.kind !== "personal")
+        return text(
+          "Only in someone's personal conversation; here, facts belong to this conversation.",
+          true,
+        );
       try {
-        const fact = await api.commit((tx) => addFact(tx, room.id, args.fact, now()), context);
+        const fact = await api.commit(
+          (tx) =>
+            args.everywhere === true
+              ? addPlayerFact(tx, room.members[0]!, args.fact, now())
+              : addFact(tx, room.id, args.fact, now()),
+          context,
+        );
         return text(`Remembered ${fact.id}.`);
       } catch (error) {
         return text((error as Error).message, true);
@@ -152,12 +334,25 @@ export function createMemoryTools(now: () => number): ToolRegistration[] {
 
   const forget = defineTool({
     name: "forget",
-    description: "Forget a fact this conversation remembers, by its id (like m3).",
+    description:
+      "Forget a fact this conversation remembers, by its id (like m3). Someone's own facts " +
+      "(like p2) can be forgotten only in their personal conversation.",
     parameters: Type.Object({ id: Type.String() }),
     replay: "safe",
     execute: async (args, api, context) => {
       const room = await roomOf(api, api.conversationId, context);
-      const dropped = await api.commit((tx) => dropFact(tx, room.id, args.id), context);
+      if (args.id.startsWith("p") && room.kind !== "personal")
+        return text(
+          `${args.id} is someone's own memory; they can forget it in their personal conversation.`,
+          true,
+        );
+      const dropped = await api.commit(
+        (tx) =>
+          args.id.startsWith("p")
+            ? dropPlayerFact(tx, room.members[0]!, args.id)
+            : dropFact(tx, room.id, args.id),
+        context,
+      );
       return dropped
         ? text(`Forgot ${args.id}.`)
         : text(`No fact ${args.id} in this conversation.`, true);

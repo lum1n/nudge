@@ -641,6 +641,30 @@
         },
         "createdAt": {
           "type": "number"
+        },
+        "by": {
+          "type": "object",
+          "required": ["id", "displayName"],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "displayName": {
+              "type": "string"
+            }
+          }
+        },
+        "owner": {
+          "type": "object",
+          "required": ["id", "displayName"],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "displayName": {
+              "type": "string"
+            }
+          }
         }
       }
     },
@@ -1152,6 +1176,30 @@
               },
               "createdAt": {
                 "type": "number"
+              },
+              "by": {
+                "type": "object",
+                "required": ["id", "displayName"],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "type": "string"
+                  }
+                }
+              },
+              "owner": {
+                "type": "object",
+                "required": ["id", "displayName"],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "type": "string"
+                  }
+                }
               }
             }
           }
@@ -2122,6 +2170,30 @@
                           },
                           "createdAt": {
                             "type": "number"
+                          },
+                          "by": {
+                            "type": "object",
+                            "required": ["id", "displayName"],
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "displayName": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "owner": {
+                            "type": "object",
+                            "required": ["id", "displayName"],
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "displayName": {
+                                "type": "string"
+                              }
+                            }
                           }
                         }
                       }
@@ -2892,6 +2964,66 @@
       "properties": {
         "text": {
           "type": "string"
+        }
+      }
+    },
+    "PlayerMemoryResponse": {
+      "type": "object",
+      "required": ["facts", "shared"],
+      "properties": {
+        "facts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "text", "createdAt"],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "number"
+              },
+              "by": {
+                "type": "object",
+                "required": ["id", "displayName"],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "type": "string"
+                  }
+                }
+              },
+              "owner": {
+                "type": "object",
+                "required": ["id", "displayName"],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "shared": {
+          "type": "boolean"
+        }
+      }
+    },
+    "ShareMemoryRequest": {
+      "type": "object",
+      "required": ["shared"],
+      "properties": {
+        "shared": {
+          "type": "boolean"
         }
       }
     },

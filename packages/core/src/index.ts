@@ -88,11 +88,14 @@ export {
 } from "./identity/players.ts";
 export {
   type Fact,
+  type FactPerson,
   MAX_FACT_LENGTH,
   MAX_FACTS,
   Memory,
   MemoryDoc,
   MemoryFull,
+  PlayerMemoryDoc,
+  type RoomFact,
 } from "./memory/memory.ts";
 export { Rooms, type SharedRoomDraft } from "./identity/rooms.ts";
 export { scrubSecrets, SecretStore } from "./secrets.ts";

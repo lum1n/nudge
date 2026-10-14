@@ -469,6 +469,84 @@ describe("memory", () => {
     await nudge.close(context);
   });
 
+  it("keeps a player's own facts, shown in their other rooms only once they share them", async () => {
+    const { faux, options, requests } = setup();
+    const nudge = await createNudge(options, context);
+    const ann = await nudge.players.ensure("ann", "Ann", context);
+    await nudge.players.ensure("bo", "Bo", context);
+    const annsRoom = await nudge.rooms.ensurePersonal(ann.id, context);
+    await nudge.rooms.createShared({ id: "trip", name: "Trip", members: ["ann", "bo"] }, context);
+    await nudge.rooms.createShared({ id: "band", name: "Band", members: ["bo"] }, context);
+    const author = { playerId: ann.id, displayName: ann.displayName };
+    const outputs: string[] = [];
+    const call = (name: string, args: Parameters<typeof fauxToolCall>[1]) => () =>
+      fauxAssistantMessage([fauxToolCall(name, args)], { stopReason: "toolUse" });
+    const done = (request: ModelContext) => {
+      requests.push(request);
+      outputs.push(lastToolResult(request) ?? "");
+      return fauxAssistantMessage([fauxText("Noted.")]);
+    };
+    const plain = (request: ModelContext) => {
+      requests.push(request);
+      return fauxAssistantMessage("Sure.");
+    };
+    const send = async (roomId: string, text: string) =>
+      (await nudge.submit(roomId, { text, author }, context)).wait(context);
+    const prompt = () => current(requests.at(-1)).prompt;
+
+    faux.setResponses([
+      call("remember", { fact: "Vegetarian", everywhere: true }),
+      done,
+      call("remember", { fact: "Likes trains", everywhere: true }),
+      done,
+      plain,
+      plain,
+    ]);
+    await send(annsRoom.id, "Remember everywhere that I'm vegetarian");
+    await send("trip", "Remember everywhere that I like trains");
+    expect(outputs).toEqual([
+      "Remembered p1.",
+      "Only in someone's personal conversation; here, facts belong to this conversation.",
+    ]);
+    await send(annsRoom.id, "Hi");
+    expect(prompt()).toContain("asked you to remember about them");
+    expect(prompt()).toContain("- p1: Vegetarian");
+    // Not shared yet: other rooms don't see it.
+    await send("trip", "Hi");
+    expect(prompt()).not.toContain("Vegetarian");
+    expect(await nudge.memory.visible("trip", context)).toEqual([]);
+
+    await nudge.memory.share(ann.id, true, context);
+    faux.setResponses([plain, plain, call("forget", { id: "p1" }), done]);
+    await send("trip", "Hi");
+    expect(prompt()).toContain("- p1: Vegetarian");
+    await send(LOBBY, "Hi");
+    expect(prompt()).toContain("- p1: Vegetarian");
+    expect(await nudge.memory.visible("trip", context)).toMatchObject([
+      { id: "p1", text: "Vegetarian", owner: { playerId: "ann", displayName: "Ann" } },
+    ]);
+    expect(await nudge.memory.visible("band", context)).toEqual([]);
+    await send("trip", "Forget p1");
+    expect(outputs.at(-1)).toContain("they can forget it in their personal conversation");
+
+    const by = { playerId: "ann", displayName: "Ann" };
+    expect(await nudge.memory.rememberFor(ann.id, "Lives in Oslo", context, by)).toMatchObject({
+      id: "p2",
+      by,
+    });
+    expect(await nudge.memory.ofPlayer(ann.id, context)).toMatchObject({
+      shared: true,
+      facts: [{ id: "p1" }, { id: "p2" }],
+    });
+    expect(await nudge.memory.forgetFor(ann.id, "p1", context)).toBe(true);
+    expect(await nudge.memory.forgetFor(ann.id, "p1", context)).toBe(false);
+    await nudge.memory.share(ann.id, false, context);
+    expect(await nudge.memory.visible("trip", context)).toEqual([]);
+    expect((await nudge.memory.visible(annsRoom.id, context)).map((f) => f.id)).toEqual(["p2"]);
+    await expect(nudge.memory.share("zed", true, context)).rejects.toThrow();
+    await nudge.close(context);
+  });
+
   it("survives a restart", async () => {
     const dir = await mkdtemp(join(tmpdir(), "nudge-memory-"));
     try {

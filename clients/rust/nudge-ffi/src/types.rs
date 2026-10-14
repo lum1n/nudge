@@ -162,6 +162,10 @@ pub struct Fact {
     pub id: String,
     pub text: String,
     pub created_at: f64,
+    /// Who remembered it; `None` when the assistant did.
+    pub by: Option<Player>,
+    /// Set on a member's own fact that the room shows because they share their memory.
+    pub owner: Option<Player>,
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
@@ -427,6 +431,8 @@ impl From<p::Fact> for Fact {
             id: fact.id,
             text: fact.text,
             created_at: fact.created_at,
+            by: fact.by.map(Into::into),
+            owner: fact.owner.map(Into::into),
         }
     }
 }

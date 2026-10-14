@@ -11,7 +11,7 @@ import {
   canUse,
   DirectoryDoc,
   type DirectoryState,
-  type Fact,
+  type RoomFact,
   type Nudge,
   type Room as CoreRoom,
   type ScheduledNudge,
@@ -206,7 +206,7 @@ export class RoomHub implements Hub<RoomView> {
     private readonly watch: ConversationWatch,
     private conversation: ConversationView,
     private approvals: readonly Approval[],
-    private memory: readonly Fact[],
+    private memory: readonly RoomFact[],
     private nudges: readonly ScheduledNudge[],
     private readonly report: (error: unknown) => void,
   ) {
@@ -225,7 +225,7 @@ export class RoomHub implements Hub<RoomView> {
     try {
       const [approvals, memory, nudges] = await Promise.all([
         nudge.approvals.list(roomId, context),
-        nudge.memory.list(roomId, context),
+        nudge.memory.visible(roomId, context),
         nudge.nudges.list(context, [roomId]),
       ]);
       const hub = new RoomHub(
@@ -319,7 +319,7 @@ export class RoomHub implements Hub<RoomView> {
         if (this.stopped) return;
         const [approvals, memory, nudges] = await Promise.all([
           kinds.includes("approvals") ? this.nudge.approvals.list(this.roomId, context) : undefined,
-          kinds.includes("memory") ? this.nudge.memory.list(this.roomId, context) : undefined,
+          kinds.includes("memory") ? this.nudge.memory.visible(this.roomId, context) : undefined,
           kinds.includes("nudges") ? this.nudge.nudges.list(context, [this.roomId]) : undefined,
         ]);
         if (this.stopped) return;

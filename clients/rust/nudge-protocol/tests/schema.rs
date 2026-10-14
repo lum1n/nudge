@@ -201,6 +201,8 @@ fn room_view() -> RoomView {
             id: "f1".into(),
             text: "Likes tea".into(),
             created_at: 1.0,
+            by: Some(ann()),
+            owner: Some(ann()),
         }],
         nudges: vec![RoomNudge {
             id: "n1".into(),
