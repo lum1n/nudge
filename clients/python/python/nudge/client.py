@@ -26,8 +26,10 @@ from nudge._ffi import (
     PairingCode,
     PendingMessage,
     Player,
+    PlayerMemory,
     QueuedMessage,
     Room,
+    RoomExtension,
     RoomNudge,
     RoomUpdate,
     Sent,
@@ -357,6 +359,31 @@ class Client:
 
     async def forget(self, room: str, fact_id: str) -> None:
         await self.ffi.forget(room, fact_id)
+
+    async def my_memory(self) -> PlayerMemory:
+        """The caller's own memory, and whether they share it with all their rooms."""
+        return await self.ffi.my_memory()
+
+    async def remember_for_me(self, text: str) -> Fact:
+        return await self.ffi.remember_for_me(text)
+
+    async def forget_for_me(self, fact_id: str) -> None:
+        await self.ffi.forget_for_me(fact_id)
+
+    async def share_my_memory(self, shared: bool) -> PlayerMemory:
+        """With `shared`, everyone in the caller's rooms, and the model there, sees their own
+        facts."""
+        return await self.ffi.share_my_memory(shared)
+
+    async def room_extensions(self, room: str) -> list[RoomExtension]:
+        return await self.ffi.room_extensions(room)
+
+    async def set_room_extension(
+        self, room: str, extension: str, enabled: bool | None
+    ) -> RoomExtension:
+        """Turns an extension on or off in the room; `None` goes back to the default for its
+        kind."""
+        return await self.ffi.set_room_extension(room, extension, enabled)
 
     async def decide(self, room: str, approval_id: str, approve: bool) -> Approval:
         return await self.ffi.decide(room, approval_id, approve)

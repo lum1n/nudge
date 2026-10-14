@@ -24,6 +24,7 @@ import nudge.ffi.MarkerKind
 import nudge.ffi.listAssistants
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
@@ -169,6 +170,27 @@ class ClientTest {
             assertEquals(404.toUShort(), e.status)
         }
         room.close()
+    }
+
+    @Test
+    fun ownMemoryAndRoomExtensions() = runBlocking {
+        val member = client(MemoryTokens(bo))
+        val fact = member.rememberForMe("Likes coffee")
+        assertEquals("bo", fact.by?.id)
+        val memory = member.myMemory()
+        assertEquals(listOf(fact.id), memory.facts.map { it.id })
+        assertFalse(memory.shared)
+        assertTrue(member.shareMyMemory(true).shared)
+        member.shareMyMemory(false)
+        member.forgetForMe(fact.id)
+        assertTrue(member.myMemory().facts.isEmpty())
+
+        val payer = member.roomExtensions("trip").first { it.name == "payer" }
+        assertTrue(payer.enabled && payer.byDefault)
+        val off = member.setRoomExtension("trip", "payer", false)
+        assertFalse(off.enabled)
+        assertTrue(off.byDefault)
+        assertTrue(member.setRoomExtension("trip", "payer", null).enabled)
     }
 
     @Test

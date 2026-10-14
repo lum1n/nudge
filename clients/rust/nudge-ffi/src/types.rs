@@ -168,6 +168,25 @@ pub struct Fact {
     pub owner: Option<Player>,
 }
 
+/// The caller's own memory: shown in their personal room, and in all their rooms when `shared`.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct PlayerMemory {
+    pub facts: Vec<Fact>,
+    pub shared: bool,
+}
+
+/// An installed extension as one room has it. The built-in one is always on and not listed.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct RoomExtension {
+    pub name: String,
+    pub version: Option<String>,
+    pub description: Option<String>,
+    /// Whether the room's conversation uses it.
+    pub enabled: bool,
+    /// Whether it is on in rooms of this kind by default; `enabled` differs when the room chose.
+    pub by_default: bool,
+}
+
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
 pub struct RoomNudge {
     pub id: String,
@@ -433,6 +452,27 @@ impl From<p::Fact> for Fact {
             created_at: fact.created_at,
             by: fact.by.map(Into::into),
             owner: fact.owner.map(Into::into),
+        }
+    }
+}
+
+impl From<p::PlayerMemoryResponse> for PlayerMemory {
+    fn from(memory: p::PlayerMemoryResponse) -> Self {
+        PlayerMemory {
+            facts: memory.facts.into_iter().map(Into::into).collect(),
+            shared: memory.shared,
+        }
+    }
+}
+
+impl From<p::RoomExtension> for RoomExtension {
+    fn from(extension: p::RoomExtension) -> Self {
+        RoomExtension {
+            name: extension.name,
+            version: extension.version,
+            description: extension.description,
+            enabled: extension.enabled,
+            by_default: extension.by_default,
         }
     }
 }

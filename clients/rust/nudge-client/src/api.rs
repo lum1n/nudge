@@ -187,6 +187,56 @@ impl Api {
         .await
     }
 
+    /// The caller's own memory, and whether they share it with all their rooms.
+    pub async fn my_memory(&self) -> Result<PlayerMemoryResponse, ApiError> {
+        self.request(Method::GET, &["me", "memory"], &[], NO_BODY)
+            .await
+    }
+
+    pub async fn remember_for_me(&self, text: &str) -> Result<Fact, ApiError> {
+        let body = RememberRequest {
+            text: text.to_owned(),
+        };
+        self.request(Method::POST, &["me", "memory"], &[], Some(&body))
+            .await
+    }
+
+    pub async fn forget_for_me(&self, fact: &str) -> Result<(), ApiError> {
+        self.request_empty(Method::DELETE, &["me", "memory", fact], &[], NO_BODY)
+            .await
+    }
+
+    /// With `shared`, everyone in the caller's rooms, and the model there, sees their own facts.
+    pub async fn share_my_memory(&self, shared: bool) -> Result<PlayerMemoryResponse, ApiError> {
+        let body = ShareMemoryRequest { shared };
+        self.request(Method::PUT, &["me", "memory", "sharing"], &[], Some(&body))
+            .await
+    }
+
+    pub async fn room_extensions(&self, room: &str) -> Result<Vec<RoomExtension>, ApiError> {
+        let response: RoomExtensionsResponse = self
+            .request(Method::GET, &["rooms", room, "extensions"], &[], NO_BODY)
+            .await?;
+        Ok(response.extensions)
+    }
+
+    /// Turns an extension on or off in the room; `None` goes back to the default for its kind.
+    pub async fn set_room_extension(
+        &self,
+        room: &str,
+        extension: &str,
+        enabled: Option<bool>,
+    ) -> Result<RoomExtension, ApiError> {
+        let body = SetRoomExtensionRequest { enabled };
+        self.request(
+            Method::PUT,
+            &["rooms", room, "extensions", extension],
+            &[],
+            Some(&body),
+        )
+        .await
+    }
+
     pub async fn decide(
         &self,
         room: &str,

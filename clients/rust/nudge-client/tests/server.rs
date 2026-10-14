@@ -421,3 +421,41 @@ async fn stops_when_its_token_is_revoked_or_the_assistant_does_not_exist() {
         "{closed:?}"
     );
 }
+
+#[tokio::test]
+async fn keeps_a_players_own_memory_and_the_rooms_extensions() {
+    let Some(server) = faux_server().await else {
+        return;
+    };
+    let api = Api::new(&server.url, "robin", tokens(Some(&server.ann))).unwrap();
+
+    let fact = api.remember_for_me("Likes tea").await.unwrap();
+    assert_eq!(fact.by.as_ref().map(|by| by.id.as_str()), Some("ann"));
+    let memory = api.my_memory().await.unwrap();
+    assert_eq!(memory.facts, vec![fact.clone()]);
+    assert!(!memory.shared);
+    assert!(api.share_my_memory(true).await.unwrap().shared);
+    api.forget_for_me(&fact.id).await.unwrap();
+    assert!(api.my_memory().await.unwrap().facts.is_empty());
+    let missing = api.forget_for_me(&fact.id).await.unwrap_err();
+    assert_eq!(missing.status(), Some(404));
+
+    let extensions = api.room_extensions("trip").await.unwrap();
+    let payer = extensions
+        .iter()
+        .find(|e| e.name == "payer")
+        .expect("payer");
+    assert!(payer.enabled && payer.by_default);
+    let off = api
+        .set_room_extension("trip", "payer", Some(false))
+        .await
+        .unwrap();
+    assert!(!off.enabled && off.by_default);
+    let back = api.set_room_extension("trip", "payer", None).await.unwrap();
+    assert!(back.enabled);
+    let unknown = api
+        .set_room_extension("trip", "nothing", Some(true))
+        .await
+        .unwrap_err();
+    assert_eq!(unknown.status(), Some(404));
+}

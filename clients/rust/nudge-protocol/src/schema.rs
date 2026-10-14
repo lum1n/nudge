@@ -592,9 +592,47 @@ pub struct RememberRequest {
     pub text: String,
 }
 
+/// The caller's own memory: shown in their personal room, and in all their rooms when `shared`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PlayerMemoryResponse {
+    pub facts: Vec<Fact>,
+    pub shared: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ShareMemoryRequest {
+    pub shared: bool,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct DecideRequest {
     pub approve: bool,
+}
+
+/// An installed extension as one room has it. The built-in one is always on and not listed.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoomExtension {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// Whether the room's conversation uses it.
+    pub enabled: bool,
+    /// Whether it is on in rooms of this kind by default; `enabled` differs when the room chose.
+    pub by_default: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RoomExtensionsResponse {
+    pub extensions: Vec<RoomExtension>,
+}
+
+/// `None` goes back to the default for the room's kind.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SetRoomExtensionRequest {
+    pub enabled: Option<bool>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

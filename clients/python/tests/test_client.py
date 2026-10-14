@@ -167,6 +167,27 @@ def test_approvals_and_nudges(server) -> None:
     run(test())
 
 
+def test_own_memory_and_room_extensions(server) -> None:
+    async def test() -> None:
+        async with Client(server.url, server.assistant, MemoryTokens(server.bo)) as bo:
+            fact = await bo.remember_for_me("Likes coffee")
+            assert fact.by is not None and fact.by.id == "bo"
+            memory = await bo.my_memory()
+            assert [f.id for f in memory.facts] == [fact.id] and not memory.shared
+            assert (await bo.share_my_memory(True)).shared
+            assert not (await bo.share_my_memory(False)).shared
+            await bo.forget_for_me(fact.id)
+            assert not (await bo.my_memory()).facts
+
+            payer = next(e for e in await bo.room_extensions("trip") if e.name == "payer")
+            assert payer.enabled and payer.by_default
+            off = await bo.set_room_extension("trip", "payer", False)
+            assert not off.enabled and off.by_default
+            assert (await bo.set_room_extension("trip", "payer", None)).enabled
+
+    run(test())
+
+
 def test_refusals(server) -> None:
     async def test() -> None:
         async with Client(server.url, server.assistant, MemoryTokens(server.bo)) as bo:

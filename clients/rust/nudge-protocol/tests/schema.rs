@@ -410,6 +410,44 @@ fn http_bodies_match_the_schema() {
     check("RememberRequest", &RememberRequest { text: "x".into() });
     check("DecideRequest", &DecideRequest { approve: true });
     check(
+        "PlayerMemoryResponse",
+        &PlayerMemoryResponse {
+            facts: vec![Fact {
+                id: "p1".into(),
+                text: "Likes tea".into(),
+                created_at: 1.0,
+                by: Some(ann()),
+                owner: Some(ann()),
+            }],
+            shared: true,
+        },
+    );
+    check("ShareMemoryRequest", &ShareMemoryRequest { shared: false });
+    let extension = RoomExtension {
+        name: "browser".into(),
+        version: Some("0.1.0".into()),
+        description: Some("Browses the web".into()),
+        enabled: false,
+        by_default: true,
+    };
+    check("RoomExtension", &extension);
+    check(
+        "RoomExtensionsResponse",
+        &RoomExtensionsResponse {
+            extensions: vec![extension],
+        },
+    );
+    check(
+        "SetRoomExtensionRequest",
+        &SetRoomExtensionRequest {
+            enabled: Some(true),
+        },
+    );
+    check(
+        "SetRoomExtensionRequest",
+        &SetRoomExtensionRequest { enabled: None },
+    );
+    check(
         "ProtectRequest",
         &ProtectRequest {
             value: "Ann".into(),

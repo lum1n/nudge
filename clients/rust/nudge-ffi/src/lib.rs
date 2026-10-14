@@ -498,6 +498,53 @@ impl NudgeClient {
         Ok(run(async move { api.forget(&room, &fact_id).await }).await?)
     }
 
+    /// The caller's own memory, and whether they share it with all their rooms.
+    pub async fn my_memory(&self) -> Result<PlayerMemory, NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.my_memory().await }).await?.into())
+    }
+
+    pub async fn remember_for_me(&self, text: String) -> Result<Fact, NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.remember_for_me(&text).await })
+            .await?
+            .into())
+    }
+
+    pub async fn forget_for_me(&self, fact_id: String) -> Result<(), NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.forget_for_me(&fact_id).await }).await?)
+    }
+
+    /// With `shared`, everyone in the caller's rooms, and the model there, sees their own facts.
+    pub async fn share_my_memory(&self, shared: bool) -> Result<PlayerMemory, NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.share_my_memory(shared).await })
+            .await?
+            .into())
+    }
+
+    pub async fn room_extensions(&self, room: String) -> Result<Vec<RoomExtension>, NudgeError> {
+        let api = self.client.api().clone();
+        let extensions = run(async move { api.room_extensions(&room).await }).await?;
+        Ok(extensions.into_iter().map(Into::into).collect())
+    }
+
+    /// Turns an extension on or off in the room; `None` goes back to the default for its kind.
+    pub async fn set_room_extension(
+        &self,
+        room: String,
+        extension: String,
+        enabled: Option<bool>,
+    ) -> Result<RoomExtension, NudgeError> {
+        let api = self.client.api().clone();
+        Ok(
+            run(async move { api.set_room_extension(&room, &extension, enabled).await })
+                .await?
+                .into(),
+        )
+    }
+
     pub async fn decide(
         &self,
         room: String,

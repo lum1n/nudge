@@ -170,6 +170,30 @@ final class ClientTests: XCTestCase {
         room.close()
     }
 
+    func testOwnMemoryAndRoomExtensions() async throws {
+        let member = try client(MemoryTokens(server.bo))
+        let fact = try await member.rememberForMe(text: "Likes coffee")
+        XCTAssertEqual(fact.by?.id, "bo")
+        let memory = try await member.myMemory()
+        XCTAssertEqual(memory.facts.map(\.id), [fact.id])
+        XCTAssertFalse(memory.shared)
+        let shared = try await member.shareMyMemory(shared: true)
+        XCTAssertTrue(shared.shared)
+        _ = try await member.shareMyMemory(shared: false)
+        try await member.forgetForMe(factId: fact.id)
+        let forgotten = try await member.myMemory()
+        XCTAssertTrue(forgotten.facts.isEmpty)
+
+        let extensions = try await member.roomExtensions(room: "trip")
+        let payer = try XCTUnwrap(extensions.first { $0.name == "payer" })
+        XCTAssertTrue(payer.enabled && payer.byDefault)
+        let off = try await member.setRoomExtension(room: "trip", extension: "payer", enabled: false)
+        XCTAssertFalse(off.enabled)
+        XCTAssertTrue(off.byDefault)
+        let back = try await member.setRoomExtension(room: "trip", extension: "payer", enabled: nil)
+        XCTAssertTrue(back.enabled)
+    }
+
     func testRefusalsAndRevocation() async throws {
         let admin = try client(MemoryTokens(server.ann))
         let member = try client(MemoryTokens(server.bo))
