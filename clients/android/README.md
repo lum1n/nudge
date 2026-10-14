@@ -26,4 +26,11 @@ Needs the Android SDK (`local.properties` with `sdk.dir`, or `ANDROID_HOME`), JD
 ./gradlew :nudge:testDebugUnitTest -Pnudge.native=false # on this machine's JVM, no NDK needed
 ```
 
+With a system Rust that has no Android targets (such as a distribution's package), a rustup of its own beside it does the cargo-ndk build: install it with `RUSTUP_HOME` and `CARGO_HOME` set to directories of its own (and `--no-modify-path`), add the three targets and `cargo install cargo-ndk` with it, and name the two directories in `local.properties` (or as Gradle properties). The rest of the build keeps the system Rust.
+
+```properties
+nudge.cargoHome=/home/robin/.local/share/cargo-android
+nudge.rustupHome=/home/robin/.local/share/rustup-android
+```
+
 `-Pnudge.native=false` skips cargo-ndk; the build then has no native libraries and runs only on the JVM. The unit tests load the host build of `libnudge_ffi` and run against a server on a faux model (`node packages/server/scripts/faux-server.ts`, after `pnpm build` in the repository).

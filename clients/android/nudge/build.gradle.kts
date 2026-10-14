@@ -2,6 +2,8 @@
 // build time, its native libraries for each ABI (built with cargo-ndk), and `nudge.client`.
 // `-Pnudge.native=false` skips the cargo-ndk build, such as on a machine without the Android
 // Rust targets; the unit tests use the host's build of the library either way.
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
@@ -14,6 +16,15 @@ val bindings = layout.buildDirectory.dir("generated/uniffi/kotlin")
 val jniLibs = layout.buildDirectory.dir("generated/jniLibs")
 val abis = listOf("arm64-v8a", "armeabi-v7a", "x86_64")
 val buildNative = providers.gradleProperty("nudge.native").map { it != "false" }.orElse(true)
+
+// `nudge.cargoHome` (and `nudge.rustupHome`), as a Gradle property or in `local.properties`, point
+// cargo-ndk at a rustup install of its own with the Android targets, next to a system Rust.
+val localProperties = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.exists() }?.reader()?.use { load(it) }
+}
+fun setting(name: String): String? = providers.gradleProperty(name).orNull ?: localProperties.getProperty(name)
+val cargoHome = setting("nudge.cargoHome")
+val rustupHome = setting("nudge.rustupHome")
 
 val cargoBuildHost by tasks.registering(Exec::class) {
     description = "Builds nudge-ffi for this machine, for bindgen and the unit tests."
@@ -40,6 +51,13 @@ val cargoNdk by tasks.registering(Exec::class) {
     description = "Builds nudge-ffi for each Android ABI with cargo-ndk."
     onlyIf { buildNative.get() }
     workingDir = rust
+    if (cargoHome != null) {
+        environment("CARGO_HOME", cargoHome)
+        environment("PATH", File(cargoHome, "bin").path + File.pathSeparator + System.getenv("PATH"))
+        rustupHome?.let { environment("RUSTUP_HOME", it) }
+        // Some crates carry a rust-toolchain.toml; without this, rustup follows it when compiling them.
+        environment("RUSTUP_TOOLCHAIN", System.getenv("RUSTUP_TOOLCHAIN") ?: "stable")
+    }
     // Cargo knows what is up to date.
     val out = jniLibs.get().asFile
     commandLine(
