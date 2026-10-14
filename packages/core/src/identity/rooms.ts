@@ -1,5 +1,6 @@
 import type { Context } from "@earendil-works/chord";
 import type { AgentChange, ConversationId, Harness } from "@earendil-works/pi-durable";
+import type { Change } from "../changes.ts";
 import { canUse, DirectoryDoc, freeId, LOBBY, type Player, type Room, slug } from "./directory.ts";
 
 export type SharedRoomDraft = {
@@ -17,6 +18,7 @@ export class Rooms {
     /** The model and instructions every new room starts with. */
     private readonly agent: () => AgentChange,
     private readonly now: () => number,
+    private readonly changed: (change: Change) => void = () => {},
   ) {}
 
   async get(id: string, context: Context): Promise<Room | undefined> {
@@ -112,6 +114,7 @@ export class Rooms {
       },
       context,
     );
+    this.changed({ kind: "rooms" });
     return created!;
   }
 }

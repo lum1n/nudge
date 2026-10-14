@@ -7,6 +7,7 @@ import {
   type Harness,
   type Tx,
 } from "@earendil-works/pi-durable";
+import type { Change } from "../changes.ts";
 import type { Room } from "../identity/directory.ts";
 import type { Rooms } from "../identity/rooms.ts";
 
@@ -132,6 +133,7 @@ export class Approvals {
     private readonly now: () => number,
     /** The handler an installed extension has for `kind`, looked up when an approval runs. */
     private readonly handler: (extension: string, kind: string) => ApprovalHandler | undefined,
+    private readonly changed: (change: Change) => void = () => {},
   ) {}
 
   /** Newest first. */
@@ -221,7 +223,7 @@ export class Approvals {
     context: Context,
     change: (item: Approval) => void,
   ): Promise<Approval> {
-    return this.harness.commit(async (tx) => {
+    const updated = await this.harness.commit(async (tx) => {
       const state = await tx.doc(ApprovalsDoc, roomId, null);
       const item = state.items.find((stored) => stored.id === id);
       if (item === undefined) throw new ApprovalNotFound(`No approval ${id} in room "${roomId}"`);
@@ -231,6 +233,8 @@ export class Approvals {
         state.items.splice(state.items.indexOf(old), 1);
       return copy(item);
     }, context);
+    this.changed({ kind: "approvals", roomId });
+    return updated;
   }
 
   /** Tells the room how an approval ended, as input the assistant answers. */

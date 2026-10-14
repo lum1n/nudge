@@ -358,8 +358,7 @@ async function submit(
       text: body.text,
       // The author is whoever the token belongs to, never what the body says.
       author: { playerId: player.id, displayName: player.displayName, clientId },
-      // Scoped to the client so one player's ids cannot collide with another's.
-      requestId: body.requestId === undefined ? undefined : `${clientId}:${body.requestId}`,
+      requestId: body.requestId,
       whenBusy: body.whenBusy,
     },
     context,

@@ -20,6 +20,7 @@ import {
 } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { Approvals } from "./approvals/approvals.ts";
+import { type Change, Changes } from "./changes.ts";
 import { createBuiltinExtension } from "./extensions/builtin.ts";
 import {
   type HostBase,
@@ -94,6 +95,8 @@ export class Nudge {
   readonly nudges: Nudges;
   readonly memory: Memory;
   readonly approvals: Approvals;
+  /** Changes to rooms, memory, nudges and approvals made through the members above. */
+  readonly changes = new Changes();
   private readonly models: RedactingModels;
   private readonly now: () => number;
   private readonly unlock: () => Promise<void>;
@@ -116,9 +119,10 @@ export class Nudge {
     this.detectors = parts.detectors;
     this.installed = parts.installed;
     this.players = new Players(harness, (name) => this.protect(name, "NAME").then(() => {}), now);
-    this.rooms = new Rooms(harness, () => agent, now);
-    this.nudges = new Nudges(harness, this.rooms, now);
-    this.memory = new Memory(harness, this.rooms, now);
+    const changed = (change: Change) => this.changes.emit(change);
+    this.rooms = new Rooms(harness, () => agent, now, changed);
+    this.nudges = new Nudges(harness, this.rooms, now, changed);
+    this.memory = new Memory(harness, this.rooms, now, changed);
     // Looked up when an approval runs, so a reload's handlers take over.
     this.approvals = new Approvals(
       harness,
@@ -126,6 +130,7 @@ export class Nudge {
       now,
       (extension, kind) =>
         this.installed.find((installed) => installed.extension.name === extension)?.approvals[kind],
+      changed,
     );
   }
 

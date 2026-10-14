@@ -10,6 +10,7 @@ import {
   type ToolRegistration,
   type Tx,
 } from "@earendil-works/pi-durable";
+import type { Change } from "../changes.ts";
 import { roomOf } from "../identity/directory.ts";
 import type { Rooms } from "../identity/rooms.ts";
 
@@ -79,6 +80,7 @@ export class Memory {
     private readonly harness: Harness,
     private readonly rooms: Rooms,
     private readonly now: () => number,
+    private readonly changed: (change: Change) => void = () => {},
   ) {}
 
   async list(roomId: string, context: Context): Promise<Fact[]> {
@@ -88,14 +90,18 @@ export class Memory {
   async remember(roomId: string, text: string, context: Context): Promise<Fact> {
     if ((await this.rooms.get(roomId, context)) === undefined)
       throw new Error(`No room "${roomId}"`);
-    return this.harness.commit((tx) => addFact(tx, roomId, text, this.now()), context);
+    const fact = await this.harness.commit((tx) => addFact(tx, roomId, text, this.now()), context);
+    this.changed({ kind: "memory", roomId });
+    return fact;
   }
 
   /** False when the room has no fact with that id. */
   async forget(roomId: string, id: string, context: Context): Promise<boolean> {
     if (!(await readFacts(this.harness, roomId, context)).some((fact) => fact.id === id))
       return false;
-    return this.harness.commit((tx) => dropFact(tx, roomId, id), context);
+    const dropped = await this.harness.commit((tx) => dropFact(tx, roomId, id), context);
+    if (dropped) this.changed({ kind: "memory", roomId });
+    return dropped;
   }
 }
 

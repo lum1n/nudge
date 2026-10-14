@@ -84,7 +84,23 @@ describe("Nudge", () => {
       playerId: "p1",
       displayName: "Ann",
       clientId: "c1",
+      requestId: "r1",
     });
+    await nudge.close(context);
+  });
+
+  it("scopes request ids to the client that sent them", async () => {
+    const { faux, models, model } = setup();
+    faux.setResponses([fauxAssistantMessage("1"), fauxAssistantMessage("2")]);
+    const nudge = await createNudge({ database: ":memory:", models, model }, context);
+    const ann = { playerId: "p1", displayName: "Ann", clientId: "c1" };
+    const bo = { playerId: "p2", displayName: "Bo", clientId: "c2" };
+    const first = await nudge.submit(LOBBY, { text: "hi", author: ann, requestId: "r1" }, context);
+    const again = await nudge.submit(LOBBY, { text: "hi", author: ann, requestId: "r1" }, context);
+    const other = await nudge.submit(LOBBY, { text: "yo", author: bo, requestId: "r1" }, context);
+    expect(again.id).toBe(first.id);
+    expect(other.id).not.toBe(first.id);
+    await other.wait(context);
     await nudge.close(context);
   });
 

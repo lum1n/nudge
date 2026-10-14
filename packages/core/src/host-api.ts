@@ -17,7 +17,10 @@ export type Author = {
 export type MessageDraft = {
   readonly text: string;
   readonly author?: Author;
-  /** Resubmitting with the same id after a crash or retry finds the first submission. */
+  /**
+   * Resubmitting with the same id after a crash or retry finds the first submission.
+   * Scoped to the author's client, so one client's ids cannot collide with another's.
+   */
   readonly requestId?: string;
   /** What happens when the room is mid-answer. Default `followUp`. */
   readonly whenBusy?: "steer" | "followUp" | "reject";
@@ -30,6 +33,8 @@ export type MessageEntryData = {
   readonly playerId: string;
   readonly displayName: string;
   readonly clientId?: string;
+  /** The sender's own id for this message, so its client can match what it sent. */
+  readonly requestId?: string;
   readonly sentAt: number;
 };
 
@@ -42,12 +47,15 @@ export async function submitMessage(
 ): Promise<Submission> {
   const conversation = await harness.conversation(conversationId, context);
   if (conversation === undefined) throw new Error(`No conversation ${conversationId}`);
-  const { author } = draft;
+  const { author, requestId } = draft;
   return conversation.submit(
     {
       type: "input",
       content: author === undefined ? draft.text : `${author.displayName}: ${draft.text}`,
-      requestId: draft.requestId,
+      requestId:
+        requestId === undefined || author?.clientId === undefined
+          ? requestId
+          : `${author.clientId}:${requestId}`,
       whenBusy: draft.whenBusy ?? "followUp",
       entry:
         author === undefined
@@ -59,6 +67,7 @@ export async function submitMessage(
                 playerId: author.playerId,
                 displayName: author.displayName,
                 ...(author.clientId === undefined ? {} : { clientId: author.clientId }),
+                ...(requestId === undefined ? {} : { requestId }),
                 sentAt: now,
               } satisfies MessageEntryData,
             },

@@ -1,5 +1,6 @@
 import type { Context } from "@earendil-works/chord";
 import type { ConversationId, Harness, TaskId } from "@earendil-works/pi-durable";
+import type { Change } from "../changes.ts";
 import type { Rooms } from "../identity/rooms.ts";
 import { ScheduleDoc, type ScheduledNudge } from "./schedule.ts";
 import { NudgeTimer } from "./timer-task.ts";
@@ -18,6 +19,7 @@ export class Nudges {
     private readonly harness: Harness,
     private readonly rooms: Rooms,
     private readonly now: () => number,
+    private readonly changed: (change: Change) => void = () => {},
   ) {}
 
   async schedule(roomId: string, draft: NudgeDraft, context: Context): Promise<ScheduledNudge> {
@@ -29,7 +31,7 @@ export class Nudges {
     if (draft.every !== undefined && !(draft.every > 0))
       throw new Error("A nudge repeats after a positive interval");
     // The task and its schedule entry commit together, so neither exists alone.
-    return this.harness.commit(async (tx) => {
+    const scheduled = await this.harness.commit(async (tx) => {
       const id = await tx.createTask(
         NudgeTimer,
         {
@@ -56,6 +58,8 @@ export class Nudges {
       (await tx.doc(ScheduleDoc)).nudges[nudge.id] = { ...nudge };
       return nudge;
     }, context);
+    this.changed({ kind: "nudges", roomId });
+    return scheduled;
   }
 
   /** Pending nudges, soonest first; only those of `roomIds` when given. */
@@ -74,12 +78,14 @@ export class Nudges {
 
   /** Stops a pending nudge. False when there is none with that id. */
   async cancel(id: string, context: Context): Promise<boolean> {
-    if ((await this.get(id, context)) === undefined) return false;
+    const nudge = await this.get(id, context);
+    if (nudge === undefined) return false;
     const taskId = Number(id) as TaskId;
     if ((await this.harness.abortTask(taskId, context)) === "marked")
       await this.harness.waitForTask(taskId, context);
     // The abort handler drops the entry; this covers a task that ended some other way.
     await this.forget([id], context);
+    this.changed({ kind: "nudges", roomId: nudge.roomId });
     return true;
   }
 

@@ -144,7 +144,7 @@ class LocalSession implements ChatSession {
   async submit(text: string, whenBusy: "steer" | "followUp"): Promise<void> {
     const submission = await this.nudge.submit(
       this.room.id,
-      { text, author: this.author, requestId: `${this.clientId}:${randomUUID()}`, whenBusy },
+      { text, author: this.author, requestId: randomUUID(), whenBusy },
       context,
     );
     void submission.wait(context).then(
