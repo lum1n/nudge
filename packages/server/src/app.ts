@@ -4,7 +4,7 @@ import { encoder } from "@earendil-works/chord/delta";
 import type { Cursor } from "@earendil-works/pi-durable";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { upgradeWebSocket } from "@hono/node-server";
+import { upgradeWebSocket as nodeUpgradeWebSocket } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import {
   AlreadyDecided,
@@ -16,7 +16,7 @@ import {
   type RoomSocketSession,
 } from "@nudge/core";
 import { type Context as HonoContext, Hono, type MiddlewareHandler } from "hono";
-import type { WSContext } from "hono/ws";
+import type { UpgradeWebSocket, WSContext } from "hono/ws";
 import {
   type ApprovalsResponse,
   type AssistantsResponse,
@@ -37,14 +37,20 @@ import {
   type TranscriptResponse,
   type WhenBusy,
 } from "./protocol.ts";
+import { type V1Options, v1Routes } from "./v1/routes.ts";
 import { publicOps, publicView } from "./view.ts";
 
 export type AppOptions = {
   /** By URL name: `/a/<name>/…`. */
   readonly assistants: ReadonlyMap<string, Nudge>;
-  /** A built web UI (a directory with `index.html`) to serve at every path outside `/a`. */
+  /** A built web UI (a directory with `index.html`) to serve at every path outside `/a` and `/v1`. */
   readonly web?: string;
   readonly onError?: (error: unknown) => void;
+  /** The runtime's WebSocket upgrade; default Node's. */
+  readonly upgradeWebSocket?: UpgradeWebSocket;
+  /** Told to v1 clients in `welcome`. */
+  readonly version?: string;
+  readonly timing?: V1Options["timing"];
 };
 
 type Env = {
@@ -70,6 +76,7 @@ const context: Context = BACKGROUND_CONTEXT;
 export function createApp(options: AppOptions): Hono<Env> {
   const app = new Hono<Env>();
   const report = options.onError ?? ((error) => console.error(error));
+  const upgradeWebSocket: UpgradeWebSocket = options.upgradeWebSocket ?? nodeUpgradeWebSocket;
 
   app.onError((error, c) => {
     if (error instanceof HttpError) return c.json({ error: error.message }, error.status);
@@ -303,6 +310,16 @@ export function createApp(options: AppOptions): Hono<Env> {
   });
 
   app.route("/a/:assistant", api);
+  app.route(
+    "/v1",
+    v1Routes({
+      assistants: options.assistants,
+      upgradeWebSocket,
+      version: options.version ?? "0.0.0",
+      report,
+      timing: options.timing,
+    }),
+  );
   if (options.web !== undefined) serveWeb(app, options.web);
   return app;
 }
@@ -310,7 +327,9 @@ export function createApp(options: AppOptions): Hono<Env> {
 /** Files from the build, and `index.html` for every other page so the browser's router takes over. */
 function serveWeb(app: Hono<Env>, root: string): void {
   const outsideApi: MiddlewareHandler<Env> = async (c, next) => {
-    if (c.req.path === "/a" || c.req.path.startsWith("/a/")) return c.notFound();
+    const path = c.req.path;
+    if (["/a", "/v1"].some((api) => path === api || path.startsWith(`${api}/`)))
+      return c.notFound();
     await next();
   };
   app.get("*", outsideApi, serveStatic({ root }), async (c) => {

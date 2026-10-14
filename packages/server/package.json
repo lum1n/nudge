@@ -21,7 +21,9 @@
     "@earendil-works/pi-durable": "1.2.0",
     "@hono/node-server": "2.1.5",
     "@nudge/core": "workspace:*",
+    "@nudge/protocol": "workspace:*",
     "hono": "4.13.13",
+    "typebox": "1.3.27",
     "ws": "8.22.0"
   },
   "devDependencies": {
