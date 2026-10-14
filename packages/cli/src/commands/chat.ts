@@ -1,7 +1,15 @@
 import { userInfo } from "node:os";
 import { createInterface } from "node:readline/promises";
 import { UsageError } from "../errors.ts";
-import { ChatRenderer, describeApproval, describeExtension, describeNudge } from "../render.ts";
+import type { ExtensionChannel } from "../extension-channel.ts";
+import {
+  ChatRenderer,
+  type Connector,
+  describeApproval,
+  describeConnector,
+  describeExtension,
+  describeNudge,
+} from "../render.ts";
 import type { RoomView } from "@nudge/protocol";
 import { type ChatSession, openLocal, openRemote } from "../session.ts";
 
@@ -25,7 +33,8 @@ const HELP =
   "/memory lists what the assistant remembers here, /memory add <text> and /memory forget <id> " +
   "change it, /approvals lists actions waiting for approval, /approve <id> and /deny <id> " +
   "decide one, /extensions lists the extensions and whether they are on here, " +
-  "/extensions on|off|default <name> changes one, /quit leaves.";
+  "/extensions on|off|default <name> changes one, /connectors lists the APIs this room can " +
+  "call, /connector-key <id> sets one's API key, /quit leaves.";
 
 export async function chat(options: ChatOptions): Promise<void> {
   let rl: ReturnType<typeof createInterface> | undefined;
@@ -107,11 +116,36 @@ export async function chat(options: ChatOptions): Promise<void> {
 
   if (!renderer.busy) ask();
 
+  // The connectors extension's panel, opened on first use.
+  let connectors: Promise<ExtensionChannel> | undefined;
+  const panel = () => {
+    connectors ??= session.extension("connectors");
+    connectors.catch(() => (connectors = undefined));
+    return connectors;
+  };
+  const listConnectors = async (channel: ExtensionChannel) =>
+    (await channel.latest<{ type: string; connectors: Connector[] }>("connectors")).connectors;
+  /** Reads the next line without echoing it, for keys; empty when input ended. */
+  const askSecret = async (question: string): Promise<string> => {
+    const output = prompt as unknown as { _writeToOutput(text: string): void };
+    const write = output._writeToOutput;
+    output._writeToOutput = () => {};
+    process.stdout.write(question);
+    try {
+      const next = await lines.next();
+      return next.done === true ? "" : next.value;
+    } finally {
+      output._writeToOutput = write;
+      if (process.stdin.isTTY) process.stdout.write("\n");
+    }
+  };
+
   let closing = false;
   const quit = async () => {
     if (closing) return;
     closing = true;
     prompt.close();
+    (await connectors?.catch(() => undefined))?.close();
     await session.close();
   };
 
@@ -188,6 +222,30 @@ export async function chat(options: ChatOptions): Promise<void> {
         else {
           const enabled = verb === "default" ? undefined : verb === "on";
           console.log(`  ${describeExtension(await session.setExtension(name, enabled))}`);
+        }
+      } else if (line === "/connectors") {
+        const list = await listConnectors(await panel());
+        if (list.length === 0) console.log("  No connectors here. Ask the assistant to add one.");
+        for (const connector of list) console.log(`  ${describeConnector(connector)}`);
+      } else if (/^\/connector-key(\s|$)/.test(line)) {
+        const id = /^\/connector-key\s+(\S+)$/.exec(line)?.[1];
+        if (id === undefined)
+          console.log("  Usage: /connector-key <id>, with an id from /connectors");
+        else {
+          const channel = await panel();
+          const connector = (await listConnectors(channel)).find((c) => c.id === id);
+          if (connector === undefined) console.log(`  No connector ${id} here.`);
+          else {
+            const key = (
+              await askSecret(`  API key for ${connector.name} (empty clears it): `)
+            ).trim();
+            await channel.request(
+              key === ""
+                ? { type: "clearKey", connector: id }
+                : { type: "setKey", connector: id, value: key },
+            );
+            console.log(key === "" ? "  Cleared." : "  Saved. The assistant never sees it.");
+          }
         }
       } else if (line.startsWith("/private ")) {
         const placeholder = await session.protect(line.slice("/private ".length));

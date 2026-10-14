@@ -17,6 +17,7 @@ import {
   visibleConnectors,
 } from "./model.ts";
 import { ConnectorError, fetchLocked, lockedUrl } from "./net.ts";
+import { Panels } from "./panel.ts";
 
 const READ_METHODS = new Set(["GET", "HEAD"]);
 const AUTH_SCHEMA = Type.Object({
@@ -34,7 +35,9 @@ export default defineNudgeExtension({
   name: "connectors",
   version: "0.1.0",
   description: "Call APIs the room adds and teaches it about",
-  setup: ({ secrets, dataDir, now }): ExtensionParts => {
+  setup: ({ secrets, dataDir, now, documents }): ExtensionParts => {
+    // Each room's connectors panel: keys, the private network, read paths, sharing.
+    const panels = new Panels(documents, secrets);
     const specCache = dataDir === undefined ? undefined : `${dataDir}/openapi-cache`;
 
     const text = (value: string, isError = false) => ({
@@ -134,6 +137,7 @@ export default defineNudgeExtension({
         }
         try {
           const updated = await api.commit((tx) => updateConnector(tx, room.id, id, rest), context);
+          void panels.changed(room.id);
           return text(`Updated connector ${updated.id}.`);
         } catch (error) {
           return text((error as Error).message, true);
@@ -150,6 +154,7 @@ export default defineNudgeExtension({
         const room = await roomOf(api, api.conversationId, context);
         const removed = await api.commit((tx) => removeConnector(tx, room.id, id), context);
         secrets.delete(room.id, id);
+        void panels.changed(room.id);
         return removed
           ? text(`Removed connector ${id}.`)
           : text(`No connector "${id}" added in this room.`, true);
@@ -242,6 +247,7 @@ export default defineNudgeExtension({
 
     return {
       tools: [addTool, updateTool, removeTool, callTool, docsTool],
+      roomSocket: panels.roomSocket,
       sections: [
         section("connectors", async (input, context) => {
           const room = await roomOf(input.read, input.conversationId, context);
@@ -252,7 +258,12 @@ export default defineNudgeExtension({
             "knowledge when a task matches:\n" +
             connectors
               .map(
-                (c) => `- ${c.id} ${c.name}: ${c.useFor}` + (c.notes ? ` (notes: ${c.notes})` : ""),
+                (c) =>
+                  `- ${c.id} ${c.name}: ${c.useFor}` +
+                  (c.notes ? ` (notes: ${c.notes})` : "") +
+                  (c.auth && secrets.get(room.id, c.id) === undefined
+                    ? " (no API key set yet)"
+                    : ""),
               )
               .join("\n")
           );
@@ -273,7 +284,12 @@ export default defineNudgeExtension({
             const connector = await run.commit((tx) =>
               addConnector(tx, run.room.id, draft, addedBy, now()),
             );
-            return { text: `Added connector ${connector.id} (${connector.name}).` };
+            void panels.changed(run.room.id);
+            const key = connector.auth
+              ? " It needs an API key: someone in the room sets it on the web app's Connectors page, or " +
+                "with /connector-key in a terminal chat."
+              : "";
+            return { text: `Added connector ${connector.id} (${connector.name}).${key}` };
           } catch (error) {
             return { text: (error as Error).message, isError: true };
           }
@@ -284,6 +300,7 @@ export default defineNudgeExtension({
             const updated = await run.commit((tx) =>
               updateConnector(tx, run.room.id, id, { baseUrl }),
             );
+            void panels.changed(run.room.id);
             return { text: `Connector ${updated.id}'s address is now ${updated.baseUrl}.` };
           } catch (error) {
             return { text: (error as Error).message, isError: true };

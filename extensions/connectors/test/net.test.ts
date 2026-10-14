@@ -65,9 +65,7 @@ describe("lockedUrl", () => {
   it("appends onto a base URL missing its trailing slash, with or without a leading slash", () => {
     const noSlash = { name: "Weather", baseUrl: "https://api.example.com/v1" };
     expect(lockedUrl(noSlash, "forecast").toString()).toBe("https://api.example.com/v1/forecast");
-    expect(lockedUrl(noSlash, "/forecast").toString()).toBe(
-      "https://api.example.com/v1/forecast",
-    );
+    expect(lockedUrl(noSlash, "/forecast").toString()).toBe("https://api.example.com/v1/forecast");
   });
 });
 

@@ -6,6 +6,8 @@ export {
   type ConnectorsState,
   MAX_CONNECTORS,
   normalizeBaseUrl,
+  shareConnector,
+  unshareConnector,
   visibleConnectors,
 } from "./model.ts";
 export {
@@ -19,3 +21,4 @@ export {
   MAX_RESPONSE_BYTES,
 } from "./net.ts";
 export { describeOperation, fetchSpec, searchOperations } from "./openapi.ts";
+export type { PanelConnector, PanelInput, PanelOutput } from "./panel.ts";

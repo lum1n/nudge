@@ -76,13 +76,22 @@ function Room() {
               {view.room.members.map((member) => member.displayName).join(", ")}
             </p>
           </div>
-          <Link
-            to="/$assistant/$room/browser"
-            params={{ assistant, room }}
-            className="self-start rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
-          >
-            Browser
-          </Link>
+          <div className="flex gap-2">
+            <Link
+              to="/$assistant/$room/browser"
+              params={{ assistant, room }}
+              className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
+            >
+              Browser
+            </Link>
+            <Link
+              to="/$assistant/$room/connectors"
+              params={{ assistant, room }}
+              className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
+            >
+              Connectors
+            </Link>
+          </div>
           <ApprovalsPanel approvals={view.approvals} />
           <MemoryPanel view={view} />
           <NudgesPanel view={view} />

@@ -11,6 +11,7 @@ import {
   tokens,
 } from "./commands/admin.ts";
 import { chat } from "./commands/chat.ts";
+import { connector } from "./commands/connector.ts";
 import { doctor } from "./commands/doctor.ts";
 import { init } from "./commands/init.ts";
 import { serve } from "./commands/serve.ts";
@@ -32,11 +33,15 @@ Commands:
                      the admins; the first player always may
   room [name]        Create a shared room with --members, or list the rooms
   nudges             List the scheduled nudges of every room
+  connectors [room]  List the APIs a room can call (default: the lobby)
+  connector share|unshare <id> [room]
+                     Share a room's connector, one without a key, with every room, or
+                     move a shared one back into the room
   reload             Reinstall extensions from the config in the running assistant
   doctor             Check Node, config, storage and model credentials;
                      --ping sends one request, --privacy tests redaction
 
-The admin commands (invite to nudges) open the assistant's database. While "nudge serve"
+The admin commands (invite to connector) open the assistant's database. While "nudge serve"
 has it open, they go through the server instead when given an admin's token (--token or
 $NUDGE_TOKEN; --url when it isn't on --host and --port). invite and pair then print a
 pairing code instead of a token.
@@ -80,7 +85,7 @@ async function main(argv: string[]): Promise<number> {
       help: { type: "boolean", short: "h", default: false },
     },
   });
-  const [command, argument] = positionals;
+  const [command, argument, ...rest] = positionals;
   if (values.help || command === undefined) {
     process.stdout.write(USAGE);
     return command === undefined && !values.help ? 1 : 0;
@@ -144,6 +149,16 @@ async function main(argv: string[]): Promise<number> {
     case "nudges":
       await nudges(access);
       return 0;
+    case "connectors":
+      await connector({ ...access, room: argument });
+      return 0;
+    case "connector": {
+      const [id, where] = rest;
+      if ((argument !== "share" && argument !== "unshare") || id === undefined)
+        throw new UsageError("Usage: nudge connector share|unshare <id> [room]");
+      await connector({ ...access, verb: argument, id, room: where });
+      return 0;
+    }
     case "reload":
       return (await reload(admin)) ? 0 : 1;
     case "doctor":

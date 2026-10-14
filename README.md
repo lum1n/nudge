@@ -175,6 +175,15 @@ An entry's `rooms` lists the kinds of room it is on in by default (`"lobby"`, `"
 - Results reach the model through the same redaction as everything else. Images in results are left out unless a server sets `"images": true`, since redaction only reads text.
 - The tool lists are read when the extension is installed; `nudge reload` reads them again. A server that can't be reached then is left out and reported. Connections close after `idleMinutes` (default 5) unused, and on reload and shutdown.
 
+### Connectors
+
+`extensions/connectors` lets a room teach the assistant APIs of its own, such as a weather or timetable service. Nothing is built in. Ask in the chat ("add the MET weather API, use it for forecasts"); adding one waits for someone in the room to approve it. The model then prefers it over browsing for those tasks, and keeps notes on how to use it.
+
+- Reads (GET and HEAD) run at once. Anything else waits for approval, unless someone marked that call as a read, such as `POST /graphql`.
+- Calls stay under the connector's base address. Localhost and the local network are blocked unless someone allows them for that connector.
+- API keys, the local network and read paths are set by people, never by the model: on the room's **Connectors** page in the web UI, or with `/connectors` and `/connector-key <id>` in `nudge chat` (the key isn't echoed). Keys are stored encrypted and scrubbed from what the model sees.
+- A connector belongs to the room it was added in. The owner can share one without a key with every room: `nudge connector share <id> [room]`, and `unshare` to move it back. `nudge connectors [room]` lists a room's.
+
 ### Write an extension
 
 `extensions/hello/src/index.ts` is a whole one:

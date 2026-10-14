@@ -125,6 +125,45 @@ export async function removeConnector(tx: Tx, roomId: string, id: string): Promi
   return true;
 }
 
+/**
+ * Moves a room's own connector to the ones every room sees. Ones with a key stay in their room:
+ * the key belongs to it.
+ */
+export async function shareConnector(tx: Tx, roomId: string, id: string): Promise<Connector> {
+  const own = await tx.doc(ConnectorsDoc, roomId, null);
+  const index = own.connectors.findIndex((c: Connector) => c.id === id);
+  if (index < 0) throw new ConnectorNotFound(`No connector "${id}" in this room`);
+  const connector = copy(own.connectors[index]!);
+  if (connector.auth !== undefined)
+    throw new Error(
+      `${connector.name} has an API key, which belongs to this room; it can't be shared`,
+    );
+  const shared = await tx.doc(SharedConnectorsDoc);
+  if (shared.connectors.length >= MAX_CONNECTORS)
+    throw new Error(`${MAX_CONNECTORS} connectors are shared already; unshare one first`);
+  connector.id = `s${shared.next}`;
+  shared.next += 1;
+  shared.connectors.push(copy(connector));
+  own.connectors.splice(index, 1);
+  return connector;
+}
+
+/** Moves a shared connector back into one room, the only one that sees it from then on. */
+export async function unshareConnector(tx: Tx, roomId: string, id: string): Promise<Connector> {
+  const shared = await tx.doc(SharedConnectorsDoc);
+  const index = shared.connectors.findIndex((c: Connector) => c.id === id);
+  if (index < 0) throw new ConnectorNotFound(`No shared connector "${id}"`);
+  const own = await tx.doc(ConnectorsDoc, roomId, null);
+  if (own.connectors.length >= MAX_CONNECTORS)
+    throw new Error(`This conversation has ${MAX_CONNECTORS} connectors already; remove one first`);
+  const connector = copy(shared.connectors[index]!);
+  connector.id = `c${own.next}`;
+  own.next += 1;
+  own.connectors.push(copy(connector));
+  shared.connectors.splice(index, 1);
+  return connector;
+}
+
 /** A room's own connectors plus every one shared with all rooms. */
 export async function visibleConnectors(
   read: DocumentReader,

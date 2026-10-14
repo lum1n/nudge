@@ -322,7 +322,7 @@ async function withAssistant(
 }
 
 /** Opens the assistant's database, or goes through its server when another process has it open. */
-async function withAssistantOrServer(
+export async function withAssistantOrServer(
   options: AdminOptions & ServerAccess,
   local: (nudge: Nudge, assistant: string) => Promise<void>,
   remote: (server: AdminServer) => Promise<void>,
@@ -343,11 +343,11 @@ async function withAssistantOrServer(
 }
 
 /** Protocol v1's HTTP API of one assistant, as an admin. */
-class AdminServer {
+export class AdminServer {
   constructor(
-    private readonly origin: string,
-    private readonly assistant: string,
-    private readonly token: string,
+    readonly origin: string,
+    readonly assistant: string,
+    readonly token: string,
   ) {}
 
   async call<T = undefined>(method: string, path: string, body?: unknown): Promise<T> {

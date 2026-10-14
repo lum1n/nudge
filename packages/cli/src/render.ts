@@ -188,3 +188,29 @@ export class ChatRenderer {
     this.write("\n");
   }
 }
+
+/** A connector as the connectors extension's panel sends it; never its key. */
+export type Connector = {
+  readonly id: string;
+  readonly name: string;
+  readonly baseUrl: string;
+  readonly useFor: string;
+  readonly auth?: { readonly in: string; readonly name: string };
+  readonly allowPrivateNetwork: boolean;
+  readonly readPaths: readonly string[];
+  readonly shared: boolean;
+  readonly hasKey: boolean;
+};
+
+export function describeConnector(connector: Connector): string {
+  const notes = [
+    connector.shared ? "shared with every room" : undefined,
+    connector.auth === undefined ? undefined : connector.hasKey ? "key set" : "no key yet",
+    connector.allowPrivateNetwork ? "may reach the local network" : undefined,
+    connector.readPaths.length > 0 ? `reads: ${connector.readPaths.join(", ")}` : undefined,
+  ].filter((note) => note !== undefined);
+  return (
+    `${connector.id}: ${connector.name} (${connector.baseUrl}) — ${connector.useFor}` +
+    (notes.length === 0 ? "" : ` [${notes.join("; ")}]`)
+  );
+}

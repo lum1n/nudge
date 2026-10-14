@@ -15,6 +15,7 @@ import type { Approval, Fact, RoomExtension, RoomView } from "@nudge/protocol";
 import { toApproval, toFact } from "@nudge/protocol/project";
 import { Hubs } from "@nudge/server";
 import { UsageError } from "./errors.ts";
+import { ExtensionChannel } from "./extension-channel.ts";
 import { hostOptions, reloadOnHangup } from "./host.ts";
 
 /**
@@ -37,6 +38,8 @@ export interface ChatSession {
   extensions(): Promise<RoomExtension[]>;
   /** On, off, or with `undefined` back to the default for the room's kind. */
   setExtension(name: string, enabled: boolean | undefined): Promise<RoomExtension>;
+  /** The room socket of an installed extension, such as the connectors panel. */
+  extension(name: string): Promise<ExtensionChannel>;
   close(): Promise<void>;
 }
 
@@ -201,6 +204,12 @@ class LocalSession implements ChatSession {
     }
   }
 
+  async extension(name: string): Promise<ExtensionChannel> {
+    const player = await this.nudge.players.get(this.author.playerId, context);
+    if (player === undefined) throw new UsageError(`No player "${this.author.playerId}"`);
+    return ExtensionChannel.local(this.nudge, this.room.id, player, name);
+  }
+
   async close(): Promise<void> {
     this.stop?.();
     this.stopReloading();
@@ -224,7 +233,14 @@ export async function openRemote(target: RemoteTarget): Promise<ChatSession> {
     const me = await client.api.me();
     const room =
       target.room === "me" ? (await client.api.personalRoom()).id : (target.room ?? "lobby");
-    return new RemoteSession(client, assistant.displayName, me.clientId, room, target.onProblem);
+    return new RemoteSession(
+      client,
+      { server, assistant: assistant.name, token: target.token },
+      assistant.displayName,
+      me.clientId,
+      room,
+      target.onProblem,
+    );
   } catch (error) {
     if (error instanceof ApiError) throw new UsageError(`${server}: ${error.message}`);
     throw error;
@@ -270,6 +286,7 @@ class RemoteSession implements ChatSession {
 
   constructor(
     private readonly client: NudgeClient,
+    private readonly access: { server: string; assistant: string; token: string },
     readonly assistantName: string,
     readonly clientId: string,
     private readonly room: string,
@@ -363,6 +380,11 @@ class RemoteSession implements ChatSession {
       this.client.api.setRoomExtension(this.room, name, enabled ?? null),
       `No extension "${name}"`,
     );
+  }
+
+  extension(name: string): Promise<ExtensionChannel> {
+    const { server, assistant, token } = this.access;
+    return ExtensionChannel.remote(server, assistant, this.room, token, name);
   }
 
   async close(): Promise<void> {
