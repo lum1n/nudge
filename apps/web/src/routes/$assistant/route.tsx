@@ -29,9 +29,9 @@ function Assistant() {
   }, [me.error]);
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-6">
-      <header className="flex items-baseline justify-between gap-4">
-        <Link to="/$assistant" params={{ assistant }} className="text-xl font-semibold">
+    <div className="flex h-dvh flex-col overflow-hidden">
+      <header className="flex shrink-0 items-baseline justify-between gap-4 border-b border-stone-200 px-4 py-3">
+        <Link to="/$assistant" params={{ assistant }} className="text-lg font-semibold">
           {me.data?.assistant.displayName ?? assistant}
         </Link>
         <div className="flex items-baseline gap-3 text-sm text-stone-600">
@@ -41,11 +41,15 @@ function Assistant() {
           </button>
         </div>
       </header>
-      {me.error && !(me.error instanceof ApiError && me.error.status === 401) ? (
-        <p className="text-red-700">{me.error.message}</p>
-      ) : (
-        <Outlet />
-      )}
+      {/* Full width: the room page lays out its own sidebar and transcript columns and scrolls
+          the transcript only; other pages just grow and let this scroll instead. */}
+      <main className="min-h-0 flex-1 overflow-y-auto">
+        {me.error && !(me.error instanceof ApiError && me.error.status === 401) ? (
+          <p className="p-4 text-red-700">{me.error.message}</p>
+        ) : (
+          <Outlet />
+        )}
+      </main>
     </div>
   );
 }

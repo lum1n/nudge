@@ -29,7 +29,7 @@ function Browser() {
   }, [assistant, navigate, state.status, state.closeCode]);
 
   return (
-    <section className="flex flex-col gap-3">
+    <section className="mx-auto flex max-w-3xl flex-col gap-3 p-4">
       <div className="flex items-center justify-between gap-4">
         <h2 className="text-lg font-medium">Browser</h2>
         <Link

@@ -62,8 +62,8 @@ function Room() {
   const { room: info, members } = query.data;
 
   return (
-    <section className="flex flex-col gap-4">
-      <div className="flex items-start justify-between gap-4">
+    <div className="flex h-full min-h-0">
+      <aside className="flex w-80 shrink-0 flex-col gap-4 overflow-y-auto border-r border-stone-200 p-4">
         <div>
           <h2 className="text-lg font-medium">{info.name}</h2>
           <p className="text-sm text-stone-600">
@@ -73,26 +73,28 @@ function Room() {
         <Link
           to="/$assistant/$room/browser"
           params={{ assistant, room }}
-          className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
+          className="self-start rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
         >
           Browser
         </Link>
-      </div>
-      {socket === undefined ? (
-        <p className="text-stone-500">Connecting…</p>
-      ) : state.status === "closed" ? (
-        retrying ? (
-          <p className="text-stone-500">Reconnecting…</p>
+        <ApprovalsPanel assistant={assistant} room={room} />
+        <MemoryPanel assistant={assistant} room={room} />
+        <NudgesPanel assistant={assistant} room={room} />
+      </aside>
+      <div className="flex min-h-0 flex-1 flex-col p-4">
+        {socket === undefined ? (
+          <p className="text-stone-500">Connecting…</p>
+        ) : state.status === "closed" ? (
+          retrying ? (
+            <p className="text-stone-500">Reconnecting…</p>
+          ) : (
+            <p className="text-red-700">Disconnected{state.error ? `: ${state.error}` : ""}.</p>
+          )
         ) : (
-          <p className="text-red-700">Disconnected{state.error ? `: ${state.error}` : ""}.</p>
-        )
-      ) : (
-        <Chat socket={socket} />
-      )}
-      <ApprovalsPanel assistant={assistant} room={room} />
-      <MemoryPanel assistant={assistant} room={room} />
-      <NudgesPanel assistant={assistant} room={room} />
-    </section>
+          <Chat socket={socket} />
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -144,9 +146,9 @@ function Chat({ socket }: { socket: RoomSocket }) {
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <div className="flex flex-col gap-3">
+      <div className="flex h-full min-h-0 flex-col gap-3">
         <StatusLine status={thread.status} />
-        <ThreadPrimitive.Viewport className="flex flex-col gap-2">
+        <ThreadPrimitive.Viewport className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
           <ThreadPrimitive.LoadEarlier className="self-center text-sm text-stone-500 underline disabled:text-stone-300 disabled:no-underline">
             Load earlier
           </ThreadPrimitive.LoadEarlier>
@@ -154,7 +156,7 @@ function Chat({ socket }: { socket: RoomSocket }) {
             {({ message }) => <MessageRow message={message} />}
           </ThreadPrimitive.Messages>
         </ThreadPrimitive.Viewport>
-        <ComposerPrimitive.Root className="flex flex-col gap-2">
+        <ComposerPrimitive.Root className="flex shrink-0 flex-col gap-2">
           <ComposerPrimitive.Queue>
             {({ queueItem }) => (
               <p key={queueItem.id} className="text-sm text-stone-500">
@@ -232,12 +234,23 @@ function MessageRow({ message }: { message: MessageState }) {
 
 function UserMessage({ message }: { message: MessageState }) {
   const custom = message.metadata.custom as { author?: string; mine?: boolean } | undefined;
+  const mine = custom?.mine ?? false;
   return (
     <MessagePrimitive.Root>
-      <p>
-        <b>{custom?.mine ? "You" : (custom?.author ?? "Someone")}:</b>{" "}
-        <MessagePrimitive.Parts components={{ Text: TextPart }} />
-      </p>
+      <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+        <div
+          className={`max-w-[75%] rounded-2xl px-3 py-2 ${
+            mine ? "bg-sky-600 text-white" : "bg-stone-200 text-stone-900"
+          }`}
+        >
+          {!mine && (
+            <p className="mb-0.5 text-xs font-medium text-stone-600">
+              {custom?.author ?? "Someone"}
+            </p>
+          )}
+          <MessagePrimitive.Parts components={{ Text: TextPart }} />
+        </div>
+      </div>
     </MessagePrimitive.Root>
   );
 }
@@ -245,17 +258,19 @@ function UserMessage({ message }: { message: MessageState }) {
 function AssistantMessage({ message }: { message: Extract<MessageState, { role: "assistant" }> }) {
   return (
     <MessagePrimitive.Root>
-      <div className="rounded bg-stone-100 px-3 py-2">
-        <MessagePrimitive.Parts
-          components={{
-            Text: MarkdownText,
-            Reasoning: ReasoningPart,
-            tools: { Fallback: ToolCallPart },
-          }}
-        />
-        {message.status.type !== "complete" && (
-          <p className="text-xs text-stone-500">{statusLabel(message.status)}</p>
-        )}
+      <div className="flex justify-start">
+        <div className="max-w-[85%] rounded-2xl border border-stone-200 bg-white px-3 py-2">
+          <MessagePrimitive.Parts
+            components={{
+              Text: MarkdownText,
+              Reasoning: ReasoningPart,
+              tools: { Fallback: ToolCallPart },
+            }}
+          />
+          {message.status.type !== "complete" && (
+            <p className="text-xs text-stone-500">{statusLabel(message.status)}</p>
+          )}
+        </div>
       </div>
     </MessagePrimitive.Root>
   );
@@ -265,12 +280,12 @@ function SystemMessage({ message }: { message: MessageState }) {
   // See `toThreadMessageLike`: the line's kind and data are in `metadata.custom`.
   const custom = message.metadata.custom as { kind?: string; text?: string } | undefined;
   if (custom?.kind === "nudge")
-    return <p className="italic text-stone-600">Nudge: {custom.text}</p>;
-  if (custom?.kind === "marker") return <hr />;
+    return <p className="text-center text-sm text-stone-600 italic">Nudge: {custom.text}</p>;
+  if (custom?.kind === "marker") return <hr className="border-stone-200" />;
   if (custom?.kind === "approval") {
     const data = custom as { summary: string; status: string; decidedBy?: string };
     return (
-      <p className="text-sm text-stone-600 italic">
+      <p className="text-center text-sm text-stone-600 italic">
         {data.decidedBy ?? "Someone"} {data.status === "denied" ? "denied" : "approved"}{" "}
         {data.summary}
         {data.status === "failed" ? " — it failed" : ""}

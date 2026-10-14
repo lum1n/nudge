@@ -51,10 +51,10 @@ function Rooms() {
     }
   }
 
-  if (me.isPending) return <p className="text-stone-500">Loading…</p>;
+  if (me.isPending) return <p className="p-4 text-stone-500">Loading…</p>;
   if (!me.data) return null;
   return (
-    <section className="flex flex-col gap-4">
+    <section className="mx-auto flex max-w-2xl flex-col gap-4 p-4">
       <div className="flex flex-col gap-2">
         <h2 className="text-sm font-medium tracking-wide text-stone-500 uppercase">Rooms</h2>
         <ul className="divide-y divide-stone-200 rounded border border-stone-200 bg-white">
