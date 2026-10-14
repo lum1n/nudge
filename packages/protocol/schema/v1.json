@@ -3057,6 +3057,44 @@
         }
       }
     },
+    "ModelViewResponse": {
+      "type": "object",
+      "required": ["messages"],
+      "properties": {
+        "messages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["role", "text"],
+            "properties": {
+              "role": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "system"
+                  },
+                  {
+                    "type": "string",
+                    "const": "user"
+                  },
+                  {
+                    "type": "string",
+                    "const": "assistant"
+                  },
+                  {
+                    "type": "string",
+                    "const": "toolResult"
+                  }
+                ]
+              },
+              "text": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
     "MonthUsage": {
       "type": "object",
       "required": ["month", "total", "players", "rooms"],

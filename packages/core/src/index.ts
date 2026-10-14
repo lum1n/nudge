@@ -6,6 +6,7 @@ import { buildModels } from "./models/providers.ts";
 import {
   ExtensionNotFound,
   type InstalledExtension,
+  type ModelViewMessage,
   Nudge,
   type NudgeOptions,
   type PrivacyOptions,

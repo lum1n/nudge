@@ -109,6 +109,7 @@ The model provider never sees personal data. Before a request leaves, Nudge repl
 - `/private <value>` in chat (or `nudge.protect(value)` in code) keeps any other value from the model, such as an address.
 - `nudge doctor --privacy` checks the detectors against sample data.
 - `NUDGE_DEBUG_REQUESTS=1 nudge chat` (or `nudge serve`) writes every request, exactly as the provider receives it, to `<database>.requests.jsonl`.
+- **Model view** on a room's page in the web UI (or `GET /rooms/<id>/model-view`) shows anyone in the room what its next request sends: the instructions and sections, every message and tool call, with placeholders where the values were.
 
 Display names of players are always protected. The transcript and the placeholder vault are stored unredacted in the assistant's SQLite file on your host. Images and thinking blocks are passed through unchanged.
 

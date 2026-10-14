@@ -25,6 +25,7 @@ import {
   type MeResponse,
   MessageRequest,
   type MessageResponse,
+  type ModelViewResponse,
   type NudgesResponse,
   PairingCodeRequest,
   type PairingCodeResponse,
@@ -304,6 +305,14 @@ export function restRoutes(options: RestOptions): Hono {
       throw error;
     }
     return c.json({ submissionId: submission.id } satisfies MessageResponse, 202);
+  });
+
+  // What the privacy promise rests on, for anyone in the room to check.
+  api.get("/rooms/:room/model-view", async (c) => {
+    const room = await usableRoom(c);
+    return c.json({
+      messages: await c.var.nudge.modelView(room.id, context),
+    } satisfies ModelViewResponse);
   });
 
   api.post("/rooms/:room/abort", async (c) => {

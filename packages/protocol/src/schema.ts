@@ -378,6 +378,22 @@ export type PlayerMemoryResponse = Static<typeof PlayerMemoryResponse>;
 export const ShareMemoryRequest = Type.Object({ shared: Type.Boolean() });
 export type ShareMemoryRequest = Static<typeof ShareMemoryRequest>;
 
+/** A room's model context as its next request would send it, personal values as placeholders. */
+export const ModelViewResponse = Type.Object({
+  messages: Type.Array(
+    Type.Object({
+      role: Type.Union([
+        Type.Literal("system"),
+        Type.Literal("user"),
+        Type.Literal("assistant"),
+        Type.Literal("toolResult"),
+      ]),
+      text: Type.String(),
+    }),
+  ),
+});
+export type ModelViewResponse = Static<typeof ModelViewResponse>;
+
 /** One month's model spend, in US dollars. */
 export const MonthUsage = Type.Object({
   month: Type.String({ description: "YYYY-MM in the assistant's time zone" }),
@@ -557,6 +573,7 @@ export const SCHEMAS = {
   ShareMemoryRequest,
   PushKeyResponse,
   PushSubscribeRequest,
+  ModelViewResponse,
   MonthUsage,
   UsageResponse,
   DecideRequest,

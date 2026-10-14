@@ -2,7 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { Context } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { Models } from "@earendil-works/pi-ai";
+import type { Message, Models } from "@earendil-works/pi-ai";
 import {
   type AgentChange,
   type AgentEventStream,
@@ -538,6 +538,20 @@ export class Nudge {
     return placeholder;
   }
 
+  /**
+   * The room's model context as its next request would send it: every message, sections and
+   * tool calls included, with personal values as placeholders. Only what is committed; a request
+   * also carries the tools' definitions, which are not personal.
+   */
+  async modelView(roomId: string, context: Context): Promise<ModelViewMessage[]> {
+    const conversation = await this.conversation(roomId, context);
+    const { messages } = await conversation.context(context);
+    return messages.map((message) => ({
+      role: message.role,
+      text: this.redact(messageText(message)),
+    }));
+  }
+
   /** What the model would see for `text`: personal values replaced by placeholders. */
   redact(text: string): string {
     return this.models.vault.redact(text, this.models.detectors);
@@ -573,6 +587,55 @@ export class Nudge {
       await this.unlock();
     }
   }
+}
+
+/** One message of a room's model context, as text. */
+export type ModelViewMessage = {
+  readonly role: "system" | "user" | "assistant" | "toolResult";
+  readonly text: string;
+};
+
+function messageText(message: Message): string {
+  if (message.role === "system") {
+    // Sections carry the prompt: who the assistant is, the room, memory, the time.
+    const parts = [
+      typeof message.content === "string"
+        ? message.content
+        : message.content.map((part) => part.text).join("\n"),
+      ...Object.entries(message.sections ?? {}).map(([name, text]) =>
+        text === null ? `[section ${name} removed]` : text,
+      ),
+    ];
+    if (message.toolsAdded?.length)
+      parts.push(`[tools added: ${message.toolsAdded.map((tool) => tool.name).join(", ")}]`);
+    if (message.toolsRemoved?.length)
+      parts.push(`[tools removed: ${message.toolsRemoved.map((tool) => tool.name).join(", ")}]`);
+    return parts.filter((part) => part !== "").join("\n\n");
+  }
+  if (typeof message.content === "string") return message.content;
+  const parts = message.content as readonly (
+    | { type: "text"; text: string }
+    | { type: "thinking"; thinking: string }
+    | { type: "toolCall"; name: string; arguments: unknown }
+    | { type: "image" }
+  )[];
+  const text = parts
+    .map((part) => {
+      switch (part.type) {
+        case "text":
+          return part.text;
+        case "thinking":
+          return `[thinking] ${part.thinking}`;
+        case "toolCall":
+          return `[calls ${part.name}] ${JSON.stringify(part.arguments)}`;
+        case "image":
+          return "[image]";
+        default:
+          return "";
+      }
+    })
+    .join("\n");
+  return message.role === "toolResult" ? `[${message.toolName} returned] ${text}` : text;
 }
 
 export class RoomNotFound extends Error {

@@ -91,6 +91,14 @@ function Room() {
             >
               Connectors
             </Link>
+            <Link
+              to="/$assistant/$room/model"
+              params={{ assistant, room }}
+              title="What the model sees of this room"
+              className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
+            >
+              Model view
+            </Link>
           </div>
           <ApprovalsPanel approvals={view.approvals} />
           <MemoryPanel view={view} />

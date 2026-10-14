@@ -16,6 +16,7 @@ import { Route as AssistantIndexRouteImport } from './routes/$assistant/index'
 import { Route as AssistantRoomRouteImport } from './routes/$assistant/$room'
 import { Route as AssistantRoomBrowserRouteImport } from './routes/$assistant/$room_.browser'
 import { Route as AssistantRoomConnectorsRouteImport } from './routes/$assistant/$room_.connectors'
+import { Route as AssistantRoomModelRouteImport } from './routes/$assistant/$room_.model'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -52,6 +53,11 @@ const AssistantRoomConnectorsRoute = AssistantRoomConnectorsRouteImport.update({
   path: '/$room/connectors',
   getParentRoute: () => AssistantRouteRoute,
 } as any)
+const AssistantRoomModelRoute = AssistantRoomModelRouteImport.update({
+  id: '/$room_/model',
+  path: '/$room/model',
+  getParentRoute: () => AssistantRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -61,6 +67,7 @@ export interface FileRoutesByFullPath {
   '/$assistant/': typeof AssistantIndexRoute
   '/$assistant/$room/browser': typeof AssistantRoomBrowserRoute
   '/$assistant/$room/connectors': typeof AssistantRoomConnectorsRoute
+  '/$assistant/$room/model': typeof AssistantRoomModelRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -69,6 +76,7 @@ export interface FileRoutesByTo {
   '/$assistant': typeof AssistantIndexRoute
   '/$assistant/$room/browser': typeof AssistantRoomBrowserRoute
   '/$assistant/$room/connectors': typeof AssistantRoomConnectorsRoute
+  '/$assistant/$room/model': typeof AssistantRoomModelRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -79,6 +87,7 @@ export interface FileRoutesById {
   '/$assistant/': typeof AssistantIndexRoute
   '/$assistant/$room_/browser': typeof AssistantRoomBrowserRoute
   '/$assistant/$room_/connectors': typeof AssistantRoomConnectorsRoute
+  '/$assistant/$room_/model': typeof AssistantRoomModelRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -90,6 +99,7 @@ export interface FileRouteTypes {
     | '/$assistant/'
     | '/$assistant/$room/browser'
     | '/$assistant/$room/connectors'
+    | '/$assistant/$room/model'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -98,6 +108,7 @@ export interface FileRouteTypes {
     | '/$assistant'
     | '/$assistant/$room/browser'
     | '/$assistant/$room/connectors'
+    | '/$assistant/$room/model'
   id:
     | '__root__'
     | '/'
@@ -107,6 +118,7 @@ export interface FileRouteTypes {
     | '/$assistant/'
     | '/$assistant/$room_/browser'
     | '/$assistant/$room_/connectors'
+    | '/$assistant/$room_/model'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -166,6 +178,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AssistantRoomConnectorsRouteImport
       parentRoute: typeof AssistantRouteRoute
     }
+    '/$assistant/$room_/model': {
+      id: '/$assistant/$room_/model'
+      path: '/$room/model'
+      fullPath: '/$assistant/$room/model'
+      preLoaderRoute: typeof AssistantRoomModelRouteImport
+      parentRoute: typeof AssistantRouteRoute
+    }
   }
 }
 
@@ -174,6 +193,7 @@ interface AssistantRouteRouteChildren {
   AssistantIndexRoute: typeof AssistantIndexRoute
   AssistantRoomBrowserRoute: typeof AssistantRoomBrowserRoute
   AssistantRoomConnectorsRoute: typeof AssistantRoomConnectorsRoute
+  AssistantRoomModelRoute: typeof AssistantRoomModelRoute
 }
 
 const AssistantRouteRouteChildren: AssistantRouteRouteChildren = {
@@ -181,6 +201,7 @@ const AssistantRouteRouteChildren: AssistantRouteRouteChildren = {
   AssistantIndexRoute: AssistantIndexRoute,
   AssistantRoomBrowserRoute: AssistantRoomBrowserRoute,
   AssistantRoomConnectorsRoute: AssistantRoomConnectorsRoute,
+  AssistantRoomModelRoute: AssistantRoomModelRoute,
 }
 
 const AssistantRouteRouteWithChildren = AssistantRouteRoute._addFileChildren(

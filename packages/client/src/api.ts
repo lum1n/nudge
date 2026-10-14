@@ -8,6 +8,7 @@ import type {
   MeResponse,
   MessageRequest,
   MessageResponse,
+  ModelViewResponse,
   PairingCodeResponse,
   PairResponse,
   Player,
@@ -149,6 +150,11 @@ export class Api {
   /** With `shared`, everyone in the caller's rooms, and the model there, sees their own facts. */
   shareMyMemory(shared: boolean): Promise<PlayerMemoryResponse> {
     return this.request("PUT", "/me/memory/sharing", { shared });
+  }
+
+  /** What the model sees of the room: its next request's messages, personal values as placeholders. */
+  async modelView(room: string): Promise<ModelViewResponse["messages"]> {
+    return (await this.request<ModelViewResponse>("GET", `${roomPath(room)}/model-view`)).messages;
   }
 
   /** This month's model spend: the assistant's and the caller's, and every month's for admins. */
