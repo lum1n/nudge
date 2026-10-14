@@ -14,6 +14,8 @@ import type {
   PlayerMemoryResponse,
   PlayerResponse,
   ProtectResponse,
+  PushKeyResponse,
+  PushSubscribeRequest,
   Room,
   RoomExtension,
   RoomExtensionsResponse,
@@ -146,6 +148,20 @@ export class Api {
   /** With `shared`, everyone in the caller's rooms, and the model there, sees their own facts. */
   shareMyMemory(shared: boolean): Promise<PlayerMemoryResponse> {
     return this.request("PUT", "/me/memory/sharing", { shared });
+  }
+
+  /** The server's VAPID public key; a 404 when the server sends no pushes. */
+  async pushKey(): Promise<string> {
+    return (await this.request<PushKeyResponse>("GET", "/push")).publicKey;
+  }
+
+  /** Has the server push answers, approvals and nudges in the caller's rooms to this browser. */
+  subscribePush(subscription: PushSubscribeRequest): Promise<void> {
+    return this.request("POST", "/push", subscription);
+  }
+
+  unsubscribePush(endpoint: string): Promise<void> {
+    return this.request("DELETE", `/push?endpoint=${encodeURIComponent(endpoint)}`);
   }
 
   decide(room: string, approval: string, approve: boolean): Promise<Approval> {

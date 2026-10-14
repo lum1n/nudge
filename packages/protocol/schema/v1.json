@@ -3027,6 +3027,36 @@
         }
       }
     },
+    "PushKeyResponse": {
+      "type": "object",
+      "required": ["publicKey"],
+      "properties": {
+        "publicKey": {
+          "type": "string"
+        }
+      }
+    },
+    "PushSubscribeRequest": {
+      "type": "object",
+      "required": ["endpoint", "keys"],
+      "properties": {
+        "endpoint": {
+          "type": "string"
+        },
+        "keys": {
+          "type": "object",
+          "required": ["p256dh", "auth"],
+          "properties": {
+            "p256dh": {
+              "type": "string"
+            },
+            "auth": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
     "DecideRequest": {
       "type": "object",
       "required": ["approve"],

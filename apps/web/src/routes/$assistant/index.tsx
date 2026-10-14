@@ -2,6 +2,7 @@ import type { RoomKind } from "@nudge/client";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 import { clientFor, useHome } from "../../api.ts";
+import { type PushState, usePush } from "../../push.ts";
 
 export const Route = createFileRoute("/$assistant/")({ component: Rooms });
 
@@ -120,6 +121,47 @@ function Rooms() {
         </form>
         {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
       </div>
+      <Notifications assistant={assistant} />
     </section>
+  );
+}
+
+const PUSH_NOTE: Record<Exclude<PushState, "on" | "off">, string> = {
+  unsupported:
+    "This browser can't show notifications. On an iPhone, add Nudge to the home screen first.",
+  blocked: "Notifications are blocked for this site in the browser's settings.",
+  unavailable: "This server sends no notifications.",
+};
+
+/** Turns this browser's notifications for the assistant's rooms on or off. */
+function Notifications({ assistant }: { assistant: string }) {
+  const push = usePush(assistant);
+  if (push.state === undefined && push.error === undefined) return null;
+  return (
+    <div className="flex flex-col gap-2 rounded border border-stone-200 bg-white p-3">
+      <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">Notifications</h3>
+      {push.state === "on" || push.state === "off" ? (
+        <div className="flex items-center justify-between gap-2 text-sm">
+          <span>
+            {push.state === "on"
+              ? "This browser gets answers, nudges and approvals from your rooms."
+              : "Get answers, nudges and approvals from your rooms on this browser."}
+          </span>
+          <button
+            type="button"
+            onClick={push.toggle}
+            disabled={push.busy}
+            className="shrink-0 rounded border px-3 py-1 disabled:opacity-50"
+          >
+            {push.state === "on" ? "Turn off" : "Turn on"}
+          </button>
+        </div>
+      ) : (
+        push.state !== undefined && (
+          <p className="text-sm text-stone-500">{PUSH_NOTE[push.state]}</p>
+        )
+      )}
+      {push.error !== undefined && <p className="text-sm text-red-700">{push.error}</p>}
+    </div>
   );
 }

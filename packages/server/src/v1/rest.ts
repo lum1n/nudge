@@ -34,6 +34,8 @@ import {
   type PlayersResponse,
   ProtectRequest,
   type ProtectResponse,
+  type PushKeyResponse,
+  PushSubscribeRequest,
   RememberRequest,
   type Room,
   type RoomExtensionsResponse,
@@ -57,6 +59,7 @@ import {
 import { type Context as HonoContext, Hono, type MiddlewareHandler } from "hono";
 import type { Static, TSchema } from "typebox";
 import { Value } from "typebox/value";
+import { BadSubscription, type Pushes } from "../push/pushes.ts";
 import type { Hubs } from "./hub.ts";
 
 const context = BACKGROUND_CONTEXT;
@@ -64,6 +67,8 @@ const context = BACKGROUND_CONTEXT;
 export type RestOptions = {
   readonly assistants: ReadonlyMap<string, Nudge>;
   readonly hubsOf: (nudge: Nudge) => Hubs;
+  /** Web Push for the assistant; undefined when the server sends none. */
+  readonly pushesOf?: (nudge: Nudge) => Pushes | undefined;
   /** The server's address as clients reach it, for pairing links; default the request's origin. */
   readonly publicUrl?: string;
 };
@@ -198,6 +203,34 @@ export function restRoutes(options: RestOptions): Hono {
       facts: memory.facts.map(toFact),
       shared: memory.shared,
     } satisfies PlayerMemoryResponse);
+  });
+
+  const pushes = (c: HonoContext<Env>): Pushes => {
+    const found = options.pushesOf?.(c.var.nudge);
+    if (found === undefined) throw new HttpError(404, "This server sends no pushes");
+    return found;
+  };
+
+  api.get("/push", (c) => c.json({ publicKey: pushes(c).publicKey } satisfies PushKeyResponse));
+
+  api.post("/push", async (c) => {
+    const body = await readBody(c, PushSubscribeRequest);
+    const { player, clientId } = c.var.credential;
+    try {
+      await pushes(c).subscribe(player.id, clientId, body);
+    } catch (error) {
+      if (error instanceof BadSubscription) throw new HttpError(400, error.message);
+      throw error;
+    }
+    return c.body(null, 204);
+  });
+
+  api.delete("/push", async (c) => {
+    const endpoint = c.req.query("endpoint");
+    if (endpoint === undefined) throw new HttpError(400, "Which endpoint? ?endpoint=…");
+    if (!(await pushes(c).unsubscribe(c.var.credential.player.id, endpoint)))
+      throw new HttpError(404, "No such subscription");
+    return c.body(null, 204);
   });
 
   api.post("/rooms", async (c) => {

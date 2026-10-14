@@ -1,9 +1,9 @@
-import { access } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { buildModels, loadConfig, type Nudge, openAssistant } from "@nudge/core";
-import { serveNudge } from "@nudge/server";
+import { generateVapidKeys, serveNudge, type VapidKeys } from "@nudge/server";
 import { UsageError } from "../errors.ts";
 import { hostOptions, reloadOnHangup } from "../host.ts";
 
@@ -32,12 +32,22 @@ export async function serve(options: ServeOptions): Promise<void> {
       assistants.set(assistant.name, nudge);
     }
     const web = await webRoot(options.web);
+    const database = config.assistants[0]?.database;
     const server = await serveNudge({
       assistants,
       port: options.port,
       hostname: options.host,
       web,
       publicUrl: options.publicUrl,
+      ...(database === undefined || database === ":memory:"
+        ? {}
+        : {
+            push: {
+              vapid: await vapidKeys(join(dirname(database), "push-vapid.json")),
+              subject: pushSubject(config.push?.subject, options.publicUrl),
+              preview: config.push?.preview === "text",
+            },
+          }),
     });
     if (web !== undefined) console.log(`Web: ${server.url}`);
     for (const name of assistants.keys()) console.log(`${name}: ${server.url}/a/${name}`);
@@ -53,6 +63,29 @@ export async function serve(options: ServeOptions): Promise<void> {
   } finally {
     for (const nudge of assistants.values()) await nudge.close(context);
   }
+}
+
+/** The server's VAPID keys, made on first start; browsers' subscriptions are bound to them. */
+async function vapidKeys(file: string): Promise<VapidKeys> {
+  try {
+    return JSON.parse(await readFile(file, "utf8")) as VapidKeys;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  const keys = generateVapidKeys();
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(file, JSON.stringify(keys, null, 2), { mode: 0o600, flag: "wx" });
+  return keys;
+}
+
+/**
+ * Who push services can reach about this server: `push.subject` in the config, else an HTTPS
+ * public URL. Apple refuses local addresses, so never `localhost`.
+ */
+function pushSubject(subject: string | undefined, publicUrl: string | undefined): string {
+  if (subject !== undefined) return subject;
+  if (publicUrl?.startsWith("https://")) return publicUrl;
+  return "https://github.com/lum1n/nudge";
 }
 
 async function webRoot(option: string | undefined): Promise<string | undefined> {

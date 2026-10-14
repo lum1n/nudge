@@ -21,6 +21,8 @@ export type AppOptions = {
   readonly timing?: V1Options["timing"];
   /** The server's address as clients reach it, for pairing links; default each request's origin. */
   readonly publicUrl?: string;
+  /** Web Push to browsers that subscribe; none without. */
+  readonly push?: V1Options["push"];
 };
 
 /** Nudge's HTTP and WebSocket API (protocol v1, under `/v1`) over one or more assistants. */
@@ -44,6 +46,7 @@ export function createApp(options: AppOptions): Hono {
       report,
       timing: options.timing,
       publicUrl: options.publicUrl,
+      push: options.push,
     }),
   );
   if (options.web !== undefined) serveWeb(app, options.web);

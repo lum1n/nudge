@@ -60,9 +60,18 @@ const AssistantSchema = Type.Object({
   extensions: Type.Optional(Type.Array(ExtensionSchema)),
 });
 
+/** Notifications `nudge serve` pushes to browsers that turn them on. */
+const PushSchema = Type.Object({
+  /** `room` (the default) says only which room has news; `text` adds the start of it. */
+  preview: Type.Optional(Type.Union([Type.Literal("room"), Type.Literal("text")])),
+  /** A `mailto:` or `https:` address push services can reach the server's owner at. */
+  subject: Type.Optional(Type.String({ pattern: "^(mailto|https):" })),
+});
+
 export const NudgeConfigSchema = Type.Object({
   assistants: Type.Array(AssistantSchema, { minItems: 1 }),
   providers: Type.Optional(Type.Array(LocalProviderSchema)),
+  push: Type.Optional(PushSchema),
 });
 
 export type NudgeConfig = Static<typeof NudgeConfigSchema>;

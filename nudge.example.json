@@ -33,5 +33,10 @@
       "supportsDeveloperRole": false,
       "models": [{ "id": "qwen2.5-3b", "contextWindow": 8192, "maxTokens": 2048 }]
     }
-  ]
+  ],
+  "push": {
+    "$comment": "Browser notifications from nudge serve. preview: \"room\" (the default) names only the room; \"text\" adds the start of the message. subject: how push services reach you, a mailto: or https: address; default the --public-url when it is HTTPS.",
+    "preview": "room",
+    "subject": "mailto:you@example.com"
+  }
 }

@@ -378,6 +378,17 @@ export type PlayerMemoryResponse = Static<typeof PlayerMemoryResponse>;
 export const ShareMemoryRequest = Type.Object({ shared: Type.Boolean() });
 export type ShareMemoryRequest = Static<typeof ShareMemoryRequest>;
 
+/** The server's VAPID public key, for `PushManager.subscribe`'s `applicationServerKey`. */
+export const PushKeyResponse = Type.Object({ publicKey: Type.String() });
+export type PushKeyResponse = Static<typeof PushKeyResponse>;
+
+/** A browser's push subscription, as `PushSubscription.toJSON()` gives it. */
+export const PushSubscribeRequest = Type.Object({
+  endpoint: Type.String(),
+  keys: Type.Object({ p256dh: Type.String(), auth: Type.String() }),
+});
+export type PushSubscribeRequest = Static<typeof PushSubscribeRequest>;
+
 export const DecideRequest = Type.Object({ approve: Type.Boolean() });
 export type DecideRequest = Static<typeof DecideRequest>;
 
@@ -519,6 +530,8 @@ export const SCHEMAS = {
   RememberRequest,
   PlayerMemoryResponse,
   ShareMemoryRequest,
+  PushKeyResponse,
+  PushSubscribeRequest,
   DecideRequest,
   RoomExtension,
   RoomExtensionsResponse,

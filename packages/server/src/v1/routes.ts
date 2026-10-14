@@ -7,6 +7,7 @@ import { Connection, type ConnectionOptions } from "./connection.ts";
 import { ExtensionSocket } from "./extension-socket.ts";
 import { Hubs } from "./hub.ts";
 import { restRoutes } from "./rest.ts";
+import { Pushes, type PushesOptions } from "../push/pushes.ts";
 
 export type V1Options = {
   readonly assistants: ReadonlyMap<string, Nudge>;
@@ -15,6 +16,8 @@ export type V1Options = {
   readonly report: (error: unknown) => void;
   /** The server's address as clients reach it, for pairing links; default each request's origin. */
   readonly publicUrl?: string;
+  /** Web Push for every assistant; none without. */
+  readonly push?: PushesOptions;
   /** Defaults: 25 s heartbeat, 50 ms between patches, 10 s for the hello. */
   readonly timing?: Partial<Pick<ConnectionOptions, "heartbeatMs" | "flushMs" | "helloTimeoutMs">>;
 };
@@ -93,9 +96,20 @@ export function v1Routes(options: V1Options): Hono {
     }),
   );
 
+  // Made now, not on first use: pushes go out while nobody is connected.
+  const pushes = new Map<Nudge, Pushes>();
+  if (options.push !== undefined)
+    for (const [name, nudge] of options.assistants)
+      pushes.set(nudge, new Pushes(nudge, name, options.push, options.report));
+
   app.route(
     "/",
-    restRoutes({ assistants: options.assistants, hubsOf, publicUrl: options.publicUrl }),
+    restRoutes({
+      assistants: options.assistants,
+      hubsOf,
+      pushesOf: (nudge) => pushes.get(nudge),
+      publicUrl: options.publicUrl,
+    }),
   );
   return app;
 }

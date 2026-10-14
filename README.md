@@ -94,7 +94,7 @@ Sign in at `/login` with a token, the link `nudge invite` prints (`/login#token=
 
 A room page shows the same conversation the CLI and the API see, live, for everyone in it: each message with who sent it, the assistant's answer streaming in with its tool calls, and fired nudges, rendered as markdown. Send a follow-up or steer while it's still answering — it queues the same way a second CLI client's would — or stop it; "Load earlier" fetches older history past what first loaded. A room's Memory, Nudges and approval panels list, add, forget, cancel and decide the same things `/memory`, `/nudges` and `/approve` do in the terminal, and update live whoever made the change. The web UI talks [protocol v1](docs/protocol/v1.md) through `@nudge/client`, like the native apps will. "Open my room" and "New shared room" on the room list open the same rooms `nudge chat me` and `nudge room` do.
 
-No mobile app or notifications: a fired nudge only shows up in a tab that already has that room open.
+Notifications: "Turn on" under Notifications on the room list subscribes the browser to Web Push. Then answers, fired nudges and approvals in that player's rooms arrive as notifications, except for a room that is open in a visible tab. They need HTTPS, or `localhost`, and on an iPhone the site added to the home screen. Pushes are encrypted for the browser, so Google's, Mozilla's or Apple's push service only relays them. By default a notification says only which room has news; `"push": { "preview": "text" }` in `nudge.json` adds the start of the text. `nudge serve` makes the server's push keys on first start (`push-vapid.json` beside the first assistant's database); losing them means browsers must turn notifications on again.
 
 ## Privacy
 
