@@ -82,6 +82,7 @@ export {
   MemoryFull,
 } from "./memory/memory.ts";
 export { Rooms, type SharedRoomDraft } from "./identity/rooms.ts";
+export { scrubSecrets, SecretStore } from "./secrets.ts";
 export { type NudgeDraft, Nudges } from "./nudges/nudges.ts";
 export { formatTime, parseTime, ScheduleDoc, type ScheduledNudge } from "./nudges/schedule.ts";
 export { FIRE_ENTRY, type FireEntryData, NudgeTimer } from "./nudges/timer-task.ts";

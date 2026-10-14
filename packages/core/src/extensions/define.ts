@@ -6,6 +6,7 @@ import { Value } from "typebox/value";
 import { ConfigError } from "../config.ts";
 import type { Player, Room } from "../identity/directory.ts";
 import type { PiiDetector } from "../privacy/detectors.ts";
+import { SecretStore } from "../secrets.ts";
 
 /** What an extension's `setup` gets from the assistant it is installed in. */
 export type ExtensionHost<Settings> = {
@@ -19,10 +20,15 @@ export type ExtensionHost<Settings> = {
   readonly protect: (value: string, kind?: string) => Promise<string>;
   /** A directory of the extension's own next to the assistant's database; absent when nothing is persisted. */
   readonly dataDir?: string;
+  /** Keys and passwords the extension keeps for itself, encrypted at rest; never reaches the model. */
+  readonly secrets: SecretStore;
 };
 
-/** What the assistant gives every extension; `setUpExtension` adds the settings and each one's `dataDir`. */
-export type HostBase = Omit<ExtensionHost<unknown>, "settings" | "dataDir"> & {
+/**
+ * What the assistant gives every extension; `setUpExtension` adds the settings and each one's
+ * `dataDir` and `secrets`.
+ */
+export type HostBase = Omit<ExtensionHost<unknown>, "settings" | "dataDir" | "secrets"> & {
   /** Parent of the extensions' data directories. */
   readonly dataRoot?: string;
 };
@@ -140,6 +146,7 @@ export async function setUpExtension(
   const settings = checkSettings(definition, use.settings);
   const { dataRoot, ...base } = host;
   const dataDir = dataRoot === undefined ? undefined : join(dataRoot, definition.name);
+  const secrets = new SecretStore(dataDir === undefined ? undefined : join(dataDir, "secrets"));
   const {
     detectors = [],
     roomSocket,
@@ -149,6 +156,7 @@ export async function setUpExtension(
   } = await definition.setup({
     ...base,
     settings,
+    secrets,
     ...(dataDir === undefined ? {} : { dataDir }),
   });
   return {

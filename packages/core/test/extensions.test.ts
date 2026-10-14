@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -193,6 +194,98 @@ describe("extensions", () => {
     await say(nudge, "I live in Storgata 1.");
     expect(last()).toContain("I live in ⟦ADDRESS1⟧.");
     await nudge.close(context);
+  });
+
+  it("gives each extension its own secret store, encrypted on disk and surviving a restart", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "nudge-secrets-ext-"));
+    try {
+      const keeper = defineNudgeExtension({
+        name: "keeper",
+        version: "1",
+        setup: ({ secrets }) => {
+          return {
+            tools: [
+              defineTool({
+                name: "note_key",
+                description: "Remember an API key for this room",
+                parameters: Type.Object({ key: Type.String() }),
+                execute: async ({ key }) => {
+                  secrets.set(LOBBY, "api-key", key);
+                  return { output: [{ type: "text", text: "noted" }] };
+                },
+              }),
+              defineTool({
+                name: "peek_key",
+                description: "See what this extension's own store holds for the lobby",
+                parameters: Type.Object({}),
+                execute: async () => ({
+                  output: [{ type: "text", text: secrets.get(LOBBY, "api-key") ?? "none" }],
+                }),
+              }),
+            ],
+          };
+        },
+      });
+      const other = defineNudgeExtension({
+        name: "other",
+        version: "1",
+        setup: ({ secrets }) => ({
+          tools: [
+            defineTool({
+              name: "peek_other",
+              description: "See what this extension's own store holds for the lobby",
+              parameters: Type.Object({}),
+              execute: async () => ({
+                output: [{ type: "text", text: secrets.get(LOBBY, "api-key") ?? "none" }],
+              }),
+            }),
+          ],
+        }),
+      });
+      const { options, faux, requests } = setup({
+        database: join(dir, "a.sqlite"),
+        extensions: [keeper, other],
+      });
+      const call =
+        (name: string, args: Parameters<typeof fauxToolCall>[1] = {}) =>
+        () =>
+          fauxAssistantMessage([fauxToolCall(name, args)], { stopReason: "toolUse" });
+      const outputs: string[] = [];
+      const done = (request: ModelContext) => {
+        requests.push(request);
+        outputs.push(lastToolResult(request) ?? "");
+        return fauxAssistantMessage("Done.");
+      };
+
+      const first = await createNudge(options, context);
+      faux.setResponses([call("note_key", { key: "sk-live-secret" }), done]);
+      await say(first, "Remember my key");
+
+      // A different extension has its own store: it never sees "keeper"'s secret.
+      faux.setResponses([call("peek_other"), done]);
+      await say(first, "Peek from other");
+
+      faux.setResponses([call("peek_key"), done]);
+      await say(first, "Peek from keeper");
+      expect(outputs).toEqual(["noted", "none", "sk-live-secret"]);
+
+      // Not on disk in the clear.
+      const onDisk = readFileSync(
+        join(dir, "a.sqlite.extensions", "keeper", "secrets", "secrets.enc"),
+        "utf8",
+      );
+      expect(onDisk).not.toContain("sk-live-secret");
+      await first.close(context);
+
+      // Still readable from the extension's own store after a restart.
+      const second = await createNudge(options, context);
+      faux.setResponses([call("peek_key"), done]);
+      await say(second, "Peek again");
+      expect(outputs.at(-1)).toBe("sk-live-secret");
+      await second.close(context);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
 
