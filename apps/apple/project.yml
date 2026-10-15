@@ -1,0 +1,98 @@
+# The Nudge app for iOS and macOS. Make the Xcode project with XcodeGen (`brew install xcodegen`):
+#   ../../clients/apple/scripts/build.sh --xcframework   # once, and after the Rust core changes
+#   xcodegen                                              # writes Nudge.xcodeproj
+# Set DEVELOPMENT_TEAM below (or in Xcode's Signing tab) to sign and to get push notifications.
+name: Nudge
+options:
+  bundleIdPrefix: app.nudge
+  deploymentTarget:
+    iOS: "26.0"
+    macOS: "26.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # Swift 6's checks as warnings: the app is built on a Mac only, so they surface there first.
+    SWIFT_VERSION: "5.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+packages:
+  Nudge:
+    path: ../../clients/apple
+targets:
+  Nudge-iOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: Nudge
+    dependencies:
+      - package: Nudge
+        product: Nudge
+    entitlements:
+      path: Support/Nudge-iOS.entitlements
+      properties:
+        aps-environment: development
+    info:
+      path: Support/Info-Nudge-iOS.plist
+      properties:
+        CFBundleDisplayName: Nudge
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleURLTypes:
+          - CFBundleURLName: app.nudge.dev.pair
+            CFBundleURLSchemes: [nudge]
+        ITSAppUsesNonExemptEncryption: false
+        UILaunchScreen: {}
+        NSLocalNetworkUsageDescription: Nudge reaches a Nudge server on your network.
+        UIBackgroundModes: [remote-notification]
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.nudge.dev
+        PRODUCT_NAME: Nudge
+        TARGETED_DEVICE_FAMILY: "1,2"
+  Nudge-macOS:
+    type: application
+    platform: macOS
+    sources:
+      - path: Nudge
+    dependencies:
+      - package: Nudge
+        product: Nudge
+    entitlements:
+      path: Support/Nudge-macOS.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+        com.apple.developer.aps-environment: development
+    info:
+      path: Support/Info-Nudge-macOS.plist
+      properties:
+        CFBundleDisplayName: Nudge
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleURLTypes:
+          - CFBundleURLName: app.nudge.dev.pair
+            CFBundleURLSchemes: [nudge]
+        ITSAppUsesNonExemptEncryption: false
+        LSApplicationCategoryType: public.app-category.productivity
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.nudge.dev
+        PRODUCT_NAME: Nudge
+        ENABLE_HARDENED_RUNTIME: YES
