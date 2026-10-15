@@ -75,9 +75,9 @@ export async function checkExtensions(
   return checked;
 }
 
-async function importExtension(
+export async function importExtension(
   from: string,
-  fresh: number | undefined,
+  fresh?: number,
 ): Promise<NudgeExtension | Extension> {
   let specifier = from;
   if (isAbsolute(from)) {

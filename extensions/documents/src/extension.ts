@@ -70,8 +70,17 @@ export type PanelInput = { ref?: string } & (
 );
 
 const Settings = Type.Object({
-  maxMegabytes: Type.Number({ default: 20, minimum: 1, maximum: 100 }),
-  maxPerRoom: Type.Number({ default: 500, minimum: 1 }),
+  maxMegabytes: Type.Number({
+    default: 20,
+    minimum: 1,
+    maximum: 100,
+    description: "Largest file, in megabytes, that can be uploaded.",
+  }),
+  maxPerRoom: Type.Number({
+    default: 500,
+    minimum: 1,
+    description: "Most documents one room may keep.",
+  }),
 });
 
 /** Keeps the files, encrypted, and their texts; serves the room's Documents page. */

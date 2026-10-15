@@ -156,7 +156,7 @@ export function parseConfig(value: unknown, baseDir: string): NudgeConfig {
  * file its package.json exports), a package name is looked up from `baseDir`. A package that cannot
  * be found from there stays a bare name for `import()` to try.
  */
-function resolveExtension(from: string, baseDir: string): string {
+export function resolveExtension(from: string, baseDir: string): string {
   if (!(from.startsWith(".") || isAbsolute(from))) {
     try {
       return createRequire(join(baseDir, "nudge.json")).resolve(from);

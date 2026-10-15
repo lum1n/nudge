@@ -36,15 +36,40 @@ function Assistant() {
     if (connection.kind === "closed" && connection.code === UNAUTHORIZED) signOut();
   }, [connection]);
 
+  const name =
+    assistants.data?.assistants.find((item) => item.name === assistant)?.displayName ?? assistant;
+  const tab = "rounded px-2 py-1 text-stone-600 hover:bg-stone-100";
+  const active = { className: "bg-stone-200 text-stone-900" };
+
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
-      <header className="flex shrink-0 items-baseline justify-between gap-4 border-b border-stone-200 px-4 py-3">
-        <Link to="/$assistant" params={{ assistant }} className="text-lg font-semibold">
-          {assistants.data?.assistants.find((item) => item.name === assistant)?.displayName ??
-            assistant}
+      <header className="flex shrink-0 items-center gap-2 border-b border-stone-200 px-3 py-2 sm:gap-4 sm:px-4">
+        <Link to="/$assistant" params={{ assistant }} className="truncate text-lg font-semibold">
+          {name}
         </Link>
-        <div className="flex items-baseline gap-3 text-sm text-stone-600">
-          {me.data && <span>{me.data.player.displayName}</span>}
+        <nav className="flex items-center gap-1 text-sm">
+          <Link
+            to="/$assistant"
+            params={{ assistant }}
+            activeOptions={{ exact: true }}
+            activeProps={active}
+            className={tab}
+          >
+            Rooms
+          </Link>
+          {me.data?.admin && (
+            <Link
+              to="/$assistant/settings"
+              params={{ assistant }}
+              activeProps={active}
+              className={tab}
+            >
+              Settings
+            </Link>
+          )}
+        </nav>
+        <div className="ml-auto flex shrink-0 items-center gap-3 text-sm text-stone-600">
+          {me.data && <span className="hidden sm:inline">{me.data.player.displayName}</span>}
           <button type="button" onClick={signOut} className="underline">
             Sign out
           </button>

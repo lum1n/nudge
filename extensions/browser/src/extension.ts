@@ -33,20 +33,50 @@ export default defineNudgeExtension({
   description: "Browse the web with a headed browser driven by its own model",
   settings: Type.Object({
     /** `provider/model` from the providers Nudge knows, such as `openai/gpt-5-mini`. */
-    model: Type.String({ default: DEFAULT_BROWSER_MODEL, pattern: "^[^/]+/.+$" }),
+    model: Type.String({
+      default: DEFAULT_BROWSER_MODEL,
+      pattern: "^[^/]+/.+$",
+      description:
+        "The model that drives the browser, as provider/model, such as openai/gpt-5-mini.",
+    }),
     reasoning: Type.Union(
       [Type.Literal("minimal"), Type.Literal("low"), Type.Literal("medium"), Type.Literal("high")],
-      { default: "low" },
+      {
+        default: "low",
+        description:
+          "How much the browser model thinks before each step; more is slower and costs more.",
+      },
     ),
-    maxSteps: Type.Integer({ default: 30, minimum: 1, maximum: 100 }),
+    maxSteps: Type.Integer({
+      default: 30,
+      minimum: 1,
+      maximum: 100,
+      description: "Most model turns the browser agent takes on one task before it gives up.",
+    }),
     /** Headless browsers are blocked by many sites; headed ones run on their own virtual display. */
-    headless: Type.Boolean({ default: false }),
+    headless: Type.Boolean({
+      default: false,
+      description:
+        "Run the browser without a window; many sites block this, so leave it off unless you need it.",
+    }),
     /** Close a room's browser after this many minutes without a task. */
-    idleMinutes: Type.Number({ default: 10, minimum: 1 }),
+    idleMinutes: Type.Number({
+      default: 10,
+      minimum: 1,
+      description: "Minutes without a task before a room's browser is closed.",
+    }),
     /** Let the browser reach localhost and the local network (routers, NAS, intranet). */
-    allowPrivateNetwork: Type.Boolean({ default: false }),
+    allowPrivateNetwork: Type.Boolean({
+      default: false,
+      description:
+        "Let the browser open localhost and devices on your local network, such as a router or NAS.",
+    }),
     /** Keep short notes per site on how to use it, and show them on the next visit. */
-    siteNotes: Type.Boolean({ default: true }),
+    siteNotes: Type.Boolean({
+      default: true,
+      description:
+        "Keep short notes on how to use each site and show them to the browser on its next visit.",
+    }),
   }),
   setup: ({ settings, dataDir, timeZone, now }) => {
     // Without a data directory (an in-memory assistant), profiles go to a temp dir made on first use.

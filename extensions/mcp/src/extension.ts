@@ -14,26 +14,69 @@ import { McpPool, type ServerConfig } from "./pool.ts";
 const VERSION = "0.1.0";
 
 const ServerSettings = Type.Object({
-  command: Type.Optional(Type.String({ minLength: 1 })),
-  args: Type.Optional(Type.Array(Type.String())),
+  command: Type.Optional(
+    Type.String({
+      minLength: 1,
+      description: "The program to start for a local server; give either this or a URL.",
+    }),
+  ),
+  args: Type.Optional(
+    Type.Array(Type.String(), { description: "Arguments passed to the program." }),
+  ),
   /** Values may name host variables as `${NAME}`, so keys stay out of nudge.json. */
-  env: Type.Optional(Type.Record(Type.String(), Type.String())),
-  cwd: Type.Optional(Type.String()),
-  url: Type.Optional(Type.String({ minLength: 1 })),
+  env: Type.Optional(
+    Type.Record(Type.String(), Type.String(), {
+      title: "Environment",
+      description:
+        "Environment variables for the program; a value of ${NAME} takes it from the host's environment.",
+    }),
+  ),
+  cwd: Type.Optional(
+    Type.String({ title: "Working directory", description: "The folder the program starts in." }),
+  ),
+  url: Type.Optional(
+    Type.String({
+      minLength: 1,
+      title: "URL",
+      description: "The address of a remote server; give either this or a command.",
+    }),
+  ),
   /** Values may name host variables as `${NAME}`. */
-  headers: Type.Optional(Type.Record(Type.String(), Type.String())),
+  headers: Type.Optional(
+    Type.Record(Type.String(), Type.String(), {
+      description:
+        "HTTP headers sent to a remote server; a value of ${NAME} takes it from the host's environment.",
+    }),
+  ),
   /** Only these of the server's tools; default all. */
-  tools: Type.Optional(Type.Array(Type.String())),
+  tools: Type.Optional(
+    Type.Array(Type.String(), {
+      description: "Offer only these of the server's tools; leave empty for all of them.",
+    }),
+  ),
   /**
    * Which calls wait for someone in the room to approve: `writes` (the default) all but the tools
    * the server marks read-only, `always` every one, `never` none.
    */
   approval: Type.Optional(
-    Type.Union([Type.Literal("writes"), Type.Literal("always"), Type.Literal("never")]),
+    Type.Union([Type.Literal("writes"), Type.Literal("always"), Type.Literal("never")], {
+      description:
+        "Which calls wait for someone in the room to approve: writes (all but read-only tools, the default), always or never.",
+    }),
   ),
   /** Pass images in results to the model; default false, since redaction only reads text. */
-  images: Type.Optional(Type.Boolean()),
-  timeoutSeconds: Type.Optional(Type.Number({ minimum: 1 })),
+  images: Type.Optional(
+    Type.Boolean({
+      description:
+        "Pass images in the server's results to the model; off by default, since only text is redacted.",
+    }),
+  ),
+  timeoutSeconds: Type.Optional(
+    Type.Number({
+      minimum: 1,
+      description: "Seconds to wait for the server to answer a request; 60 when left out.",
+    }),
+  ),
 });
 
 /** Providers allow at most 64 characters of `[A-Za-z0-9_-]` in a tool name. */
@@ -73,9 +116,17 @@ export default defineNudgeExtension({
   description:
     "Tools from MCP servers, found with tool_search; calls that change things are approved",
   settings: Type.Object({
-    servers: Type.Record(Type.String(), ServerSettings, { default: {} }),
+    servers: Type.Record(Type.String(), ServerSettings, {
+      default: {},
+      description:
+        "The MCP servers to use, by name in lowercase letters, digits, - and _; the name becomes part of each tool's name.",
+    }),
     /** Close a server's connection, and stop a started program, after this long unused. */
-    idleMinutes: Type.Number({ default: 5, minimum: 0 }),
+    idleMinutes: Type.Number({
+      default: 5,
+      minimum: 0,
+      description: "Minutes unused before a server's connection is closed and its program stopped.",
+    }),
   }),
   setup: async ({ settings, now }): Promise<ExtensionParts> => {
     const configs = new Map<string, ServerConfig>();

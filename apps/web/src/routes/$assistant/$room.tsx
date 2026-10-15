@@ -19,7 +19,7 @@ import type {
   RoomView,
   Status,
 } from "@nudge/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { createContext, type FormEvent, useCallback, useContext, useEffect, useState } from "react";
 import { clientFor, forgetToken, useConnection, useRoom } from "../../api.ts";
@@ -44,6 +44,8 @@ function Room() {
   const held = useRoom(assistant, room);
   const connection = useConnection(assistant);
   const navigate = useNavigate();
+  // Below `md` the sidebar is a drawer over the chat.
+  const [drawer, setDrawer] = useState(false);
 
   useEffect(() => {
     if (connection.kind === "closed" && connection.code === UNAUTHORIZED) {
@@ -66,15 +68,37 @@ function Room() {
       </p>
     );
 
+  const waiting = view.approvals.filter((item) => item.status === "pending").length;
   return (
     <ViewContext value={view}>
-      <div className="flex h-full min-h-0">
-        <aside className="flex w-80 shrink-0 flex-col gap-4 overflow-y-auto border-r border-stone-200 p-4">
-          <div>
-            <h2 className="text-lg font-medium">{view.room.name}</h2>
-            <p className="text-sm text-stone-600">
-              {view.room.members.map((member) => member.displayName).join(", ")}
-            </p>
+      <div className="relative flex h-full min-h-0">
+        {drawer && (
+          <button
+            type="button"
+            aria-label="Close the room's details"
+            onClick={() => setDrawer(false)}
+            className="fixed inset-0 z-20 bg-stone-900/30 md:hidden"
+          />
+        )}
+        <aside
+          className={`${
+            drawer ? "fixed inset-y-0 left-0 z-30 flex w-[min(22rem,88vw)] shadow-xl" : "hidden"
+          } flex-col gap-4 overflow-y-auto border-r border-stone-200 bg-stone-50 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] md:static md:flex md:w-80 md:shrink-0 md:pt-4 md:pb-4 md:shadow-none`}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h2 className="text-lg font-medium">{view.room.name}</h2>
+              <p className="text-sm text-stone-600">
+                {view.room.members.map((member) => member.displayName).join(", ")}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDrawer(false)}
+              className="shrink-0 rounded px-2 py-1 text-sm text-stone-600 hover:bg-stone-200 md:hidden"
+            >
+              Close
+            </button>
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
@@ -117,8 +141,24 @@ function Room() {
           <ApprovalsPanel approvals={view.approvals} />
           <MemoryPanel view={view} />
           <NudgesPanel view={view} />
+          <ExtensionsPanel />
         </aside>
-        <div className="flex min-h-0 flex-1 flex-col p-4">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-4 sm:pt-4 sm:pb-4">
+          <div className="mb-2 flex items-center justify-between gap-2 md:hidden">
+            <h2 className="truncate font-medium">{view.room.name}</h2>
+            <button
+              type="button"
+              onClick={() => setDrawer(true)}
+              className="flex shrink-0 items-center gap-1.5 rounded border border-stone-300 bg-white px-3 py-1 text-sm"
+            >
+              Room
+              {waiting > 0 && (
+                <span className="rounded-full bg-amber-600 px-1.5 text-xs text-white">
+                  {waiting}
+                </span>
+              )}
+            </button>
+          </div>
           {connection.kind === "waiting" ? (
             <p className="text-sm text-stone-500">Reconnecting…</p>
           ) : connection.kind === "closed" ? (
@@ -167,7 +207,7 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
     <AssistantRuntimeProvider runtime={runtime}>
       <div className="flex h-full min-h-0 flex-col gap-3">
         <StatusLine status={view.live.status} />
-        <ThreadPrimitive.Viewport className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+        <ThreadPrimitive.Viewport className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-x-hidden overflow-y-auto">
           <ThreadPrimitive.LoadEarlier className="self-center text-sm text-stone-500 underline disabled:text-stone-300 disabled:no-underline">
             Load earlier
           </ThreadPrimitive.LoadEarlier>
@@ -182,7 +222,7 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
         <ComposerPrimitive.Root className="flex shrink-0 flex-col gap-2">
           <ComposerPrimitive.Queue>
             {({ queueItem }) => (
-              <p key={queueItem.id} className="text-sm text-stone-500">
+              <p key={queueItem.id} className="text-sm [overflow-wrap:anywhere] text-stone-500">
                 Waiting: {queueItem.prompt}
               </p>
             )}
@@ -190,14 +230,16 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
           <div className="flex gap-2">
             <ComposerPrimitive.Input
               placeholder="Message"
-              className="flex-1 rounded border border-stone-300 px-2 py-1"
+              className="max-h-40 min-w-0 flex-1 resize-none rounded border border-stone-300 bg-white px-2 py-1.5"
             />
             {view.live.running ? (
-              <ComposerPrimitive.Cancel className="rounded border px-3">
+              <ComposerPrimitive.Cancel className="shrink-0 rounded border bg-white px-3">
                 Stop
               </ComposerPrimitive.Cancel>
             ) : (
-              <ComposerPrimitive.Send className="rounded border px-3">Send</ComposerPrimitive.Send>
+              <ComposerPrimitive.Send className="shrink-0 rounded border bg-white px-3">
+                Send
+              </ComposerPrimitive.Send>
             )}
           </div>
         </ComposerPrimitive.Root>
@@ -218,7 +260,7 @@ function FailedSends({ store, pending }: { store: RoomStore; pending: readonly P
           key={message.requestId}
           className="flex items-baseline justify-between gap-2 rounded border border-red-200 bg-red-50 px-3 py-1 text-sm"
         >
-          <span>
+          <span className="min-w-0 [overflow-wrap:anywhere]">
             Not sent: {message.text} <span className="text-red-700">({message.error})</span>
           </span>
           <span className="flex shrink-0 gap-2">
@@ -283,7 +325,7 @@ function UserMessage({ message }: { message: MessageState }) {
     <MessagePrimitive.Root>
       <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
         <div
-          className={`max-w-[75%] rounded-2xl px-3 py-2 ${
+          className={`max-w-[85%] min-w-0 rounded-2xl px-3 py-2 [overflow-wrap:anywhere] md:max-w-[75%] ${
             mine ? "bg-sky-600 text-white" : "bg-stone-200 text-stone-900"
           }`}
         >
@@ -303,7 +345,7 @@ function AssistantMessage({ message }: { message: Extract<MessageState, { role: 
   return (
     <MessagePrimitive.Root>
       <div className="flex justify-start">
-        <div className="max-w-[85%] rounded-2xl border border-stone-200 bg-white px-3 py-2">
+        <div className="max-w-full min-w-0 rounded-2xl border border-stone-200 bg-white px-3 py-2 [overflow-wrap:anywhere] md:max-w-[85%]">
           <MessagePrimitive.Parts
             components={{
               Text: MarkdownText,
@@ -324,12 +366,16 @@ function SystemMessage({ message }: { message: MessageState }) {
   // See `toThreadMessageLike`: the line's kind and data are in `metadata.custom`.
   const custom = message.metadata.custom as { kind?: string; text?: string } | undefined;
   if (custom?.kind === "nudge")
-    return <p className="text-center text-sm text-stone-600 italic">Nudge: {custom.text}</p>;
+    return (
+      <p className="text-center text-sm [overflow-wrap:anywhere] text-stone-600 italic">
+        Nudge: {custom.text}
+      </p>
+    );
   if (custom?.kind === "marker") return <hr className="border-stone-200" />;
   if (custom?.kind === "approval") {
     const data = custom as { summary: string; status: string; decidedBy?: string };
     return (
-      <p className="text-center text-sm text-stone-600 italic">
+      <p className="text-center text-sm [overflow-wrap:anywhere] text-stone-600 italic">
         {data.decidedBy ?? "Someone"} {data.status === "denied" ? "denied" : "approved"}{" "}
         {data.summary}
         {data.status === "failed" ? " — it failed" : ""}
@@ -352,7 +398,8 @@ function MarkdownText() {
         [&_blockquote]:pl-2 [&_blockquote]:text-stone-600 [&_code]:rounded [&_code]:bg-stone-200
         [&_code]:px-1 [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold
         [&_h3]:font-semibold [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1 [&_pre]:my-1
-        [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-stone-200 [&_pre]:p-2
+        [&_img]:max-w-full [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-stone-200 [&_pre]:p-2 [&_pre]:[overflow-wrap:normal]
+        [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto
         [&_pre_code]:bg-transparent [&_pre_code]:px-0 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5"
     />
   );
@@ -379,7 +426,7 @@ function ToolCallPart({ toolName, status, result, isError, artifact }: ToolCallM
   const approval = (artifact as { approval?: string } | undefined)?.approval;
   if (typeof approval === "string") return <ApprovalCard id={approval} />;
   return (
-    <p className="text-sm text-stone-500">
+    <p className="text-sm [overflow-wrap:anywhere] text-stone-500">
       {toolName} — {result !== undefined ? (isError ? "failed" : "done") : status.type}
     </p>
   );
@@ -429,7 +476,7 @@ function ApprovalRow({ approval }: { approval: Approval }) {
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-baseline justify-between gap-2">
-        <span>{approval.summary}</span>
+        <span className="min-w-0 [overflow-wrap:anywhere]">{approval.summary}</span>
         {approval.status === "pending" ? (
           <span className="flex shrink-0 gap-2">
             <button
@@ -560,12 +607,12 @@ function MemoryPanel({ view }: { view: RoomView }) {
           value={text}
           onChange={(event) => setText(event.target.value)}
           placeholder="Remember something"
-          className="flex-1 rounded border border-stone-300 px-2 py-1 text-sm"
+          className="min-w-0 flex-1 rounded border border-stone-300 px-2 py-1 text-sm"
         />
         <button
           type="submit"
           disabled={busy || text.trim() === ""}
-          className="rounded border px-2 text-sm disabled:opacity-50"
+          className="shrink-0 rounded border px-2 text-sm disabled:opacity-50"
         >
           Add
         </button>
@@ -618,6 +665,60 @@ function NudgesPanel({ view }: { view: RoomView }) {
             >
               Cancel
             </button>
+          </li>
+        ))}
+      </ul>
+      {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
+    </section>
+  );
+}
+
+/** Which installed extensions this room uses; anyone in the room may change it. */
+function ExtensionsPanel() {
+  const { assistant, room } = Route.useParams();
+  const queryClient = useQueryClient();
+  const key = [assistant, "room-extensions", room];
+  const extensions = useQuery({
+    queryKey: key,
+    queryFn: () => clientFor(assistant).api.roomExtensions(room),
+  });
+  const [error, setError] = useState<string>();
+
+  async function set(name: string, enabled: boolean | null) {
+    setError(undefined);
+    try {
+      await clientFor(assistant).api.setRoomExtension(room, name, enabled);
+      await queryClient.invalidateQueries({ queryKey: key });
+    } catch (caught) {
+      setError((caught as Error).message);
+    }
+  }
+
+  if (extensions.data === undefined || extensions.data.length === 0) return null;
+  return (
+    <section className="flex flex-col gap-2 rounded border border-stone-200 bg-white p-3">
+      <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">Extensions</h3>
+      <ul className="flex flex-col gap-1">
+        {extensions.data.map((extension) => (
+          <li key={extension.name} className="flex items-center justify-between gap-2 text-sm">
+            <label className="flex min-w-0 items-center gap-2" title={extension.description}>
+              <input
+                type="checkbox"
+                className="size-4 shrink-0"
+                checked={extension.enabled}
+                onChange={(event) => void set(extension.name, event.target.checked)}
+              />
+              <span className="truncate">{extension.name}</span>
+            </label>
+            {extension.enabled !== extension.byDefault && (
+              <button
+                type="button"
+                onClick={() => void set(extension.name, null)}
+                className="shrink-0 text-xs text-stone-500 underline"
+              >
+                Reset
+              </button>
+            )}
           </li>
         ))}
       </ul>

@@ -5,6 +5,7 @@ import {
   ApprovalNotFound,
   BudgetReached,
   canUse,
+  ConfigError,
   type Credential,
   ExtensionNotFound,
   type Nudge,
@@ -20,6 +21,8 @@ import {
   CreateRoomRequest,
   DecideRequest,
   decodeCursor,
+  type ExtensionSetup,
+  type ExtensionSetupsResponse,
   encodeCursor,
   IssueTokenRequest,
   type MeResponse,
@@ -39,6 +42,7 @@ import {
   type PushKeyResponse,
   PushSubscribeRequest,
   RememberRequest,
+  SaveExtensionSetupsRequest,
   type Room,
   type RoomExtensionsResponse,
   type RoomsResponse,
@@ -74,6 +78,21 @@ export type RestOptions = {
   readonly pushesOf?: (nudge: Nudge) => Pushes | undefined;
   /** The server's address as clients reach it, for pairing links; default the request's origin. */
   readonly publicUrl?: string;
+  /** Setting up extensions from a client; the admin's settings routes answer 404 without. */
+  readonly extensionSettings?: ExtensionSettings;
+};
+
+/**
+ * Where an assistant's extensions are set up, such as the config file `nudge serve` read. A
+ * `ConfigError` from either is the caller's mistake.
+ */
+export type ExtensionSettings = {
+  list(assistant: string): Promise<ExtensionSetup[]>;
+  /** Installs `extensions` in place of the assistant's, and keeps them; then lists them again. */
+  save(
+    assistant: string,
+    extensions: SaveExtensionSetupsRequest["extensions"],
+  ): Promise<ExtensionSetup[]>;
 };
 
 type Env = {
@@ -551,8 +570,37 @@ export function restRoutes(options: RestOptions): Hono {
     return c.body(null, 204);
   });
 
+  const extensionSettings = (): ExtensionSettings => {
+    if (options.extensionSettings === undefined)
+      throw new HttpError(404, "This server can't set up extensions");
+    return options.extensionSettings;
+  };
+
+  api.get("/admin/extensions", admin, async (c) => {
+    const extensions = await asBadRequest(() => extensionSettings().list(c.var.name));
+    return c.json({ extensions } satisfies ExtensionSetupsResponse);
+  });
+
+  // Reinstalls the extensions now, and writes the config only once that worked.
+  api.put("/admin/extensions", admin, async (c) => {
+    const body = await readBody(c, SaveExtensionSetupsRequest);
+    const extensions = await asBadRequest(() =>
+      extensionSettings().save(c.var.name, body.extensions),
+    );
+    return c.json({ extensions } satisfies ExtensionSetupsResponse);
+  });
+
   app.route("/a/:assistant", api);
   return app as unknown as Hono;
+}
+
+async function asBadRequest<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof ConfigError) throw new HttpError(400, error.message);
+    throw error;
+  }
 }
 
 /** `nudge://pair?server=…&assistant=…&code=…`, what a pairing QR code holds. */

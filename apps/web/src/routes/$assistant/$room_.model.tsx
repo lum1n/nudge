@@ -35,8 +35,8 @@ function ModelView() {
   }, [assistant, room, loads]);
 
   return (
-    <section className="mx-auto flex max-w-3xl flex-col gap-3 p-4">
-      <div className="flex items-center justify-between gap-4">
+    <section className="mx-auto flex max-w-3xl flex-col gap-3 p-3 sm:p-4">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
         <h2 className="text-lg font-medium">What the model sees</h2>
         <div className="flex gap-3 text-sm">
           <button

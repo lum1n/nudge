@@ -2,8 +2,22 @@ import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { buildModels, loadConfig, type Nudge, openAssistant } from "@nudge/core";
-import { generateVapidKeys, serveNudge, type VapidKeys } from "@nudge/server";
+import {
+  buildModels,
+  ConfigError,
+  listExtensionSetups,
+  loadConfig,
+  loadExtensions,
+  type Nudge,
+  openAssistant,
+  saveExtensionSetups,
+} from "@nudge/core";
+import {
+  type ExtensionSettings,
+  generateVapidKeys,
+  serveNudge,
+  type VapidKeys,
+} from "@nudge/server";
 import { UsageError } from "../errors.ts";
 import { scheduleBackups } from "./backup.ts";
 import { hostOptions, reloadOnHangup } from "../host.ts";
@@ -40,6 +54,7 @@ export async function serve(options: ServeOptions): Promise<void> {
       hostname: options.host,
       web,
       publicUrl: options.publicUrl,
+      extensionSettings: configExtensions(options.config, assistants, (line) => console.log(line)),
       ...(database === undefined || database === ":memory:"
         ? {}
         : {
@@ -66,6 +81,49 @@ export async function serve(options: ServeOptions): Promise<void> {
   } finally {
     for (const nudge of assistants.values()) await nudge.close(context);
   }
+}
+
+/**
+ * The web UI's settings page, over the config file: saving reinstalls the assistant's extensions
+ * as `nudge reload` does, and writes the file once that worked. Saves run one at a time.
+ */
+function configExtensions(
+  configPath: string,
+  assistants: ReadonlyMap<string, Nudge>,
+  say: (line: string) => void,
+): ExtensionSettings {
+  let saving = Promise.resolve();
+  return {
+    list: (assistant) => listExtensionSetups(configPath, assistant),
+    save: (assistant, extensions) => {
+      const save = saving.then(async () => {
+        await saveExtensionSetups(configPath, assistant, extensions, async (config) => {
+          const nudge = assistants.get(assistant);
+          const entry = config.assistants.find((a) => a.name === assistant);
+          if (nudge === undefined || entry === undefined) return;
+          let installed;
+          try {
+            installed = await nudge.reloadExtensions(
+              await loadExtensions(entry.extensions ?? [], { fresh: true }),
+            );
+          } catch (error) {
+            // An extension that won't start, such as one missing its token, is the admin's to fix.
+            throw error instanceof ConfigError
+              ? error
+              : new ConfigError(`Nothing changed: ${(error as Error).message}`);
+          }
+          const names = installed.map((e) => `${e.name}${e.version ? ` ${e.version}` : ""}`);
+          say(`${assistant}: extensions set up from the web: ${names.join(", ") || "none"}`);
+        });
+        return listExtensionSetups(configPath, assistant);
+      });
+      saving = save.then(
+        () => {},
+        () => {},
+      );
+      return save;
+    },
+  };
 }
 
 /** The server's VAPID keys, made on first start; browsers' subscriptions are bound to them. */

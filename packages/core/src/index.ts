@@ -84,6 +84,12 @@ export {
   type RoomSocketSession,
 } from "./extensions/define.ts";
 export { checkExtensions, type LoadOptions, loadExtensions } from "./extensions/loader.ts";
+export {
+  type ExtensionChoice,
+  type ExtensionSetup,
+  listExtensionSetups,
+  saveExtensionSetups,
+} from "./extensions/settings.ts";
 // What an extension needs to build tools and sections, so it can depend on @nudge/core alone.
 export { Type } from "@earendil-works/pi-ai";
 export { defineTool, hook, section } from "@earendil-works/pi-durable";

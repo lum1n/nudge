@@ -6,11 +6,23 @@ const VERSION = "0.1.0";
 
 const Settings = Type.Object({
   /** The bot account's homeserver, such as `https://matrix.example.org`. */
-  homeserver: Type.String({ pattern: "^https?://" }),
+  homeserver: Type.String({
+    pattern: "^https?://",
+    description: "The bot account's homeserver, such as https://matrix.example.org.",
+  }),
   /** The bot's access token; `${NAME}` takes it from the host's environment. */
-  token: Type.String({ default: "${MATRIX_ACCESS_TOKEN}" }),
+  token: Type.String({
+    default: "${MATRIX_ACCESS_TOKEN}",
+    title: "Access token",
+    description: "The bot account's access token; ${NAME} takes it from an environment variable.",
+  }),
   /** Seconds one long poll waits for news. */
-  pollSeconds: Type.Number({ default: 30, minimum: 1, maximum: 60 }),
+  pollSeconds: Type.Number({
+    default: 30,
+    minimum: 1,
+    maximum: 60,
+    description: "Seconds one request to the homeserver waits for new messages.",
+  }),
 });
 
 export type MatrixOptions = {

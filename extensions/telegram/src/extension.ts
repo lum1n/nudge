@@ -6,11 +6,24 @@ const VERSION = "0.1.0";
 
 const Settings = Type.Object({
   /** The bot's token from @BotFather; `${NAME}` takes it from the host's environment. */
-  token: Type.String({ default: "${TELEGRAM_BOT_TOKEN}" }),
+  token: Type.String({
+    default: "${TELEGRAM_BOT_TOKEN}",
+    title: "Bot token",
+    description: "The bot's token from @BotFather; ${NAME} takes it from an environment variable.",
+  }),
   /** Seconds one long poll waits for news. */
-  pollSeconds: Type.Number({ default: 30, minimum: 1, maximum: 50 }),
+  pollSeconds: Type.Number({
+    default: 30,
+    minimum: 1,
+    maximum: 50,
+    description: "Seconds one request to Telegram waits for new messages.",
+  }),
   /** For tests and Bot API servers of your own. */
-  apiBase: Type.String({ default: "https://api.telegram.org" }),
+  apiBase: Type.String({
+    default: "https://api.telegram.org",
+    title: "Bot API URL",
+    description: "The Bot API server to use; change it only if you run your own.",
+  }),
 });
 
 const COMMANDS = [

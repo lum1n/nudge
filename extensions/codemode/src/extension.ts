@@ -37,14 +37,28 @@ export default defineNudgeExtension({
   description: "Run short scripts that call the room's tools, in a sandbox",
   settings: Type.Object({
     /** Longest a script may run, including the time its tool calls take. */
-    timeoutSeconds: Type.Number({ default: 30, minimum: 1, maximum: 600 }),
+    timeoutSeconds: Type.Number({
+      default: 30,
+      minimum: 1,
+      maximum: 600,
+      description: "Seconds a script may run, including the time its tool calls take.",
+    }),
     /** Memory the script's VM may allocate. */
-    memoryMb: Type.Number({ default: 64, minimum: 8, maximum: 1024 }),
+    memoryMb: Type.Number({
+      default: 64,
+      minimum: 8,
+      maximum: 1024,
+      description: "Megabytes of memory a script may use.",
+    }),
     /**
      * Give scripts `models.*` (classifiers and image generation, through the assistant's
      * redaction). Off by default, since each call is a paid model request.
      */
-    models: Type.Boolean({ default: false }),
+    models: Type.Boolean({
+      default: false,
+      description:
+        "Let scripts call classifiers and image generation; each call is a paid model request.",
+    }),
   }),
   setup: ({ settings }): ExtensionParts => {
     const sandbox = new CappedSandbox(settings.timeoutSeconds * 1000, settings.memoryMb * 2 ** 20);

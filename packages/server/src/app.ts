@@ -23,6 +23,8 @@ export type AppOptions = {
   readonly publicUrl?: string;
   /** Web Push to browsers that subscribe; none without. */
   readonly push?: V1Options["push"];
+  /** Setting up extensions from the web UI, such as in the config file; none without. */
+  readonly extensionSettings?: V1Options["extensionSettings"];
 };
 
 /** Nudge's HTTP and WebSocket API (protocol v1, under `/v1`) over one or more assistants. */
@@ -47,6 +49,7 @@ export function createApp(options: AppOptions): Hono {
       timing: options.timing,
       publicUrl: options.publicUrl,
       push: options.push,
+      extensionSettings: options.extensionSettings,
     }),
   );
   if (options.web !== undefined) serveWeb(app, options.web);

@@ -6,7 +6,7 @@ import type { UpgradeWebSocket } from "hono/ws";
 import { Connection, type ConnectionOptions } from "./connection.ts";
 import { ExtensionSocket } from "./extension-socket.ts";
 import { Hubs } from "./hub.ts";
-import { restRoutes } from "./rest.ts";
+import { type ExtensionSettings, restRoutes } from "./rest.ts";
 import { Pushes, type PushesOptions } from "../push/pushes.ts";
 
 export type V1Options = {
@@ -18,6 +18,8 @@ export type V1Options = {
   readonly publicUrl?: string;
   /** Web Push for every assistant; none without. */
   readonly push?: PushesOptions;
+  /** Setting up extensions from the web UI; none without. */
+  readonly extensionSettings?: ExtensionSettings;
   /** Defaults: 25 s heartbeat, 50 ms between patches, 10 s for the hello. */
   readonly timing?: Partial<Pick<ConnectionOptions, "heartbeatMs" | "flushMs" | "helloTimeoutMs">>;
 };
@@ -109,6 +111,7 @@ export function v1Routes(options: V1Options): Hono {
       hubsOf,
       pushesOf: (nudge) => pushes.get(nudge),
       publicUrl: options.publicUrl,
+      extensionSettings: options.extensionSettings,
     }),
   );
   return app;

@@ -1,10 +1,11 @@
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
-import { createNudge, type Nudge, requestApproval } from "@nudge/core";
+import { ConfigError, createNudge, type Nudge, requestApproval } from "@nudge/core";
 import {
   AdminPlayer,
   CLOSE,
+  ExtensionSetupsResponse,
   MeResponse,
   NudgesResponse,
   PairingCodeResponse,
@@ -24,7 +25,7 @@ import { RoomProjector, TIMELINE_LIMIT } from "@nudge/protocol/project";
 import type { TSchema } from "typebox";
 import { Value } from "typebox/value";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { type RunningServer, serveNudge } from "../src/index.ts";
+import { type ExtensionSettings, type RunningServer, serveNudge } from "../src/index.ts";
 
 const context = BACKGROUND_CONTEXT;
 
@@ -393,6 +394,60 @@ describe("v1 HTTP", () => {
       ["trip", "Pack"],
       ["band", "Practice"],
     ]);
+  });
+
+  it("sets up extensions for admins only, through the server's settings", async () => {
+    expect((await call("GET", "/admin/extensions", { token: tokens.Ann })).status).toBe(404);
+    const saved: unknown[] = [];
+    const settings: ExtensionSettings = {
+      list: async () => [
+        {
+          from: "./extensions/lists",
+          name: "lists",
+          configured: true,
+          enabled: true,
+          settings: {},
+          missingEnv: [],
+        },
+      ],
+      save: async (_assistant, extensions) => {
+        if (extensions.some((e) => e.from.startsWith("/"))) throw new ConfigError("Not allowed");
+        saved.push(extensions);
+        return settings.list("robin");
+      },
+    };
+    await server.close();
+    server = await serveNudge({
+      assistants: new Map([["robin", nudge]]),
+      port: 0,
+      extensionSettings: settings,
+    });
+    expect((await call("GET", "/admin/extensions", { token: tokens.Bo })).status).toBe(403);
+    const listed = await call("GET", "/admin/extensions", {
+      token: tokens.Ann,
+      schema: ExtensionSetupsResponse,
+    });
+    expect(listed.json.extensions[0].name).toBe("lists");
+    const body = { extensions: [{ from: "./extensions/lists", enabled: false }] };
+    expect(
+      (
+        await call("PUT", "/admin/extensions", {
+          token: tokens.Ann,
+          body,
+          schema: ExtensionSetupsResponse,
+        })
+      ).status,
+    ).toBe(200);
+    expect(saved).toEqual([body.extensions]);
+    const refused = await call("PUT", "/admin/extensions", {
+      token: tokens.Ann,
+      body: { extensions: [{ from: "/tmp/x.js", enabled: true }] },
+    });
+    expect(refused).toEqual({ status: 400, json: { error: "Not allowed" } });
+    expect(
+      (await call("PUT", "/admin/extensions", { token: tokens.Ann, body: { extensions: [{}] } }))
+        .status,
+    ).toBe(400);
   });
 
   it("closes the sockets of a revoked token with 4401", async () => {

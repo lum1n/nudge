@@ -454,6 +454,51 @@ export const SetRoomExtensionRequest = Type.Object({
 });
 export type SetRoomExtensionRequest = Static<typeof SetRoomExtensionRequest>;
 
+const RoomKinds = Type.Array(
+  Type.Union([Type.Literal("lobby"), Type.Literal("personal"), Type.Literal("shared")]),
+  { uniqueItems: true },
+);
+
+/** An extension on the admin's settings page: from the config, or found beside it. */
+export const ExtensionSetup = Type.Object({
+  /** As the config writes it; sent back to say which one. */
+  from: Type.String(),
+  /** Absent when the module could not be loaded. */
+  name: Type.Optional(Type.String()),
+  version: Type.Optional(Type.String()),
+  description: Type.Optional(Type.String()),
+  /** In the config; false for one found in `extensions/` that nobody added yet. */
+  configured: Type.Boolean(),
+  /** Installed: configured and not turned off. */
+  enabled: Type.Boolean(),
+  /** The kinds of room it is on in by default; absent for every kind. */
+  rooms: Type.Optional(RoomKinds),
+  settings: Type.Record(Type.String(), Type.Unknown()),
+  /** Its settings as JSON Schema; absent when it takes none. */
+  schema: Type.Optional(Type.Unknown()),
+  /** `${NAME}` references in its settings that the server's environment doesn't set. */
+  missingEnv: Type.Array(Type.String()),
+  /** Why the module could not be loaded. */
+  error: Type.Optional(Type.String()),
+});
+export type ExtensionSetup = Static<typeof ExtensionSetup>;
+
+export const ExtensionSetupsResponse = Type.Object({ extensions: Type.Array(ExtensionSetup) });
+export type ExtensionSetupsResponse = Static<typeof ExtensionSetupsResponse>;
+
+/** The assistant's extensions, in the order they are installed; ones left out are removed. */
+export const SaveExtensionSetupsRequest = Type.Object({
+  extensions: Type.Array(
+    Type.Object({
+      from: Type.String(),
+      enabled: Type.Boolean(),
+      settings: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+      rooms: Type.Optional(RoomKinds),
+    }),
+  ),
+});
+export type SaveExtensionSetupsRequest = Static<typeof SaveExtensionSetupsRequest>;
+
 export const ProtectRequest = Type.Object({
   value: Type.String(),
   /** Upper-case letters, such as `NAME`; default `PRIVATE`. */

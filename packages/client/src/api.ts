@@ -4,6 +4,8 @@ import type {
   ClientInfo,
   CreateRoomRequest,
   ErrorResponse,
+  ExtensionSetup,
+  ExtensionSetupsResponse,
   Fact,
   MeResponse,
   MessageRequest,
@@ -20,6 +22,7 @@ import type {
   Room,
   RoomExtension,
   RoomExtensionsResponse,
+  SaveExtensionSetupsRequest,
   TimelineResponse,
   TokenInfo,
   TokensResponse,
@@ -226,6 +229,19 @@ export class Api {
   /** Revokes a client's token; its sockets close with 4401. */
   revoke(clientId: string): Promise<void> {
     return this.request("DELETE", `/admin/tokens/${encodeURIComponent(clientId)}`);
+  }
+
+  /** The assistant's extensions and the ones it could add, with their settings and schemas. */
+  async extensionSetups(): Promise<ExtensionSetup[]> {
+    return (await this.request<ExtensionSetupsResponse>("GET", "/admin/extensions")).extensions;
+  }
+
+  /** Installs `extensions`, in order, in place of the assistant's, and keeps them in its config. */
+  async saveExtensionSetups(
+    extensions: SaveExtensionSetupsRequest["extensions"],
+  ): Promise<ExtensionSetup[]> {
+    return (await this.request<ExtensionSetupsResponse>("PUT", "/admin/extensions", { extensions }))
+      .extensions;
   }
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {

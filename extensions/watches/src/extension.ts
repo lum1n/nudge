@@ -24,8 +24,16 @@ const MINUTE = 60_000;
 
 const Settings = Type.Object({
   /** The shortest time between checks; each check is a model run with tools, so it costs. */
-  minMinutes: Type.Number({ default: 30, minimum: 0 }),
-  maxPerRoom: Type.Number({ default: 10, minimum: 1 }),
+  minMinutes: Type.Number({
+    default: 30,
+    minimum: 0,
+    description: "Fewest minutes between two checks of a watch; each check is a paid model run.",
+  }),
+  maxPerRoom: Type.Number({
+    default: 10,
+    minimum: 1,
+    description: "Most watches one room may have at a time.",
+  }),
 });
 
 type TimerInput = { roomId: string; watchId: string; every: number; firstAt: number };

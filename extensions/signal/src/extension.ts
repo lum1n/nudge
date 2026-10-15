@@ -6,9 +6,18 @@ const VERSION = "0.1.0";
 
 const Settings = Type.Object({
   /** Where `signal-cli daemon --tcp` listens. */
-  daemon: Type.String({ default: "127.0.0.1:7583" }),
+  daemon: Type.String({
+    default: "127.0.0.1:7583",
+    description: "The host:port where signal-cli daemon --tcp listens.",
+  }),
   /** The bot's own number, when the daemon serves several accounts (started without `-a`). */
-  account: Type.Optional(Type.String({ pattern: "^\\+\\d+$" })),
+  account: Type.Optional(
+    Type.String({
+      pattern: "^\\+\\d+$",
+      description:
+        "The bot's own phone number, such as +4712345678, when the daemon serves several accounts.",
+    }),
+  ),
 });
 
 export type SignalOptions = {

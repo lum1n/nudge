@@ -1,1 +1,16 @@
 @import "tailwindcss";
+
+/* Notches and rounded corners in landscape, with `viewport-fit=cover`. */
+#app {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* iOS zooms into any field under 16px when it gets focus; unlayered, so it beats `text-sm`. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"], [type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}

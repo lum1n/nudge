@@ -9,12 +9,30 @@ const MAX_REDIRECTS = 5;
 
 const Settings = Type.Object({
   /** The SearXNG instance, with JSON output turned on (`search.formats: [html, json]`). */
-  url: Type.String({ default: "http://127.0.0.1:8888", pattern: "^https?://" }),
+  url: Type.String({
+    default: "http://127.0.0.1:8888",
+    pattern: "^https?://",
+    title: "SearXNG URL",
+    description:
+      "The address of your SearXNG instance, with JSON output turned on in its settings.yml.",
+  }),
   /** A language code such as `nb` or `en`, or `auto`. */
-  language: Type.String({ default: "auto" }),
-  maxResults: Type.Number({ default: 8, minimum: 1, maximum: 30 }),
+  language: Type.String({
+    default: "auto",
+    description: "The language to search in, as a code such as nb or en, or auto.",
+  }),
+  maxResults: Type.Number({
+    default: 8,
+    minimum: 1,
+    maximum: 30,
+    description: "Most results one search gives the assistant.",
+  }),
   /** Let `read_page` reach local addresses too; off, so a page can't lead it into the house. */
-  readLocalPages: Type.Boolean({ default: false }),
+  readLocalPages: Type.Boolean({
+    default: false,
+    description:
+      "Let page reading reach localhost and your local network; off, so a web page can't lead it inside.",
+  }),
 });
 
 type SearxResult = {

@@ -20,29 +20,88 @@ const VERSION = "0.1.0";
 /** Characters of a message body the model gets. */
 const MAX_BODY = 15_000;
 
-const ServerSettings = Type.Object({
-  host: Type.String({ minLength: 1 }),
-  port: Type.Optional(Type.Number()),
-  secure: Type.Optional(Type.Boolean()),
-  user: Type.Optional(Type.String()),
-  /** `${NAME}` takes it from the host's environment, so it stays out of nudge.json. */
-  password: Type.Optional(Type.String()),
-});
+const serverSettings = (options: { title?: string; description?: string } = {}) =>
+  Type.Object(
+    {
+      host: Type.String({
+        minLength: 1,
+        description: "The mail server's host name, such as imap.example.org.",
+      }),
+      port: Type.Optional(
+        Type.Number({
+          description: "The server's port; 993 for IMAP and 465 for SMTP when left out.",
+        }),
+      ),
+      secure: Type.Optional(
+        Type.Boolean({
+          description:
+            "Use TLS from the start instead of upgrading with STARTTLS; by default on for IMAP, and for SMTP on port 465.",
+        }),
+      ),
+      user: Type.Optional(
+        Type.String({
+          description:
+            "The user name to log in with; ${NAME} takes it from an environment variable.",
+        }),
+      ),
+      /** `${NAME}` takes it from the host's environment, so it stays out of nudge.json. */
+      password: Type.Optional(
+        Type.String({
+          description:
+            "The password to log in with; write ${NAME} to take it from an environment variable instead.",
+        }),
+      ),
+    },
+    options,
+  );
 
 const AccountSettings = Type.Object({
-  id: Type.String({ pattern: "^[a-z0-9][a-z0-9-]*$" }),
-  from: Type.String({ minLength: 3 }),
-  imap: Type.Intersect([
-    ServerSettings,
-    Type.Object({ user: Type.String(), password: Type.String() }),
-  ]),
+  id: Type.String({
+    pattern: "^[a-z0-9][a-z0-9-]*$",
+    description: "A short name for the account, in lowercase letters, digits and dashes.",
+  }),
+  from: Type.String({
+    minLength: 3,
+    description:
+      "The sender address on mail the assistant sends, such as Robin <robin@example.org>.",
+  }),
+  imap: Type.Intersect(
+    [
+      serverSettings(),
+      Type.Object({
+        user: Type.String({
+          description:
+            "The user name to log in with; ${NAME} takes it from an environment variable.",
+        }),
+        password: Type.String({
+          description:
+            "The password to log in with; write ${NAME} to take it from an environment variable instead.",
+        }),
+      }),
+    ],
+    { title: "IMAP", description: "The server mail is searched and read on." },
+  ),
   /** Default: the IMAP host's name with `imap.` turned into `smtp.`, port 465, the IMAP login. */
-  smtp: Type.Optional(ServerSettings),
+  smtp: Type.Optional(
+    serverSettings({
+      title: "SMTP",
+      description:
+        "The server mail is sent through; by default the IMAP host with imap. turned into smtp., port 465 and the IMAP login.",
+    }),
+  ),
   /** Room ids that may use the account; `*` for every room. */
-  rooms: Type.Array(Type.String(), { minItems: 1 }),
+  rooms: Type.Array(Type.String(), {
+    minItems: 1,
+    description: "Ids of the rooms that may use this account; * for every room.",
+  }),
 });
 
-const Settings = Type.Object({ accounts: Type.Array(AccountSettings, { default: [] }) });
+const Settings = Type.Object({
+  accounts: Type.Array(AccountSettings, {
+    default: [],
+    description: "The mail accounts the assistant can search, read and send from.",
+  }),
+});
 
 type SendPayload = OutgoingMail & { readonly account: string };
 

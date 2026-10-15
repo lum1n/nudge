@@ -9,9 +9,17 @@ export default defineNudgeExtension({
   version: "0.1.0",
   description: "Greets in your words, rolls dice, and keeps licence plates private",
   settings: Type.Object({
-    greeting: Type.String({ default: "Hello", minLength: 1 }),
+    greeting: Type.String({
+      default: "Hello",
+      minLength: 1,
+      description: "The word the assistant answers a greeting with.",
+    }),
     /** Most sides `roll_dice` accepts. */
-    maxSides: Type.Integer({ default: 100, minimum: 2 }),
+    maxSides: Type.Integer({
+      default: 100,
+      minimum: 2,
+      description: "Most sides a die may have when someone asks for a dice roll.",
+    }),
   }),
   setup: ({ settings, displayName }) => ({
     sections: [

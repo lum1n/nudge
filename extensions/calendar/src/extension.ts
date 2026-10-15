@@ -22,17 +22,41 @@ const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 
 const AccountSettings = Type.Object({
-  id: Type.String({ pattern: "^[a-z0-9][a-z0-9-]*$" }),
-  url: Type.String({ pattern: "^https?://" }),
-  user: Type.String(),
+  id: Type.String({
+    pattern: "^[a-z0-9][a-z0-9-]*$",
+    description: "A short name for the account, in lowercase letters, digits and dashes.",
+  }),
+  url: Type.String({
+    pattern: "^https?://",
+    title: "CalDAV URL",
+    description: "The address of the CalDAV server, starting with http:// or https://.",
+  }),
+  user: Type.String({
+    description: "The user name to log in with; ${NAME} takes it from an environment variable.",
+  }),
   /** `${NAME}` takes it from the host's environment, so it stays out of nudge.json. */
-  password: Type.String(),
-  calendars: Type.Optional(Type.Array(Type.String())),
+  password: Type.String({
+    description:
+      "The password to log in with; write ${NAME} to take it from an environment variable instead.",
+  }),
+  calendars: Type.Optional(
+    Type.Array(Type.String(), {
+      description: "Use only the calendars with these names; leave empty for all of them.",
+    }),
+  ),
   /** Room ids that may use the account; `*` for every room. */
-  rooms: Type.Array(Type.String(), { minItems: 1 }),
+  rooms: Type.Array(Type.String(), {
+    minItems: 1,
+    description: "Ids of the rooms that may use this account; * for every room.",
+  }),
 });
 
-const Settings = Type.Object({ accounts: Type.Array(AccountSettings, { default: [] }) });
+const Settings = Type.Object({
+  accounts: Type.Array(AccountSettings, {
+    default: [],
+    description: "The CalDAV accounts the assistant can read and add events to.",
+  }),
+});
 
 type AddPayload = {
   readonly account: string;

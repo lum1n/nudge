@@ -4,10 +4,18 @@ import { AMBIGUOUS, CUES, FIRST_NAMES, LAST_NAMES } from "./names.ts";
 const VERSION = "0.1.0";
 
 const Settings = Type.Object({
-  names: Type.Boolean({ default: true }),
-  addresses: Type.Boolean({ default: true }),
-  /** More given names, family names or whole names to find, such as relatives'. */
-  extraNames: Type.Array(Type.String(), { default: [] }),
+  names: Type.Boolean({
+    default: true,
+    description: "Find people's names in messages and keep them from the model.",
+  }),
+  addresses: Type.Boolean({
+    default: true,
+    description: "Find street addresses in messages and keep them from the model.",
+  }),
+  extraNames: Type.Array(Type.String(), {
+    default: [],
+    description: "More given names, family names or whole names to find, such as relatives'.",
+  }),
 });
 
 /** A capitalized word: a letter in upper case, then letters, with hyphenated parts. */
