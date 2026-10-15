@@ -3057,6 +3057,53 @@
         }
       }
     },
+    "DeviceRequest": {
+      "type": "object",
+      "required": ["platform", "token"],
+      "properties": {
+        "platform": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "apns"
+            },
+            {
+              "type": "string",
+              "const": "fcm"
+            }
+          ]
+        },
+        "token": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "environment": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "production"
+            },
+            {
+              "type": "string",
+              "const": "sandbox"
+            }
+          ]
+        }
+      }
+    },
+    "DevicesResponse": {
+      "type": "object",
+      "required": ["apns", "fcm"],
+      "properties": {
+        "apns": {
+          "type": "boolean"
+        },
+        "fcm": {
+          "type": "boolean"
+        }
+      }
+    },
     "ModelViewResponse": {
       "type": "object",
       "required": ["messages"],

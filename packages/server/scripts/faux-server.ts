@@ -1,7 +1,9 @@
 // A Nudge server on a faux model, for testing clients in other languages (`clients/`): one
 // assistant "robin" with players Ann (the admin) and Bo and their shared room "trip", in memory.
 // Runs the built packages, so `pnpm build` first: `node packages/server/scripts/faux-server.ts`.
-// Prints one JSON line, `{ url, assistant, tokens: { ann, bo } }`, and stops when stdin ends.
+// Prints one JSON line, `{ url, assistant, tokens: { ann, bo }, pairing: { bo } }` (a pairing code for
+// Bo, good for 10 minutes), and stops when stdin ends. The rooms have the lists extension, for
+// clients' panels.
 //
 // The model answers "Hello! …" in several pieces first and "Answer <n>." after that. A message
 // containing "please pay" makes it call `pay`, which waits for an approval and answers "Paid 10 kr.";
@@ -22,6 +24,7 @@ import {
   roomOf,
   Type,
 } from "@nudge/core";
+import { listsExtension } from "@nudge/ext-lists";
 import { serveNudge } from "@nudge/server";
 
 const context = BACKGROUND_CONTEXT;
@@ -93,7 +96,7 @@ const nudge = await createNudge(
     models,
     model: { provider: faux.provider.id, modelId: faux.getModel().id },
     settings: { progress: { partialIntervalMs: 20 } },
-    extensions: [payer],
+    extensions: [payer, listsExtension],
   },
   context,
 );
@@ -102,8 +105,9 @@ const bo = (await nudge.players.invite("Bo", context)).token;
 await nudge.rooms.createShared({ id: "trip", name: "Trip", members: ["ann", "bo"] }, context);
 const port = Number(process.env.NUDGE_FAUX_PORT ?? 0);
 const server = await serveNudge({ assistants: new Map([["robin", nudge]]), port });
+const pairing = { bo: (await nudge.players.pairingCode("bo", context)).code };
 process.stdout.write(
-  `${JSON.stringify({ url: server.url, assistant: "robin", tokens: { ann, bo } })}\n`,
+  `${JSON.stringify({ url: server.url, assistant: "robin", tokens: { ann, bo }, pairing })}\n`,
 );
 
 process.stdin.resume();

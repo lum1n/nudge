@@ -12,10 +12,12 @@ An extendable, multiplayer personal assistant that keeps personal data away from
 - `@nudge/client`: the TypeScript client of protocol v1.
 - `clients/rust`: the Rust client of protocol v1 (`nudge-protocol`, `nudge-client`), and its UniFFI bindings for Swift, Kotlin and Python (`nudge-ffi`).
 - `clients/python`: the Python package `nudge-client` (asyncio), built on `nudge-ffi` with maturin.
-- `clients/android`: the Android library (Kotlin, `StateFlow`s) and a Compose sample app.
+- `clients/android`: the Android library (Kotlin, `StateFlow`s).
 - `clients/apple`: the Swift package (`@Observable` models) for iOS and macOS.
 - `@nudge/cli`: the `nudge` command.
 - `@nudge/web`: the web UI (`apps/web`), served by `nudge serve`.
+- `apps/apple`: the Nudge app for iPhone, iPad and Mac (SwiftUI, on `clients/apple`).
+- `apps/android`: the Nudge app for Android (Compose, on `clients/android`).
 - `@nudge/ext-hello`: a sample extension (`extensions/hello`).
 - `@nudge/ext-browser`: lets the assistant use the web (`extensions/browser`).
 - `@nudge/ext-mcp`: gives the assistant the tools of MCP servers (`extensions/mcp`).
@@ -95,6 +97,17 @@ Sign in at `/login` with a token, the link `nudge invite` prints (`/login#token=
 A room page shows the same conversation the CLI and the API see, live, for everyone in it: each message with who sent it, the assistant's answer streaming in with its tool calls, and fired nudges, rendered as markdown. Send a follow-up or steer while it's still answering — it queues the same way a second CLI client's would — or stop it; "Load earlier" fetches older history past what first loaded. A room's Memory, Nudges and approval panels list, add, forget, cancel and decide the same things `/memory`, `/nudges` and `/approve` do in the terminal, and update live whoever made the change. The web UI talks [protocol v1](docs/protocol/v1.md) through `@nudge/client`, like the native apps will. "Open my room" and "New shared room" on the room list open the same rooms `nudge chat me` and `nudge room` do.
 
 Notifications: "Turn on" under Notifications on the room list subscribes the browser to Web Push. Then answers, fired nudges and approvals in that player's rooms arrive as notifications, except for a room that is open in a visible tab. They need HTTPS, or `localhost`, and on an iPhone the site added to the home screen. Pushes are encrypted for the browser, so Google's, Mozilla's or Apple's push service only relays them. By default a notification says only which room has news; `"push": { "preview": "text" }` in `nudge.json` adds the start of the text. `nudge serve` makes the server's push keys on first start (`push-vapid.json` beside the first assistant's database); losing them means browsers must turn notifications on again.
+
+The iOS, macOS and Android apps (`apps/apple`, `apps/android`) get the same notifications through APNs and FCM. The server sends them directly, so it needs credentials for them in `nudge.json` (paths relative to it):
+
+```json
+"push": {
+  "apns": { "keyFile": "apns-key.p8", "keyId": "ABC123DEFG", "teamId": "XYZ987TEAM", "bundleId": "app.nudge.dev" },
+  "fcm": { "serviceAccountFile": "firebase-service-account.json" }
+}
+```
+
+The APNs key comes from the Apple Developer account (Keys, with Apple Push Notifications service); the FCM key is a service account of the Firebase project the Android app is built with (Project settings → Service accounts → Generate new private key). Without them the apps work, without notifications.
 
 ## Spend
 
@@ -371,5 +384,7 @@ The Kotlin and Swift bindings run their tests on this machine too, against the h
 cd clients/android && ./gradlew :nudge:testDebugUnitTest -Pnudge.native=false
 cd clients/apple && scripts/build.sh && swift test
 ```
+
+The apps: `apps/android` builds with Gradle here (`./gradlew :app:installDebug`), and `apps/apple` on a Mac with Xcode; see their READMEs. `node packages/server/scripts/faux-server.ts` (after `pnpm build`) gives them a server on a fake model, with a pairing code.
 
 For the web UI with hot reload, run `nudge serve` and then `pnpm -C apps/web dev`: Vite proxies `/v1` (HTTP and WebSocket) to `127.0.0.1:8787`, or to `$NUDGE_SERVER`.

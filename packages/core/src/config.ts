@@ -74,6 +74,24 @@ const PushSchema = Type.Object({
   preview: Type.Optional(Type.Union([Type.Literal("room"), Type.Literal("text")])),
   /** A `mailto:` or `https:` address push services can reach the server's owner at. */
   subject: Type.Optional(Type.String({ pattern: "^(mailto|https):" })),
+  /** Pushes to the iOS and macOS apps, with an APNs key from the Apple Developer account. */
+  apns: Type.Optional(
+    Type.Object({
+      /** The `.p8` key file, relative to the config file. */
+      keyFile: Type.String({ minLength: 1 }),
+      keyId: Type.String({ minLength: 1 }),
+      teamId: Type.String({ minLength: 1 }),
+      /** The app's bundle id; default `app.nudge.dev`. */
+      bundleId: Type.Optional(Type.String({ minLength: 1 })),
+    }),
+  ),
+  /** Pushes to the Android app, with a Firebase project's service account. */
+  fcm: Type.Optional(
+    Type.Object({
+      /** The service account's JSON key file, relative to the config file. */
+      serviceAccountFile: Type.String({ minLength: 1 }),
+    }),
+  ),
 });
 
 /** Encrypted backups `nudge serve` makes on its own; `nudge backup` makes one at any time. */

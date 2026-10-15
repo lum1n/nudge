@@ -7,7 +7,7 @@ import { Connection, type ConnectionOptions } from "./connection.ts";
 import { ExtensionSocket } from "./extension-socket.ts";
 import { Hubs } from "./hub.ts";
 import { type ExtensionSettings, restRoutes } from "./rest.ts";
-import { Pushes, type PushesOptions } from "../push/pushes.ts";
+import { nativeSenders, Pushes, type PushesOptions } from "../push/pushes.ts";
 
 export type V1Options = {
   readonly assistants: ReadonlyMap<string, Nudge>;
@@ -100,9 +100,16 @@ export function v1Routes(options: V1Options): Hono {
 
   // Made now, not on first use: pushes go out while nobody is connected.
   const pushes = new Map<Nudge, Pushes>();
-  if (options.push !== undefined)
+  if (options.push !== undefined) {
+    const native = nativeSenders(options.push);
     for (const [name, nudge] of options.assistants)
-      pushes.set(nudge, new Pushes(nudge, name, options.push, options.report));
+      pushes.set(
+        nudge,
+        new Pushes(nudge, name, options.push, options.report, native, (player, room) =>
+          hubsOf(nudge).isOpen(player, room),
+        ),
+      );
+  }
 
   app.route(
     "/",

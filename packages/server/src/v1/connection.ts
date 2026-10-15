@@ -149,7 +149,14 @@ export class Connection {
       const room = await this.options.hubs.room(target.slice("room:".length));
       if (room !== undefined && !room.hub.allows(player.id)) room.release();
       else if (room !== undefined) {
-        lease = room;
+        const closed = this.options.hubs.opened(player.id, target.slice("room:".length));
+        lease = {
+          hub: room.hub,
+          release: () => {
+            closed();
+            room.release();
+          },
+        };
         allowed = () => room.hub.allows(player.id);
       }
     }

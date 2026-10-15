@@ -430,6 +430,21 @@ export const PushSubscribeRequest = Type.Object({
 });
 export type PushSubscribeRequest = Static<typeof PushSubscribeRequest>;
 
+/**
+ * A phone or a Mac that takes native pushes: an APNs device token (hex) or an FCM registration
+ * token. `sandbox` is for apps built for development, which APNs reaches through its sandbox.
+ */
+export const DeviceRequest = Type.Object({
+  platform: Type.Union([Type.Literal("apns"), Type.Literal("fcm")]),
+  token: Type.String({ minLength: 1, maxLength: 4096 }),
+  environment: Type.Optional(Type.Union([Type.Literal("production"), Type.Literal("sandbox")])),
+});
+export type DeviceRequest = Static<typeof DeviceRequest>;
+
+/** Which native pushes this server can send; a platform it can't is `false`. */
+export const DevicesResponse = Type.Object({ apns: Type.Boolean(), fcm: Type.Boolean() });
+export type DevicesResponse = Static<typeof DevicesResponse>;
+
 export const DecideRequest = Type.Object({ approve: Type.Boolean() });
 export type DecideRequest = Static<typeof DecideRequest>;
 
@@ -618,6 +633,8 @@ export const SCHEMAS = {
   ShareMemoryRequest,
   PushKeyResponse,
   PushSubscribeRequest,
+  DeviceRequest,
+  DevicesResponse,
   ModelViewResponse,
   MonthUsage,
   UsageResponse,

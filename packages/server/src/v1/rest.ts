@@ -21,6 +21,8 @@ import {
   CreateRoomRequest,
   DecideRequest,
   decodeCursor,
+  DeviceRequest,
+  type DevicesResponse,
   type ExtensionSetup,
   type ExtensionSetupsResponse,
   encodeCursor,
@@ -185,6 +187,12 @@ export function restRoutes(options: RestOptions): Hono {
     } satisfies MeResponse);
   });
 
+  // Signing out: the caller's own token stops working, and its sockets close with 4401.
+  api.delete("/me/token", async (c) => {
+    await c.var.nudge.players.revoke(c.var.credential.clientId, context);
+    return c.body(null, 204);
+  });
+
   api.get("/me/memory", async (c) => {
     const memory = await c.var.nudge.memory.ofPlayer(c.var.credential.player.id, context);
     return c.json({
@@ -278,6 +286,26 @@ export function restRoutes(options: RestOptions): Hono {
     if (endpoint === undefined) throw new HttpError(400, "Which endpoint? ?endpoint=…");
     if (!(await pushes(c).unsubscribe(c.var.credential.player.id, endpoint)))
       throw new HttpError(404, "No such subscription");
+    return c.body(null, 204);
+  });
+
+  api.get("/devices", (c) => c.json(pushes(c).platforms satisfies DevicesResponse));
+
+  api.post("/devices", async (c) => {
+    const body = await readBody(c, DeviceRequest);
+    const { player, clientId } = c.var.credential;
+    try {
+      await pushes(c).register(player.id, clientId, body);
+    } catch (error) {
+      if (error instanceof BadSubscription) throw new HttpError(400, error.message);
+      throw error;
+    }
+    return c.body(null, 204);
+  });
+
+  api.delete("/devices/:token", async (c) => {
+    if (!(await pushes(c).unregister(c.var.credential.player.id, c.req.param("token"))))
+      throw new HttpError(404, "No such device");
     return c.body(null, 204);
   });
 

@@ -476,6 +476,12 @@ describe("v1 HTTP", () => {
     ).toBe(404);
   });
 
+  it("signs a client out by revoking its own token", async () => {
+    expect((await call("DELETE", "/me/token", { token: tokens.Bo })).status).toBe(204);
+    expect((await call("GET", "/me", { token: tokens.Bo })).status).toBe(401);
+    expect((await call("GET", "/me", { token: tokens.Ann })).status).toBe(200);
+  });
+
   it("pages the history before the room view back to the start", async () => {
     // 60 messages and answers: more items than the room view holds.
     for (let n = 0; n < 60; n++)

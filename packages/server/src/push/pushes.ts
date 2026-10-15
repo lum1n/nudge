@@ -1,6 +1,8 @@
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { defineDocFamily } from "@earendil-works/pi-durable";
 import { DirectoryDoc, type Nudge, type RoomEvent } from "@nudge/core";
+import { Apns, type ApnsEnvironment, type ApnsOptions } from "./apns.ts";
+import { Fcm, type FcmOptions } from "./fcm.ts";
 import { type PushOptions, type PushTarget, sendPush } from "./web-push.ts";
 
 const context = BACKGROUND_CONTEXT;
@@ -15,14 +17,27 @@ type Subscription = {
   createdAt: number;
 };
 
-/** Each player's browsers that take pushes, keyed by player id. */
-export const PushDoc = defineDocFamily<{ subscriptions: Subscription[] }, null>({
-  kind: "nudge.push",
-  version: 1,
-  scope: "session",
-  family: true,
-  initial: () => ({ subscriptions: [] }),
-});
+// Stored in a document, so plain JSON.
+type Device = {
+  platform: "apns" | "fcm";
+  token: string;
+  /** APNs only: apps built for development take pushes through Apple's sandbox. */
+  environment?: ApnsEnvironment;
+  /** The client whose token added it; it stops getting pushes once that token is revoked. */
+  clientId: string;
+  createdAt: number;
+};
+
+/** Each player's browsers and devices that take pushes, keyed by player id. */
+export const PushDoc = defineDocFamily<{ subscriptions: Subscription[]; devices?: Device[] }, null>(
+  {
+    kind: "nudge.push",
+    version: 1,
+    scope: "session",
+    family: true,
+    initial: () => ({ subscriptions: [] }),
+  },
+);
 
 /** Subscriptions kept per player; a new one beyond this pushes out the oldest. */
 const MAX_PER_PLAYER = 10;
@@ -44,6 +59,27 @@ export type PushMessage = {
 export type PushesOptions = PushOptions & {
   /** With a preview, a notification has the start of the answer or approval; default only which room has news. */
   readonly preview?: boolean;
+  /** Native pushes to the iOS and macOS apps; none without. */
+  readonly apns?: ApnsOptions;
+  /** Native pushes to the Android app; none without. */
+  readonly fcm?: FcmOptions;
+};
+
+/** The native push services a server sends through, shared by its assistants. */
+export type NativeSenders = { readonly apns?: Apns; readonly fcm?: Fcm };
+
+export function nativeSenders(options: PushesOptions): NativeSenders {
+  return {
+    apns: options.apns === undefined ? undefined : new Apns(options.apns),
+    fcm: options.fcm === undefined ? undefined : new Fcm(options.fcm),
+  };
+}
+
+/** What a device registers with. */
+export type DeviceTarget = {
+  readonly platform: "apns" | "fcm";
+  readonly token: string;
+  readonly environment?: ApnsEnvironment;
 };
 
 export class BadSubscription extends Error {
@@ -51,9 +87,10 @@ export class BadSubscription extends Error {
 }
 
 /**
- * Web Push for one assistant: players' browsers subscribe, and every room event reaches the
- * browsers of the room's members, encrypted for each. Whether one is shown is the service
- * worker's call: not when the room is open in a visible tab.
+ * Pushes for one assistant. Players' browsers subscribe, and every room event reaches the
+ * browsers of the room's members, encrypted for each; whether one is shown is the service
+ * worker's call: not when the room is open in a visible tab. Their phones and Macs register a
+ * device, and get the same through APNs or FCM unless the player has the room open on a socket.
  */
 export class Pushes {
   private readonly stop: () => void;
@@ -64,6 +101,9 @@ export class Pushes {
     private readonly name: string,
     private readonly options: PushesOptions,
     private readonly report: (error: unknown) => void,
+    private readonly native: NativeSenders = {},
+    /** Whether the player has the room open on a socket right now. */
+    private readonly watching: (playerId: string, roomId: string) => boolean = () => false,
   ) {
     this.stop = nudge.events.subscribe((event) => {
       this.notify(event).catch(report);
@@ -100,6 +140,41 @@ export class Pushes {
     }, context);
   }
 
+  /** Which native pushes this server sends. */
+  get platforms(): { apns: boolean; fcm: boolean } {
+    return { apns: this.native.apns !== undefined, fcm: this.native.fcm !== undefined };
+  }
+
+  async register(playerId: string, clientId: string, device: DeviceTarget): Promise<void> {
+    if (this.native[device.platform] === undefined)
+      throw new BadSubscription(`This server sends no ${device.platform.toUpperCase()} pushes`);
+    if (device.platform === "apns" && !/^[0-9a-f]{16,200}$/i.test(device.token))
+      throw new BadSubscription("An APNs device token is hex");
+    await this.nudge.harness.commit(async (tx) => {
+      const doc = await tx.doc(PushDoc, playerId, null);
+      // A device token moves with the device: whoever registers it last gets its pushes.
+      const kept = (doc.devices ?? []).filter((d) => d.token !== device.token);
+      kept.push({
+        platform: device.platform,
+        token: device.token,
+        ...(device.platform === "apns" ? { environment: device.environment ?? "production" } : {}),
+        clientId,
+        createdAt: Date.now(),
+      });
+      doc.devices = kept.slice(-MAX_PER_PLAYER);
+    }, context);
+  }
+
+  /** False when the player had no such device. */
+  async unregister(playerId: string, token: string): Promise<boolean> {
+    return this.nudge.harness.commit(async (tx) => {
+      const doc = await tx.doc(PushDoc, playerId, null);
+      const before = doc.devices?.length ?? 0;
+      doc.devices = (doc.devices ?? []).filter((d) => d.token !== token);
+      return doc.devices.length < before;
+    }, context);
+  }
+
   close(): void {
     this.stop();
   }
@@ -130,8 +205,47 @@ export class Pushes {
           }),
         );
         for (const endpoint of gone) await this.unsubscribe(player.id, endpoint);
+        if (this.watching(player.id, event.roomId)) return;
+        const lost: string[] = [];
+        await Promise.all(
+          (doc?.devices ?? []).map(async (device) => {
+            if (!clients.has(device.clientId)) return lost.push(device.token);
+            try {
+              if ((await this.sendNative(device, message)) === "gone") lost.push(device.token);
+            } catch (error) {
+              this.report(error);
+            }
+          }),
+        );
+        for (const token of lost) await this.unregister(player.id, token);
       }),
     );
+  }
+
+  private sendNative(device: Device, message: PushMessage): Promise<"sent" | "gone"> {
+    const data = {
+      assistant: this.name,
+      roomId: message.roomId,
+      kind: message.kind,
+      url: message.url,
+    };
+    if (device.platform === "apns") {
+      const apns = this.native.apns;
+      if (apns === undefined) return Promise.resolve("sent");
+      return apns.send(device.token, device.environment ?? "production", {
+        title: message.title,
+        body: message.body,
+        collapseId: message.tag,
+        threadId: message.tag,
+        data,
+      });
+    }
+    const fcm = this.native.fcm;
+    if (fcm === undefined) return Promise.resolve("sent");
+    return fcm.send(device.token, {
+      collapseKey: message.tag,
+      data: { ...data, title: message.title, body: message.body, tag: message.tag },
+    });
   }
 
   private async message(event: RoomEvent): Promise<PushMessage | undefined> {

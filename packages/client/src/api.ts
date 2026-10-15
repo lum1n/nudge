@@ -98,6 +98,12 @@ export class Api {
     return this.request("GET", "/me");
   }
 
+  /** Revokes this client's own token, and forgets it. */
+  async signOut(): Promise<void> {
+    await this.request("DELETE", "/me/token");
+    this.tokens.set(undefined);
+  }
+
   createRoom(body: CreateRoomRequest): Promise<Room> {
     return this.request("POST", "/rooms", body);
   }

@@ -9,13 +9,16 @@ import {
   loadConfig,
   loadExtensions,
   type Nudge,
+  type NudgeConfig,
   openAssistant,
   saveExtensionSetups,
 } from "@nudge/core";
 import {
   type ExtensionSettings,
   generateVapidKeys,
+  type PushesOptions,
   serveNudge,
+  type ServiceAccount,
   type VapidKeys,
 } from "@nudge/server";
 import { UsageError } from "../errors.ts";
@@ -62,6 +65,7 @@ export async function serve(options: ServeOptions): Promise<void> {
               vapid: await vapidKeys(join(dirname(database), "push-vapid.json")),
               subject: pushSubject(config.push?.subject, options.publicUrl),
               preview: config.push?.preview === "text",
+              ...(await nativePush(options.config, config.push)),
             },
           }),
     });
@@ -123,6 +127,44 @@ function configExtensions(
       );
       return save;
     },
+  };
+}
+
+/** APNs and FCM credentials named in the config, read from their files. */
+async function nativePush(
+  configPath: string,
+  push: NudgeConfig["push"],
+): Promise<Pick<PushesOptions, "apns" | "fcm">> {
+  const read = async (file: string, what: string) => {
+    try {
+      return await readFile(resolve(dirname(configPath), file), "utf8");
+    } catch (error) {
+      throw new ConfigError(`push.${what}: can't read ${file}: ${(error as Error).message}`);
+    }
+  };
+  const apns = push?.apns;
+  const fcm = push?.fcm;
+  let serviceAccount: ServiceAccount | undefined;
+  if (fcm !== undefined) {
+    try {
+      serviceAccount = JSON.parse(await read(fcm.serviceAccountFile, "fcm.serviceAccountFile"));
+    } catch (error) {
+      if (error instanceof ConfigError) throw error;
+      throw new ConfigError(`push.fcm.serviceAccountFile is not JSON`);
+    }
+  }
+  return {
+    ...(apns === undefined
+      ? {}
+      : {
+          apns: {
+            key: await read(apns.keyFile, "apns.keyFile"),
+            keyId: apns.keyId,
+            teamId: apns.teamId,
+            bundleId: apns.bundleId ?? "app.nudge.dev",
+          },
+        }),
+    ...(serviceAccount === undefined ? {} : { fcm: { serviceAccount } }),
   };
 }
 
