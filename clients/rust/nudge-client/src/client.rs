@@ -11,6 +11,7 @@ use crate::cache::{Cache, CacheError, Outgoing};
 use crate::connection::{
     Backoff, Connection, ConnectionOptions, ConnectionStatus, OnError, Watch, connect_url,
 };
+use crate::panel::{PanelListener, PanelSocket, panel_url};
 use crate::stores::{HomeStore, PageLoader, PendingMessage, PendingState, RoomStore};
 
 pub struct ClientConfig {
@@ -82,6 +83,9 @@ pub struct NudgeClient {
 
 struct Inner {
     api: Api,
+    server: String,
+    assistant: String,
+    backoff: Backoff,
     connection: Connection,
     cache: Arc<Cache>,
     held: Mutex<HashMap<Target, Held>>,
@@ -154,6 +158,9 @@ impl NudgeClient {
         });
         let inner = Arc::new(Inner {
             api,
+            server: config.server,
+            assistant: config.assistant,
+            backoff: config.backoff,
             connection,
             cache,
             held: Mutex::new(HashMap::new()),
@@ -182,6 +189,23 @@ impl NudgeClient {
     /// Closes the socket; leases stay, and are subscribed again by `open()`.
     pub fn close(&self) {
         self.inner.connection.close();
+    }
+
+    /// A room's socket to an extension's panel, such as `lists` or `documents`.
+    pub fn panel(
+        &self,
+        room: &str,
+        extension: &str,
+        listener: Arc<dyn PanelListener>,
+    ) -> Result<PanelSocket, ApiError> {
+        let inner = &self.inner;
+        let url = panel_url(&inner.server, &inner.assistant, room, extension)?;
+        Ok(PanelSocket::open(
+            url,
+            inner.api.tokens().clone(),
+            listener,
+            inner.backoff,
+        ))
     }
 
     /// The player's home view.

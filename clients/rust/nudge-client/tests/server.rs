@@ -459,3 +459,83 @@ async fn keeps_a_players_own_memory_and_the_rooms_extensions() {
         .unwrap_err();
     assert_eq!(unknown.status(), Some(404));
 }
+
+/// Hears a panel socket, for the test.
+struct Panel(tokio::sync::mpsc::UnboundedSender<Result<Value, PanelStatus>>);
+
+impl PanelListener for Panel {
+    fn status(&self, status: PanelStatus) {
+        let _ = self.0.send(Err(status));
+    }
+
+    fn frame(&self, frame: Value) {
+        let _ = self.0.send(Ok(frame));
+    }
+}
+
+#[tokio::test]
+async fn reads_usage_and_the_model_view_and_edits_a_list_on_its_panel() {
+    let Some(server) = faux_server().await else {
+        return;
+    };
+    let client = client(&server.url, Some(&server.ann));
+    let api = client.api();
+    let usage = api.usage().await.unwrap();
+    assert_eq!(usage.month.len(), 7);
+    let messages = api.model_view("trip").await.unwrap().messages;
+    assert!(messages.iter().all(|m| m.role != ModelRole::User));
+    // The faux server sends no pushes.
+    assert_eq!(api.push_platforms().await.unwrap_err().status(), Some(404));
+
+    let (sender, mut events) = tokio::sync::mpsc::unbounded_channel();
+    let panel = client
+        .panel("trip", "lists", Arc::new(Panel(sender)))
+        .unwrap();
+    let mut next = async || {
+        timeout(Duration::from_secs(10), events.recv())
+            .await
+            .expect("a panel event in time")
+            .unwrap()
+    };
+    assert_eq!(next().await, Err(PanelStatus::Connecting));
+    assert_eq!(next().await, Err(PanelStatus::Open));
+    assert_eq!(
+        next().await,
+        Ok(serde_json::json!({ "type": "lists", "lists": [] }))
+    );
+    panel.send(
+        &serde_json::json!({ "type": "add", "list": "Shopping", "text": "Milk", "ref": "r1" }),
+    );
+    assert_eq!(
+        next().await,
+        Ok(serde_json::json!({ "type": "ok", "ref": "r1" }))
+    );
+    let lists = next().await.unwrap();
+    assert_eq!(lists["lists"][0]["name"], "shopping");
+    assert_eq!(lists["lists"][0]["items"][0]["text"], "Milk");
+    assert_eq!(lists["lists"][0]["items"][0]["by"], "Ann");
+    panel.close();
+    assert_eq!(
+        next().await,
+        Err(PanelStatus::Closed {
+            code: 1000,
+            reason: String::new()
+        })
+    );
+
+    // Not a member of a room: 4404, and no more tries.
+    let (sender, mut events) = tokio::sync::mpsc::unbounded_channel();
+    let _panel = client
+        .panel("nowhere", "lists", Arc::new(Panel(sender)))
+        .unwrap();
+    let closed = timeout(Duration::from_secs(10), async {
+        loop {
+            if let Some(Err(PanelStatus::Closed { code, .. })) = events.recv().await {
+                return code;
+            }
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(closed, 4404);
+}

@@ -6,6 +6,7 @@ mod api;
 mod cache;
 mod client;
 mod connection;
+mod panel;
 mod stores;
 
 pub use api::{Api, ApiError, MemoryTokens, PageRequest, TokenStore, list_assistants};
@@ -18,6 +19,7 @@ pub use connection::{
     Subscriber, TargetFrame, Watch, connect_url,
 };
 pub use nudge_protocol as protocol;
+pub use panel::{PanelListener, PanelSocket, PanelStatus, panel_url};
 pub use stores::{
     HomeStore, PageLoader, PendingMessage, PendingState, RoomState, RoomStore, SyncStatus,
     ViewState, slide,

@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 // The Swift client of Nudge: the bindings of `nudge-ffi` (`NudgeFFI`, over the C module
 // `NudgeFFIC`) and `Nudge`, observable models for SwiftUI. Run `scripts/build.sh` first: it
 // writes the bindings and, on macOS with `--xcframework`, builds `NudgeFFIC.xcframework` for
@@ -17,7 +17,7 @@ let linkLibrary: [LinkerSetting] = [.linkedFramework("SystemConfiguration")]
 
 let package = Package(
     name: "Nudge",
-    platforms: [.iOS(.v17), .macOS(.v14)],
+    platforms: [.iOS(.v26), .macOS(.v26)],
     products: [
         .library(name: "Nudge", targets: ["Nudge"]),
     ],

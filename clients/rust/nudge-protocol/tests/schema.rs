@@ -492,6 +492,72 @@ fn http_bodies_match_the_schema() {
             }],
         },
     );
+    for (platform, environment) in [
+        (DevicePlatform::Apns, Some(PushEnvironment::Sandbox)),
+        (DevicePlatform::Apns, Some(PushEnvironment::Production)),
+    ] {
+        check(
+            "DeviceRequest",
+            &DeviceRequest {
+                platform,
+                token: "ab12".into(),
+                environment,
+            },
+        );
+    }
+    check(
+        "DeviceRequest",
+        &DeviceRequest {
+            platform: DevicePlatform::Fcm,
+            token: "x".into(),
+            environment: Some(PushEnvironment::Production),
+        },
+    );
+    check(
+        "DevicesResponse",
+        &DevicesResponse {
+            apns: true,
+            fcm: false,
+        },
+    );
+    let roles = [
+        ModelRole::System,
+        ModelRole::User,
+        ModelRole::Assistant,
+        ModelRole::ToolResult,
+    ];
+    check(
+        "ModelViewResponse",
+        &ModelViewResponse {
+            messages: roles
+                .into_iter()
+                .map(|role| ModelMessage {
+                    role,
+                    text: "⟦NAME1⟧".into(),
+                })
+                .collect(),
+        },
+    );
+    let month = MonthUsage {
+        month: "2026-10".into(),
+        total: 1.5,
+        players: [("ann".to_owned(), 1.0)].into(),
+        rooms: [("trip".to_owned(), 1.5)].into(),
+    };
+    check("MonthUsage", &month);
+    check(
+        "UsageResponse",
+        &UsageResponse {
+            month: "2026-10".into(),
+            total: 1.5,
+            mine: 1.0,
+            budget: UsageBudget {
+                monthly_usd: Some(20.0),
+                per_player_usd: Some(5.0),
+            },
+            months: Some(vec![month]),
+        },
+    );
 }
 
 #[test]

@@ -67,6 +67,43 @@ final class ClientTests: XCTestCase {
         }
     }
 
+    func testListsPanelAndUsage() async throws {
+        let ann = try client(MemoryTokens(server.ann))
+        let usage = try await ann.usage()
+        XCTAssertEqual(usage.month.count, 7)
+        let lists = try ann.observeLists("trip")
+        _ = try await within { try await lists.first { $0.lists == [] } }
+        lists.add("Milk", to: "Shopping")
+        let shown = try await within { try await lists.first { $0.lists?.first?.items.count == 1 } }
+        let item = try XCTUnwrap(shown.lists?.first?.items.first)
+        XCTAssertEqual(shown.lists?.first?.name, "shopping")
+        XCTAssertEqual(item.text, "Milk")
+        lists.toggle(item, in: "shopping")
+        _ = try await within { try await lists.first { $0.lists?.first?.items.first?.done == true } }
+        lists.remove(item, from: "nope")
+        _ = try await within { try await lists.first { $0.error != nil } }
+        lists.close()
+
+        let nowhere = try ann.observeLists("nowhere")
+        let closed = try await within {
+            try await nowhere.first { if case .closed = $0.status { true } else { false } }
+        }
+        XCTAssertEqual(closed.status, .closed(code: 4404, reason: #"No room "nowhere" with extension "lists""#))
+    }
+
+    func testPairingLinks() {
+        let link = PairingLink(URL(string: "nudge://pair?server=https%3A%2F%2Fnudge.example%2Fx&assistant=robin&code=7K3Q-M9XD")!)
+        XCTAssertEqual(link, PairingLink(server: "https://nudge.example/x", assistant: "robin", code: "7K3Q-M9XD"))
+        for bad in [
+            "nudge://pair?server=ftp%3A%2F%2Fx&assistant=robin&code=1",
+            "nudge://pair?server=https%3A%2F%2Fx&code=1",
+            "nudge://other?server=https%3A%2F%2Fx&assistant=robin&code=1",
+            "https://pair?server=https%3A%2F%2Fx&assistant=robin&code=1",
+        ] {
+            XCTAssertNil(PairingLink(URL(string: bad)!), bad)
+        }
+    }
+
     func testApplyingChanges() {
         func marker(_ id: String) -> TimelineItem { .marker(id: id, kind: .reset) }
         let timeline = [TimelineItem]().applying([

@@ -14,6 +14,7 @@ import nudge.ffi.ClientConfig
 import nudge.ffi.ConnectionStatus
 import nudge.ffi.NudgeClient
 import nudge.ffi.NudgeException
+import nudge.ffi.PanelStatus
 import nudge.ffi.Part
 import nudge.ffi.PendingState
 import nudge.ffi.Sent
@@ -219,5 +220,47 @@ class ClientTest {
         admin.revoke(open.clientId)
         val closed = connection.awaitState { it is ConnectionStatus.Closed && it.code != 1000.toUShort() }
         assertEquals(4401.toUShort(), (closed as ConnectionStatus.Closed).code)
+    }
+
+    @Test
+    fun listsPanelAndUsage() = runBlocking {
+        val ann = client(MemoryTokens(this@ClientTest.ann))
+        assertEquals(7, ann.usage().month.length)
+        val lists = ann.observeLists("trip")
+        suspend fun until(predicate: (ListsState) -> Boolean) =
+            withTimeout(15_000) { lists.state.first(predicate) }
+        until { it.lists == emptyList<NudgeList>() }
+        lists.add("Milk", "Shopping")
+        val shown = until { it.lists?.firstOrNull()?.items?.size == 1 }
+        val item = shown.lists!!.first().items.first()
+        assertEquals("shopping", shown.lists!!.first().name)
+        assertEquals("Milk", item.text)
+        lists.toggle(item, "shopping")
+        until { it.lists?.firstOrNull()?.items?.firstOrNull()?.done == true }
+        lists.remove(item, "nope")
+        until { it.error != null }
+        lists.close()
+
+        val nowhere = ann.observeLists("nowhere")
+        val closed = withTimeout(15_000) { nowhere.state.first { it.status is PanelStatus.Closed } }
+        assertEquals(4404.toUShort(), (closed.status as PanelStatus.Closed).code)
+        nowhere.close()
+    }
+
+    @Test
+    fun pairingLinks() {
+        assertEquals(
+            PairingLink("https://nudge.example/x", "robin", "7K3Q-M9XD"),
+            PairingLink.parse("nudge://pair?server=https%3A%2F%2Fnudge.example%2Fx&assistant=robin&code=7K3Q-M9XD"),
+        )
+        for (bad in listOf(
+            "nudge://pair?server=ftp%3A%2F%2Fx&assistant=robin&code=1",
+            "nudge://pair?server=https%3A%2F%2Fx&code=1",
+            "nudge://other?server=https%3A%2F%2Fx&assistant=robin&code=1",
+            "https://pair?server=https%3A%2F%2Fx&assistant=robin&code=1",
+            "not a link",
+        )) {
+            assertEquals(bad, null, PairingLink.parse(bad))
+        }
     }
 }

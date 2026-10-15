@@ -1,9 +1,9 @@
 # Nudge for Apple platforms
 
-The Swift client of [protocol v1](../../docs/protocol/v1.md): the Rust client (`../rust`) through its UniFFI bindings, as a Swift package for iOS 17 and macOS 14.
+The Swift client of [protocol v1](../../docs/protocol/v1.md): the Rust client (`../rust`) through its UniFFI bindings, as a Swift package for iOS 26 and macOS 26.
 
 - `NudgeFFI` (re-exported by `Nudge`): the generated bindings. `NudgeClient(config:tokens:)` has the commands (`pair`, `me`, `send`, `abort`, `remember`, `decide`, …, and the admin ones, as async functions), `connect()`/`disconnect()` for the socket, and listeners for the views. Refusals throw `NudgeError.Status(status:detail:)`.
-- `Nudge`: `observeConnectionState()`, `observeHomeState()` and `observeRoomState(_:)` give `@Observable` objects on the main actor with the latest `value`, for SwiftUI; a `RoomState` has the whole timeline, rebuilt from the bindings' changes. `MemoryTokens` and `KeychainTokens` keep the token.
+- `Nudge`: `observeConnectionState()`, `observeHomeState()` and `observeRoomState(_:)` give `@Observable` objects on the main actor with the latest `value`, for SwiftUI; a `RoomState` has the whole timeline, rebuilt from the bindings' changes. `observeLists(_:)` follows a room's lists over the lists extension's panel and edits them. `MemoryTokens` and `KeychainTokens` keep the token; `PairingLink` reads a `nudge://pair` link. The Nudge app in [`apps/apple`](../../apps/apple) is built on this package.
 
 ```swift
 let client = try NudgeClient(

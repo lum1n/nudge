@@ -124,6 +124,14 @@ impl Api {
         self.request(Method::GET, &["me"], &[], NO_BODY).await
     }
 
+    /// Revokes this client's own token, and forgets it.
+    pub async fn sign_out(&self) -> Result<(), ApiError> {
+        self.request_empty(Method::DELETE, &["me", "token"], &[], NO_BODY)
+            .await?;
+        self.tokens.set(None);
+        Ok(())
+    }
+
     pub async fn create_room(&self, body: &CreateRoomRequest) -> Result<Room, ApiError> {
         self.request(Method::POST, &["rooms"], &[], Some(body))
             .await
@@ -268,6 +276,34 @@ impl Api {
             .request(Method::POST, &["protect"], &[], Some(&body))
             .await?;
         Ok(response.placeholder)
+    }
+
+    /// What the model saw in the room, as it was sent: placeholders, not the values.
+    pub async fn model_view(&self, room: &str) -> Result<ModelViewResponse, ApiError> {
+        self.request(Method::GET, &["rooms", room, "model-view"], &[], NO_BODY)
+            .await
+    }
+
+    /// This month's model spend; every month, room and player for admins.
+    pub async fn usage(&self) -> Result<UsageResponse, ApiError> {
+        self.request(Method::GET, &["usage"], &[], NO_BODY).await
+    }
+
+    /// Which native pushes the server sends; 404 when it sends none.
+    pub async fn push_platforms(&self) -> Result<DevicesResponse, ApiError> {
+        self.request(Method::GET, &["devices"], &[], NO_BODY).await
+    }
+
+    /// Has the server push to this device when one of the player's rooms has news and they don't
+    /// have it open. Registering again with the same token replaces the old one.
+    pub async fn register_device(&self, device: &DeviceRequest) -> Result<(), ApiError> {
+        self.request_empty(Method::POST, &["devices"], &[], Some(device))
+            .await
+    }
+
+    pub async fn unregister_device(&self, token: &str) -> Result<(), ApiError> {
+        self.request_empty(Method::DELETE, &["devices", token], &[], NO_BODY)
+            .await
     }
 
     // Admin routes, for players with the admin flag.

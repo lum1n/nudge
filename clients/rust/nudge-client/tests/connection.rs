@@ -331,3 +331,80 @@ async fn closing_drops_the_socket_and_stays_closed() {
     connection.open();
     server.accept().await;
 }
+
+/// Hears a panel socket's statuses and frames.
+struct PanelEvents(mpsc::UnboundedSender<Result<Value, PanelStatus>>);
+
+impl PanelListener for PanelEvents {
+    fn status(&self, status: PanelStatus) {
+        let _ = self.0.send(Err(status));
+    }
+
+    fn frame(&self, frame: Value) {
+        let _ = self.0.send(Ok(frame));
+    }
+}
+
+async fn next_event(
+    events: &mut mpsc::UnboundedReceiver<Result<Value, PanelStatus>>,
+) -> Result<Value, PanelStatus> {
+    timeout(Duration::from_secs(5), events.recv())
+        .await
+        .expect("an event in time")
+        .unwrap()
+}
+
+#[tokio::test]
+async fn panel_socket_says_hello_relays_frames_reconnects_and_gives_up() {
+    let mut server = FakeServer::start().await;
+    let url = server
+        .url
+        .replace("/connect", "/rooms/trip/ext/lists")
+        .parse()
+        .unwrap();
+    assert_eq!(
+        panel_url("https://nudge.example/x/", "robin", "a b", "lists")
+            .unwrap()
+            .as_str(),
+        "wss://nudge.example/x/v1/a/robin/rooms/a%20b/ext/lists"
+    );
+    let (sender, mut events) = mpsc::unbounded_channel();
+    let panel = PanelSocket::open(
+        url,
+        Arc::new(MemoryTokens::new(Some("t1".into()))),
+        Arc::new(PanelEvents(sender)),
+        Backoff {
+            start: Duration::from_millis(20),
+            max: Duration::from_millis(40),
+        },
+    );
+    assert_eq!(next_event(&mut events).await, Err(PanelStatus::Connecting));
+    let mut socket = server.accept().await;
+    assert_eq!(
+        read(&mut socket).await,
+        json!({ "type": "hello", "token": "t1" })
+    );
+    write(&mut socket, json!({ "type": "ready" })).await;
+    assert_eq!(next_event(&mut events).await, Err(PanelStatus::Open));
+    let lists = json!({ "type": "lists", "lists": [] });
+    write(&mut socket, lists.clone()).await;
+    assert_eq!(next_event(&mut events).await, Ok(lists));
+    panel.send(&json!({ "type": "add", "list": "Shopping", "text": "Milk" }));
+    assert_eq!(read(&mut socket).await["text"], "Milk");
+
+    // Dropped: back with a new hello.
+    close(&mut socket, 1011).await;
+    assert_eq!(next_event(&mut events).await, Err(PanelStatus::Connecting));
+    let mut socket = server.accept().await;
+    assert_eq!(read(&mut socket).await["type"], "hello");
+    // A bad token: no more tries.
+    close(&mut socket, 4401).await;
+    assert_eq!(
+        next_event(&mut events).await,
+        Err(PanelStatus::Closed {
+            code: 4401,
+            reason: String::new()
+        })
+    );
+    server.no_socket_for(Duration::from_millis(200)).await;
+}

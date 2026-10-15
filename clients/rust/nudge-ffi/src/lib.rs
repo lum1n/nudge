@@ -269,6 +269,69 @@ impl Drop for RoomSubscription {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum PanelStatus {
+    /// Opening the socket, or waiting for `ready`; also after it dropped, until it is back.
+    Connecting,
+    Open,
+    /// Given up: closed (1000), a bad token (4401), or no such room or extension socket (4404).
+    Closed {
+        code: u16,
+        reason: String,
+    },
+}
+
+/// Hears an extension panel's socket, on one of the library's threads.
+#[uniffi::export(with_foreign)]
+pub trait PanelListener: Send + Sync {
+    fn on_status(&self, status: PanelStatus);
+    /// A frame of the extension's own, as JSON: its view, `ok` and `error` replies, …
+    fn on_frame(&self, json: String);
+}
+
+struct ForeignPanelListener(Arc<dyn PanelListener>);
+
+impl nudge_client::PanelListener for ForeignPanelListener {
+    fn status(&self, status: nudge_client::PanelStatus) {
+        self.0.on_status(match status {
+            nudge_client::PanelStatus::Connecting => PanelStatus::Connecting,
+            nudge_client::PanelStatus::Open => PanelStatus::Open,
+            nudge_client::PanelStatus::Closed { code, reason } => {
+                PanelStatus::Closed { code, reason }
+            }
+        });
+    }
+
+    fn frame(&self, frame: serde_json::Value) {
+        self.0.on_frame(frame.to_string());
+    }
+}
+
+/// A room's socket to an extension's panel, such as `lists` or `documents`. It reconnects on its
+/// own; `disconnect` it, or drop it, when done.
+#[derive(uniffi::Object)]
+pub struct Panel {
+    socket: nudge_client::PanelSocket,
+}
+
+#[uniffi::export]
+impl Panel {
+    /// Sends one of the extension's input frames, as JSON; dropped while the socket isn't open.
+    pub fn send(&self, json: String) -> Result<(), NudgeError> {
+        let frame: serde_json::Value =
+            serde_json::from_str(&json).map_err(|error| NudgeError::Decode {
+                detail: error.to_string(),
+            })?;
+        self.socket.send(&frame);
+        Ok(())
+    }
+
+    // Not `close`: the bindings' objects have a `close` that frees them.
+    pub fn disconnect(&self) {
+        self.socket.close();
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
 pub struct TokenInfo {
     pub client_id: String,
@@ -478,6 +541,74 @@ impl NudgeClient {
     /// Drops a pending message from the outbox and the room's updates.
     pub fn dismiss(&self, room: String, request_id: String) {
         self.client.dismiss(&room, &request_id);
+    }
+
+    /// Revokes this device's token on the server and forgets it; the socket closes with 4401.
+    pub async fn sign_out(&self) -> Result<(), NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.sign_out().await }).await?)
+    }
+
+    /// Opens a room's socket to an extension's panel, such as `lists` or `documents`.
+    pub fn open_panel(
+        &self,
+        room: String,
+        extension: String,
+        listener: Arc<dyn PanelListener>,
+    ) -> Result<Arc<Panel>, NudgeError> {
+        let _runtime = RUNTIME.enter();
+        let socket =
+            self.client
+                .panel(&room, &extension, Arc::new(ForeignPanelListener(listener)))?;
+        Ok(Arc::new(Panel { socket }))
+    }
+
+    /// Which native pushes the server sends; 404 when it sends no pushes at all.
+    pub async fn push_platforms(&self) -> Result<PushPlatforms, NudgeError> {
+        let api = self.client.api().clone();
+        let platforms = run(async move { api.push_platforms().await }).await?;
+        Ok(PushPlatforms {
+            apns: platforms.apns,
+            fcm: platforms.fcm,
+        })
+    }
+
+    /// Has the server push to this device (an APNs device token in hex, or an FCM registration
+    /// token) when one of the player's rooms has news and the app doesn't have it open.
+    /// `environment` is for APNs: `Sandbox` for development builds. Call again when the token
+    /// changes.
+    pub async fn register_device(
+        &self,
+        platform: DevicePlatform,
+        token: String,
+        environment: Option<PushEnvironment>,
+    ) -> Result<(), NudgeError> {
+        let api = self.client.api().clone();
+        let device = p::DeviceRequest {
+            platform: platform.into(),
+            token,
+            environment: environment.map(Into::into),
+        };
+        Ok(run(async move { api.register_device(&device).await }).await?)
+    }
+
+    /// Stops pushes to this device, as when signing out.
+    pub async fn unregister_device(&self, token: String) -> Result<(), NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.unregister_device(&token).await }).await?)
+    }
+
+    /// What the model saw in the room, as sent: placeholders, not the values.
+    pub async fn model_view(&self, room: String) -> Result<Vec<ModelMessage>, NudgeError> {
+        let api = self.client.api().clone();
+        let view = run(async move { api.model_view(&room).await }).await?;
+        Ok(view.messages.into_iter().map(Into::into).collect())
+    }
+
+    /// This month's model spend; every month, room and player for admins.
+    pub async fn usage(&self) -> Result<Usage, NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.usage().await }).await?.into())
     }
 
     /// Stops the answer in progress, and drops the room's queued messages.

@@ -689,3 +689,90 @@ pub struct TokenInfo {
 pub struct TokensResponse {
     pub tokens: Vec<TokenInfo>,
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DevicePlatform {
+    Apns,
+    Fcm,
+}
+
+/// Apps built for development take APNs pushes through Apple's sandbox.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PushEnvironment {
+    Production,
+    Sandbox,
+}
+
+/// A phone or a Mac that takes native pushes: an APNs device token (hex) or an FCM registration
+/// token.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct DeviceRequest {
+    pub platform: DevicePlatform,
+    pub token: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub environment: Option<PushEnvironment>,
+}
+
+/// Which native pushes the server can send.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct DevicesResponse {
+    pub apns: bool,
+    pub fcm: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ModelRole {
+    System,
+    User,
+    Assistant,
+    ToolResult,
+}
+
+/// One message of the conversation as the model gets it, placeholders and all.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ModelMessage {
+    pub role: ModelRole,
+    pub text: String,
+}
+
+/// What the model saw in a room: its context, redacted as sent.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ModelViewResponse {
+    pub messages: Vec<ModelMessage>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageBudget {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub monthly_usd: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub per_player_usd: Option<f64>,
+}
+
+/// One month's model spend, in US dollars.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct MonthUsage {
+    /// `YYYY-MM` in the assistant's time zone.
+    pub month: String,
+    pub total: f64,
+    /// By player id.
+    pub players: std::collections::BTreeMap<String, f64>,
+    /// By room id.
+    pub rooms: std::collections::BTreeMap<String, f64>,
+}
+
+/// The month's spend and limits; `months` for admins only.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct UsageResponse {
+    pub month: String,
+    pub total: f64,
+    /// What answering the caller's messages cost this month.
+    pub mine: f64,
+    pub budget: UsageBudget,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub months: Option<Vec<MonthUsage>>,
+}

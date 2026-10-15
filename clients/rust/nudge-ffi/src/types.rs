@@ -1,6 +1,8 @@
 //! The protocol's shapes as UniFFI records and enums. Free-form JSON (a tool's args and details)
 //! crosses as a JSON string, and times as milliseconds since the epoch.
 
+use std::collections::HashMap;
+
 use nudge_client::protocol as p;
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
@@ -571,6 +573,120 @@ impl From<&nudge_client::PendingMessage> for PendingMessage {
                     error: error.clone(),
                 },
             },
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum DevicePlatform {
+    Apns,
+    Fcm,
+}
+
+/// Apps built for development take APNs pushes through Apple's sandbox.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum PushEnvironment {
+    Production,
+    Sandbox,
+}
+
+/// Which native pushes the server sends.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct PushPlatforms {
+    pub apns: bool,
+    pub fcm: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum ModelRole {
+    System,
+    User,
+    Assistant,
+    ToolResult,
+}
+
+/// One message of a room's conversation as the model got it, placeholders and all.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct ModelMessage {
+    pub role: ModelRole,
+    pub text: String,
+}
+
+/// One month's model spend, in US dollars.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct MonthUsage {
+    /// `YYYY-MM`.
+    pub month: String,
+    pub total: f64,
+    /// By player id.
+    pub players: HashMap<String, f64>,
+    /// By room id.
+    pub rooms: HashMap<String, f64>,
+}
+
+/// This month's model spend and the limits; `months` for admins only.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct Usage {
+    pub month: String,
+    pub total: f64,
+    /// What answering the caller's messages cost this month.
+    pub mine: f64,
+    pub monthly_usd: Option<f64>,
+    pub per_player_usd: Option<f64>,
+    pub months: Vec<MonthUsage>,
+}
+
+impl From<DevicePlatform> for p::DevicePlatform {
+    fn from(platform: DevicePlatform) -> Self {
+        match platform {
+            DevicePlatform::Apns => p::DevicePlatform::Apns,
+            DevicePlatform::Fcm => p::DevicePlatform::Fcm,
+        }
+    }
+}
+
+impl From<PushEnvironment> for p::PushEnvironment {
+    fn from(environment: PushEnvironment) -> Self {
+        match environment {
+            PushEnvironment::Production => p::PushEnvironment::Production,
+            PushEnvironment::Sandbox => p::PushEnvironment::Sandbox,
+        }
+    }
+}
+
+impl From<p::ModelMessage> for ModelMessage {
+    fn from(message: p::ModelMessage) -> Self {
+        ModelMessage {
+            role: match message.role {
+                p::ModelRole::System => ModelRole::System,
+                p::ModelRole::User => ModelRole::User,
+                p::ModelRole::Assistant => ModelRole::Assistant,
+                p::ModelRole::ToolResult => ModelRole::ToolResult,
+            },
+            text: message.text,
+        }
+    }
+}
+
+impl From<p::UsageResponse> for Usage {
+    fn from(usage: p::UsageResponse) -> Self {
+        Usage {
+            month: usage.month,
+            total: usage.total,
+            mine: usage.mine,
+            monthly_usd: usage.budget.monthly_usd,
+            per_player_usd: usage.budget.per_player_usd,
+            months: usage
+                .months
+                .unwrap_or_default()
+                .into_iter()
+                .map(|month| MonthUsage {
+                    month: month.month,
+                    total: month.total,
+                    players: month.players.into_iter().collect(),
+                    rooms: month.rooms.into_iter().collect(),
+                })
+                .collect(),
         }
     }
 }

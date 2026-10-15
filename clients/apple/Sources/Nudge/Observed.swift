@@ -76,16 +76,16 @@ extension TimelineItem {
 public class Observed<Value: Sendable> {
     public private(set) var value: Value?
     @ObservationIgnored private var number = 0
-    @ObservationIgnored fileprivate var stop: (@Sendable () -> Void)?
+    @ObservationIgnored var stop: (@Sendable () -> Void)?
 
-    fileprivate init() {}
+    init() {}
 
     public func close() {
         stop?()
         stop = nil
     }
 
-    fileprivate func set(_ value: Value, number: Int) {
+    func set(_ value: Value, number: Int) {
         guard number > self.number else { return }
         self.number = number
         self.value = value
@@ -119,7 +119,7 @@ public final class ObservedRoom: Observed<RoomState> {
 }
 
 /// Numbers what a listener hears, in the order it hears it, and hands it to the main actor.
-private final class Relay<Value: Sendable>: @unchecked Sendable {
+final class Relay<Value: Sendable>: @unchecked Sendable {
     private let lock = NSLock()
     private var number = 0
     private weak var observed: Observed<Value>?

@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "nudge-android"
-include(":nudge", ":sample")
+include(":nudge")

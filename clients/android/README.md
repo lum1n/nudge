@@ -1,9 +1,9 @@
 # Nudge for Android
 
-The Kotlin client of [protocol v1](../../docs/protocol/v1.md): the Rust client (`../rust`) through its UniFFI bindings, as an Android library (`nudge`), and a small Compose app on it (`sample`).
+The Kotlin client of [protocol v1](../../docs/protocol/v1.md): the Rust client (`../rust`) through its UniFFI bindings, as an Android library (`nudge`). The Nudge app in [`apps/android`](../../apps/android) is built on it.
 
 - `nudge.ffi`: the generated bindings, written from the Rust library at build time. `NudgeClient(ClientConfig, TokenStore)` has the commands (`pair`, `me`, `send`, `abort`, `remember`, `decide`, …, and the admin ones, as suspend functions), `connect()`/`disconnect()` for the socket, and listeners for the views. Refusals throw `NudgeException.Status` (`status`, `detail`).
-- `nudge.client`: `observeConnectionState()`, `observeHomeState()` and `observeRoomState(room)` give `Observed` objects with a `StateFlow` of the latest state, for view models and Compose; a `RoomState` has the whole timeline, rebuilt from the bindings' changes. `close()` them when done. `MemoryTokens` and `PreferencesTokens` keep the token.
+- `nudge.client`: `observeConnectionState()`, `observeHomeState()` and `observeRoomState(room)` give `Observed` objects with a `StateFlow` of the latest state, for view models and Compose; a `RoomState` has the whole timeline, rebuilt from the bindings' changes. `observeLists(room)` follows a room's lists over the lists extension's panel and edits them. `close()` them when done. `MemoryTokens` and `PreferencesTokens` keep the token; `PairingLink.parse` reads a `nudge://pair` link.
 
 ```kotlin
 val client = NudgeClient(
@@ -22,7 +22,7 @@ client.send("trip", "When does the train leave?", null)
 Needs the Android SDK (`local.properties` with `sdk.dir`, or `ANDROID_HOME`), JDK 17 for Gradle, and for the native libraries [cargo-ndk](https://github.com/bbqsrc/cargo-ndk) with the Rust targets `aarch64-linux-android`, `armv7-linux-androideabi` and `x86_64-linux-android` (`rustup target add …`).
 
 ```bash
-./gradlew :sample:assembleDebug                         # bindings, native libraries, app
+./gradlew :nudge:assembleDebug                          # bindings, native libraries
 ./gradlew :nudge:testDebugUnitTest -Pnudge.native=false # on this machine's JVM, no NDK needed
 ```
 
