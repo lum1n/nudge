@@ -1,0 +1,33 @@
+# Nudge for Android
+
+The Nudge app for Android 8 and later, in Jetpack Compose with Material 3 Expressive, on the library in [`clients/android`](../../clients/android) (the Rust core through UniFFI). Application id `app.nudge.dev`.
+
+- The current Android design: Material 3 Expressive (`material3` 1.5, expressive motion, dynamic colour), the adaptive list-detail scaffold (rooms and the open room side by side on tablets and foldables, a room's lists and details in a third pane on wide screens, predictive back), flexible app bars, segmented lists as in Android's own Settings, the FAB menu for new rooms, and the shape-morphing loading indicator and buttons.
+- Sign in with a pairing code (`nudge pair <player>` on the server) or by opening a `nudge://pair?…` link. The token stays in the app's private storage, out of backups.
+- Rooms: a list on phones, beside the open room on tablets and wide screens. Each row shows when the assistant is answering and how many actions wait for approval.
+- A room: the timeline as it streams (text, thinking, tool calls), actions waiting for approval with Approve and Deny, fired nudges, messages on their way (with Retry and Dismiss when one fails), Stop, and earlier messages on demand. Views and unsent messages are cached, so the app opens offline and sends what waited once it's back.
+- Lists (the lists extension's panel), and the room's members, memory, nudges, extensions and what the model saw.
+- Settings: your own memory and whether it's shared, this month's spend, notifications, sign out (which revokes the device's token on the server).
+- Notifications through FCM when an answer is ready or an action waits for approval in a room you don't have open. The app disconnects in the background so the server knows to push. Tapping one opens the room.
+
+## Build
+
+Needs the Android SDK with platform 37, JDK 17 for Gradle (the wrapper is Gradle 9.8; AGP 9.4 and Kotlin 2.4), and for the native libraries [cargo-ndk](https://github.com/bbqsrc/cargo-ndk) with the Rust targets `aarch64-linux-android`, `armv7-linux-androideabi` and `x86_64-linux-android`. The library is an included build, so it is set up as in [its README](../../clients/android/README.md): `clients/android/local.properties` with `sdk.dir` (and `nudge.cargoHome`/`nudge.rustupHome` for a rustup of its own), and the same `sdk.dir` in `apps/android/local.properties`.
+
+```bash
+JAVA_HOME=/usr/lib/jvm/java-17-openjdk ./gradlew :app:installDebug   # bindings, native libraries, app
+./gradlew :app:assembleDebug -Pnudge.native=false                     # without the native libraries: compiles, doesn't run
+```
+
+To try it without a real model: `pnpm build` in the repository, then `NUDGE_FAUX_PORT=8799 node packages/server/scripts/faux-server.ts`. It prints a pairing code for Bo; on the emulator the server is `http://10.0.2.2:8799`:
+
+```bash
+adb shell am start -a android.intent.action.VIEW -d '"nudge://pair?server=http%3A%2F%2F10.0.2.2%3A8799&assistant=robin&code=<code>"' app.nudge.dev
+```
+
+## Push
+
+Notifications need a Firebase project:
+
+1. In the [Firebase console](https://console.firebase.google.com), add an Android app with the package name `app.nudge.dev` and download its `google-services.json` into `app/` (it is ignored by git). The build applies the Google services plugin only when the file is there; without it the app works without notifications.
+2. Under Project settings → Service accounts, generate a private key, and give the JSON file to the server as `push.fcm.serviceAccountFile` in `nudge.json` (see the repository's README).

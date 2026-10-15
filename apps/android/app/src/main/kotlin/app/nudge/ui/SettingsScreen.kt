@@ -1,0 +1,278 @@
+package app.nudge.ui
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Logout
+import androidx.compose.material.icons.outlined.AccountCircle
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Dns
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Payments
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.SmartToy
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MediumFlexibleTopAppBar
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedListItem
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.nudge.AppModel
+import app.nudge.BuildConfig
+import app.nudge.Session
+import app.nudge.explain
+import java.text.NumberFormat
+import java.util.Currency
+import kotlinx.coroutines.launch
+import nudge.ffi.PlayerMemory
+import nudge.ffi.Usage
+
+/** The account, the player's own memory, this month's spend, notifications, and signing out. */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    val me by model.me.collectAsStateWithLifecycle()
+    val platforms by model.pushPlatforms.collectAsStateWithLifecycle()
+    val client = session.client
+    var memory by remember { mutableStateOf<PlayerMemory?>(null) }
+    var usage by remember { mutableStateOf<Usage?>(null) }
+    var newFact by remember { mutableStateOf("") }
+    var problem by remember { mutableStateOf<String?>(null) }
+    var confirmSignOut by remember { mutableStateOf(false) }
+    val notificationsOn = NotificationManagerCompat.from(LocalContext.current).areNotificationsEnabled()
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+
+    fun change(action: suspend () -> Unit) = scope.launch {
+        try {
+            action()
+            memory = client.myMemory()
+            problem = null
+        } catch (error: Exception) {
+            problem = explain(error)
+        }
+    }
+
+    LaunchedEffect(client) {
+        try {
+            memory = client.myMemory()
+            usage = client.usage()
+        } catch (error: Exception) {
+            problem = explain(error)
+        }
+    }
+
+    Scaffold(
+        containerColor = groupedBackground(),
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        topBar = {
+            MediumFlexibleTopAppBar(
+                colors = groupedTopBarColors(),
+                title = { Text("Settings") },
+                navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                scrollBehavior = scrollBehavior,
+            )
+        },
+    ) { padding ->
+        LazyColumn(
+            Modifier.imePadding(),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                top = padding.calculateTopPadding(),
+                bottom = padding.calculateBottomPadding() + 24.dp,
+            ),
+        ) {
+            group(
+                "Account",
+                listOf(
+                    { shapes ->
+                        SegmentedListItem(
+                            shapes = shapes,
+                            leadingContent = { Icon(Icons.Outlined.AccountCircle, null) },
+                            overlineContent = { Text("Signed in as") },
+                        ) { Text(me?.player?.displayName ?: "…") }
+                    },
+                    { shapes ->
+                        SegmentedListItem(
+                            shapes = shapes,
+                            leadingContent = { Icon(Icons.Outlined.SmartToy, null) },
+                            overlineContent = { Text("Assistant") },
+                        ) { Text(session.account.assistantName) }
+                    },
+                    { shapes ->
+                        SegmentedListItem(
+                            shapes = shapes,
+                            leadingContent = { Icon(Icons.Outlined.Dns, null) },
+                            overlineContent = { Text("Server") },
+                        ) { Text(session.account.server) }
+                    },
+                ),
+            )
+
+            val mine = memory
+            group(
+                "My memory",
+                buildList<GroupRow> {
+                    if (mine == null) {
+                        add { _ -> LoadingIndicator(Modifier.padding(16.dp)) }
+                        return@buildList
+                    }
+                    add { shapes ->
+                        SegmentedListItem(
+                            checked = mine.shared,
+                            onCheckedChange = { shared -> change { client.shareMyMemory(shared) } },
+                            shapes = shapes,
+                            leadingContent = { Icon(Icons.Outlined.Share, null) },
+                            supportingContent = { Text("Every room you're in sees these facts, and the assistant there too.") },
+                            trailingContent = { Switch(checked = mine.shared, onCheckedChange = null) },
+                        ) { Text("Share with all my rooms") }
+                    }
+                    mine.facts.forEach { fact ->
+                        add { shapes ->
+                            SegmentedListItem(
+                                shapes = shapes,
+                                trailingContent = {
+                                    IconButton(onClick = { change { client.forgetForMe(fact.id) } }) {
+                                        Icon(Icons.Outlined.Close, "Forget")
+                                    }
+                                },
+                            ) { Text(fact.text) }
+                        }
+                    }
+                },
+            )
+            item {
+                OutlinedTextField(
+                    value = newFact,
+                    onValueChange = { newFact = it },
+                    placeholder = { Text("Remember about me…") },
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.large,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = {
+                        val text = newFact.trim()
+                        if (text.isNotEmpty()) {
+                            newFact = ""
+                            change { client.rememberForMe(text) }
+                        }
+                    }),
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                )
+            }
+
+            usage?.let { spend ->
+                group(
+                    "This month",
+                    buildList<GroupRow> {
+                        fun row(label: String, value: Double) = add { shapes ->
+                            SegmentedListItem(
+                                shapes = shapes,
+                                leadingContent = { Icon(Icons.Outlined.Payments, null) },
+                                trailingContent = { Text(dollars(value), style = MaterialTheme.typography.titleMedium) },
+                            ) { Text(label) }
+                        }
+                        row("Your messages", spend.mine)
+                        row("Everyone", spend.total)
+                        spend.perPlayerUsd?.let { row("Your limit", it) }
+                        spend.monthlyUsd?.let { row("Monthly limit", it) }
+                    },
+                )
+            }
+
+            group(
+                "Notifications",
+                listOf(
+                    { shapes ->
+                        SegmentedListItem(
+                            shapes = shapes,
+                            leadingContent = { Icon(Icons.Outlined.Notifications, null) },
+                            supportingContent = {
+                                Text("When an answer is ready or an action waits for your approval, while the app is closed.")
+                            },
+                        ) {
+                            Text(
+                                when {
+                                    !BuildConfig.FIREBASE -> "Not in this build"
+                                    !notificationsOn -> "Off in the phone's settings"
+                                    platforms?.fcm != true -> "Not sent by this server"
+                                    else -> "On"
+                                },
+                            )
+                        }
+                    },
+                ),
+            )
+
+            problem?.let { item { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(vertical = 16.dp)) } }
+            item {
+                Button(
+                    onClick = { confirmSignOut = true },
+                    shapes = ButtonDefaults.shapes(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    ),
+                    modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
+                ) {
+                    Icon(Icons.AutoMirrored.Outlined.Logout, null, Modifier.padding(end = 8.dp))
+                    Text("Sign out")
+                }
+            }
+        }
+    }
+
+    if (confirmSignOut) {
+        AlertDialog(
+            onDismissRequest = { confirmSignOut = false },
+            icon = { Icon(Icons.AutoMirrored.Outlined.Logout, null) },
+            title = { Text("Sign out of ${session.account.assistantName}?") },
+            text = { Text("You'll need a new pairing code to sign in again.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmSignOut = false
+                    scope.launch { model.signOut() }
+                }) { Text("Sign out") }
+            },
+            dismissButton = { TextButton(onClick = { confirmSignOut = false }) { Text("Cancel") } },
+        )
+    }
+}
+
+private fun dollars(value: Double): String =
+    NumberFormat.getCurrencyInstance().apply { currency = Currency.getInstance("USD") }.format(value)
