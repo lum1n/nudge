@@ -12,6 +12,8 @@ struct SettingsView: View {
     @State private var memory: PlayerMemory?
     @State private var usage: Usage?
     @State private var newFact = ""
+    @State private var hidden: [PrivateValue]?
+    @State private var newHidden = ""
     @State private var notifications: UNAuthorizationStatus?
     @State private var problem: String?
     @State private var confirmSignOut = false
@@ -59,6 +61,30 @@ struct SettingsView: View {
                     Text("My memory")
                 } footer: {
                     Text("Facts about you, shown in your own room. Shared, every room you're in sees them, and the assistant there too.")
+                }
+                Section {
+                    if let hidden {
+                        ForEach(hidden, id: \.placeholder) { value in
+                            Label(value.value, systemImage: "lock.fill")
+                                .contextMenu {
+                                    Button("Forget for good", systemImage: "trash", role: .destructive) {
+                                        Task { await attempt { try await client.forgetValue(placeholder: value.placeholder) } }
+                                    }
+                                }
+                        }
+                        .onDelete { offsets in
+                            for index in offsets {
+                                Task { await attempt { try await client.forgetValue(placeholder: hidden[index].placeholder) } }
+                            }
+                        }
+                        TextField("Hide a value…", text: $newHidden).onSubmit { Task { await hide() } }
+                    } else {
+                        ProgressView()
+                    }
+                } header: {
+                    Text("Only you see")
+                } footer: {
+                    Text("An address, a name or a number: the others and the assistant see it as hidden, in every room. Forgotten, everyone sees only that it was hidden.")
                 }
                 if let usage {
                     Section("This month") {
@@ -125,6 +151,7 @@ struct SettingsView: View {
         notifications = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
         do {
             memory = try await client.myMemory()
+            hidden = try await client.privateValues()
             usage = try await client.usage()
         } catch {
             problem = explain(error)
@@ -140,6 +167,15 @@ struct SettingsView: View {
         }
     }
 
+    private func hide() async {
+        let text = newHidden.trimmingCharacters(in: .whitespaces)
+        guard text.count >= 2 else { return }
+        await attempt {
+            _ = try await client.protect(value: text, kind: nil, private: true)
+            newHidden = ""
+        }
+    }
+
     private func forget(_ fact: Fact) async {
         await attempt { try await client.forgetForMe(factId: fact.id) }
     }
@@ -148,11 +184,12 @@ struct SettingsView: View {
         await attempt { memory = try await client.shareMyMemory(shared: shared) }
     }
 
-    /// Runs a change, then reads the memory again.
+    /// Runs a change, then reads the memory and the hidden values again.
     private func attempt(_ change: () async throws -> Void) async {
         do {
             try await change()
             memory = try await client.myMemory()
+            hidden = try await client.privateValues()
             problem = nil
         } catch {
             problem = explain(error)

@@ -9,13 +9,22 @@ struct TimelineRow: View {
 
     var body: some View {
         switch item {
-        case .user(_, let text, let author, _, _, _):
+        // Someone else's private message: the server sent it empty, so it is a line, not a bubble.
+        case .user(_, let text, _, _, _, _, let privateTo?) where text.isEmpty:
+            PrivateLine(text: "\(privateTo.displayName) sent a private message")
+        case .user(_, let text, let author, _, _, _, let privateTo):
             let mine = author == nil || author?.id == me
-            MessageBubble(text: text, mine: mine, author: mine ? nil : author?.displayName)
-        case .nudge(_, let text, let firedAt):
+            VStack(alignment: mine ? .trailing : .leading, spacing: 2) {
+                if privateTo != nil { OnlyYou() }
+                MessageBubble(text: text, mine: mine, author: mine ? nil : author?.displayName)
+            }
+            .frame(maxWidth: .infinity, alignment: mine ? .trailing : .leading)
+        case .nudge(_, let text, _, let privateTo?) where text.isEmpty:
+            PrivateLine(text: "A nudge for \(privateTo.displayName)")
+        case .nudge(_, let text, let firedAt, _):
             Label {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(text)
+                    Text(hidingValues(text))
                     Text(date(firedAt), style: .time).font(.caption).foregroundStyle(.secondary)
                 }
             } icon: {
@@ -24,12 +33,21 @@ struct TimelineRow: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .glassEffect(.regular.tint(.orange.opacity(0.15)), in: .rect(cornerRadius: 18))
-        case .approval(_, let approvalId, let summary, let status, let decidedBy):
+        case .approval(_, _, let summary, _, _, let privateTo?) where summary.isEmpty:
+            PrivateLine(text: "An approval for \(privateTo.displayName) ended")
+        case .approval(_, let approvalId, let summary, let status, let decidedBy, _):
             ApprovalCard(summary: summary, status: status, decidedBy: decidedBy) { approve in
                 decide(approvalId, approve)
             }
-        case .answer(_, let status, let error, let parts):
-            AnswerView(status: status, error: error, parts: parts)
+        case .answer(_, let status, _, _, let privateTo?) where privateTo.id != me:
+            PrivateLine(
+                text: status == .running
+                    ? "Answering \(privateTo.displayName) privately…" : "Answered \(privateTo.displayName) privately")
+        case .answer(_, let status, let error, let parts, let privateTo):
+            VStack(alignment: .leading, spacing: 4) {
+                if privateTo != nil { OnlyYou() }
+                AnswerView(status: status, error: error, parts: parts)
+            }
         case .marker(_, let kind):
             Text(kind == .compacted ? "Earlier messages summarized" : "Conversation started over")
                 .font(.caption)
@@ -46,6 +64,40 @@ func date(_ milliseconds: Double) -> Date {
     Date(timeIntervalSince1970: milliseconds / 1000)
 }
 
+/// Something private to someone else happened here; the server didn't say what.
+struct PrivateLine: View {
+    let text: String
+
+    var body: some View {
+        Label(text, systemImage: "lock.fill")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity)
+    }
+}
+
+/// Marks what is the reader's alone, so they know the others don't see it.
+struct OnlyYou: View {
+    var body: some View {
+        Label("Only you", systemImage: "lock.fill").font(.caption2).foregroundStyle(.purple)
+    }
+}
+
+/// Text with each value the server hid (`⟦EMAIL1⟧` and the like) shown as "hidden".
+func hidingValues(_ text: String) -> AttributedString {
+    var shown = AttributedString()
+    var rest = Substring(text)
+    while let match = rest.firstMatch(of: /⟦[A-Z]+\d+⟧/) {
+        shown += AttributedString(rest[..<match.range.lowerBound])
+        var hidden = AttributedString(" hidden ")
+        hidden.font = .callout.italic().monospaced()
+        hidden.backgroundColor = .secondary.opacity(0.25)
+        shown += hidden
+        rest = rest[match.range.upperBound...]
+    }
+    return shown + AttributedString(rest)
+}
+
 struct MessageBubble: View {
     let text: String
     let mine: Bool
@@ -57,7 +109,7 @@ struct MessageBubble: View {
             if let author {
                 Text(author).font(.caption).foregroundStyle(.secondary)
             }
-            Text(text)
+            Text(hidingValues(text))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
                 .foregroundStyle(mine ? Color.white : Color.primary)
@@ -111,11 +163,13 @@ struct AnswerView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Inline markdown (bold, code, links), with the text's own line breaks.
+    /// Inline markdown (bold, code, links), with the text's own line breaks; hidden values as
+    /// `hidden`, in code style.
     private func markdown(_ text: String) -> AttributedString {
         let options = AttributedString.MarkdownParsingOptions(
             interpretedSyntax: .inlineOnlyPreservingWhitespace, failurePolicy: .returnPartiallyParsedIfPossible)
-        return (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
+        let marked = text.replacing(/⟦[A-Z]+\d+⟧/) { _ in "`hidden`" }
+        return (try? AttributedString(markdown: marked, options: options)) ?? AttributedString(marked)
     }
 }
 
@@ -137,6 +191,11 @@ struct LoginButton: View {
 struct ToolView: View {
     let tool: ToolPart
     @State private var open = false
+
+    private var progress: String? {
+        tool.output?.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+            .last { !$0.isEmpty }.map { String($0.prefix(100)) }
+    }
 
     var body: some View {
         DisclosureGroup(isExpanded: $open) {
@@ -160,7 +219,13 @@ struct ToolView: View {
                     Image(systemName: tool.isError == true ? "xmark.circle" : "checkmark.circle")
                         .foregroundStyle(tool.isError == true ? .red : .green)
                 }
-                Text(tool.name).font(.callout.monospaced())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(tool.name).font(.callout.monospaced())
+                    // What a running tool is doing: its last printed line, like `Clicking "Search"…`.
+                    if tool.status != .done, !open, let line = progress {
+                        Text(line).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                }
             }
         }
         .padding(.horizontal, 12)
@@ -181,7 +246,7 @@ struct ApprovalCard: View {
             Label(status == .pending ? "Needs approval" : "Approval", systemImage: "hand.raised.fill")
                 .font(.caption.bold())
                 .foregroundStyle(.orange)
-            Text(summary)
+            Text(hidingValues(summary))
             if status == .pending {
                 GlassEffectContainer(spacing: 8) {
                     HStack(spacing: 8) {

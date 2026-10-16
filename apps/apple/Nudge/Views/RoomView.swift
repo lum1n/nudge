@@ -8,6 +8,7 @@ struct RoomView: View {
     let me: String?
     @State private var observed: ObservedRoom?
     @State private var draft = ""
+    @State private var secret = false
     @State private var showing: Sheet?
     @State private var problem: String?
 
@@ -71,6 +72,8 @@ struct RoomView: View {
                             if let status = state?.live?.status { LiveStatusView(status: status) }
                             Composer(
                                 draft: $draft, running: state?.live?.running == true,
+                                // Only in a shared room is there anyone to keep a message from.
+                                secret: state?.room?.kind == .personal ? nil : $secret,
                                 send: { text in Task { await send(text) } },
                                 stop: { Task { await attempt { try await client.abort(room: roomId) } } })
                         }
@@ -143,7 +146,7 @@ struct RoomView: View {
     }
 
     private func answerLength(_ item: TimelineItem) -> String {
-        guard case .answer(let id, _, _, let parts) = item else { return item.id }
+        guard case .answer(let id, _, _, let parts, _) = item else { return item.id }
         return "\(id):\(parts.count):\(parts.last.map(partLength) ?? 0)"
     }
 
@@ -164,8 +167,9 @@ struct RoomView: View {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         draft = ""
+        let isPrivate = secret && state?.room?.kind != .personal
         // A refused message stays in `pending`, marked failed, with Retry and Dismiss.
-        _ = try? await client.send(room: roomId, text: trimmed, whenBusy: nil)
+        _ = try? await client.send(room: roomId, text: trimmed, whenBusy: nil, private: isPrivate)
     }
 
     private func decide(_ approval: String, _ approve: Bool) {
@@ -186,6 +190,8 @@ struct RoomView: View {
 struct Composer: View {
     @Binding var draft: String
     let running: Bool
+    /// Whether the next message is private; nil where there is nobody to keep it from.
+    var secret: Binding<Bool>?
     let send: (String) -> Void
     let stop: () -> Void
     @FocusState private var focused: Bool
@@ -195,7 +201,17 @@ struct Composer: View {
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            TextField("Message", text: $draft, axis: .vertical)
+            if let secret {
+                Toggle(isOn: secret) {
+                    Image(systemName: secret.wrappedValue ? "lock.fill" : "lock.open").frame(width: 24, height: 24)
+                }
+                .toggleStyle(.button)
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+                .controlSize(.large)
+                .accessibilityLabel(secret.wrappedValue ? "Private: only you see it and the answer" : "Send privately")
+            }
+            TextField(secret?.wrappedValue == true ? "Private message" : "Message", text: $draft, axis: .vertical)
                 .lineLimit(1...8)
                 .textFieldStyle(.plain)
                 .focused($focused)
