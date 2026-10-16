@@ -78,7 +78,7 @@ nudge room Trip --members ann,bo      # a shared room "trip"; `nudge room` lists
 nudge serve                           # web UI at http://127.0.0.1:8787, API under /v1
 ```
 
-`nudge invite` also prints a sign-in link for the web UI (`/login#token=…`; pass `--port` or `--url` if the server isn't on 127.0.0.1:8787). The web UI keeps the token for the browser tab only. `nudge serve --web <dir>` serves another build, `--web none` only the API.
+`nudge invite` also prints a sign-in link for the web UI (`/login#token=…`; pass `--port` or `--url` if the server isn't on 127.0.0.1:8787). The web UI keeps the token for the browser tab only, unless "Remember this device" is ticked at sign-in. `nudge serve --web <dir>` serves another build, `--web none` only the API.
 
 Or each person connects from their own terminal, and all of them see the same conversation live:
 
