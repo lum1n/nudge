@@ -465,9 +465,21 @@ importers:
       '@earendil-works/pi-ai':
         specifier: 1.2.0
         version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@4.6.6)
+      '@nudge/ext-browser':
+        specifier: workspace:*
+        version: link:../../extensions/browser
+      '@nudge/ext-connectors':
+        specifier: workspace:*
+        version: link:../../extensions/connectors
+      '@nudge/ext-documents':
+        specifier: workspace:*
+        version: link:../../extensions/documents
       '@nudge/ext-lists':
         specifier: workspace:*
         version: link:../../extensions/lists
+      '@nudge/ext-mail':
+        specifier: workspace:*
+        version: link:../../extensions/mail
       '@types/ws':
         specifier: 8.18.2
         version: 8.18.2

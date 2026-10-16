@@ -28,7 +28,11 @@
   },
   "devDependencies": {
     "@earendil-works/pi-ai": "1.2.0",
+    "@nudge/ext-browser": "workspace:*",
+    "@nudge/ext-connectors": "workspace:*",
+    "@nudge/ext-documents": "workspace:*",
     "@nudge/ext-lists": "workspace:*",
+    "@nudge/ext-mail": "workspace:*",
     "@types/ws": "8.18.2"
   }
 }
