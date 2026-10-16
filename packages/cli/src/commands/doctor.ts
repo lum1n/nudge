@@ -14,7 +14,7 @@ import {
 
 export type DoctorOptions = {
   readonly config: string;
-  /** Send one tiny request to each assistant's model. */
+  /** Send one tiny request to each assistant's model, and to each model its extensions use. */
   readonly ping?: boolean;
   /** Check that the built-in detectors catch a sample of personal data. */
   readonly privacy?: boolean;
@@ -56,6 +56,15 @@ export async function doctor(options: DoctorOptions): Promise<boolean> {
   }
 
   const models = buildModels(config.providers);
+  const ping = async (label: string, provider: string, modelId: string) => {
+    const model = models.getModel(provider, modelId);
+    if (model === undefined) return;
+    const answer = await models.completeSimple(model, {
+      messages: [{ role: "user", content: "Reply with the word pong.", timestamp: Date.now() }],
+    });
+    const failed = answer.stopReason === "error" || answer.stopReason === "aborted";
+    check(!failed, `${label}: ping ${failed ? (answer.errorMessage ?? "failed") : "answered"}`);
+  };
   for (const assistant of config.assistants) {
     const ref = assistant.model ?? DEFAULT_MODEL;
     const label = `${assistant.name}: ${ref.provider}/${ref.modelId}`;
@@ -96,8 +105,10 @@ export async function doctor(options: DoctorOptions): Promise<boolean> {
               check(false, `${what}: no such model`);
               continue;
             }
+            // Such as the browser extension's own model, which may be another provider's.
             const auth = await models.checkAuth(used.provider).catch(() => undefined);
             check(auth !== undefined, `${what}: credentials ${auth?.source ?? "missing"}`);
+            if (options.ping && auth !== undefined) await ping(what, used.provider, used.modelId);
           }
       } catch (error) {
         check(false, `${assistant.name}: extensions: ${(error as Error).message}`);
@@ -110,12 +121,7 @@ export async function doctor(options: DoctorOptions): Promise<boolean> {
     }
     const auth = await models.checkAuth(ref.provider).catch(() => undefined);
     check(auth !== undefined, `${label}: credentials ${auth?.source ?? "missing"}`);
-    if (!options.ping || auth === undefined) continue;
-    const answer = await models.completeSimple(model, {
-      messages: [{ role: "user", content: "Reply with the word pong.", timestamp: Date.now() }],
-    });
-    const failed = answer.stopReason === "error" || answer.stopReason === "aborted";
-    check(!failed, `${label}: ping ${failed ? (answer.errorMessage ?? "failed") : "answered"}`);
+    if (options.ping && auth !== undefined) await ping(label, ref.provider, ref.modelId);
   }
   return ok;
 }
