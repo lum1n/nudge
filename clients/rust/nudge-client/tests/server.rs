@@ -18,6 +18,7 @@ use tokio::time::timeout;
 struct FauxServer {
     url: String,
     ann: String,
+    bo: String,
     _process: Child,
 }
 
@@ -51,6 +52,7 @@ async fn faux_server() -> Option<FauxServer> {
     Some(FauxServer {
         url: started["url"].as_str().unwrap().to_owned(),
         ann: started["tokens"]["ann"].as_str().unwrap().to_owned(),
+        bo: started["tokens"]["bo"].as_str().unwrap().to_owned(),
         _process: process,
     })
 }
@@ -538,4 +540,67 @@ async fn reads_usage_and_the_model_view_and_edits_a_list_on_its_panel() {
     .await
     .unwrap();
     assert_eq!(closed, 4404);
+}
+
+#[tokio::test]
+async fn keeps_a_private_message_and_a_private_value_from_the_others() {
+    let Some(server) = faux_server().await else {
+        return;
+    };
+    let ann = client(&server.url, Some(&server.ann));
+    let bo = client(&server.url, Some(&server.bo));
+    let (ann_room, bo_room) = (ann.room("trip"), bo.room("trip"));
+    ann.open();
+    bo.open();
+    let (mut ann_states, mut bo_states) = (ann_room.states(), bo_room.states());
+    until(&mut ann_states, |s| s.status == SyncStatus::Live).await;
+    until(&mut bo_states, |s| s.status == SyncStatus::Live).await;
+
+    let private = SendOptions {
+        private: true,
+        ..SendOptions::default()
+    };
+    ann.send("trip", "My door code is 4455", private)
+        .await
+        .unwrap();
+    let mine = until(&mut ann_states, |s| settled(s)).await;
+    let theirs = until(&mut bo_states, |s| settled(s)).await;
+    let first = |state: &RoomState| match state.timeline.first() {
+        Some(TimelineItem::User(user)) => user.clone(),
+        other => panic!("not a message: {other:?}"),
+    };
+    assert_eq!(first(&mine).text, "My door code is 4455");
+    assert_eq!(first(&mine).private_to.unwrap().id, "ann");
+    assert_eq!(first(&theirs).text, "");
+    assert_eq!(first(&theirs).private_to.unwrap().id, "ann");
+    match theirs.timeline.last() {
+        Some(TimelineItem::Answer(answer)) => {
+            assert!(answer.parts.is_empty());
+            assert_eq!(answer.private_to.as_ref().unwrap().id, "ann");
+        }
+        other => panic!("not an answer: {other:?}"),
+    }
+
+    let placeholder = ann.api().protect("Storgata 5", None, true).await.unwrap();
+    let values = ann.api().private_values().await.unwrap();
+    assert_eq!(values[0].value, "Storgata 5");
+    assert!(bo.api().private_values().await.unwrap().is_empty());
+    ann.send("trip", "Meet at Storgata 5", SendOptions::default())
+        .await
+        .unwrap();
+    let shown = until(&mut bo_states, |s| {
+        user_texts(s).contains(&format!("Meet at {placeholder}"))
+    })
+    .await;
+    assert!(!format!("{:?}", shown.timeline).contains("Storgata 5"));
+    assert_eq!(
+        bo.api()
+            .forget_value(&placeholder)
+            .await
+            .unwrap_err()
+            .status(),
+        Some(403)
+    );
+    ann.api().forget_value(&placeholder).await.unwrap();
+    assert!(ann.api().private_values().await.unwrap().is_empty());
 }

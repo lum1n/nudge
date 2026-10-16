@@ -19,6 +19,8 @@ pub struct Outgoing {
     pub room: String,
     pub text: String,
     pub when_busy: Option<WhenBusy>,
+    /// Only the sender sees it and the answer to it.
+    pub private: bool,
     /// Ms since the epoch.
     pub created_at: i64,
     /// Why the server refused it; it is not sent again until `resend`.
@@ -55,6 +57,13 @@ impl Cache {
                error text
              );",
         )?;
+        // Caches from before private messages lack the column.
+        let has_private = db
+            .prepare("select 1 from pragma_table_info('outbox') where name = 'private'")?
+            .exists([])?;
+        if !has_private {
+            db.execute_batch("alter table outbox add column private integer not null default 0")?;
+        }
         Ok(Cache { db: Mutex::new(db) })
     }
 
@@ -125,9 +134,11 @@ impl Cache {
                 when_busy: when_busy.and_then(|text| serde_json::from_value(text.into()).ok()),
                 created_at: row.get(4)?,
                 error: row.get(5)?,
+                private: row.get(6)?,
             })
         };
-        let columns = "select request_id, room, text, when_busy, created_at, error from outbox";
+        let columns =
+            "select request_id, room, text, when_busy, created_at, error, private from outbox";
         let rows = match room {
             Some(room) => db
                 .prepare(&format!(
@@ -150,15 +161,17 @@ impl Cache {
         });
         let db = self.db.lock().unwrap();
         let _ = db.execute(
-            "insert or replace into outbox (request_id, room, text, when_busy, created_at, error)
-             values (?1, ?2, ?3, ?4, ?5, ?6)",
+            "insert or replace into outbox
+               (request_id, room, text, when_busy, created_at, error, private)
+             values (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
                 message.request_id,
                 message.room,
                 message.text,
                 when_busy,
                 message.created_at,
-                message.error
+                message.error,
+                message.private
             ],
         );
     }
@@ -190,6 +203,7 @@ mod tests {
             room: room.into(),
             text: format!("text {id}"),
             when_busy: Some(WhenBusy::Steer),
+            private: true,
             created_at: at,
             error: None,
         }

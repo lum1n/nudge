@@ -266,16 +266,37 @@ impl Api {
             .await
     }
 
-    /// A placeholder that stands for `value` in what the model sees.
-    pub async fn protect(&self, value: &str, kind: Option<&str>) -> Result<String, ApiError> {
+    /// A placeholder that stands for `value` in what the model sees. `private` also hides it
+    /// from everyone else, wherever it shows.
+    pub async fn protect(
+        &self,
+        value: &str,
+        kind: Option<&str>,
+        private: bool,
+    ) -> Result<String, ApiError> {
         let body = ProtectRequest {
             value: value.to_owned(),
             kind: kind.map(str::to_owned),
+            private: private.then_some(true),
         };
         let response: ProtectResponse = self
             .request(Method::POST, &["protect"], &[], Some(&body))
             .await?;
         Ok(response.placeholder)
+    }
+
+    /// The values only this player sees.
+    pub async fn private_values(&self) -> Result<Vec<PrivateValue>, ApiError> {
+        let response: PrivateValuesResponse = self
+            .request(Method::GET, &["me", "private"], &[], NO_BODY)
+            .await?;
+        Ok(response.values)
+    }
+
+    /// Drops a value for good: from now on everyone, the model included, sees only `placeholder`.
+    pub async fn forget_value(&self, placeholder: &str) -> Result<(), ApiError> {
+        self.request_empty(Method::DELETE, &["vault", placeholder], &[], NO_BODY)
+            .await
     }
 
     /// What the model saw in the room, as it was sent: placeholders, not the values.

@@ -87,11 +87,15 @@ pub enum TimelineItem {
         sent_at: Option<f64>,
         client_id: Option<String>,
         request_id: Option<String>,
+        /// Only this player sees it; everyone else gets it emptied.
+        private_to: Option<Player>,
     },
     Nudge {
         id: String,
         text: String,
         fired_at: f64,
+        /// Only this player sees it; everyone else gets it emptied.
+        private_to: Option<Player>,
     },
     Approval {
         id: String,
@@ -99,12 +103,16 @@ pub enum TimelineItem {
         summary: String,
         status: ApprovalStatus,
         decided_by: Option<String>,
+        /// Only this player sees it; everyone else gets it emptied.
+        private_to: Option<Player>,
     },
     Answer {
         id: String,
         status: AnswerStatus,
         error: Option<String>,
         parts: Vec<Part>,
+        /// Only this player sees it; everyone else gets it emptied.
+        private_to: Option<Player>,
     },
     Marker {
         id: String,
@@ -146,6 +154,9 @@ pub struct QueuedMessage {
     pub client_id: Option<String>,
     pub request_id: Option<String>,
     pub nudge: bool,
+    /// Only this player sees it; everyone else gets it with empty text.
+    #[uniffi(default = None)]
+    pub private_to: Option<Player>,
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
@@ -157,6 +168,9 @@ pub struct Approval {
     pub decided_by: Option<Player>,
     pub decided_at: Option<f64>,
     pub result: Option<String>,
+    /// Asked for in answer to something private: only this player sees and decides it.
+    #[uniffi(default = None)]
+    pub private_to: Option<Player>,
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
@@ -168,6 +182,9 @@ pub struct Fact {
     pub by: Option<Player>,
     /// Set on a member's own fact that the room shows because they share their memory.
     pub owner: Option<Player>,
+    /// Remembered in answer to something private: only this player sees it.
+    #[uniffi(default = None)]
+    pub private_to: Option<Player>,
 }
 
 /// The caller's own memory: shown in their personal room, and in all their rooms when `shared`.
@@ -195,6 +212,9 @@ pub struct RoomNudge {
     pub message: String,
     pub fire_at: f64,
     pub every: Option<f64>,
+    /// Scheduled in answer to something private: only this player sees it.
+    #[uniffi(default = None)]
+    pub private_to: Option<Player>,
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
@@ -212,6 +232,8 @@ pub struct HomeNudge {
     pub message: String,
     pub fire_at: f64,
     pub every: Option<f64>,
+    #[uniffi(default = None)]
+    pub private_to: Option<Player>,
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
@@ -254,6 +276,9 @@ pub struct PendingMessage {
     pub text: String,
     pub when_busy: Option<WhenBusy>,
     pub state: PendingState,
+    /// Only the sender sees it and the answer to it.
+    #[uniffi(default = false)]
+    pub private: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
@@ -267,6 +292,24 @@ pub struct MeInfo {
 pub struct Paired {
     pub client_id: String,
     pub player: Player,
+}
+
+/// A value only its owner sees; others see `placeholder`.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct PrivateValue {
+    pub placeholder: String,
+    pub kind: String,
+    pub value: String,
+}
+
+impl From<p::PrivateValue> for PrivateValue {
+    fn from(value: p::PrivateValue) -> Self {
+        PrivateValue {
+            placeholder: value.placeholder,
+            kind: value.kind,
+            value: value.value,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
@@ -362,11 +405,13 @@ pub fn timeline_item(item: &p::TimelineItem) -> Option<TimelineItem> {
             sent_at: user.sent_at,
             client_id: user.client_id.clone(),
             request_id: user.request_id.clone(),
+            private_to: user.private_to.clone().map(Into::into),
         },
         p::TimelineItem::Nudge(nudge) => TimelineItem::Nudge {
             id: nudge.id.clone(),
             text: nudge.text.clone(),
             fired_at: nudge.fired_at,
+            private_to: nudge.private_to.clone().map(Into::into),
         },
         p::TimelineItem::Approval(approval) => TimelineItem::Approval {
             id: approval.id.clone(),
@@ -374,6 +419,7 @@ pub fn timeline_item(item: &p::TimelineItem) -> Option<TimelineItem> {
             summary: approval.summary.clone(),
             status: approval.status.into(),
             decided_by: approval.decided_by.clone(),
+            private_to: approval.private_to.clone().map(Into::into),
         },
         p::TimelineItem::Answer(answer) => TimelineItem::Answer {
             id: answer.id.clone(),
@@ -385,6 +431,7 @@ pub fn timeline_item(item: &p::TimelineItem) -> Option<TimelineItem> {
             },
             error: answer.error.clone(),
             parts: answer.parts.iter().filter_map(part).collect(),
+            private_to: answer.private_to.clone().map(Into::into),
         },
         p::TimelineItem::Marker(marker) => TimelineItem::Marker {
             id: marker.id.clone(),
@@ -428,6 +475,7 @@ impl From<p::QueuedMessage> for QueuedMessage {
             client_id: queued.client_id,
             request_id: queued.request_id,
             nudge: queued.nudge,
+            private_to: queued.private_to.map(Into::into),
         }
     }
 }
@@ -442,6 +490,7 @@ impl From<p::Approval> for Approval {
             decided_by: approval.decided_by.map(Into::into),
             decided_at: approval.decided_at,
             result: approval.result,
+            private_to: approval.private_to.map(Into::into),
         }
     }
 }
@@ -454,6 +503,7 @@ impl From<p::Fact> for Fact {
             created_at: fact.created_at,
             by: fact.by.map(Into::into),
             owner: fact.owner.map(Into::into),
+            private_to: fact.private_to.map(Into::into),
         }
     }
 }
@@ -486,6 +536,7 @@ impl From<p::RoomNudge> for RoomNudge {
             message: nudge.message,
             fire_at: nudge.fire_at,
             every: nudge.every,
+            private_to: nudge.private_to.map(Into::into),
         }
     }
 }
@@ -513,6 +564,7 @@ impl From<p::HomeView> for HomeView {
                     message: nudge.message,
                     fire_at: nudge.fire_at,
                     every: nudge.every,
+                    private_to: nudge.private_to.map(Into::into),
                 })
                 .collect(),
         }
@@ -564,6 +616,7 @@ impl From<&nudge_client::PendingMessage> for PendingMessage {
             request_id: message.request_id.clone(),
             text: message.text.clone(),
             when_busy: message.when_busy.map(Into::into),
+            private: message.private,
             state: match &message.state {
                 nudge_client::PendingState::Sending => PendingState::Sending,
                 nudge_client::PendingState::Waiting { error } => PendingState::Waiting {

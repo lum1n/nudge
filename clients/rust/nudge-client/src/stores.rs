@@ -240,6 +240,8 @@ pub struct PendingMessage {
     pub request_id: String,
     pub text: String,
     pub when_busy: Option<WhenBusy>,
+    /// Only the sender sees it and the answer to it.
+    pub private: bool,
     pub state: PendingState,
 }
 
@@ -651,6 +653,7 @@ mod tests {
             sent_at: None,
             client_id: None,
             request_id: None,
+            private_to: None,
         })
     }
 
@@ -868,6 +871,7 @@ mod tests {
             request_id: id.into(),
             text: text.into(),
             when_busy: None,
+            private: false,
             state: PendingState::Sending,
         };
         for (id, text) in [("r1", "Hello"), ("r2", "Again")] {
@@ -876,6 +880,7 @@ mod tests {
                 room: "trip".into(),
                 text: text.into(),
                 when_busy: None,
+                private: false,
                 created_at: 0,
                 error: None,
             });

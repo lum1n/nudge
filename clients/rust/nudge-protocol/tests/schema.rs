@@ -136,11 +136,13 @@ fn items() -> Vec<TimelineItem> {
             sent_at: Some(1.0),
             client_id: Some("client-1".into()),
             request_id: Some("r1".into()),
+            private_to: Some(ann()),
         }),
         TimelineItem::Nudge(NudgeItem {
             id: "nudge:2".into(),
             text: "Time".into(),
             fired_at: 2.0,
+            private_to: Some(ann()),
         }),
         TimelineItem::Approval(ApprovalItem {
             id: "approval:3".into(),
@@ -148,6 +150,7 @@ fn items() -> Vec<TimelineItem> {
             summary: "Pay".into(),
             status: ApprovalStatus::Denied,
             decided_by: Some("Ann".into()),
+            private_to: Some(ann()),
         }),
         TimelineItem::Answer(AnswerItem {
             id: "answer:4".into(),
@@ -158,6 +161,7 @@ fn items() -> Vec<TimelineItem> {
                 Part::Reasoning { text: "b".into() },
                 Part::Tool(tool()),
             ],
+            private_to: Some(ann()),
         }),
         TimelineItem::Marker(MarkerItem {
             id: "marker:5".into(),
@@ -187,6 +191,7 @@ fn room_view() -> RoomView {
             client_id: Some("client-1".into()),
             request_id: Some("r2".into()),
             nudge: false,
+            private_to: Some(ann()),
         }],
         approvals: vec![Approval {
             id: "a1".into(),
@@ -196,6 +201,7 @@ fn room_view() -> RoomView {
             decided_by: Some(ann()),
             decided_at: Some(2.0),
             result: Some("paid".into()),
+            private_to: Some(ann()),
         }],
         memory: vec![Fact {
             id: "f1".into(),
@@ -203,12 +209,14 @@ fn room_view() -> RoomView {
             created_at: 1.0,
             by: Some(ann()),
             owner: Some(ann()),
+            private_to: Some(ann()),
         }],
         nudges: vec![RoomNudge {
             id: "n1".into(),
             message: "Water".into(),
             fire_at: 5.0,
             every: Some(60_000.0),
+            private_to: Some(ann()),
         }],
     }
 }
@@ -228,6 +236,7 @@ fn home_view() -> HomeView {
             message: "Water".into(),
             fire_at: 5.0,
             every: Some(60_000.0),
+            private_to: Some(ann()),
         }],
     }
 }
@@ -396,6 +405,7 @@ fn http_bodies_match_the_schema() {
                 text: "Hi".into(),
                 request_id: "r1".into(),
                 when_busy: Some(when_busy),
+                private: Some(true),
             },
         );
     }
@@ -418,6 +428,7 @@ fn http_bodies_match_the_schema() {
                 created_at: 1.0,
                 by: Some(ann()),
                 owner: Some(ann()),
+                private_to: Some(ann()),
             }],
             shared: true,
         },
@@ -452,6 +463,17 @@ fn http_bodies_match_the_schema() {
         &ProtectRequest {
             value: "Ann".into(),
             kind: Some("NAME".into()),
+            private: Some(true),
+        },
+    );
+    check(
+        "PrivateValuesResponse",
+        &PrivateValuesResponse {
+            values: vec![PrivateValue {
+                placeholder: "⟦PRIVATE1⟧".into(),
+                kind: "PRIVATE".into(),
+                value: "Storgata 5".into(),
+            }],
         },
     );
     check(

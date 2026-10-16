@@ -106,6 +106,9 @@ pub struct UserItem {
     /// The id its sender chose, so that sender can swap its optimistic copy for this one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub request_id: Option<String>,
+    /// Only this player sees it; everyone else gets it emptied, so they know there was one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub private_to: Option<Player>,
 }
 
 /// A scheduled nudge that fired; the assistant answers it like a message.
@@ -115,6 +118,9 @@ pub struct NudgeItem {
     pub id: String,
     pub text: String,
     pub fired_at: f64,
+    /// Only this player sees it; everyone else gets it emptied, so they know there was one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub private_to: Option<Player>,
 }
 
 /// How an action people were asked to approve ended; the assistant answers it like a message.
@@ -128,6 +134,9 @@ pub struct ApprovalItem {
     /// The display name of who decided.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub decided_by: Option<String>,
+    /// Only this player sees it; everyone else gets it emptied, so they know there was one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub private_to: Option<Player>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -147,6 +156,9 @@ pub struct AnswerItem {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     pub parts: Vec<Part>,
+    /// It answers something private: only this player sees its parts; everyone else gets none.
+    #[serde(default, rename = "privateTo", skip_serializing_if = "Option::is_none")]
+    pub private_to: Option<Player>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -230,6 +242,9 @@ pub struct QueuedMessage {
     pub request_id: Option<String>,
     /// A fired nudge or an ended approval rather than someone's message.
     pub nudge: bool,
+    /// Only this player sees it; everyone else gets it emptied, so they know there was one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub private_to: Option<Player>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -247,6 +262,9 @@ pub struct Approval {
     /// What the action reported, once it ran.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub result: Option<String>,
+    /// Only this player sees it; everyone else gets it emptied, so they know there was one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub private_to: Option<Player>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -261,6 +279,9 @@ pub struct Fact {
     /// Set on a member's own fact that the room shows because they share their memory.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub owner: Option<Player>,
+    /// Only this player sees it; everyone else gets it emptied, so they know there was one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub private_to: Option<Player>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -272,6 +293,9 @@ pub struct RoomNudge {
     /// Repeat interval in ms; absent for a one-off.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub every: Option<f64>,
+    /// Only this player sees it; everyone else gets it emptied, so they know there was one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub private_to: Option<Player>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -320,6 +344,9 @@ pub struct HomeNudge {
     pub fire_at: f64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub every: Option<f64>,
+    /// Only this player sees it; everyone else gets it emptied, so they know there was one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub private_to: Option<Player>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -570,6 +597,9 @@ pub struct MessageRequest {
     /// What to do while the assistant is answering. Default `followUp`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub when_busy: Option<WhenBusy>,
+    /// Only the sender sees the message and the answer to it; the room sees that there was one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub private: Option<bool>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -641,11 +671,28 @@ pub struct ProtectRequest {
     /// Upper-case letters, such as `NAME`; default `PRIVATE`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kind: Option<String>,
+    /// Also hide the value from everyone but the caller, wherever it shows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub private: Option<bool>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ProtectResponse {
     pub placeholder: String,
+}
+
+/// A value only its owner sees; others see `placeholder`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PrivateValue {
+    pub placeholder: String,
+    pub kind: String,
+    pub value: String,
+}
+
+/// The caller's private values, in the order they were made private.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PrivateValuesResponse {
+    pub values: Vec<PrivateValue>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

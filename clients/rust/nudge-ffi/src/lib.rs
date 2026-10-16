@@ -514,16 +514,20 @@ impl NudgeClient {
         Ok(run(async move { api.personal_room().await }).await?.into())
     }
 
-    /// Sends a message, shown as pending in the room's updates until the timeline has it.
+    /// Sends a message, shown as pending in the room's updates until the timeline has it. With
+    /// `private`, only this player sees it and the answer to it.
+    #[uniffi::method(default(private = false))]
     pub async fn send(
         &self,
         room: String,
         text: String,
         when_busy: Option<WhenBusy>,
+        private: bool,
     ) -> Result<Sent, NudgeError> {
         let client = self.client.clone();
         let options = SendOptions {
             when_busy: when_busy.map(Into::into),
+            private,
             request_id: None,
         };
         let sent = run(async move { client.send(&room, &text, options).await }).await?;
@@ -695,10 +699,33 @@ impl NudgeClient {
         Ok(run(async move { api.cancel_nudge(&nudge_id).await }).await?)
     }
 
-    /// A placeholder that stands for `value` in what the model sees.
-    pub async fn protect(&self, value: String, kind: Option<String>) -> Result<String, NudgeError> {
+    /// A placeholder that stands for `value` in what the model sees. With `private`, everyone
+    /// but this player sees the placeholder too, wherever the value shows.
+    #[uniffi::method(default(private = false))]
+    pub async fn protect(
+        &self,
+        value: String,
+        kind: Option<String>,
+        private: bool,
+    ) -> Result<String, NudgeError> {
         let api = self.client.api().clone();
-        Ok(run(async move { api.protect(&value, kind.as_deref()).await }).await?)
+        Ok(run(async move { api.protect(&value, kind.as_deref(), private).await }).await?)
+    }
+
+    /// The values only this player sees.
+    pub async fn private_values(&self) -> Result<Vec<PrivateValue>, NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.private_values().await })
+            .await?
+            .into_iter()
+            .map(Into::into)
+            .collect())
+    }
+
+    /// Drops a value for good: from now on everyone, the model included, sees only `placeholder`.
+    pub async fn forget_value(&self, placeholder: String) -> Result<(), NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.forget_value(&placeholder).await }).await?)
     }
 
     // Admin commands, for players with the admin flag.

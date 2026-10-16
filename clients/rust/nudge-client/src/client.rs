@@ -62,6 +62,8 @@ pub enum Sent {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SendOptions {
     pub when_busy: Option<WhenBusy>,
+    /// Only the sender sees the message and the answer to it.
+    pub private: bool,
     /// A fresh one when absent.
     pub request_id: Option<String>,
 }
@@ -257,6 +259,7 @@ impl NudgeClient {
             room: room.to_owned(),
             text: text.to_owned(),
             when_busy: options.when_busy,
+            private: options.private,
             created_at: now_ms(),
             error: None,
         };
@@ -288,6 +291,7 @@ impl NudgeClient {
                     room: room.to_owned(),
                     text: pending.text,
                     when_busy: pending.when_busy,
+                    private: pending.private,
                     created_at: now_ms(),
                     error: None,
                 },
@@ -387,6 +391,7 @@ impl Inner {
             text: message.text.clone(),
             request_id: message.request_id.clone(),
             when_busy: message.when_busy,
+            private: message.private.then_some(true),
         };
         let result = self.api.send(&message.room, &body).await;
         self.posting.lock().unwrap().remove(&message.request_id);
@@ -462,6 +467,7 @@ fn pending(message: &Outgoing) -> PendingMessage {
         request_id: message.request_id.clone(),
         text: message.text.clone(),
         when_busy: message.when_busy,
+        private: message.private,
         state: match &message.error {
             Some(error) => PendingState::Failed {
                 error: error.clone(),
