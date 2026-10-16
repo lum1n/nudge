@@ -20,11 +20,14 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
@@ -62,6 +65,7 @@ import nudge.ffi.ApprovalStatus
 import nudge.ffi.GoneReason
 import nudge.ffi.NudgeClient
 import nudge.ffi.QueueMode
+import nudge.ffi.RoomKind
 import nudge.ffi.Status
 import nudge.ffi.SyncStatus
 
@@ -88,6 +92,7 @@ fun RoomScreen(
     val state = room?.state?.collectAsStateWithLifecycle()?.value
     val me by model.me.collectAsStateWithLifecycle()
     var draft by remember(roomId) { mutableStateOf("") }
+    var secret by remember(roomId) { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
 
     fun attempt(action: suspend () -> Unit) = scope.launch {
@@ -115,12 +120,16 @@ fun RoomScreen(
                         draft = draft,
                         onDraft = { draft = it },
                         running = state?.live?.running == true,
+                        // Only in a shared room is there anyone to keep a message from.
+                        secret = if (state?.room?.kind == RoomKind.PERSONAL) null else secret,
+                        onSecret = { secret = it },
                         send = {
                             val text = draft.trim()
                             if (text.isNotEmpty()) {
                                 draft = ""
+                                val private = secret && state?.room?.kind != RoomKind.PERSONAL
                                 // A refused message stays pending, marked failed, with Retry and Dismiss.
-                                scope.launch { runCatching { client.send(roomId, text, null) } }
+                                scope.launch { runCatching { client.send(roomId, text, null, private) } }
                             }
                         },
                         stop = { attempt { client.abort(roomId) } },
@@ -243,17 +252,39 @@ private fun Timeline(
 /** The message field, and Send, or Stop while the assistant answers and the field is empty. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun Composer(draft: String, onDraft: (String) -> Unit, running: Boolean, send: () -> Unit, stop: () -> Unit) {
+private fun Composer(
+    draft: String,
+    onDraft: (String) -> Unit,
+    running: Boolean,
+    /** Whether the next message is private; null where there is nobody to keep it from. */
+    secret: Boolean?,
+    onSecret: (Boolean) -> Unit,
+    send: () -> Unit,
+    stop: () -> Unit,
+) {
     Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
         Row(
             Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            if (secret != null) {
+                FilledIconToggleButton(
+                    checked = secret,
+                    onCheckedChange = onSecret,
+                    shapes = IconButtonDefaults.toggleableShapes(),
+                    modifier = Modifier.size(56.dp),
+                ) {
+                    Icon(
+                        if (secret) Icons.Outlined.Lock else Icons.Outlined.LockOpen,
+                        if (secret) "Private: only you see it and the answer" else "Send privately",
+                    )
+                }
+            }
             TextField(
                 value = draft,
                 onValueChange = onDraft,
-                placeholder = { Text("Message") },
+                placeholder = { Text(if (secret == true) "Private message" else "Message") },
                 maxLines = 6,
                 shape = MaterialTheme.shapes.extraLarge,
                 colors = TextFieldDefaults.colors(

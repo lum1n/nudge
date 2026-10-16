@@ -17,6 +17,7 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.PanTool
 import androidx.compose.material3.Button
@@ -73,29 +74,47 @@ val TimelineItem.itemId: String
 @Composable
 fun TimelineRow(item: TimelineItem, me: String?, decide: (String, Boolean) -> Unit, openBrowser: () -> Unit) {
     when (item) {
-        is TimelineItem.User -> {
+        // Someone else's private message: the server sent it empty, so it is a line, not a bubble.
+        is TimelineItem.User -> if (item.privateTo != null && item.text.isEmpty()) {
+            PrivateLine("${item.privateTo?.displayName} sent a private message")
+        } else {
             val mine = item.author == null || item.author?.id == me
             Column(Modifier.fillMaxWidth(), horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
+                if (item.privateTo != null) OnlyYou()
                 Bubble(item.text, mine, if (mine) null else item.author?.displayName)
             }
         }
-        is TimelineItem.Nudge -> Surface(
+        is TimelineItem.Nudge -> if (item.privateTo != null && item.text.isEmpty()) {
+            PrivateLine("A nudge for ${item.privateTo?.displayName}")
+        } else Surface(
             color = MaterialTheme.colorScheme.secondaryContainer,
             shape = MaterialTheme.shapes.large,
         ) { Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Icon(Icons.Outlined.NotificationsActive, null)
             Column {
-                Text(item.text)
+                Text(withHidden(item.text))
                 Text(
                     DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(item.firedAt.toLong())),
                     style = MaterialTheme.typography.labelSmall,
                 )
             }
         } }
-        is TimelineItem.Approval -> ApprovalCard(item.summary, item.status, item.decidedBy) { approve ->
-            decide(item.approvalId, approve)
+        is TimelineItem.Approval -> if (item.privateTo != null && item.summary.isEmpty()) {
+            PrivateLine("An approval for ${item.privateTo?.displayName} ended")
+        } else {
+            ApprovalCard(item.summary, item.status, item.decidedBy) { approve -> decide(item.approvalId, approve) }
         }
-        is TimelineItem.Answer -> Answer(item, openBrowser)
+        is TimelineItem.Answer -> when (val owner = item.privateTo) {
+            null -> Answer(item, openBrowser)
+            else -> if (owner.id == me) {
+                Column { OnlyYou(); Answer(item, openBrowser) }
+            } else {
+                PrivateLine(
+                    if (item.status == AnswerStatus.RUNNING) "Answering ${owner.displayName} privately…"
+                    else "Answered ${owner.displayName} privately",
+                )
+            }
+        }
         is TimelineItem.Marker -> Row(verticalAlignment = Alignment.CenterVertically) {
             HorizontalDivider(Modifier.weight(1f))
             Text(
@@ -127,7 +146,7 @@ fun Bubble(text: String, mine: Boolean, author: String?, faded: Boolean = false)
             modifier = Modifier.widthIn(max = 520.dp).alpha(if (faded) 0.6f else 1f),
         ) {
             SelectionContainer {
-                Text(text, Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
+                Text(withHidden(text), Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
             }
         }
     }
@@ -225,6 +244,17 @@ private fun Tool(tool: ToolPart) {
                 }
                 Text(tool.name, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
             }
+            // What a running tool is doing: the last line it printed, such as browse's `Clicking "Search"…`.
+            if (tool.status != ToolStatus.DONE && !open) {
+                tool.output?.lineSequence()?.map { it.trim() }?.lastOrNull { it.isNotEmpty() }?.let { line ->
+                    Text(
+                        line.take(100),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+            }
             if (open) {
                 if (tool.argsJson != "{}") {
                     Text(tool.argsJson, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
@@ -265,7 +295,7 @@ fun ApprovalCard(summary: String, status: ApprovalStatus, decidedBy: String?, de
                     color = MaterialTheme.colorScheme.tertiary,
                 )
             }
-            Text(summary)
+            Text(withHidden(summary))
             if (status == ApprovalStatus.PENDING) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { decide(true) }, shapes = ButtonDefaults.shapes()) {
@@ -293,7 +323,49 @@ fun ApprovalCard(summary: String, status: ApprovalStatus, decidedBy: String?, de
     }
 }
 
-/** `**bold**`, `*italic*` and `` `code` `` in a line of the answer; the rest as written. */
+/** Something private to someone else happened here; the server didn't say what. */
+@Composable
+private fun PrivateLine(text: String) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Outlined.Lock, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** Marks what is the reader's alone, so they know the others don't see it. */
+@Composable
+private fun OnlyYou() {
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Outlined.Lock, null, Modifier.size(12.dp), tint = MaterialTheme.colorScheme.tertiary)
+        Text("Only you", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
+    }
+}
+
+/** `⟦EMAIL1⟧` and the like: a value the server hid from this player. */
+private val PLACEHOLDER = Regex("⟦[A-Z]+\\d+⟧")
+
+private val HIDDEN = SpanStyle(
+    fontFamily = FontFamily.Monospace,
+    fontStyle = FontStyle.Italic,
+    background = androidx.compose.ui.graphics.Color(0x33808080),
+)
+
+/** Text with each hidden value shown as "hidden". */
+fun withHidden(text: String): AnnotatedString = buildAnnotatedString {
+    var last = 0
+    for (match in PLACEHOLDER.findAll(text)) {
+        append(text.substring(last, match.range.first))
+        withStyle(HIDDEN) { append(" hidden ") }
+        last = match.range.last + 1
+    }
+    append(text.substring(last))
+}
+
+/** `**bold**`, `*italic*` and `` `code` `` in a line of the answer, hidden values marked; the rest as written. */
 fun markdown(text: String): AnnotatedString = buildAnnotatedString {
     var i = 0
     fun span(open: String, style: SpanStyle): Boolean {
@@ -305,6 +377,12 @@ fun markdown(text: String): AnnotatedString = buildAnnotatedString {
         return true
     }
     while (i < text.length) {
+        val hidden = PLACEHOLDER.matchAt(text, i)
+        if (hidden != null) {
+            withStyle(HIDDEN) { append(" hidden ") }
+            i = hidden.range.last + 1
+            continue
+        }
         if (span("**", SpanStyle(fontWeight = FontWeight.Bold))) continue
         if (span("`", SpanStyle(fontFamily = FontFamily.Monospace))) continue
         if (span("*", SpanStyle(fontStyle = FontStyle.Italic))) continue

@@ -19,6 +19,7 @@ import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.Share
@@ -64,6 +65,7 @@ import java.text.NumberFormat
 import java.util.Currency
 import kotlinx.coroutines.launch
 import nudge.ffi.PlayerMemory
+import nudge.ffi.PrivateValue
 import nudge.ffi.Usage
 
 /**
@@ -78,6 +80,8 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
     val platforms by model.pushPlatforms.collectAsStateWithLifecycle()
     val client = session.client
     var memory by remember { mutableStateOf<PlayerMemory?>(null) }
+    var hidden by remember { mutableStateOf<List<PrivateValue>?>(null) }
+    var newHidden by remember { mutableStateOf("") }
     var usage by remember { mutableStateOf<Usage?>(null) }
     var newFact by remember { mutableStateOf("") }
     var problem by remember { mutableStateOf<String?>(null) }
@@ -90,6 +94,7 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
         try {
             action()
             memory = client.myMemory()
+            hidden = client.privateValues()
             problem = null
         } catch (error: Exception) {
             problem = explain(error)
@@ -99,6 +104,7 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
     LaunchedEffect(client) {
         try {
             memory = client.myMemory()
+            hidden = client.privateValues()
             usage = client.usage()
         } catch (error: Exception) {
             problem = explain(error)
@@ -221,6 +227,61 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                         if (text.isNotEmpty()) {
                             newFact = ""
                             change { client.rememberForMe(text) }
+                        }
+                    }),
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                )
+            }
+
+            // Values only this player sees: everyone else, and the model, get a placeholder.
+            group(
+                "Only you see",
+                buildList<GroupRow> {
+                    val values = hidden
+                    if (values == null) {
+                        add { _ -> LoadingIndicator(Modifier.padding(16.dp)) }
+                        return@buildList
+                    }
+                    if (values.isEmpty()) {
+                        add { shapes ->
+                            SegmentedListItem(
+                                shapes = shapes,
+                                leadingContent = { Icon(Icons.Outlined.Lock, null) },
+                                supportingContent = {
+                                    Text("Hide an address, a name or a number: the others and the assistant see it as hidden, in every room.")
+                                },
+                            ) { Text("Nothing hidden yet") }
+                        }
+                    }
+                    values.forEach { value ->
+                        add { shapes ->
+                            SegmentedListItem(
+                                shapes = shapes,
+                                leadingContent = { Icon(Icons.Outlined.Lock, null) },
+                                trailingContent = {
+                                    // Forgotten for good: from then on everyone sees only the placeholder.
+                                    IconButton(onClick = { change { client.forgetValue(value.placeholder) } }) {
+                                        Icon(Icons.Outlined.Close, "Forget for good")
+                                    }
+                                },
+                            ) { Text(value.value) }
+                        }
+                    }
+                },
+            )
+            item {
+                OutlinedTextField(
+                    value = newHidden,
+                    onValueChange = { newHidden = it },
+                    placeholder = { Text("Hide a value…") },
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.large,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = {
+                        val text = newHidden.trim()
+                        if (text.length >= 2) {
+                            newHidden = ""
+                            change { client.protect(text, null, true) }
                         }
                     }),
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
