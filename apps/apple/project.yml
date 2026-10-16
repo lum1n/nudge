@@ -48,6 +48,10 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         UILaunchScreen: {}
         NSLocalNetworkUsageDescription: Nudge reaches a Nudge server on your network.
+        # Plain HTTP only to servers on the local network (private addresses, .local names);
+        # everywhere else HTTPS, as App Transport Security wants.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
         UIBackgroundModes: [remote-notification]
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
@@ -92,6 +96,10 @@ targets:
             CFBundleURLSchemes: [nudge]
         ITSAppUsesNonExemptEncryption: false
         LSApplicationCategoryType: public.app-category.productivity
+        # Plain HTTP only to servers on the local network (private addresses, .local names);
+        # everywhere else HTTPS, as App Transport Security wants.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.nudge.dev

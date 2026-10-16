@@ -1,5 +1,6 @@
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { networkInterfaces } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
@@ -35,6 +36,43 @@ export type ServeOptions = {
   readonly publicUrl?: string;
 };
 
+/**
+ * Where to reach the server: on this computer only, or at each of its network addresses when it
+ * listens on all of them, as apps on a phone need.
+ */
+export function startupLines(
+  url: string,
+  host: string,
+  assistants: readonly string[],
+  web: string | undefined,
+  interfaces = networkInterfaces(),
+): string[] {
+  const port = new URL(url).port;
+  const everywhere = host === "0.0.0.0" || host === "::";
+  const addresses = everywhere
+    ? Object.values(interfaces)
+        .flat()
+        .filter((info) => info !== undefined && info.family === "IPv4" && !info.internal)
+        .map((info) => `http://${info!.address}:${port}`)
+    : [url];
+  const lines = [
+    `Nudge is serving ${assistants.join(", ")} at ${addresses.join(", ") || url}` +
+      (web === undefined ? " (API only)" : ", with the web UI"),
+  ];
+  if (everywhere)
+    lines.push(
+      "Plain HTTP: anyone on this network can read what goes over it, tokens included. Put a TLS proxy in front, or use a VPN such as Tailscale, beyond a network you trust.",
+    );
+  else if (host === "127.0.0.1" || host === "localhost" || host === "::1")
+    lines.push(
+      "Only this computer can reach it. For phones and other computers: nudge serve --host 0.0.0.0",
+    );
+  lines.push(
+    "Sign in apps with a code from: nudge pair <player>   Chat here: NUDGE_TOKEN=… nudge chat --url <address>",
+  );
+  return lines;
+}
+
 /** Runs every configured assistant behind one HTTP and WebSocket server until Ctrl-C. */
 export async function serve(options: ServeOptions): Promise<void> {
   const context = BACKGROUND_CONTEXT;
@@ -69,9 +107,8 @@ export async function serve(options: ServeOptions): Promise<void> {
             },
           }),
     });
-    if (web !== undefined) console.log(`Web: ${server.url}`);
-    for (const name of assistants.keys()) console.log(`${name}: ${server.url}/a/${name}`);
-    console.log("Connect with: NUDGE_TOKEN=… nudge chat --url <url above>");
+    for (const line of startupLines(server.url, options.host, [...assistants.keys()], web))
+      console.log(line);
     const stopReloading = reloadOnHangup(options.config, assistants);
     const stopBackups = scheduleBackups(options.config, config, (line) => console.log(line));
     await new Promise<void>((resolve) => {

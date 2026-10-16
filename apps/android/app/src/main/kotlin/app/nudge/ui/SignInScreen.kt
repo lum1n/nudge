@@ -208,10 +208,28 @@ fun SignInScreen(model: AppModel, askForNotifications: () -> Unit) {
     }
 }
 
-/** `nudge.example` → `https://nudge.example`, and no trailing slash. */
+/**
+ * `nudge.example` → `https://nudge.example`, `192.168.1.10:8787` → `http://192.168.1.10:8787` (a
+ * server on the local network rarely has a certificate), and no trailing slash.
+ */
 private fun normalized(text: String): String {
     var address = text.trim()
     if (address.isEmpty()) return address
-    if ("://" !in address) address = "https://$address"
+    if ("://" !in address) address = (if (isLocal(address)) "http://" else "https://") + address
     return address.trimEnd('/')
+}
+
+/** Whether an address without a scheme names a host on this network. */
+private fun isLocal(address: String): Boolean {
+    var host = address.substringBefore('/').lowercase()
+    if (host.startsWith("[")) return listOf("[fd", "[fc", "[fe80", "[::1]").any { host.startsWith(it) }
+    host = host.substringBeforeLast(':')
+    if (host == "localhost" || listOf(".local", ".lan", ".home.arpa", ".internal").any { host.endsWith(it) }) {
+        return true
+    }
+    val parts = host.split('.').mapNotNull { it.toIntOrNull() }
+    if (parts.size != 4) return false
+    val (a, b) = parts
+    return a == 10 || a == 127 || (a == 192 && b == 168) || (a == 169 && b == 254) ||
+        (a == 172 && b in 16..31) || (a == 100 && b in 64..127) // carrier-grade NAT, such as Tailscale
 }

@@ -129,13 +129,33 @@ struct SignInView: View {
         }
     }
 
-    /// `nudge.example` → `https://nudge.example`, and no trailing slash.
+    /// `nudge.example` → `https://nudge.example`, `192.168.1.10:8787` → `http://192.168.1.10:8787`
+    /// (a server on the local network rarely has a certificate), and no trailing slash.
     private func normalized(_ text: String) -> String {
         var address = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if address.isEmpty { return address }
-        if !address.contains("://") { address = "https://" + address }
+        if !address.contains("://") { address = (isLocal(address) ? "http://" : "https://") + address }
         while address.hasSuffix("/") { address.removeLast() }
         return address
+    }
+
+    /// Whether an address without a scheme names a host on this network.
+    private func isLocal(_ address: String) -> Bool {
+        var host = String(address.prefix { $0 != "/" })
+        if host.hasPrefix("[") { return host.hasPrefix("[fd") || host.hasPrefix("[fc") || host.hasPrefix("[fe80") || host.hasPrefix("[::1]") }
+        if let colon = host.lastIndex(of: ":") { host = String(host[..<colon]) }
+        host = host.lowercased()
+        if host == "localhost" || [".local", ".lan", ".home.arpa", ".internal"].contains(where: host.hasSuffix) {
+            return true
+        }
+        let parts = host.split(separator: ".").compactMap { Int($0) }
+        guard parts.count == 4 else { return false }
+        switch (parts[0], parts[1]) {
+        case (10, _), (127, _), (192, 168), (169, 254): return true
+        case (172, 16...31): return true
+        case (100, 64...127): return true  // carrier-grade NAT, such as Tailscale
+        default: return false
+        }
     }
 }
 
