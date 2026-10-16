@@ -265,7 +265,12 @@ describe("per-person visibility", () => {
       (await call("DELETE", `/vault/${encodeURIComponent("⟦PRIVATE1⟧")}`, tokens.Ann!)).status,
     ).toBe(404);
     expect((await call("GET", "/me/private", tokens.Ann!)).json).toEqual({ values: [] });
-    // Forgotten, it is no one's any more: the model never gets it back either.
+    // Forgotten, it is no one's any more: history holds only the placeholder, for everyone.
     expect(nudge.showTo("ann", "⟦PRIVATE1⟧")).toBe("⟦PRIVATE1⟧");
+    await eventually(() => (first(ann) as { text?: string }).text === "Meet at ⟦PRIVATE1⟧");
+    expect(first(bo)).toMatchObject({ text: "Meet at ⟦PRIVATE1⟧" });
+    const conversation = await nudge.conversation("trip", context);
+    const stored = JSON.stringify((await conversation.entries({}, 100, undefined, context)).items);
+    expect(stored).not.toContain("Storgata 5");
   });
 });

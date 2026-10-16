@@ -48,16 +48,53 @@ type Bound = {
 export class RedactingModels implements Models {
   private bound: Bound | undefined;
   private saving: Promise<void> = Promise.resolve();
-  /** The assistant's detectors, then its extensions'; replaced when extensions reload. */
-  detectors: readonly PiiDetector[];
-  /** Why no request may go out now, such as a spent budget; undefined lets them through. */
-  refuse: () => string | undefined = () => undefined;
+  private ownDetectors: readonly PiiDetector[];
+  private ownRefuse: () => string | undefined = () => undefined;
+  private valued: RedactingModels | undefined;
 
+  /**
+   * By default what comes back keeps its placeholders, as the transcript stores it (ADR 9);
+   * `withValues()` gives the copy that puts the values back, for code that acts on them.
+   */
   constructor(
     private readonly inner: Models,
     private readonly options: RedactionOptions,
+    /** Shares the vault, detectors and budget of another, and puts values back in what comes back. */
+    private readonly root?: RedactingModels,
   ) {
-    this.detectors = options.detectors;
+    this.ownDetectors = options.detectors;
+  }
+
+  /** The assistant's detectors, then its extensions'; replaced when extensions reload. */
+  get detectors(): readonly PiiDetector[] {
+    return this.root?.detectors ?? this.ownDetectors;
+  }
+
+  set detectors(detectors: readonly PiiDetector[]) {
+    this.ownDetectors = detectors;
+  }
+
+  /** Why no request may go out now, such as a spent budget; undefined lets them through. */
+  get refuse(): () => string | undefined {
+    return this.root?.refuse ?? this.ownRefuse;
+  }
+
+  set refuse(refuse: () => string | undefined) {
+    this.ownRefuse = refuse;
+  }
+
+  /**
+   * The same models with values put back in what comes back, for code that acts on the answer
+   * itself rather than storing it, such as a browser worker that types into a page.
+   */
+  withValues(): RedactingModels {
+    if (this.root !== undefined) return this;
+    this.valued ??= new RedactingModels(this.inner, this.options, this);
+    return this.valued;
+  }
+
+  private get rehydrating(): boolean {
+    return this.root !== undefined;
   }
 
   /** Connects the vault once its storage is open. Requests before this fail. */
@@ -66,6 +103,7 @@ export class RedactingModels implements Models {
   }
 
   get vault(): Vault {
+    if (this.root !== undefined) return this.root.vault;
     if (this.bound === undefined)
       throw new Error("Redaction is not ready: the vault is not loaded yet");
     return this.bound.vault;
@@ -73,6 +111,7 @@ export class RedactingModels implements Models {
 
   /** Saves new vault entries, in order, and waits until everything added so far is stored. */
   async flush(): Promise<void> {
+    if (this.root !== undefined) return this.root.flush();
     const { vault, save } = this.bound ?? this.notReady();
     const entries = vault.takeUnsaved();
     if (entries.length > 0) {
@@ -178,7 +217,8 @@ export class RedactingModels implements Models {
     handle: DeferredHandle,
     options?: ModelsDeferredFetchOptions,
   ) {
-    return rehydrateMessage(await this.inner.fetchDeferred(model, handle, options), this.vault);
+    const message = await this.inner.fetchDeferred(model, handle, options);
+    return this.rehydrating ? rehydrateMessage(message, this.vault) : message;
   }
 
   // Everything else passes through. Spelled out: `inner` is a class instance, so spreading it
@@ -241,7 +281,8 @@ export class RedactingModels implements Models {
     event: AssistantMessageEvent,
     shown: Map<number, string>,
   ): AssistantMessageEvent {
-    const vault = this.vault;
+    // Placeholders stay; only one cut off at the end of the text so far is held back.
+    const vault = this.rehydrating ? this.vault : KEEP_PLACEHOLDERS;
     switch (event.type) {
       case "done":
         return { ...event, message: rehydrateMessage(event.message, vault) };
@@ -297,6 +338,9 @@ export class RedactingModels implements Models {
     throw new Error("Redaction is not ready: the vault is not loaded yet");
   }
 }
+
+/** Puts nothing back: what `rehydrateEvent` uses when placeholders are to stay. */
+const KEEP_PLACEHOLDERS = { rehydrate: (text: string) => text } as Vault;
 
 /** A request the assistant would not send, such as one past its budget. */
 export class RequestRefused extends Error {

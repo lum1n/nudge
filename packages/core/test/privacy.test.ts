@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
@@ -13,6 +13,9 @@ import {
 import { AssistantEntry, defineExtension, defineTool } from "@earendil-works/pi-durable";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { builtinDetectors, createNudge, LOBBY, type NudgeOptions, Vault } from "../src/index.ts";
+import { openRawDatabase } from "../src/encrypted-storage.ts";
+import { MemoryDoc } from "../src/memory/memory.ts";
+import { redactHistory } from "../src/privacy/redact-history.ts";
 import { withoutPartialPlaceholder } from "../src/privacy/vault.ts";
 
 const context = BACKGROUND_CONTEXT;
@@ -176,8 +179,16 @@ describe("redaction in a running assistant", () => {
     const lobby = await withTool.conversation(LOBBY, context);
     const answer = await lobby.commit((tx) => tx.entry(AssistantEntry, settled.answer), context);
     const answerText = JSON.stringify(answer?.model);
-    expect(answerText).toContain(`Vegard, I found Kari at ${PHONE}. Your IBAN is ${IBAN}.`);
+    // Stored as the model wrote it; people get the values back where they see it.
+    expect(answerText).toContain("⟦NAME2⟧, I found ⟦NAME1⟧ at ⟦PHONE1⟧. Your IBAN is ⟦IBAN1⟧.");
+    expect(
+      withTool.showTo("p1", "⟦NAME2⟧, I found ⟦NAME1⟧ at ⟦PHONE1⟧. Your IBAN is ⟦IBAN1⟧."),
+    ).toBe(`Vegard, I found Kari at ${PHONE}. Your IBAN is ${IBAN}.`);
+    // The tool acted on the value, and what it returned was stored without it.
     expect(seenByTool).toEqual([EMAIL]);
+    const stored = JSON.stringify((await lobby.entries({}, 100, undefined, context)).items);
+    for (const secret of SECRETS) expect(stored).not.toContain(secret);
+    expect(stored).toContain("Found ⟦NAME1⟧ at ⟦EMAIL1⟧, phone ⟦PHONE1⟧");
 
     const compaction = await lobby.compact(undefined, context);
     const compacted = await withTool.harness.waitForTask(compaction, context);
@@ -189,6 +200,53 @@ describe("redaction in a running assistant", () => {
       for (const secret of [...SECRETS, "Vegard"]) expect(request).not.toContain(secret);
     }
     expect(sent[1]).toContain("⟦PHONE1⟧");
+  });
+
+  it("rewrites history from before placeholders were stored, and vacuums it out of the file", async () => {
+    const { faux, options } = setup();
+    faux.setResponses([fauxAssistantMessage("Noted, ⟦EMAIL1⟧.")]);
+    const first = await createNudge(options, context);
+    const author = { playerId: "p1", displayName: "Vegard" };
+    await (await first.submit(LOBBY, { text: `Mail ${EMAIL}`, author }, context)).wait(context);
+    await first.memory.remember(LOBBY, "placeholder", context);
+    await first.close(context);
+    // As an older Nudge stored it: the values written out.
+    const raw = await openRawDatabase(options.database);
+    for (const row of raw.all("SELECT id, record FROM entries") as { id: number; record: string }[])
+      raw.run(
+        "UPDATE entries SET record = ? WHERE id = ?",
+        row.record.replaceAll("⟦EMAIL1⟧", EMAIL),
+        row.id,
+      );
+    raw.close();
+    const old = await createNudge(options, context);
+    await old.harness.commit(async (tx) => {
+      (await tx.doc(MemoryDoc, LOBBY, null)).facts[0]!.text = `Vegard is at ${PHONE}`;
+    }, context);
+    await old.close(context);
+
+    expect(await redactHistory(options, createNudge, context)).toEqual({
+      entries: expect.any(Number),
+      documents: 1,
+    });
+    // The vault is the one place the values stay.
+    const check = await openRawDatabase(options.database);
+    const rows = JSON.stringify(check.all("SELECT record FROM entries"));
+    check.close();
+    expect(rows).not.toContain(EMAIL);
+    expect(rows).toContain("⟦EMAIL1⟧");
+    const reopened = await createNudge(options, context);
+    expect((await reopened.memory.list(LOBBY, context))[0]!.text).toBe("⟦NAME1⟧ is at ⟦PHONE1⟧");
+    expect(reopened.showTo("p1", "⟦NAME1⟧ is at ⟦PHONE1⟧")).toBe(`Vegard is at ${PHONE}`);
+    // Forgetting a value now takes it out of every copy.
+    await reopened.forgetValue("⟦EMAIL1⟧");
+    await reopened.close(context);
+    const after = (await readFile(options.database)).toString("latin1");
+    const wal = await readFile(`${options.database}-wal`).then(
+      (b) => b.toString("latin1"),
+      () => "",
+    );
+    expect(after + wal).not.toContain(EMAIL);
   });
 
   it("keeps placeholders across a restart", async () => {
@@ -205,7 +263,7 @@ describe("redaction in a running assistant", () => {
     await second.close(context);
   });
 
-  it("streams values, not placeholders, even when a chunk splits one", async () => {
+  it("streams placeholders whole, even when a chunk splits one", async () => {
     const { faux, options } = setup();
     faux.setResponses([fauxAssistantMessage("Dear ⟦NAME1⟧, your mail ⟦EMAIL1⟧ is set.")]);
     const nudge = await createNudge(
@@ -227,7 +285,15 @@ describe("redaction in a running assistant", () => {
     await (await nudge.submit(LOBBY, { text: "status?", author }, context)).wait(context);
     await nudge.harness.waitForIdle(context);
     await stream.stop();
+    // Viewers fill the values in, so a placeholder never arrives in pieces.
+    let shown = "";
+    for (const delta of partials) {
+      shown += delta;
+      expect(shown.lastIndexOf("⟦")).toBeLessThanOrEqual(shown.lastIndexOf("⟧"));
+    }
+    // The last words may come only with the finished message.
+    expect(shown).toMatch(/^Dear ⟦NAME1⟧, your mail ⟦EMAIL1⟧ is/);
+    expect(nudge.showTo("p1", shown)).toMatch(`Dear Vegard, your mail ${EMAIL} is`);
     await nudge.close(context);
-    expect(partials.join("")).not.toContain("⟦");
   });
 });

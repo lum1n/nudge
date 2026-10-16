@@ -3,10 +3,10 @@ import type { Models } from "@earendil-works/pi-ai";
 import { type AssistantConfig, ConfigError, DEFAULT_MODEL, type NudgeConfig } from "./config.ts";
 import { loadExtensions } from "./extensions/loader.ts";
 import { buildModels } from "./models/providers.ts";
+import { type RedactedHistory, redactHistory } from "./privacy/redact-history.ts";
 import {
   ExtensionNotFound,
   type InstalledExtension,
-  type ModelViewMessage,
   NotAllowed,
   Nudge,
   type NudgeOptions,
@@ -148,6 +148,9 @@ export {
   type Span,
 } from "./privacy/detectors.ts";
 export { Vault, type VaultEntry } from "./privacy/vault.ts";
+export { keepsPlaceholders } from "./privacy/tool-values.ts";
+export type { RedactedHistory };
+export { currentTurn, type Owner, type Turn } from "./privacy/turn.ts";
 export {
   type DatabaseEncryption,
   type DatabaseKey,
@@ -194,20 +197,42 @@ export async function openAssistant(
   context: Context,
   overrides: Partial<NudgeOptions> & { models?: Models } = {},
 ): Promise<Nudge> {
-  return Nudge.open(
-    {
-      database: assistant.database ?? ":memory:",
-      models: overrides.models ?? buildModels(config.providers),
-      model: assistant.model ?? DEFAULT_MODEL,
-      displayName: assistant.displayName ?? capitalize(assistant.name),
-      timeZone: assistant.timeZone,
-      instructions: assistant.instructions,
-      extensions: await loadExtensions(assistant.extensions ?? []),
-      ...(assistant.budget === undefined ? {} : { budget: assistant.budget }),
-      ...overrides,
-    },
+  return Nudge.open(await assistantOptions(config, assistant, overrides), context);
+}
+
+/**
+ * Rewrites a configured assistant's database from before ADR 9 with placeholders; see
+ * `redactHistory`. Needs the database to itself.
+ */
+export async function redactStoredHistory(
+  config: NudgeConfig,
+  assistant: AssistantConfig,
+  context: Context,
+  overrides: Partial<NudgeOptions> = {},
+): Promise<RedactedHistory> {
+  return redactHistory(
+    await assistantOptions(config, assistant, overrides),
+    (options, openContext) => Nudge.open(options, openContext),
     context,
   );
+}
+
+async function assistantOptions(
+  config: NudgeConfig,
+  assistant: AssistantConfig,
+  overrides: Partial<NudgeOptions> & { models?: Models },
+): Promise<NudgeOptions> {
+  return {
+    database: assistant.database ?? ":memory:",
+    models: overrides.models ?? buildModels(config.providers),
+    model: assistant.model ?? DEFAULT_MODEL,
+    displayName: assistant.displayName ?? capitalize(assistant.name),
+    timeZone: assistant.timeZone,
+    instructions: assistant.instructions,
+    extensions: await loadExtensions(assistant.extensions ?? []),
+    ...(assistant.budget === undefined ? {} : { budget: assistant.budget }),
+    ...overrides,
+  };
 }
 
 function capitalize(name: string): string {

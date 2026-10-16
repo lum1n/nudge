@@ -183,7 +183,9 @@ describe("mail", () => {
     expect(mail.sent).toEqual([]);
     const [approval] = await nudge.approvals.list(LOBBY, context);
     expect(approval).toMatchObject({ extension: "mail", kind: "send", status: "pending" });
-    expect(approval!.summary).toContain('to post@skole.example: "Re: Foreldremøte torsdag"');
+    expect(nudge.showTo(undefined, approval!.summary)).toContain(
+      'to post@skole.example: "Re: Foreldremøte torsdag"',
+    );
 
     const done = await nudge.approvals.decide(LOBBY, approval!.id, { approve: true, by }, context);
     expect(done.status).toBe("done");

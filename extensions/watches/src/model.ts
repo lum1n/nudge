@@ -22,6 +22,8 @@ export type Watch = {
   /** Why the last check failed, if it did. */
   lastError?: string;
   createdAt: number;
+  /** Added in answer to something private: only this player hears what it finds. */
+  privateTo?: { playerId: string; displayName: string };
 };
 
 export type WatchesState = { items: Watch[]; next: number };

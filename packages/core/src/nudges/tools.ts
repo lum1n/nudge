@@ -1,6 +1,7 @@
 import { Type } from "@earendil-works/pi-ai";
 import { defineTool, type ToolRegistration } from "@earendil-works/pi-durable";
 import { roomOf } from "../identity/directory.ts";
+import { keepsPlaceholders } from "../privacy/tool-values.ts";
 import { currentTurn } from "../privacy/turn.ts";
 import type { Nudges } from "./nudges.ts";
 import { formatTime, parseTime, type ScheduledNudge } from "./schedule.ts";
@@ -101,7 +102,7 @@ export function createNudgeTools(options: NudgeToolOptions): ToolRegistration[] 
     },
   });
 
-  return [schedule, list, cancel] as ToolRegistration[];
+  return [keepsPlaceholders(schedule), list, cancel] as ToolRegistration[];
 }
 
 function minutes(ms: number): string {

@@ -14,6 +14,7 @@ import {
 import type { Change } from "../changes.ts";
 import { DirectoryDoc, type Room, roomOf } from "../identity/directory.ts";
 import type { Rooms } from "../identity/rooms.ts";
+import { keepsPlaceholders } from "../privacy/tool-values.ts";
 import { currentTurn, type Turn } from "../privacy/turn.ts";
 
 /** A person, as a fact names them. */
@@ -59,6 +60,8 @@ export const MemoryDoc = defineDocFamily<MemoryState, null>({
   scope: "session",
   family: true,
   initial: () => ({ facts: [], next: 1 }),
+  // Stored whole on every change, so what was forgotten leaves no older revision (ADR 9).
+  checkpointWhen: () => true,
 });
 
 /**
@@ -72,6 +75,8 @@ export const PlayerMemoryDoc = defineDocFamily<PlayerMemoryState, null>({
   scope: "session",
   family: true,
   initial: () => ({ facts: [], next: 1, shared: false }),
+  // Stored whole on every change, so what was forgotten leaves no older revision (ADR 9).
+  checkpointWhen: () => true,
 });
 
 export const MAX_FACTS = 100;
@@ -153,6 +158,8 @@ export class Memory {
     private readonly rooms: Rooms,
     private readonly now: () => number,
     private readonly changed: (change: Change) => void = () => {},
+    /** Facts people add are kept with placeholders, like what the model remembers. */
+    private readonly redact: (text: string) => string = (text) => text,
   ) {}
 
   /** The room's own facts. */
@@ -176,7 +183,7 @@ export class Memory {
     if ((await this.rooms.get(roomId, context)) === undefined)
       throw new Error(`No room "${roomId}"`);
     const fact = await this.harness.commit(
-      (tx) => addFact(tx, roomId, text, this.now(), by),
+      (tx) => addFact(tx, roomId, this.redact(text), this.now(), by),
       context,
     );
     this.changed({ kind: "memory", roomId });
@@ -213,7 +220,7 @@ export class Memory {
   ): Promise<Fact> {
     await this.knownPlayer(playerId, context);
     const fact = await this.harness.commit(
-      (tx) => addPlayerFact(tx, playerId, text, this.now(), by),
+      (tx) => addPlayerFact(tx, playerId, this.redact(text), this.now(), by),
       context,
     );
     await this.playerChanged(playerId, context);
@@ -397,5 +404,5 @@ export function createMemoryTools(now: () => number): ToolRegistration[] {
     },
   });
 
-  return [remember, forget] as ToolRegistration[];
+  return [keepsPlaceholders(remember), forget] as ToolRegistration[];
 }

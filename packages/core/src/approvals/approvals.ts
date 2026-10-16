@@ -10,6 +10,7 @@ import {
 import type { Change } from "../changes.ts";
 import type { Room } from "../identity/directory.ts";
 import type { Rooms } from "../identity/rooms.ts";
+import { mapStrings } from "../privacy/redact.ts";
 import { currentTurn, inTurn, type Owner } from "../privacy/turn.ts";
 
 export type ApprovalStatus = "pending" | "approved" | "denied" | "done" | "failed";
@@ -49,6 +50,8 @@ export const ApprovalsDoc = defineDocFamily<ApprovalsState, null>({
   scope: "session",
   family: true,
   initial: () => ({ items: [], next: 1 }),
+  // Stored whole on every change, so what was forgotten leaves no older revision (ADR 9).
+  checkpointWhen: () => true,
 });
 
 export const APPROVAL_ENTRY = "nudge.approval";
@@ -103,16 +106,17 @@ export async function requestApproval(
   const state = await tx.doc(ApprovalsDoc, roomId, null);
   if (state.items.filter((item) => item.status === "pending").length >= MAX_PENDING)
     throw new Error(`This conversation has ${MAX_PENDING} approvals waiting already`);
+  // Kept with placeholders like the transcript; the handler gets the values back.
+  const { privateTo, redact = (text: string) => text } = currentTurn();
   const approval: Approval = {
     id: `a${state.next}`,
     extension: draft.extension,
     kind: draft.kind,
-    summary,
-    payload: draft.payload,
+    summary: redact(summary),
+    payload: mapStrings(draft.payload, redact),
     requestedAt: now,
     status: "pending",
   };
-  const { privateTo } = currentTurn();
   if (privateTo !== undefined) approval.privateTo = { ...privateTo };
   state.next += 1;
   state.items.push(structuredClone(approval));
@@ -141,6 +145,10 @@ export class Approvals {
     /** The handler an installed extension has for `kind`, looked up when an approval runs. */
     private readonly handler: (extension: string, kind: string) => ApprovalHandler | undefined,
     private readonly changed: (change: Change) => void = () => {},
+    /** Puts values back in a payload, which is stored with placeholders. */
+    private readonly rehydrate: (text: string) => string = (text) => text,
+    /** What an action reports is stored with placeholders too. */
+    private readonly redact: (text: string) => string = (text) => text,
   ) {}
 
   /** Newest first. */
@@ -182,7 +190,7 @@ export class Approvals {
     const outcome = await this.run(room, decided, context);
     const finished = await this.update(roomId, id, context, (item) => {
       item.status = outcome.isError ? "failed" : "done";
-      item.result = outcome.text;
+      item.result = this.redact(outcome.text);
     });
     await this.tell(room, finished, context);
     return finished;
@@ -218,7 +226,7 @@ export class Approvals {
       // What the action asks for in turn, such as another approval, stays as private as it is.
       const turn = approval.privateTo === undefined ? {} : { privateTo: approval.privateTo };
       return await inTurn(turn, () =>
-        handler(approval.payload, {
+        handler(mapStrings(approval.payload, this.rehydrate), {
           room,
           approval,
           commit: (apply) => this.harness.commit(apply, context),

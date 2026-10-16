@@ -6,22 +6,34 @@ import {
   findAssistant,
   loadConfig,
   lockDatabase,
+  redactStoredHistory,
 } from "@nudge/core";
+import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { AdminOptions } from "./admin.ts";
 
 /**
- * Shows whether each assistant's database is encrypted, or encrypts or decrypts it in place. Needs
- * the database to itself, so it refuses while `nudge serve` or a chat has it open.
+ * Shows whether each assistant's database is encrypted, or encrypts or decrypts it in place, or
+ * rewrites its history with placeholders (`redact`). Needs the database to itself, so it refuses
+ * while `nudge serve` or a chat has it open.
  */
 export async function db(
-  options: AdminOptions & { readonly verb?: "encrypt" | "decrypt" },
+  options: AdminOptions & { readonly verb?: "encrypt" | "decrypt" | "redact" },
 ): Promise<void> {
   const config = await loadConfig(options.config);
   const assistants =
     options.assistant === undefined
       ? config.assistants
       : [findAssistant(config, options.assistant)];
-  for (const { name, database = "" } of assistants) {
+  for (const assistant of assistants) {
+    const { name, database = "" } = assistant;
+    if (options.verb === "redact") {
+      const done = await redactStoredHistory(config, assistant, BACKGROUND_CONTEXT);
+      console.log(
+        `${name}: ${done.entries} transcript entries and ${done.documents} remembered texts now ` +
+          "hold placeholders; the values are only in the vault.",
+      );
+      continue;
+    }
     const state = await databaseEncryption(database);
     if (options.verb === undefined) {
       const key = state === "encrypted" ? await databaseKey(database) : undefined;

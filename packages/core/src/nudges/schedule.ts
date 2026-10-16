@@ -29,6 +29,8 @@ export const ScheduleDoc = defineDoc<ScheduleState>({
   version: 1,
   scope: "session",
   initial: () => ({ nudges: {} }),
+  // Stored whole on every change, so what was forgotten leaves no older revision (ADR 9).
+  checkpointWhen: () => true,
 });
 
 /** The first time after `now` a nudge that was due at `fireAt` fires again; missed repeats are skipped. */

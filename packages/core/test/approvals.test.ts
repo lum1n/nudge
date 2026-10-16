@@ -125,14 +125,17 @@ describe("approvals", () => {
       id: "a1",
       extension: "mailer",
       kind: "send",
-      summary: "Send a mail to ann@example.com",
+      // Stored with placeholders; the handler still gets the address.
+      summary: "Send a mail to ⟦EMAIL1⟧",
+      payload: { to: "⟦EMAIL1⟧" },
       status: "pending",
     });
+    expect(nudge.showTo("ann", pending!.summary)).toBe("Send a mail to ann@example.com");
 
     const done = await nudge.approvals.decide(LOBBY, "a1", { approve: true, by }, context);
     expect(done).toMatchObject({
       status: "done",
-      result: "Sent to ann@example.com.",
+      result: "Sent to ⟦EMAIL1⟧.",
       decidedBy: by,
     });
     expect(sent).toEqual(["ann@example.com"]);

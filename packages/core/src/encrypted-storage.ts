@@ -8,13 +8,17 @@ import type { Storage } from "@earendil-works/pi-durable";
 import { SqliteStorage } from "@earendil-works/pi-durable/storage/sqlite";
 import {
   NodeSqliteDatabase,
-  openNodeSqliteStorage,
+  openNodeSqliteDatabase,
 } from "@earendil-works/pi-durable/storage/sqlite/node";
 
 /** The part of better-sqlite3-multiple-ciphers used here; its typings aren't reachable through its `exports`. */
 type CipherDatabase = {
   pragma(source: string): unknown;
-  prepare(sql: string): { get(...params: unknown[]): unknown };
+  prepare(sql: string): {
+    get(...params: unknown[]): unknown;
+    all(...params: unknown[]): unknown[];
+    run(...params: unknown[]): unknown;
+  };
   exec(sql: string): unknown;
   close(): void;
 };
@@ -83,7 +87,11 @@ export async function openDatabaseStorage(database: string): Promise<Storage> {
     throw new DatabaseKeyError(
       `${database} is not encrypted, but ${key.source} is set: run "nudge db encrypt", or remove the key`,
     );
-  if (key === undefined) return openNodeSqliteStorage(database);
+  if (key === undefined) {
+    const db = await openNodeSqliteDatabase(database);
+    await db.exec("PRAGMA secure_delete = ON");
+    return SqliteStorage.open(db);
+  }
   return SqliteStorage.open(await openEncrypted(database, key));
 }
 
@@ -156,6 +164,40 @@ export async function snapshotDatabase(database: string, target: string): Promis
   }
 }
 
+/** A plain connection to an assistant's database, for upkeep while nothing else has it open. */
+export type RawDatabase = {
+  all(sql: string, ...params: (string | number)[]): unknown[];
+  run(sql: string, ...params: (string | number)[]): void;
+  exec(sql: string): void;
+  close(): void;
+};
+
+/** Opens the database file itself, encrypted or not. The caller holds the database lock. */
+export async function openRawDatabase(database: string): Promise<RawDatabase> {
+  const state = await databaseEncryption(database);
+  if (state === "missing") throw new Error(`${database} doesn't exist`);
+  let db: CipherDatabase | DatabaseSync;
+  if (state === "plain") {
+    const { DatabaseSync } = await import("node:sqlite");
+    db = new DatabaseSync(database, { timeout: 5_000 });
+  } else {
+    const key = await databaseKey(database);
+    if (key === undefined)
+      throw new DatabaseKeyError(
+        `${database} is encrypted, but there is no key: set NUDGE_DB_KEY or restore ${keyFile(database)}`,
+      );
+    const cipher = new Database(database, { timeout: 5_000 });
+    cipher.pragma(`hexkey='${key.key.toString("hex")}'`);
+    db = cipher;
+  }
+  return {
+    all: (sql, ...params) => db.prepare(sql).all(...params) as unknown[],
+    run: (sql, ...params) => void db.prepare(sql).run(...params),
+    exec: (sql) => void db.exec(sql),
+    close: () => db.close(),
+  };
+}
+
 async function openEncrypted(database: string, key: DatabaseKey): Promise<NodeSqliteDatabase> {
   await mkdir(dirname(database), { recursive: true });
   const db = new Database(database, { timeout: 5_000 });
@@ -166,6 +208,8 @@ async function openEncrypted(database: string, key: DatabaseKey): Promise<NodeSq
     db.pragma("journal_mode = WAL");
     db.pragma("synchronous = NORMAL");
     db.pragma("wal_autocheckpoint = 1000");
+    // What is deleted, such as a forgotten value's old copy, is overwritten, not left in free pages.
+    db.pragma("secure_delete = ON");
   } catch (error) {
     db.close();
     throw new DatabaseKeyError(

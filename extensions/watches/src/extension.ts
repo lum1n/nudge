@@ -8,10 +8,12 @@ import {
 } from "@earendil-works/pi-durable";
 import {
   defineNudgeExtension,
+  currentTurn,
   defineTool,
   DirectoryDoc,
   type ExtensionHost,
   FIRE_ENTRY,
+  keepsPlaceholders,
   type FireEntryData,
   roomOf,
   section,
@@ -20,6 +22,19 @@ import {
 import { type Found, parseFound, remember, type Watch, WatchesDoc } from "./model.ts";
 
 const VERSION = "0.1.0";
+
+/** Who a watch added now is private to, if the turn is private. */
+function privately(): { privateTo?: { playerId: string; displayName: string } } {
+  const { privateTo } = currentTurn();
+  return privateTo === undefined ? {} : { privateTo: { ...privateTo } };
+}
+
+/** A private watch exists only in its owner's private turns. */
+function visible(watch: Watch): boolean {
+  return (
+    watch.privateTo === undefined || watch.privateTo.playerId === currentTurn().privateTo?.playerId
+  );
+}
 const MINUTE = 60_000;
 
 const Settings = Type.Object({
@@ -133,6 +148,7 @@ export const watchesExtension = defineNudgeExtension({
             seen: [],
             checks: 0,
             createdAt: now,
+            ...privately(),
           };
           state.next += 1;
           state.items.push(structuredClone(watch));
@@ -149,7 +165,9 @@ export const watchesExtension = defineNudgeExtension({
       replay: "safe",
       execute: async (_args, api, context) => {
         const room = await roomOf(api, api.conversationId, context);
-        const items = (await api.snapshot(WatchesDoc, room.id, context))?.items ?? [];
+        const items = ((await api.snapshot(WatchesDoc, room.id, context))?.items ?? []).filter(
+          visible,
+        );
         return text(items.length === 0 ? "No watches." : items.map(describe).join("\n"));
       },
     });
@@ -166,7 +184,8 @@ export const watchesExtension = defineNudgeExtension({
         const watch = (await api.snapshot(WatchesDoc, room.id, context))?.items.find(
           (item) => item.id === args.id,
         );
-        if (watch === undefined) return text(`No watch ${args.id} in this conversation.`, true);
+        if (watch === undefined || !visible(watch))
+          return text(`No watch ${args.id} in this conversation.`, true);
         await stopWatch(host, watch, context);
         return text(`Removed watch ${describe(watch)}`);
       },
@@ -174,7 +193,8 @@ export const watchesExtension = defineNudgeExtension({
 
     return {
       tasks: [timer],
-      tools: [add, list, remove],
+      // What to watch is kept as the model wrote it, with placeholders.
+      tools: [keepsPlaceholders(add), list, remove],
       sections: [
         section("watches", async (input, context) => {
           const room = await roomOf(input.read, input.conversationId, context).catch(
@@ -316,6 +336,7 @@ function createTimer(host: Pick<ExtensionHost<unknown>, "assistant" | "now">) {
                   nudgeId: `watch-${watchId}`,
                   message: `Watch ${watchId}: ${fresh.length} new — ${watch.what}`,
                   fireAt: host.now(),
+                  ...(watch.privateTo === undefined ? {} : { privateTo: watch.privateTo }),
                 } satisfies FireEntryData,
               },
             },

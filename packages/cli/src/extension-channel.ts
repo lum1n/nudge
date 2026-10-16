@@ -52,7 +52,7 @@ export class ExtensionChannel {
         admin: admin ?? (await nudge.players.isAdmin(player.id, context)),
       },
       {
-        send: (data) => channel.received(data),
+        send: (data) => channel.received(nudge.showJsonTo(player.id, data)),
         close: (_code, reason) => channel.closed(reason ?? "closed"),
       },
     );

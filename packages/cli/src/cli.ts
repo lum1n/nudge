@@ -41,10 +41,11 @@ Commands:
   connector share|unshare <id> [room]
                      Share a room's connector, one without a key, with every room, or
                      move a shared one back into the room
-  db [encrypt|decrypt]
+  db [encrypt|decrypt|redact]
                      Show whether each database is encrypted, or encrypt or decrypt it in
                      place (stop "nudge serve" first). The key is NUDGE_DB_KEY, or a
-                     <database>.key file that "encrypt" writes
+                     <database>.key file that "encrypt" writes. "redact" rewrites history
+                     from before placeholders were stored, so forgetting a value erases it
   backup             Make an encrypted backup of every assistant now, into --to <dir> or
                      the config's backup.dir; works while "nudge serve" runs
   restore <file>     Unpack a backup into --to <dir> (--force overwrites files there)
@@ -192,8 +193,13 @@ async function main(argv: string[]): Promise<number> {
       return 0;
     }
     case "db":
-      if (argument !== undefined && argument !== "encrypt" && argument !== "decrypt")
-        throw new UsageError("Usage: nudge db [encrypt|decrypt]");
+      if (
+        argument !== undefined &&
+        argument !== "encrypt" &&
+        argument !== "decrypt" &&
+        argument !== "redact"
+      )
+        throw new UsageError("Usage: nudge db [encrypt|decrypt|redact]");
       await db({ ...admin, verb: argument });
       return 0;
     case "reload":

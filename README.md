@@ -117,16 +117,24 @@ Every model request's cost, as the model catalog prices it, is booked per month 
 
 ## Privacy
 
-The model provider never sees personal data. Before a request leaves, Nudge replaces e-mail addresses, phone numbers, IBANs, card numbers, Norwegian national identity and account numbers, and the names of the people chatting with placeholders such as `⟦EMAIL1⟧`; when the answer comes back, it puts the values back. This covers every request, including tool rounds and the summaries made when a long conversation is compacted. A value keeps its placeholder for the life of the assistant.
+The model provider never sees personal data. Before a request leaves, Nudge replaces e-mail addresses, phone numbers, IBANs, card numbers, Norwegian national identity and account numbers, and the names of the people chatting with placeholders such as `⟦EMAIL1⟧`. This covers every request, including tool rounds and the summaries made when a long conversation is compacted. A value keeps its placeholder for the life of the assistant.
 
-- `/private <value>` in chat (or `nudge.protect(value)` in code) keeps any other value from the model, such as an address.
+The history is stored with the placeholders too: messages, answers, tool results, memory, approvals and nudges. The values are kept in one place, the vault, and put back only where a person sees them (and where a tool acts on them, such as sending a mail). So forgetting a value takes it out of all history at once ([ADR 9](docs/adr/0009-placeholders-at-rest-and-per-person-visibility.md)). A database from before this needs `nudge db redact` once, with `nudge serve` stopped.
+
+In a shared room, you can keep things to yourself:
+
+- **A value:** `/private <value>` in chat, or "Hide a value" in the web UI and the apps, keeps a value, such as an address, from the model and from everyone but you, wherever it shows. They see it as hidden. `/hidden` lists yours, and `/hidden forget <placeholder>` (or Forget) drops one for good, for everyone and the model.
+- **A message:** `/whisper <text>`, or the Private switch by the message field, sends a message only you see, and the answer to it. The others see that you sent one. Approvals, nudges, facts and watches that answer makes are yours alone too. The assistant is told not to bring it up with the others; it may still, in its own words, so don't count on it for secrets from the model's memory.
+
+More:
+
 - `nudge doctor --privacy` checks the detectors against sample data.
 - `NUDGE_DEBUG_REQUESTS=1 nudge chat` (or `nudge serve`) writes every request, exactly as the provider receives it, to `<database>.requests.jsonl`.
 - **Model view** on a room's page in the web UI (or `GET /rooms/<id>/model-view`) shows anyone in the room what its next request sends: the instructions and sections, every message and tool call, with placeholders where the values were.
 
 `extensions/ner` is optional and finds more: people's names (common Norwegian and English given names, a capitalized family name after one, a known family name after a capitalized word, and the name after a greeting, sign-off or title such as "Mvh" or "Dr.") and Norwegian street addresses ("Storgata 5B, 0151 Oslo"). It uses name lists and rules on the host, no model. Words that are also names, like "Per" or "Liv", count at the start of a sentence only next to a family name. Town names on their own are left alone, so tools still know where things are. `extraNames` adds names the lists don't have, such as relatives'; `names` and `addresses` turn either part off. It will miss some names and catch some words that aren't names; check with **Model view**.
 
-Display names of players are always protected. The transcript and the placeholder vault are stored unredacted in the assistant's SQLite file on your host. Images and thinking blocks are passed through unchanged.
+Display names of players are always protected. Images are passed through unchanged. Extensions keep their own data (connector notes, browser site notes, uploaded documents) as they stored it.
 
 Each assistant keeps its data in one SQLite file, by default `data/<name>.sqlite` next to the config.
 

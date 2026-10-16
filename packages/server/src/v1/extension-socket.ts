@@ -76,8 +76,9 @@ export class ExtensionSocket {
         admin: await this.nudge.players.isAdmin(credential.player.id, context),
       },
       {
+        // As the player may see it, like the room's view: values others own stay hidden.
         send: (text) => {
-          if (ws.readyState === 1) ws.send(text);
+          if (ws.readyState === 1) ws.send(this.nudge.showJsonTo(credential.player.id, text));
         },
         close: (code, reason) => ws.close(code, reason),
       },

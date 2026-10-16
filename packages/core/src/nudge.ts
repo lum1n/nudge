@@ -2,7 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { Context } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { Message, Models } from "@earendil-works/pi-ai";
+import type { JsonValue, Message, Models } from "@earendil-works/pi-ai";
 import {
   type AgentChange,
   type AgentEventStream,
@@ -42,7 +42,9 @@ import { Memory } from "./memory/memory.ts";
 import { Nudges } from "./nudges/nudges.ts";
 import { RedactingModels, type RedactionOptions } from "./models/redacting-models.ts";
 import { builtinDetectors, type PiiDetector } from "./privacy/detectors.ts";
-import { type Owner, turnOf, withTurns } from "./privacy/turn.ts";
+import { mapStrings } from "./privacy/redact.ts";
+import { type ToolValues, withToolValues } from "./privacy/tool-values.ts";
+import { type Owner, turnOf } from "./privacy/turn.ts";
 import { Vault } from "./privacy/vault.ts";
 import { VaultDoc } from "./privacy/vault-doc.ts";
 import { openDatabaseStorage } from "./encrypted-storage.ts";
@@ -143,6 +145,16 @@ export class Nudge {
   private readonly detectors: readonly PiiDetector[];
   private installed: readonly SetUpExtension[];
   private readonly report: (error: unknown) => void;
+
+  /** What reloaded extensions' tools run with; see `withToolValues`. */
+  private get toolValues(): ToolValues {
+    return {
+      turn: (id, context) => turnOf(this.harness, id, context),
+      redact: (text) => this.redact(text),
+      rehydrate: (text) => this.models.vault.rehydrate(text),
+      models: () => this.models.withValues(),
+    };
+  }
   private reloading: Promise<unknown> = Promise.resolve();
 
   private constructor(parts: Parts) {
@@ -170,7 +182,7 @@ export class Nudge {
       changed,
     );
     this.nudges = new Nudges(harness, this.rooms, now, changed);
-    this.memory = new Memory(harness, this.rooms, now, changed);
+    this.memory = new Memory(harness, this.rooms, now, changed, (text) => this.redact(text));
     // Looked up when an approval runs, so a reload's handlers take over.
     this.approvals = new Approvals(
       harness,
@@ -179,6 +191,8 @@ export class Nudge {
       (extension, kind) =>
         this.installed.find((installed) => installed.extension.name === extension)?.approvals[kind],
       changed,
+      (text) => this.models.vault.rehydrate(text),
+      (text) => this.redact(text),
     );
   }
 
@@ -194,8 +208,14 @@ export class Nudge {
     };
     // Tools learn whether they answer something private through `currentTurn()`.
     const turn = (id: ConversationId, context: Context) => turnOf(whenOpen().harness, id, context);
+    const values: ToolValues = {
+      turn,
+      redact: (text) => whenOpen().redact(text),
+      rehydrate: (text) => whenOpen().models.vault.rehydrate(text),
+      models: () => whenOpen().models.withValues(),
+    };
     registry.install(
-      withTurns(
+      withToolValues(
         createBuiltinExtension({
           displayName,
           timeZone,
@@ -203,7 +223,7 @@ export class Nudge {
           nudges: () => whenOpen().nudges,
           turn,
         }),
-        turn,
+        values,
       ),
     );
     const host: Parts["host"] = {
@@ -228,7 +248,7 @@ export class Nudge {
       await unlock();
       throw error;
     }
-    for (const { extension } of installed) registry.install(withTurns(extension, turn));
+    for (const { extension } of installed) registry.install(withToolValues(extension, values));
     const detectors = options.privacy?.detectors ?? builtinDetectors;
     const models = new RedactingModels(options.models, {
       detectors: withExtensionDetectors(detectors, installed),
@@ -351,9 +371,7 @@ export class Nudge {
       for (const { extension } of this.installed)
         if (!names.has(extension.name)) this.registry.uninstall(extension);
       for (const { extension } of next)
-        this.registry.install(
-          withTurns(extension, (id, context) => turnOf(this.harness, id, context)),
-        );
+        this.registry.install(withToolValues(extension, this.toolValues));
       this.models.detectors = withExtensionDetectors(this.detectors, next);
       const replaced = this.installed;
       this.installed = next;
@@ -543,17 +561,18 @@ export class Nudge {
     if (refusal !== undefined) throw new BudgetReached(refusal);
     // The model sees "<name>: <text>"; the name is personal, so it goes to the vault first.
     if (draft.author !== undefined) this.models.vault.protect(draft.author.displayName, "NAME");
-    // What a private message reveals for the first time is its author's alone.
-    if (draft.private === true && draft.author !== undefined) {
-      const before = this.models.vault.version;
-      this.models.vault.redact(draft.text, this.models.detectors, draft.author.playerId);
-      await this.models.flush();
-      if (this.models.vault.version !== before) this.changes.emit({ kind: "vault" });
-    }
+    // Stored with placeholders, so forgetting a value takes it out of history (ADR 9). What a
+    // private message reveals for the first time is its author's alone.
+    const vault = this.models.vault;
+    const before = vault.version;
+    const owner = draft.private === true ? draft.author?.playerId : undefined;
+    const text = vault.redact(draft.text, this.models.detectors, owner);
+    await this.models.flush();
+    if (owner !== undefined && vault.version !== before) this.changes.emit({ kind: "vault" });
     return submitMessage(
       this.harness,
       room.conversationId as ConversationId,
-      draft,
+      { ...draft, text },
       this.now(),
       context,
     );
@@ -620,6 +639,22 @@ export class Nudge {
     return this.models.vault.showTo(playerId, text);
   }
 
+  /**
+   * A JSON text, such as a frame of an extension's room socket, with every string as `showTo`
+   * gives it. Very long strings, such as images, pass as they are. Text that isn't JSON passes too.
+   */
+  showJsonTo(playerId: string | undefined, json: string): string {
+    let value: JsonValue;
+    try {
+      value = JSON.parse(json) as JsonValue;
+    } catch {
+      return json;
+    }
+    return JSON.stringify(
+      mapStrings(value, (text) => (text.length > SHOWN_LIMIT ? text : this.showTo(playerId, text))),
+    );
+  }
+
   /** Goes up whenever `showTo` may give something new for the same text. */
   get vaultVersion(): number {
     return this.models.vault.version;
@@ -658,6 +693,11 @@ export class Nudge {
     return out;
   }
 
+  /** Stores what `redact` and `protect` added to the vault so far. */
+  saveVault(): Promise<void> {
+    return this.models.flush();
+  }
+
   /** What the model would see for `text`: personal values replaced by placeholders. */
   redact(text: string): string {
     return this.models.vault.redact(text, this.models.detectors);
@@ -694,6 +734,9 @@ export class Nudge {
     }
   }
 }
+
+/** Strings longer than this in a socket frame are data, such as a screenshot, not text. */
+const SHOWN_LIMIT = 64 * 1024;
 
 /** Entries that start a turn: what comes after them, up to the next, answers them. */
 const TURN_ENTRIES: ReadonlySet<string> = new Set([

@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { Context } from "@earendil-works/chord";
-import type { ConversationId, Extension, Harness } from "@earendil-works/pi-durable";
+import type { ConversationId, Harness } from "@earendil-works/pi-durable";
 
 /** The player something private belongs to, with the name others are told it went to. */
 export type Owner = { readonly playerId: string; readonly displayName: string };
@@ -9,6 +9,11 @@ export type Owner = { readonly playerId: string; readonly displayName: string };
 export type Turn = {
   /** Set when only this player may see what the turn shows and makes. */
   readonly privateTo?: Owner;
+  /**
+   * Personal values in `text` as placeholders, for what a tool stores, such as an approval's
+   * summary. Absent outside tools.
+   */
+  readonly redact?: (text: string) => string;
 };
 
 const turns = new AsyncLocalStorage<Turn>();
@@ -61,20 +66,4 @@ export async function turnOf(
     }
   }
   return {};
-}
-
-/** The extension with each tool running inside the turn of its conversation. */
-export function withTurns(
-  extension: Extension,
-  turn: (conversationId: ConversationId, context: Context) => Promise<Turn>,
-): Extension {
-  if (extension.tools === undefined || extension.tools.length === 0) return extension;
-  return {
-    ...extension,
-    tools: extension.tools.map((tool) => ({
-      ...tool,
-      execute: async (args, api, context) =>
-        inTurn(await turn(api.conversationId, context), () => tool.execute(args, api, context)),
-    })),
-  };
 }

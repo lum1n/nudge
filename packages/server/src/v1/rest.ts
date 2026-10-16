@@ -201,10 +201,12 @@ export function restRoutes(options: RestOptions): Hono {
 
   api.get("/me/memory", async (c) => {
     const memory = await c.var.nudge.memory.ofPlayer(c.var.credential.player.id, context);
-    return c.json({
-      facts: memory.facts.map(toFact),
-      shared: memory.shared,
-    } satisfies PlayerMemoryResponse);
+    return c.json(
+      viewerOf(c).strings({
+        facts: memory.facts.map(toFact),
+        shared: memory.shared,
+      } satisfies PlayerMemoryResponse),
+    );
   });
 
   api.post("/me/memory", async (c) => {
@@ -214,7 +216,9 @@ export function restRoutes(options: RestOptions): Hono {
     const by = { playerId: player.id, displayName: player.displayName };
     try {
       return c.json(
-        toFact(await c.var.nudge.memory.rememberFor(player.id, body.text, context, by)),
+        viewerOf(c).strings(
+          toFact(await c.var.nudge.memory.rememberFor(player.id, body.text, context, by)),
+        ),
         201,
       );
     } catch (error) {
@@ -235,10 +239,12 @@ export function restRoutes(options: RestOptions): Hono {
     const id = c.var.credential.player.id;
     await c.var.nudge.memory.share(id, body.shared, context);
     const memory = await c.var.nudge.memory.ofPlayer(id, context);
-    return c.json({
-      facts: memory.facts.map(toFact),
-      shared: memory.shared,
-    } satisfies PlayerMemoryResponse);
+    return c.json(
+      viewerOf(c).strings({
+        facts: memory.facts.map(toFact),
+        shared: memory.shared,
+      } satisfies PlayerMemoryResponse),
+    );
   });
 
   api.get("/usage", async (c) => {
@@ -425,7 +431,9 @@ export function restRoutes(options: RestOptions): Hono {
       const { player } = c.var.credential;
       const by = { playerId: player.id, displayName: player.displayName };
       return c.json(
-        toFact(await c.var.nudge.memory.remember(room.id, body.text, context, by)),
+        viewerOf(c).strings(
+          toFact(await c.var.nudge.memory.remember(room.id, body.text, context, by)),
+        ),
         201,
       );
     } catch (error) {

@@ -5,6 +5,7 @@ import {
   defineNudgeExtension,
   defineTool,
   type ExtensionDocuments,
+  keepsPlaceholders,
   roomOf,
   type RoomSocketHandler,
   section,
@@ -45,7 +46,11 @@ export type PanelInput = { ref?: string } & (
 class Panels {
   private readonly viewers = new Map<string, Set<(data: string) => void>>();
 
-  constructor(private readonly documents: () => ExtensionDocuments) {}
+  constructor(
+    private readonly documents: () => ExtensionDocuments,
+    /** Items people add are kept with placeholders, like the model's. */
+    private readonly redact: (text: string) => string,
+  ) {}
 
   async lists(roomId: string, context: Context = BACKGROUND_CONTEXT): Promise<PanelList[]> {
     const state = await this.documents().snapshot(ListsDoc, roomId, context);
@@ -110,7 +115,7 @@ class Panels {
     switch (input.type) {
       case "add":
         await commit((tx) =>
-          addItems(tx, roomId, input.list, [String(input.text ?? "")], by, Date.now()),
+          addItems(tx, roomId, input.list, [this.redact(String(input.text ?? ""))], by, Date.now()),
         );
         return;
       case "toggle": {
@@ -142,7 +147,7 @@ export const listsExtension = defineNudgeExtension({
   description:
     "Shared lists per room, such as shopping and to-dos, for the model and in the web UI.",
   setup: (host) => {
-    const panels = new Panels(host.documents);
+    const panels = new Panels(host.documents, (text) => host.assistant().redact(text));
     const text = (value: string, isError = false) => ({
       output: [{ type: "text" as const, text: value }],
       ...(isError ? { isError } : {}),
@@ -270,7 +275,8 @@ export const listsExtension = defineNudgeExtension({
     });
 
     return {
-      tools: [add, showTool, check, remove, clear],
+      // Lists keep what they are given; values go back in only where someone sees them.
+      tools: [add, showTool, check, remove, clear].map((tool) => keepsPlaceholders(tool)),
       roomSocket: panels.roomSocket,
       sections: [
         section("lists", async (input, context) => {

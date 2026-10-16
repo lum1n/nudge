@@ -271,7 +271,16 @@ export async function nudges(options: AdminOptions & ServerAccess): Promise<void
   };
   await withAssistantOrServer(
     options,
-    async (nudge) => print((await nudge.nudges.list(context)).map(toHomeNudge)),
+    // On the host as the server shows an admin: values shown, others' private nudges blank.
+    async (nudge) =>
+      print(
+        (await nudge.nudges.list(context)).map((scheduled) => {
+          const shown = toHomeNudge(scheduled);
+          return shown.privateTo === undefined
+            ? { ...shown, message: nudge.showTo(undefined, shown.message) }
+            : { ...shown, message: "" };
+        }),
+      ),
     async (server) => print((await server.call<NudgesResponse>("GET", "/admin/nudges")).nudges),
   );
 }
