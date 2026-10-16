@@ -8,7 +8,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Api
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Person
@@ -54,12 +57,18 @@ import nudge.ffi.NudgeClient
 import nudge.ffi.RoomExtension
 
 /**
- * About a room: who is in it, what the assistant remembers here, its nudges, which extensions it
- * uses, and what the model saw. Opens in the third pane, or full screen on a phone.
+ * About a room: its documents and connectors, who is in it, what the assistant remembers
+ * here, its nudges, which extensions it uses, and what the model saw. Opens in the third pane, or full screen on a phone.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun RoomInfoScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
+fun RoomInfoScreen(
+    client: NudgeClient,
+    roomId: String,
+    close: () -> Unit,
+    documents: () -> Unit,
+    connectors: () -> Unit,
+) {
     val scope = rememberCoroutineScope()
     val observed = remember(client, roomId) { MutableStateFlow<ObservedRoom?>(null) }
     DisposableEffect(client, roomId) {
@@ -106,6 +115,25 @@ fun RoomInfoScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
             ),
         ) {
             problem?.let { item { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp)) } }
+
+            // Holds the list at its top when the panels below come in later.
+            item(key = "top") {}
+            // The panels of the extensions the room has on.
+            val on = extensions.orEmpty().filter { it.enabled }.map { it.name }.toSet()
+            val panels: List<GroupRow> = listOf(
+                Triple("documents", "Documents", Icons.Outlined.Description to documents),
+                Triple("connectors", "Connectors", Icons.Outlined.Api to connectors),
+            ).filter { it.first in on }.map { (_, title, action) ->
+                { shapes ->
+                    SegmentedListItem(
+                        onClick = action.second,
+                        shapes = shapes,
+                        leadingContent = { Icon(action.first, null) },
+                        trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) },
+                    ) { Text(title) }
+                }
+            }
+            if (panels.isNotEmpty()) group("In this room", panels)
 
             group(
                 "Members",

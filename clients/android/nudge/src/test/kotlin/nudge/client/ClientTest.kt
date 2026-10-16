@@ -248,6 +248,68 @@ class ClientTest {
     }
 
     @Test
+    fun documentsPanel() = runBlocking {
+        val bo = client(MemoryTokens(this@ClientTest.bo))
+        val documents = bo.observeDocuments("trip")
+        suspend fun until(predicate: (DocumentsState) -> Boolean) =
+            withTimeout(15_000) { documents.state.first(predicate) }
+        until { it.documents == emptyList<DocumentInfo>() }
+        val receipt = "Receipt: one bicycle, 4000 kr".toByteArray()
+        val id = documents.upload("receipt.txt", "text/plain", receipt)
+        val shown = until { it.documents?.size == 1 }.documents!!.single()
+        assertEquals(id, shown.id)
+        assertEquals("receipt.txt", shown.name)
+        assertEquals("Bo", shown.addedBy)
+        assertEquals(receipt.size.toLong(), shown.size)
+        val file = documents.download(shown)
+        assertEquals("receipt.txt", file.name)
+        assertEquals(String(receipt), String(file.bytes))
+        try {
+            documents.upload("again.txt", "text/plain", receipt)
+            error("not refused")
+        } catch (refused: PanelRefusal) {
+            assertTrue(refused.message!!.contains("here already"))
+        }
+        documents.remove(shown)
+        until { it.documents?.isEmpty() == true }
+        documents.close()
+    }
+
+    @Test
+    fun connectorsPanel() = runBlocking {
+        val bo = client(MemoryTokens(this@ClientTest.bo))
+        val room = bo.observeRoomState("trip")
+        room.awaitState { it.status == SyncStatus.LIVE }
+        // The model asks to add "Weather"; it needs an approval.
+        bo.send("trip", "Please add a connector for the weather", null)
+        val approval = room.awaitState { state -> state.approvals.any { it.status == ApprovalStatus.PENDING } }.approvals[0]
+        bo.decide("trip", approval.id, true)
+        room.close()
+
+        val connectors = bo.observeConnectors("trip")
+        suspend fun until(predicate: (ConnectorsState) -> Boolean) =
+            withTimeout(15_000) { connectors.state.first(predicate) }
+        val weather = until { it.connectors?.size == 1 }.connectors!!.single()
+        assertEquals("Weather", weather.name)
+        assertEquals("header", weather.auth?.placement)
+        assertFalse(weather.hasKey)
+        assertFalse(until { it.connectors != null }.admin)
+        connectors.setKey(weather, "secret-key")
+        until { it.connectors?.single()?.hasKey == true }
+        connectors.allowPrivateNetwork(weather, true)
+        until { it.connectors?.single()?.allowPrivateNetwork == true }
+        connectors.setReadPaths(weather, listOf("POST /graphql"))
+        until { it.connectors?.single()?.readPaths == listOf("POST /graphql") }
+        connectors.setReadPaths(weather, listOf("GET /x"))
+        until { it.error != null }
+        connectors.clearKey(weather)
+        until { it.connectors?.single()?.hasKey == false && it.error == null }
+        connectors.remove(weather)
+        until { it.connectors?.isEmpty() == true }
+        connectors.close()
+    }
+
+    @Test
     fun pairingLinks() {
         assertEquals(
             PairingLink("https://nudge.example/x", "robin", "7K3Q-M9XD"),

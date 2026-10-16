@@ -91,6 +91,63 @@ final class ClientTests: XCTestCase {
         XCTAssertEqual(closed.status, .closed(code: 4404, reason: #"No room "nowhere" with extension "lists""#))
     }
 
+    func testDocumentsPanel() async throws {
+        let bo = try client(MemoryTokens(server.bo))
+        let documents = try bo.observeDocuments("trip")
+        _ = try await within { try await documents.first { $0.documents == [] } }
+        let receipt = Data("Receipt: one bicycle, 4000 kr".utf8)
+        let id = try await documents.upload(name: "receipt.txt", mime: "text/plain", data: receipt)
+        let shown = try await within { try await documents.first { $0.documents?.count == 1 } }
+        let document = try XCTUnwrap(shown.documents?.first)
+        XCTAssertEqual(document.id, id)
+        XCTAssertEqual(document.name, "receipt.txt")
+        XCTAssertEqual(document.addedBy, "Bo")
+        XCTAssertEqual(document.size, receipt.count)
+        let file = try await documents.download(document)
+        XCTAssertEqual(file.data, receipt)
+        do {
+            try await documents.upload(name: "again.txt", mime: "text/plain", data: receipt)
+            XCTFail("not refused")
+        } catch let refusal as PanelRefusal {
+            XCTAssertTrue(refusal.message.contains("here already"))
+        }
+        documents.remove(document)
+        _ = try await within { try await documents.first { $0.documents?.isEmpty == true } }
+        documents.close()
+    }
+
+    func testConnectorsPanel() async throws {
+        let bo = try client(MemoryTokens(server.bo))
+        let room = bo.observeRoomState("trip")
+        _ = try await within { try await room.first { $0.status == .live } }
+        // The model asks to add "Weather"; it needs an approval.
+        _ = try await bo.send(room: "trip", text: "Please add a connector for the weather", whenBusy: nil)
+        let waiting = try await within { try await room.first { $0.approvals.contains { $0.status == .pending } } }
+        _ = try await bo.decide(room: "trip", approvalId: waiting.approvals[0].id, approve: true)
+        room.close()
+
+        let connectors = try bo.observeConnectors("trip")
+        let shown = try await within { try await connectors.first { $0.connectors?.count == 1 } }
+        let weather = try XCTUnwrap(shown.connectors?.first)
+        XCTAssertEqual(weather.name, "Weather")
+        XCTAssertEqual(weather.auth?.placement, "header")
+        XCTAssertFalse(weather.hasKey)
+        XCTAssertFalse(shown.admin)
+        connectors.setKey("secret-key", for: weather)
+        _ = try await within { try await connectors.first { $0.connectors?.first?.hasKey == true } }
+        connectors.allowPrivateNetwork(true, for: weather)
+        _ = try await within { try await connectors.first { $0.connectors?.first?.allowPrivateNetwork == true } }
+        connectors.setReadPaths(["POST /graphql"], for: weather)
+        _ = try await within { try await connectors.first { $0.connectors?.first?.readPaths == ["POST /graphql"] } }
+        connectors.setReadPaths(["GET /x"], for: weather)
+        _ = try await within { try await connectors.first { $0.error != nil } }
+        connectors.clearKey(of: weather)
+        _ = try await within { try await connectors.first { $0.connectors?.first?.hasKey == false && $0.error == nil } }
+        connectors.remove(weather)
+        _ = try await within { try await connectors.first { $0.connectors?.isEmpty == true } }
+        connectors.close()
+    }
+
     func testPairingLinks() {
         let link = PairingLink(URL(string: "nudge://pair?server=https%3A%2F%2Fnudge.example%2Fx&assistant=robin&code=7K3Q-M9XD")!)
         XCTAssertEqual(link, PairingLink(server: "https://nudge.example/x", assistant: "robin", code: "7K3Q-M9XD"))
