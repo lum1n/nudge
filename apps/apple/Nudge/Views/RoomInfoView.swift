@@ -1,7 +1,7 @@
 import Nudge
 import SwiftUI
 
-/// About a room: its documents and connectors, who is in it, what the assistant remembers
+/// About a room: its documents, connectors and browser, who is in it, what the assistant remembers
 /// here, its nudges, which extensions it uses, and what the model saw.
 struct RoomInfoView: View {
     @Environment(\.dismiss) private var dismiss
@@ -18,7 +18,7 @@ struct RoomInfoView: View {
             Form {
                 // The panels of the extensions the room has on.
                 let on = Set((extensions ?? []).filter(\.enabled).map(\.name))
-                if !on.isDisjoint(with: ["documents", "connectors"]) {
+                if !on.isDisjoint(with: ["documents", "connectors", "browser"]) {
                     Section("In this room") {
                         if on.contains("documents") {
                             NavigationLink { DocumentsView(client: client, roomId: roomId) } label: {
@@ -28,6 +28,11 @@ struct RoomInfoView: View {
                         if on.contains("connectors") {
                             NavigationLink { ConnectorsView(client: client, roomId: roomId) } label: {
                                 Label("Connectors", systemImage: "point.3.connected.trianglepath.dotted")
+                            }
+                        }
+                        if on.contains("browser") {
+                            NavigationLink { BrowserView(client: client, roomId: roomId) } label: {
+                                Label("Browser", systemImage: "globe")
                             }
                         }
                     }

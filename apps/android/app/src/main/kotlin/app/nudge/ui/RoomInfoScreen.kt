@@ -12,6 +12,7 @@ import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Api
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Person
@@ -57,8 +58,9 @@ import nudge.ffi.NudgeClient
 import nudge.ffi.RoomExtension
 
 /**
- * About a room: its documents and connectors, who is in it, what the assistant remembers
- * here, its nudges, which extensions it uses, and what the model saw. Opens in the third pane, or full screen on a phone.
+ * About a room: its documents, connectors and browser, who is in it, what the assistant remembers
+ * here, its nudges, which extensions it uses, and what the model saw. Opens in the third pane, or
+ * full screen on a phone.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -68,6 +70,7 @@ fun RoomInfoScreen(
     close: () -> Unit,
     documents: () -> Unit,
     connectors: () -> Unit,
+    browser: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val observed = remember(client, roomId) { MutableStateFlow<ObservedRoom?>(null) }
@@ -123,6 +126,7 @@ fun RoomInfoScreen(
             val panels: List<GroupRow> = listOf(
                 Triple("documents", "Documents", Icons.Outlined.Description to documents),
                 Triple("connectors", "Connectors", Icons.Outlined.Api to connectors),
+                Triple("browser", "Browser", Icons.Outlined.Language to browser),
             ).filter { it.first in on }.map { (_, title, action) ->
                 { shapes ->
                     SegmentedListItem(

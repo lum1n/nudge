@@ -75,6 +75,7 @@ fun RoomScreen(
     back: (() -> Unit)?,
     lists: () -> Unit,
     info: () -> Unit,
+    browser: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val observed = remember(client, roomId) { MutableStateFlow<ObservedRoom?>(null) }
@@ -165,6 +166,7 @@ fun RoomScreen(
                     decide = { approval, approve -> attempt { client.decide(roomId, approval, approve) } },
                     retry = { requestId -> attempt { client.resend(roomId, requestId) } },
                     dismiss = { requestId -> client.dismiss(roomId, requestId) },
+                    openBrowser = browser,
                 )
             }
         }
@@ -190,6 +192,7 @@ private fun Timeline(
     decide: (String, Boolean) -> Unit,
     retry: (String) -> Unit,
     dismiss: (String) -> Unit,
+    openBrowser: () -> Unit,
 ) {
     // Laid out from the bottom, so a growing answer stays in view.
     val listState = rememberLazyListState()
@@ -218,7 +221,7 @@ private fun Timeline(
             }
         }
         items(state.timeline.asReversed(), key = { it.itemId }) { item ->
-            TimelineRow(item, me, decide)
+            TimelineRow(item, me, decide, openBrowser)
         }
         if (state.canLoadEarlier || state.loadingEarlier) {
             item(key = "earlier") {
