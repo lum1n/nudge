@@ -145,14 +145,14 @@ final class ClientTests: XCTestCase {
         var texts: [String] = []
         let done = try await within {
             try await room.first { state in
-                guard case .answer(_, let status, _, let parts) = state.timeline.first(where: { if case .answer = $0 { true } else { false } }) else { return false }
+                guard case .answer(_, let status, _, let parts, _) = state.timeline.first(where: { if case .answer = $0 { true } else { false } }) else { return false }
                 texts.append(parts.map { if case .text(let text) = $0 { text } else { "" } }.joined())
                 return status == .done
             }
         }
         XCTAssertTrue(texts.last!.hasPrefix("Hello! This answer arrives"))
         XCTAssertGreaterThan(Set(texts).count, 2, "streamed in several states")
-        XCTAssertEqual(done.timeline.compactMap { if case .user(_, let text, _, _, _, _) = $0 { text } else { nil } }, ["Hello there"])
+        XCTAssertEqual(done.timeline.compactMap { if case .user(_, let text, _, _, _, _, _) = $0 { text } else { nil } }, ["Hello there"])
         XCTAssertTrue(done.pending.isEmpty)
 
         let fact = try await admin.remember(room: "trip", text: "Bo likes trains")
