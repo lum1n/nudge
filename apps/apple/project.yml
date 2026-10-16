@@ -1,6 +1,5 @@
-# The Nudge app for iOS and macOS. Make the Xcode project with XcodeGen (`brew install xcodegen`):
-#   ../../clients/apple/scripts/build.sh --xcframework   # once, and after the Rust core changes
-#   xcodegen                                              # writes Nudge.xcodeproj
+# The Nudge app for iOS and macOS. Make the Xcode project with `scripts/setup.sh`, which builds the
+# Rust core and runs XcodeGen (`brew install xcodegen`); `--project-only` after adding files.
 # Set DEVELOPMENT_TEAM below (or in Xcode's Signing tab) to sign and to get push notifications.
 name: Nudge
 options:

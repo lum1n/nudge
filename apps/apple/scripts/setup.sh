@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Sets up the Nudge Xcode project on a Mac: checks for Xcode, XcodeGen and Rust, adds the Apple
+# Rust targets that are missing, builds the Rust core as NudgeFFIC.xcframework, writes
+# Nudge.xcodeproj from project.yml and opens it.
+#
+#   scripts/setup.sh                 everything, then open the project
+#   scripts/setup.sh --project-only  only write the project again, such as after adding files
+#   scripts/setup.sh --no-open       don't open Xcode at the end
+set -euo pipefail
+here="$(cd "$(dirname "$0")/.." && pwd)"
+client="$here/../../clients/apple"
+
+rust=yes
+open=yes
+for arg in "$@"; do
+  case "$arg" in
+    --project-only) rust=no ;;
+    --no-open) open=no ;;
+    -h | --help) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "Unknown option $arg; see $0 --help" >&2; exit 2 ;;
+  esac
+done
+
+fail() { echo "$1" >&2; exit 1; }
+
+[[ "$(uname)" == Darwin ]] || fail "This needs a Mac with Xcode; on Linux, clients/apple/scripts/build.sh builds the Swift package alone."
+xcodebuild -version >/dev/null 2>&1 ||
+  fail "No Xcode: install Xcode 26 from the App Store, then run: sudo xcode-select -s /Applications/Xcode.app"
+command -v xcodegen >/dev/null || fail "No XcodeGen: brew install xcodegen"
+
+if [[ "$rust" == yes ]]; then
+  command -v cargo >/dev/null || fail "No Rust: install it from https://rustup.rs"
+  command -v rustup >/dev/null || fail "No rustup: the Apple targets come from rustup (https://rustup.rs)"
+  targets=(aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios aarch64-apple-darwin x86_64-apple-darwin)
+  installed="$(rustup target list --installed)"
+  missing=()
+  for target in "${targets[@]}"; do
+    grep -qx "$target" <<<"$installed" || missing+=("$target")
+  done
+  if ((${#missing[@]} > 0)); then
+    echo "Adding Rust targets: ${missing[*]}"
+    rustup target add "${missing[@]}"
+  fi
+  echo "Building the Rust core for iOS, the simulator and macOS…"
+  "$client/scripts/build.sh" --xcframework
+fi
+
+[[ -d "$client/NudgeFFIC.xcframework" ]] ||
+  fail "No NudgeFFIC.xcframework yet: run $0 without --project-only first."
+
+cd "$here"
+xcodegen generate --quiet
+echo "Wrote $here/Nudge.xcodeproj. Pick your team under Signing & Capabilities (or set DEVELOPMENT_TEAM in project.yml), then build Nudge-iOS or Nudge-macOS."
+[[ "$open" == yes ]] && open Nudge.xcodeproj
+exit 0

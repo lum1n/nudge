@@ -14,16 +14,13 @@ The Nudge app for iOS 26 and macOS 26 (and later), in SwiftUI, on the Swift pack
 
 ## Build
 
-On a Mac with Xcode 26 and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`), and Rust with the Apple targets:
+On a Mac with Xcode 26, [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`) and Rust from [rustup](https://rustup.rs):
 
 ```bash
-rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios aarch64-apple-darwin x86_64-apple-darwin
-../../clients/apple/scripts/build.sh --xcframework   # the Rust core for iOS, the simulator and macOS
-xcodegen                                              # writes Nudge.xcodeproj from project.yml
-open Nudge.xcodeproj
+scripts/setup.sh
 ```
 
-Run `build.sh --xcframework` again after the Rust core changes, and `xcodegen` after adding files or changing `project.yml`. Pick your team under Signing & Capabilities (or set `DEVELOPMENT_TEAM` in `project.yml`); the Nudge-iOS and Nudge-macOS schemes build the two apps.
+It adds the Apple Rust targets that are missing, builds the Rust core for iOS, the simulator and macOS (`clients/apple/scripts/build.sh --xcframework`), writes `Nudge.xcodeproj` from `project.yml` and opens it. Run it again after the Rust core changes; after adding files or changing `project.yml`, `scripts/setup.sh --project-only` only writes the project. `--no-open` leaves Xcode closed. Pick your team under Signing & Capabilities (or set `DEVELOPMENT_TEAM` in `project.yml`); the Nudge-iOS and Nudge-macOS schemes build the two apps.
 
 To try it without a real model: `pnpm build` in the repository, then `node packages/server/scripts/faux-server.ts`. It prints the server's address and a pairing code for Bo; the simulator and the Mac reach it at that address.
 
