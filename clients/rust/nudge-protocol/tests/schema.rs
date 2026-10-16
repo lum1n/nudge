@@ -447,6 +447,38 @@ fn http_bodies_match_the_schema() {
         "SetRoomExtensionRequest",
         &SetRoomExtensionRequest { enabled: None },
     );
+    let settings = json!({ "maxMegabytes": 5 }).as_object().unwrap().clone();
+    let setup = ExtensionSetup {
+        from: "./extensions/documents".into(),
+        name: Some("documents".into()),
+        version: Some("0.1.0".into()),
+        description: Some("Documents per room".into()),
+        configured: true,
+        enabled: true,
+        rooms: Some(vec![RoomKind::Personal, RoomKind::Shared]),
+        settings: settings.clone(),
+        schema: Some(json!({ "type": "object", "properties": {} })),
+        missing_env: vec!["MAIL_PASSWORD".into()],
+        error: Some("Cannot find module".into()),
+    };
+    check("ExtensionSetup", &setup);
+    check(
+        "ExtensionSetupsResponse",
+        &ExtensionSetupsResponse {
+            extensions: vec![setup],
+        },
+    );
+    check(
+        "SaveExtensionSetupsRequest",
+        &SaveExtensionSetupsRequest {
+            extensions: vec![SavedExtensionSetup {
+                from: "./extensions/documents".into(),
+                enabled: false,
+                settings: Some(settings),
+                rooms: Some(vec![RoomKind::Lobby]),
+            }],
+        },
+    );
     check(
         "ProtectRequest",
         &ProtectRequest {

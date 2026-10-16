@@ -743,6 +743,52 @@ impl NudgeClient {
         let api = self.client.api().clone();
         Ok(run(async move { api.revoke(&client_id).await }).await?)
     }
+
+    /// The assistant's extensions and the ones it could add, with their settings and schemas;
+    /// 404 when the server can't set up extensions.
+    pub async fn extension_setups(&self) -> Result<Vec<ExtensionSetup>, NudgeError> {
+        let api = self.client.api().clone();
+        let setups = run(async move { api.extension_setups().await }).await?;
+        Ok(setups.into_iter().map(Into::into).collect())
+    }
+
+    /// Installs `extensions`, in order, in place of the assistant's, and keeps them in its
+    /// config; ones left out are removed. 400, and nothing changed, when one won't start.
+    pub async fn save_extension_setups(
+        &self,
+        extensions: Vec<SavedExtensionSetup>,
+    ) -> Result<Vec<ExtensionSetup>, NudgeError> {
+        let extensions = extensions
+            .into_iter()
+            .map(|setup| {
+                let settings = match setup.settings_json {
+                    None => None,
+                    Some(json) => match serde_json::from_str(&json) {
+                        Ok(serde_json::Value::Object(settings)) => Some(settings),
+                        _ => {
+                            return Err(NudgeError::Decode {
+                                detail: format!(
+                                    "The settings of {} are not a JSON object",
+                                    setup.from
+                                ),
+                            });
+                        }
+                    },
+                };
+                Ok(p::SavedExtensionSetup {
+                    from: setup.from,
+                    enabled: setup.enabled,
+                    settings,
+                    rooms: setup
+                        .rooms
+                        .map(|rooms| rooms.into_iter().map(Into::into).collect()),
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let api = self.client.api().clone();
+        let setups = run(async move { api.save_extension_setups(extensions).await }).await?;
+        Ok(setups.into_iter().map(Into::into).collect())
+    }
 }
 
 impl From<nudge_client::Sent> for Sent {

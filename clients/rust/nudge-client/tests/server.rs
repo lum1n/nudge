@@ -18,6 +18,7 @@ use tokio::time::timeout;
 struct FauxServer {
     url: String,
     ann: String,
+    bo: String,
     _process: Child,
 }
 
@@ -51,6 +52,7 @@ async fn faux_server() -> Option<FauxServer> {
     Some(FauxServer {
         url: started["url"].as_str().unwrap().to_owned(),
         ann: started["tokens"]["ann"].as_str().unwrap().to_owned(),
+        bo: started["tokens"]["bo"].as_str().unwrap().to_owned(),
         _process: process,
     })
 }
@@ -538,4 +540,61 @@ async fn reads_usage_and_the_model_view_and_edits_a_list_on_its_panel() {
     .await
     .unwrap();
     assert_eq!(closed, 4404);
+}
+
+#[tokio::test]
+async fn sets_up_extensions_for_admins() {
+    let Some(server) = faux_server().await else {
+        return;
+    };
+    let bo = Api::new(&server.url, "robin", tokens(Some(&server.bo))).unwrap();
+    assert_eq!(bo.extension_setups().await.unwrap_err().status(), Some(403));
+
+    let api = Api::new(&server.url, "robin", tokens(Some(&server.ann))).unwrap();
+    let setups = api.extension_setups().await.unwrap();
+    let documents = setups
+        .iter()
+        .find(|s| s.name.as_deref() == Some("documents"))
+        .expect("documents");
+    assert!(documents.configured && documents.enabled);
+    assert_eq!(
+        documents.schema.as_ref().unwrap()["properties"]["maxMegabytes"]["default"],
+        20
+    );
+    let mail = setups
+        .iter()
+        .find(|s| s.name.as_deref() == Some("mail"))
+        .expect("mail");
+    assert!(!mail.configured);
+
+    let saved = |settings: Value| -> Vec<SavedExtensionSetup> {
+        setups
+            .iter()
+            .filter(|s| s.configured)
+            .map(|s| SavedExtensionSetup {
+                from: s.from.clone(),
+                enabled: s.enabled,
+                settings: Some(if s.name.as_deref() == Some("documents") {
+                    settings.as_object().unwrap().clone()
+                } else {
+                    s.settings.clone()
+                }),
+                rooms: s.rooms.clone(),
+            })
+            .collect()
+    };
+    let after = api
+        .save_extension_setups(saved(serde_json::json!({ "maxMegabytes": 5 })))
+        .await
+        .unwrap();
+    let documents = after
+        .iter()
+        .find(|s| s.name.as_deref() == Some("documents"))
+        .unwrap();
+    assert_eq!(documents.settings["maxMegabytes"], 5);
+    let refused = api
+        .save_extension_setups(saved(serde_json::json!({ "maxMegabytes": "lots" })))
+        .await
+        .unwrap_err();
+    assert_eq!(refused.status(), Some(400));
 }
