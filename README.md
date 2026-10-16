@@ -179,7 +179,7 @@ An entry's `rooms` lists the kinds of room it is on in by default (`"lobby"`, `"
 - **Site notes:** after a run that took a few actions, the browser agent writes short notes on how it used each site (where the filters are, URL parameters that worked, which button closes the cookie dialog), and gets them back the next time it reaches that site, in any room. They hold no results and nothing about the user, and cost one small extra request. `"siteNotes": false` turns them off.
 - `nudge doctor` also checks the browser model's credentials.
 - Install its browser once with `pnpm -C extensions/browser exec patchright install chromium`.
-- `pnpm -C extensions/browser eval -- --model anthropic/claude-haiku-5-5,openai/gpt-5-mini` runs a set of everyday tasks against each model and writes results to `extensions/browser/.eval/`. Keys come only from your environment.
+- `pnpm -C extensions/browser eval -- --model anthropic/claude-haiku-5-5,openai/gpt-5-mini` runs a set of everyday tasks against each model, twice each (`--runs 3` for more), through the same redaction as Nudge, after `pnpm build`. It writes each run's result, every request the providers got, and a summary table (answered, expected answer seen, steps, seconds, cost, leaks) to `extensions/browser/.eval/`. Some tasks carry made-up personal details; a leak is one of them reaching a request as it is, and makes the run exit with an error. Keys come only from your environment; without one for a model it stops before opening a browser.
 
 ### MCP servers
 
