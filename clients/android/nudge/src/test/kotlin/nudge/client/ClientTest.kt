@@ -310,6 +310,51 @@ class ClientTest {
     }
 
     @Test
+    fun extensionSettings() = runBlocking {
+        val member = client(MemoryTokens(bo))
+        try {
+            member.extensionSetups()
+            error("not refused")
+        } catch (e: NudgeException.Status) {
+            assertEquals(403.toUShort(), e.status)
+        }
+        val admin = client(MemoryTokens(ann))
+        val setups = admin.extensionSetups()
+        val documents = setups.first { it.name == "documents" }
+        val fields = settingFields(documents.schemaJson)
+        assertEquals(listOf("maxMegabytes", "maxPerRoom"), fields.map { it.name })
+        assertEquals("Max megabytes", fields[0].label)
+        assertEquals(SettingKind.Number(integer = false, minimum = 1.0, maximum = 100.0), fields[0].kind)
+
+        // Mail, not added yet: a list of accounts, each with nested servers and a password.
+        val mail = setups.first { it.name == "mail" }
+        assertFalse(mail.configured)
+        val accounts = settingFields(mail.schemaJson).single().kind as SettingKind.Items
+        assertEquals(listOf("id", "from", "imap", "smtp", "rooms"), accounts.fields.map { it.name })
+        val imap = accounts.fields.first { it.name == "imap" }
+        assertEquals("IMAP", imap.label)
+        val server = (imap.kind as SettingKind.Group).fields
+        assertEquals(listOf("host", "port", "secure", "user", "password"), server.map { it.name })
+        assertEquals(SettingKind.Text(secret = true), server.first { it.name == "password" }.kind)
+        assertEquals(SettingKind.Toggle, server.first { it.name == "secure" }.kind)
+        assertTrue(server.first { it.name == "user" }.required)
+        assertEquals(SettingKind.Lines, accounts.fields.first { it.name == "rooms" }.kind)
+
+        val browser = setups.first { it.name == "browser" }
+        val reasoning = settingFields(browser.schemaJson).first { it.name == "reasoning" }
+        assertEquals(4, (reasoning.kind as SettingKind.Choice).options.size)
+
+        val smaller = kotlinx.serialization.json.buildJsonObject { put("maxMegabytes", kotlinx.serialization.json.JsonPrimitive(5)) }
+        val saved = admin.saveExtensionSetups(
+            setups.filter { it.configured }.map { setup ->
+                setup.saved(setup.enabled, if (setup == documents) smaller else setup.settings, setup.rooms)
+            },
+        )
+        assertEquals(smaller, saved.first { it.name == "documents" }.settings)
+        assertTrue(saved.first { it.name == "lists" }.enabled)
+    }
+
+    @Test
     fun pairingLinks() {
         assertEquals(
             PairingLink("https://nudge.example/x", "robin", "7K3Q-M9XD"),

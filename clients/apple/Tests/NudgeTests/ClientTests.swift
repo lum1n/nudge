@@ -148,6 +148,47 @@ final class ClientTests: XCTestCase {
         connectors.close()
     }
 
+    func testExtensionSettings() async throws {
+        let member = try client(MemoryTokens(server.bo))
+        do {
+            _ = try await member.extensionSetups()
+            XCTFail("not refused")
+        } catch NudgeError.Status(let status, _) {
+            XCTAssertEqual(status, 403)
+        }
+        let admin = try client(MemoryTokens(server.ann))
+        let setups = try await admin.extensionSetups()
+        let documents = try XCTUnwrap(setups.first { $0.name == "documents" })
+        XCTAssertEqual(documents.settingFields.map(\.name), ["maxMegabytes", "maxPerRoom"])
+        XCTAssertEqual(documents.settingFields[0].label, "Max megabytes")
+        XCTAssertEqual(documents.settingFields[0].kind, .number(integer: false, minimum: 1, maximum: 100))
+
+        // Mail, not added yet: a list of accounts, each with nested servers and a password.
+        let mail = try XCTUnwrap(setups.first { $0.name == "mail" })
+        XCTAssertFalse(mail.configured)
+        guard case .items(let account) = mail.settingFields.first?.kind else { return XCTFail() }
+        XCTAssertEqual(account.map(\.name), ["id", "from", "imap", "smtp", "rooms"])
+        let imap = try XCTUnwrap(account.first { $0.name == "imap" })
+        XCTAssertEqual(imap.label, "IMAP")
+        guard case .group(let server) = imap.kind else { return XCTFail() }
+        XCTAssertEqual(server.map(\.name), ["host", "port", "secure", "user", "password"])
+        XCTAssertEqual(server.first { $0.name == "password" }?.kind, .text(secret: true))
+        XCTAssertEqual(server.first { $0.name == "secure" }?.kind, .toggle)
+        XCTAssertEqual(server.first { $0.name == "user" }?.required, true)
+        XCTAssertEqual(account.first { $0.name == "rooms" }?.kind, .lines)
+        let browser = try XCTUnwrap(setups.first { $0.name == "browser" })
+        guard case .choice(let levels) = browser.settingFields.first(where: { $0.name == "reasoning" })?.kind
+        else { return XCTFail() }
+        XCTAssertEqual(levels, [.string("minimal"), .string("low"), .string("medium"), .string("high")])
+
+        let smaller: [String: JSONValue] = ["maxMegabytes": .number(5)]
+        let saved = try await admin.saveExtensionSetups(
+            extensions: setups.filter(\.configured).map { setup in
+                setup.saved(enabled: setup.enabled, settings: setup == documents ? smaller : setup.settings, rooms: setup.rooms)
+            })
+        XCTAssertEqual(saved.first { $0.name == "documents" }?.settings, smaller)
+    }
+
     func testPairingLinks() {
         let link = PairingLink(URL(string: "nudge://pair?server=https%3A%2F%2Fnudge.example%2Fx&assistant=robin&code=7K3Q-M9XD")!)
         XCTAssertEqual(link, PairingLink(server: "https://nudge.example/x", assistant: "robin", code: "7K3Q-M9XD"))

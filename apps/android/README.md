@@ -6,8 +6,9 @@ The Nudge app for Android 8 and later, in Jetpack Compose with Material 3 Expres
 - Sign in with a pairing code (`nudge pair <player>` on the server) or by opening a `nudge://pair?…` link. The token stays in the app's private storage, out of backups.
 - Rooms: a list on phones, beside the open room on tablets and wide screens. Each row shows when the assistant is answering and how many actions wait for approval.
 - A room: the timeline as it streams (text, thinking, tool calls), actions waiting for approval with Approve and Deny, fired nudges, messages on their way (with Retry and Dismiss when one fails), Stop, and earlier messages on demand. Views and unsent messages are cached, so the app opens offline and sends what waited once it's back.
-- Lists (the lists extension's panel), and the room's members, memory, nudges, extensions and what the model saw.
-- Settings: your own memory and whether it's shared, this month's spend, notifications, sign out (which revokes the device's token on the server).
+- Lists, documents (upload, download, delete, find by name) and connectors (API keys, typed and never shown again, the local network, read paths), over the extensions' panels, and the room's members, memory, nudges, extensions and what the model saw.
+- The room's browser, live, from About this room or from "Open the room's browser to log in" when the assistant needs a login: tap to click, drag to scroll, type into the page, Take control from whoever has it, Done (and Remember, to save the login), and the saved logins.
+- Settings: for admins, the assistant's extensions (on or off, their settings as a form drawn from each one's schema, and the rooms they are on in), your own memory and whether it's shared, this month's spend, notifications, sign out (which revokes the device's token on the server).
 - Notifications through FCM when an answer is ready or an action waits for approval in a room you don't have open. The app disconnects in the background so the server knows to push. Tapping one opens the room.
 
 ## Build
