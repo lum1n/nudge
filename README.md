@@ -366,6 +366,13 @@ pnpm check   # typecheck, lint, test
 pnpm build   # every package, and the web UI into apps/web/dist
 ```
 
+The browser extension's tests on fixture pages (consent dialogs, hidden checkboxes, carousels, cards, logins) drive a real headless Chromium, so they run only when asked:
+
+```bash
+pnpm -C extensions/browser exec patchright install chromium
+NUDGE_BROWSER_TESTS=1 pnpm exec vitest run extensions/browser
+```
+
 The Rust client needs a Rust toolchain (edition 2024). Its tests start a server on a faux model with `node packages/server/scripts/faux-server.ts`, which runs the built packages, so `pnpm build` first:
 
 ```bash

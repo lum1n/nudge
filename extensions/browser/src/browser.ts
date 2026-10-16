@@ -332,7 +332,11 @@ export class BrowserSession {
     const what = this.describe(ref);
     const now = await locator.isChecked().catch(() => undefined);
     if (now === checked) return `${what} was already ${checked ? "checked" : "unchecked"}.`;
-    await this.robust(locator, ref, (l) => l.setChecked(checked, { timeout: 4_000 }));
+    // Many checkboxes hide their input behind a styled box; give up on the input soon and use
+    // its label, which takes the click.
+    await this.robust(locator, ref, (l, first) =>
+      l.setChecked(checked, { timeout: first ? 1_500 : 4_000 }),
+    );
     return `${checked ? "Checked" : "Unchecked"} ${what}.`;
   }
 
@@ -446,10 +450,11 @@ export class BrowserSession {
   private async robust(
     locator: Locator,
     ref: string,
-    act: (l: Locator) => Promise<unknown>,
+    /** `first` is the element itself; a retry goes to its label. */
+    act: (l: Locator, first: boolean) => Promise<unknown>,
   ): Promise<void> {
     try {
-      await act(locator);
+      await act(locator, true);
       return;
     } catch (error) {
       const message = String(error);
@@ -457,7 +462,7 @@ export class BrowserSession {
         const label = await labelFor(locator);
         if (label) {
           try {
-            await act(label === "self" ? locator : label);
+            await act(label === "self" ? locator : label, false);
             return;
           } catch {
             // fall through to the explanation below
