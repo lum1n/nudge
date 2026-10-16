@@ -1,12 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useEffect, useState } from "react";
 import { forgetToken } from "../../api.ts";
-import {
-  type ConnectorsSocket,
-  type PanelConnector,
-  useConnectors,
-  usePanelState,
-} from "../../connectors.ts";
+import { type ConnectorsSocket, type PanelConnector, useConnectors } from "../../connectors.ts";
 
 export const Route = createFileRoute("/$assistant/$room_/connectors")({ component: Connectors });
 
@@ -15,8 +10,7 @@ const NOT_FOUND = 4404;
 
 function Connectors() {
   const { assistant, room } = Route.useParams();
-  const socket = useConnectors(assistant, room);
-  const state = usePanelState(socket);
+  const [socket, state] = useConnectors(assistant, room);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -48,16 +42,16 @@ function Connectors() {
             ? "This assistant has no connectors extension here, or you are not in this room."
             : `Disconnected${state.error ? `: ${state.error}` : ""}.`}
         </p>
-      ) : socket === undefined || state.connectors === undefined ? (
+      ) : socket === undefined || state.view === undefined ? (
         <p className="text-stone-500">Connecting…</p>
       ) : (
         <>
           {state.error ? <p className="text-sm text-red-700">{state.error}</p> : null}
-          {state.connectors.length === 0 ? (
+          {state.view.length === 0 ? (
             <p className="text-stone-500">No connectors yet.</p>
           ) : (
             <ul className="flex flex-col gap-3">
-              {state.connectors.map((connector) => (
+              {state.view.map((connector) => (
                 <li key={connector.id}>
                   <ConnectorCard socket={socket} connector={connector} />
                 </li>
