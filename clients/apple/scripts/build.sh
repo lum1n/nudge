@@ -17,6 +17,8 @@ trap 'rm -rf "$out"' EXIT
 cargo run -q -p nudge-ffi --features cli --bin uniffi-bindgen -- \
   generate --no-format --library "$host" --language swift --out-dir "$out"
 
+# Everything in these is generated and ignored, so a fresh clone has neither.
+mkdir -p "$here/Sources/NudgeFFI" "$here/Sources/NudgeFFIC"
 cp "$out/NudgeFFI.swift" "$here/Sources/NudgeFFI/NudgeFFI.swift"
 cp "$out/NudgeFFIC.h" "$here/Sources/NudgeFFIC/NudgeFFIC.h"
 # For Linux: the same module, linking the shared library.
