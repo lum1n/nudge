@@ -32,6 +32,7 @@ export function fakeBrowser(
     tabs: async () => "1. Page — https://example.no (current)",
     settle: async () => {},
     takeNotes: () => [],
+    describe: (ref) => `button "Button ${ref}" [${ref}]`,
     login: async () => {
       calls.push("login");
       return "Filled in the saved login for example.no and submitted it.";

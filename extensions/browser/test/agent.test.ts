@@ -105,6 +105,69 @@ describe("runBrowserAgent", () => {
     expect(third).toContain('Page 2\\"');
   });
 
+  it("says what each action is about to do, for people watching", async () => {
+    const { models, model } = setup([
+      fauxAssistantMessage(
+        [
+          fauxToolCall("browser_navigate", { url: "https://www.finn.no/" }, { id: "a" }),
+          fauxToolCall("browser_type", { ref: "e3", text: "GLC 2027" }, { id: "b" }),
+          fauxToolCall("browser_click", { ref: "e7" }, { id: "c" }),
+        ],
+        { stopReason: "toolUse" },
+      ),
+      fauxAssistantMessage([fauxText("Done.")]),
+    ]);
+    const lines: string[] = [];
+    await runBrowserAgent({
+      models,
+      model,
+      browser: fakeBrowser().browser,
+      task: "Search",
+      onStep: (step) => step.type === "doing" && lines.push(step.text),
+    });
+    // What was typed never shows; elements go by their names on the page.
+    expect(lines).toEqual([
+      "Opening finn.no…",
+      'Typing into "Button e3"…',
+      'Clicking "Button e7"…',
+    ]);
+  });
+
+  it("stops before a consequential action and resumes, once approved, allowed to do it", async () => {
+    const action = 'Click "Bestill" to book a table for 2 at 19:00 on Friday';
+    const { models, model, requests } = setup([
+      fauxAssistantMessage(
+        [
+          fauxToolCall("browser_click", { ref: "e2" }, { id: "a" }),
+          fauxToolCall("browser_confirm", { action }, { id: "b" }),
+          fauxToolCall("browser_click", { ref: "e9" }, { id: "c" }),
+        ],
+        { stopReason: "toolUse" },
+      ),
+      fauxAssistantMessage([fauxToolCall("browser_click", { ref: "e9" })], {
+        stopReason: "toolUse",
+      }),
+      fauxAssistantMessage([fauxText("Booked: table for 2 at 19:00.")]),
+    ]);
+    const { browser, calls } = fakeBrowser();
+    const stopped = await runBrowserAgent({ models, model, browser, task: "Book a table" });
+    expect(stopped).toMatchObject({ outcome: "needs-confirmation", action });
+    // Nothing after the confirm ran.
+    expect(calls).toEqual(["click e2"]);
+    expect(text(requests[0])).toContain("call browser_confirm with the exact action");
+
+    const resumed = await runBrowserAgent({
+      models,
+      model,
+      browser,
+      task: "Book a table",
+      approved: action,
+    });
+    expect(resumed).toMatchObject({ outcome: "answered", answer: "Booked: table for 2 at 19:00." });
+    expect(calls).toEqual(["click e2", "click e9"]);
+    expect(text(requests[1])).toContain(`they approved it: ${JSON.stringify(action).slice(1, -1)}`);
+  });
+
   it("gives up after maxSteps", async () => {
     const loop = fauxAssistantMessage([fauxToolCall("browser_scroll", { direction: "down" })], {
       stopReason: "toolUse",

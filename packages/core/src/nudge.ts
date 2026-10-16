@@ -169,6 +169,7 @@ export class Nudge {
       harness,
       this.rooms,
       now,
+      parts.models,
       (extension, kind) =>
         this.installed.find((installed) => installed.extension.name === extension)?.approvals[kind],
       changed,

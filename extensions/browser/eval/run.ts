@@ -60,12 +60,14 @@ for (const { spec, providerId, model } of runs) {
       reasoning: values.reasoning as ThinkingLevel,
       maxSteps: Number(values.steps),
       timeZone: "Europe/Oslo",
-      onStep: (step) =>
+      onStep: (step) => {
+        if (step.type === "doing") return;
         log(
           step.type === "note"
             ? `  [${task.id} ${step.step}] ${step.text.slice(0, 200).replace(/\n/g, " ")}`
             : `  [${task.id} ${step.step}] ${step.ok ? "✓" : "✗"} ${step.tool} ${JSON.stringify(step.args)} → ${step.result.slice(0, 140)}`,
-        ),
+        );
+      },
     }).catch((error: unknown) => ({
       outcome: `crash: ${String(error).split("\n")[0]}`,
       answer: "",

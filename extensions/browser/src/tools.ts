@@ -17,6 +17,7 @@ export type Browser = Pick<
   | "settle"
   | "takeNotes"
   | "login"
+  | "describe"
 >;
 
 export interface BrowserTool<T extends TSchema = TSchema> {
@@ -25,10 +26,13 @@ export interface BrowserTool<T extends TSchema = TSchema> {
   parameters: T;
   /** Observations return the page themselves; actions get a fresh snapshot appended by the batch. */
   observes?: boolean;
-  /** Ends the browsing task: the user has to do something first. */
-  ends?: boolean;
+  /** Ends the browsing task: the user has to do something first, log in or approve an action. */
+  ends?: Stop;
   run(session: Browser, args: Static<T>): Promise<string>;
 }
+
+/** Why a task stopped before its answer. */
+export type Stop = "needs-login" | "needs-confirmation";
 
 const Ref = Type.String({
   description: "Element ref from the latest observation, like e12 or f3e40.",
@@ -124,8 +128,23 @@ export const browserTools: BrowserTool[] = [
       reason: Type.String({ description: "What the login is needed for" }),
     }),
     observes: true,
-    ends: true,
+    ends: "needs-login",
     run: async (_s, a) => `Login needed on ${a.site}: ${a.reason}`,
+  }),
+  tool({
+    name: "browser_confirm",
+    description:
+      "Stop and ask the user to approve one consequential action before you do it: buying, booking, sending a message or a form, signing up, posting, or entering their personal data. Get everything ready first, so the action is one click away. Ends the task; once the user approves, you are started again on the same page, allowed to do exactly that action.",
+    parameters: Type.Object({
+      action: Type.String({
+        minLength: 1,
+        description:
+          'Exactly what you will do and what it commits the user to, like: Click "Pay 1 290 kr" on sas.no to book OSL–BGO on 3 May, 07:05, for 1 adult.',
+      }),
+    }),
+    observes: true,
+    ends: "needs-confirmation",
+    run: async (_s, a) => `Waiting for the user to approve: ${a.action}`,
   }),
   tool({
     name: "browser_tabs",
@@ -150,7 +169,72 @@ export interface ToolCallOutput {
   text: string;
   isError: boolean;
   /** The task has to stop here; see `BrowserTool.ends`. */
-  ends?: boolean;
+  ends?: Stop;
+  /** What the call was given, for a stop that needs it. */
+  args?: Record<string, unknown>;
+}
+
+/**
+ * What a call is about to do, as one short line for people watching, like `Clicking "Search"…`.
+ * Element names come from the latest observation; typed text and saved logins never show.
+ */
+export function progressLine(
+  session: Pick<Browser, "describe">,
+  call: Pick<ToolCallInput, "name" | "arguments">,
+): string {
+  const a = call.arguments;
+  const text = (key: string) => (typeof a[key] === "string" ? (a[key] as string) : "");
+  const quote = (value: string) => `"${value.length > 60 ? `${value.slice(0, 59)}…` : value}"`;
+  // `button "Search" [e12]` names the element "Search"; one without a name goes by its role.
+  const element = () => {
+    const line = session.describe(text("ref"));
+    if (line === text("ref")) return "an element";
+    const name = /"([^"]+)"/.exec(line)?.[1];
+    return name === undefined ? `the ${line.split(/[\s:[]/)[0] || "element"}` : quote(name);
+  };
+  switch (call.name) {
+    case "browser_observe":
+      return "Reading the page…";
+    case "browser_find":
+      return `Looking for ${quote(text("query"))} on the page…`;
+    case "browser_navigate": {
+      const url = text("url");
+      if (url === "back") return "Going back…";
+      if (url === "forward") return "Going forward…";
+      if (url === "reload") return "Reloading the page…";
+      try {
+        return `Opening ${new URL(url).hostname.replace(/^www\./, "")}…`;
+      } catch {
+        return "Opening a page…";
+      }
+    }
+    case "browser_click":
+      return `Clicking ${element()}…`;
+    case "browser_type":
+      return `Typing into ${element()}…`;
+    case "browser_check":
+      return `${a.checked === false ? "Unchecking" : "Checking"} ${element()}…`;
+    case "browser_select":
+      return `Choosing ${quote(text("option"))}…`;
+    case "browser_press":
+      return `Pressing ${text("key")}…`;
+    case "browser_scroll":
+      return text("ref") === "" ? `Scrolling ${text("direction")}…` : `Scrolling to ${element()}…`;
+    case "browser_login":
+      return "Logging in with the saved login…";
+    case "browser_request_login":
+      return `Asking you to log in on ${text("site")}…`;
+    case "browser_confirm":
+      return "Asking you to approve the next step…";
+    case "browser_tabs":
+      return text("action") === "switch"
+        ? "Switching tabs…"
+        : text("action") === "close"
+          ? "Closing a tab…"
+          : "Looking at the tabs…";
+    default:
+      return "Working…";
+  }
 }
 
 /**
@@ -160,6 +244,8 @@ export interface ToolCallOutput {
 export async function runBatch(
   session: Browser,
   calls: readonly ToolCallInput[],
+  /** Hears each call just before it runs. */
+  onCall?: (call: ToolCallInput) => void,
 ): Promise<ToolCallOutput[]> {
   const out: ToolCallOutput[] = [];
   let failed = false;
@@ -170,9 +256,11 @@ export async function runBatch(
       out.push({
         id: call.id,
         name: call.name,
-        text: out.some((o) => o.ends)
+        text: out.some((o) => o.ends === "needs-login")
           ? "Not run: the task stopped for a login."
-          : "Not run: an earlier action in this turn failed.",
+          : out.some((o) => o.ends === "needs-confirmation")
+            ? "Not run: the task stopped for the user's approval."
+            : "Not run: an earlier action in this turn failed.",
         isError: true,
       });
       continue;
@@ -183,6 +271,7 @@ export async function runBatch(
       continue;
     }
     try {
+      onCall?.(call);
       const text = await definition.run(session, call.arguments as never);
       if (!definition.observes) await session.settle();
       out.push({
@@ -190,7 +279,7 @@ export async function runBatch(
         name: call.name,
         text,
         isError: false,
-        ...(definition.ends ? { ends: true } : {}),
+        ...(definition.ends ? { ends: definition.ends, args: call.arguments } : {}),
       });
       lastObserved = Boolean(definition.observes);
       if (definition.ends) failed = true;

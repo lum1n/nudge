@@ -1,13 +1,33 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Api, Model, ThinkingLevel } from "@earendil-works/pi-ai";
-import { defineDoc } from "@earendil-works/pi-durable";
-import { defineNudgeExtension, defineTool, Type } from "@nudge/core";
-import { DEFAULT_BROWSER_MODEL, runBrowserAgent } from "./agent.ts";
+import type { Context } from "@earendil-works/chord";
+import type { Api, Model, Models, ThinkingLevel } from "@earendil-works/pi-ai";
+import { defineDoc, type Tx } from "@earendil-works/pi-durable";
+import {
+  type Approval,
+  defineNudgeExtension,
+  defineTool,
+  requestApproval,
+  roomOf,
+  Type,
+} from "@nudge/core";
+import {
+  type BrowserAgentOptions,
+  type BrowserAgentResult,
+  DEFAULT_BROWSER_MODEL,
+  runBrowserAgent,
+} from "./agent.ts";
+import type { BrowserSession } from "./browser.ts";
+import { type LiveInput, type LiveOutput, startLiveView } from "./live.ts";
+import { LoginStore } from "./logins.ts";
+import { holdBrowser, withBrowser } from "./pool.ts";
+import { type Viewer, viewersOf } from "./viewers.ts";
+
+type SiteNotesState = { sites: Record<string, { notes: string; at: number }> };
 
 /** What the browser agent learned about using each site, by host; shared by every room. */
-export const SiteNotesDoc = defineDoc<{ sites: Record<string, { notes: string; at: number }> }>({
+export const SiteNotesDoc = defineDoc<SiteNotesState>({
   kind: "browser.sites",
   version: 1,
   scope: "session",
@@ -16,11 +36,9 @@ export const SiteNotesDoc = defineDoc<{ sites: Record<string, { notes: string; a
 
 /** Sites whose notes are kept; the ones used longest ago go first. */
 const MAX_SITES = 300;
-import type { BrowserSession } from "./browser.ts";
-import { type LiveInput, type LiveOutput, startLiveView } from "./live.ts";
-import { LoginStore } from "./logins.ts";
-import { holdBrowser, withBrowser } from "./pool.ts";
-import { type Viewer, viewersOf } from "./viewers.ts";
+
+/** What a `confirm` approval holds: the task a run stopped in, and the action to approve. */
+type ConfirmPayload = { task: string; action: string };
 
 /**
  * Lets the assistant use the web. The room's model delegates a task to `browse`; a browser agent on
@@ -78,7 +96,7 @@ export default defineNudgeExtension({
         "Keep short notes on how to use each site and show them to the browser on its next visit.",
     }),
   }),
-  setup: ({ settings, dataDir, timeZone, now }) => {
+  setup: ({ settings, dataDir, timeZone, now, documents }) => {
     // Without a data directory (an in-memory assistant), profiles go to a temp dir made on first use.
     let temp: string | undefined;
     const profiles = () =>
@@ -100,65 +118,113 @@ export default defineNudgeExtension({
         (host) => logins.find(scope, host),
         logins.list(scope).flatMap((login) => [login.username ?? "", login.password]),
       );
+
+    /** One run of the browser agent in a room's browser, with site notes if they are on. */
+    const browseIn = async (
+      run: {
+        readonly models: Models;
+        readonly conversationId: number;
+        /** The site notes kept so far. */
+        readonly notes: () => Promise<SiteNotesState | undefined>;
+        readonly commit: <T>(apply: (tx: Tx) => Promise<T> | T) => Promise<T>;
+        readonly context: Context;
+      },
+      task: string,
+      extra: Pick<BrowserAgentOptions, "approved" | "onStep">,
+    ): Promise<BrowserAgentResult | undefined> => {
+      const model = run.models.getModel(provider!, id.join("/")) as Model<Api> | undefined;
+      if (!model) return undefined;
+      const scope = scopeOf(run.conversationId);
+      const known = settings.siteNotes ? ((await run.notes())?.sites ?? {}) : {};
+      const siteNotes = settings.siteNotes
+        ? {
+            read: (host: string) => known[host]?.notes,
+            write: (notes: Readonly<Record<string, string>>) =>
+              run.commit(async (tx) => {
+                const doc = await tx.doc(SiteNotesDoc);
+                for (const [host, text] of Object.entries(notes))
+                  doc.sites[host] = { notes: text, at: now() };
+                const hosts = Object.entries(doc.sites).sort(([, a], [, b]) => b.at - a.at);
+                for (const [host] of hosts.slice(MAX_SITES)) delete doc.sites[host];
+              }),
+          }
+        : undefined;
+      return withBrowser(optionsFor(run.conversationId), idleMs, (browser) => {
+        useLogins(browser, scope);
+        return runBrowserAgent({
+          models: run.models,
+          model,
+          browser,
+          task,
+          reasoning: settings.reasoning as ThinkingLevel,
+          maxSteps: settings.maxSteps,
+          ...(siteNotes === undefined ? {} : { siteNotes }),
+          timeZone,
+          now,
+          ...(run.context.abortSignal ? { signal: run.context.abortSignal } : {}),
+          ...extra,
+        });
+      });
+    };
+
+    /**
+     * Files an approval for the action a run stopped at. Approving it runs the task again in the
+     * same room's browser, allowed to do exactly that action (`approvals.confirm`).
+     */
+    const askToConfirm = (
+      commit: <T>(apply: (tx: Tx) => Promise<T> | T) => Promise<T>,
+      roomId: string,
+      task: string,
+      action: string,
+    ): Promise<Approval> =>
+      commit((tx) =>
+        requestApproval(
+          tx,
+          roomId,
+          {
+            extension: "browser",
+            kind: "confirm",
+            summary: `In the browser: ${action}`,
+            payload: { task, action } satisfies ConfirmPayload,
+          },
+          now(),
+        ),
+      );
+
+    const unavailable = `The browser model "${settings.model}" is not available. Set "model" in the browser extension's settings in nudge.json.`;
+    const stopped = (result: BrowserAgentResult) =>
+      `Browsing stopped (${result.outcome}${result.error ? `: ${result.error}` : ""}) after ${result.steps} steps.${result.answer ? `\n${result.answer}` : ""}`;
+
     return {
       models: [{ provider: provider!, modelId: id.join("/") }],
       tools: [
         defineTool({
           name: "browse",
           description:
-            "Use the web: look things up on websites, search listings, compare prices, read timetables or fill in search forms. A separate browser agent does the task and returns its answer with links. Give it a complete, self-contained task saying what to find and what to report. It logs in with logins the user saved; when a site needs a new login it stops and asks the user to log in in this room's browser. It cannot buy anything or send messages.",
+            "Use the web: look things up on websites, search listings, compare prices, read timetables or fill in search forms. A separate browser agent does the task and returns its answer with links. Give it a complete, self-contained task saying what to find and what to report. It logs in with logins the user saved; when a site needs a new login it stops and asks the user to log in in this room's browser. Before it buys, books, sends or signs up for anything it stops and asks the people in the room to approve that exact action; once approved, it carries on by itself.",
           parameters: Type.Object({
             task: Type.String({ minLength: 1, description: "What to do and what to report back" }),
           }),
           execute: async ({ task }, api, context) => {
-            const model = api.models.getModel(provider!, id.join("/")) as Model<Api> | undefined;
-            if (!model) {
-              return {
-                output: [
-                  {
-                    type: "text",
-                    text: `The browser model "${settings.model}" is not available. Set "model" in the browser extension's settings in nudge.json.`,
-                  },
-                ],
-                isError: true,
-              };
-            }
-            const scope = scopeOf(api.conversationId);
-            const known = settings.siteNotes
-              ? ((await api.snapshot(SiteNotesDoc, context))?.sites ?? {})
-              : {};
-            const siteNotes = settings.siteNotes
-              ? {
-                  read: (host: string) => known[host]?.notes,
-                  write: (notes: Readonly<Record<string, string>>) =>
-                    api.commit(async (tx) => {
-                      const doc = await tx.doc(SiteNotesDoc);
-                      for (const [host, text] of Object.entries(notes))
-                        doc.sites[host] = { notes: text, at: now() };
-                      const hosts = Object.entries(doc.sites).sort(([, a], [, b]) => b.at - a.at);
-                      for (const [host] of hosts.slice(MAX_SITES)) delete doc.sites[host];
-                    }, context),
-                }
-              : undefined;
-            const result = await withBrowser(optionsFor(api.conversationId), idleMs, (browser) => {
-              useLogins(browser, scope);
-              return runBrowserAgent({
+            // People in the room see the last line while it runs (`ToolPart.output`).
+            api.output("Starting the browser…\n");
+            const result = await browseIn(
+              {
                 models: api.models,
-                model,
-                browser,
-                task,
-                reasoning: settings.reasoning as ThinkingLevel,
-                maxSteps: settings.maxSteps,
-                ...(siteNotes === undefined ? {} : { siteNotes }),
-                timeZone,
-                now,
-                ...(context.abortSignal ? { signal: context.abortSignal } : {}),
+                conversationId: api.conversationId,
+                notes: () => api.snapshot(SiteNotesDoc, context),
+                commit: (apply) => api.commit(apply, context),
+                context,
+              },
+              task,
+              {
                 onStep: (step) => {
-                  if (step.type === "action")
-                    void api.details({ step: step.step, action: step.tool, ok: step.ok }, context);
+                  if (step.type === "doing") api.output(`${step.text}\n`);
                 },
-              });
-            });
+              },
+            );
+            if (result === undefined)
+              return { output: [{ type: "text", text: unavailable }], isError: true };
             const details = { steps: result.steps, actions: result.actions, model: settings.model };
             if (result.outcome === "needs-login") {
               return {
@@ -172,12 +238,29 @@ export default defineNudgeExtension({
                 details: { ...details, needsLogin: true },
               };
             }
+            if (result.outcome === "needs-confirmation") {
+              const room = await roomOf(api, api.conversationId, context);
+              const approval = await askToConfirm(
+                (apply) => api.commit(apply, context),
+                room.id,
+                task,
+                result.action ?? "",
+              );
+              return {
+                output: [
+                  {
+                    type: "text",
+                    text: `The browser stopped before this step and asked the room to approve it (approval ${approval.id}): ${result.action}\nOnce someone approves, it carries on by itself and the room hears how it went. Don't browse for this again meanwhile.`,
+                  },
+                ],
+                usage: result.usage,
+                // `approval` puts Approve and Deny in the chat, as for any approval.
+                details: { ...details, approval: approval.id },
+              };
+            }
             const answered = result.outcome === "answered";
-            const text = answered
-              ? result.answer
-              : `Browsing stopped (${result.outcome}${result.error ? `: ${result.error}` : ""}) after ${result.steps} steps.${result.answer ? `\n${result.answer}` : ""}`;
             return {
-              output: [{ type: "text", text }],
+              output: [{ type: "text", text: answered ? result.answer : stopped(result) }],
               isError: !answered,
               usage: result.usage,
               details,
@@ -185,7 +268,40 @@ export default defineNudgeExtension({
           },
         }),
       ],
-      // The room's browser, live, for the people in the room: watch it, take over, log in.
+      approvals: {
+        // The action a `browse` run stopped at, approved: the same task again, in the room's
+        // browser where the run left it, allowed to do exactly that.
+        confirm: async (payload, run) => {
+          const { task, action } = payload as ConfirmPayload;
+          const result = await browseIn(
+            {
+              models: run.models,
+              conversationId: run.room.conversationId,
+              notes: () => documents().snapshot(SiteNotesDoc, run.context),
+              commit: run.commit,
+              context: run.context,
+            },
+            task,
+            { approved: action },
+          );
+          if (result === undefined) return { text: unavailable, isError: true };
+          if (result.outcome === "answered") return { text: result.answer, usage: result.usage };
+          if (result.outcome === "needs-confirmation") {
+            const next = await askToConfirm(run.commit, run.room.id, task, result.action ?? "");
+            return {
+              text: `${result.answer ? `${result.answer}\n` : ""}It stopped again before another step, which waits for approval ${next.id}: ${result.action}`,
+              usage: result.usage,
+            };
+          }
+          if (result.outcome === "needs-login")
+            return {
+              text: `${result.answer}\nSomeone has to open this room's browser in the Nudge web app, log in there and press Done; then ask again.`,
+              usage: result.usage,
+              isError: true,
+            };
+          return { text: stopped(result), usage: result.usage, isError: true };
+        },
+      },
       // The room's browser, live, for the people in the room: watch it, take over, log in.
       roomSocket: async ({ room, player }, socket) => {
         const scope = scopeOf(room.conversationId);
