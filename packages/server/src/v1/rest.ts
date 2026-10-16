@@ -42,6 +42,7 @@ import {
   ProtectRequest,
   type ProtectResponse,
   type PushKeyResponse,
+  PushRenewRequest,
   PushSubscribeRequest,
   RememberRequest,
   SaveExtensionSetupsRequest,
@@ -176,6 +177,26 @@ export function restRoutes(options: RestOptions): Hono {
     } satisfies PairResponse);
   });
 
+  const pushes = (c: HonoContext<Env>): Pushes => {
+    const found = options.pushesOf?.(c.var.nudge);
+    if (found === undefined) throw new HttpError(404, "This server sends no pushes");
+    return found;
+  };
+
+  // Also before it: a service worker has no token. The old subscription's auth secret stands in.
+  api.post("/push/renew", async (c) => {
+    const body = await readBody(c, PushRenewRequest);
+    let renewed: boolean;
+    try {
+      renewed = await pushes(c).renew(body.old, body.subscription);
+    } catch (error) {
+      if (error instanceof BadSubscription) throw new HttpError(400, error.message);
+      throw error;
+    }
+    if (!renewed) throw new HttpError(404, "No such subscription");
+    return c.body(null, 204);
+  });
+
   api.use(authenticate);
 
   api.get("/me", async (c) => {
@@ -260,12 +281,6 @@ export function restRoutes(options: RestOptions): Hono {
         : {}),
     } satisfies UsageResponse);
   });
-
-  const pushes = (c: HonoContext<Env>): Pushes => {
-    const found = options.pushesOf?.(c.var.nudge);
-    if (found === undefined) throw new HttpError(404, "This server sends no pushes");
-    return found;
-  };
 
   api.get("/push", (c) => c.json({ publicKey: pushes(c).publicKey } satisfies PushKeyResponse));
 

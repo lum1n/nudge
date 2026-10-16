@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { defineDocFamily } from "@earendil-works/pi-durable";
 import { DirectoryDoc, type Nudge, type RoomEvent } from "@nudge/core";
@@ -140,6 +141,42 @@ export class Pushes {
     }, context);
   }
 
+  /**
+   * Swaps a subscription the browser replaced (`pushsubscriptionchange`) for its new one. The
+   * service worker has no token, so the old subscription's auth secret, which only the browser
+   * and this server know, stands in for it. False when no player has that subscription.
+   */
+  async renew(old: { endpoint: string; auth: string }, target: PushTarget): Promise<boolean> {
+    checkTarget(target);
+    const directory = await this.nudge.harness.snapshot(DirectoryDoc, context);
+    for (const playerId of Object.keys(directory?.players ?? {})) {
+      const seen = await this.nudge.harness.snapshot(PushDoc, playerId, context);
+      if (!seen?.subscriptions.some((s) => s.endpoint === old.endpoint)) continue;
+      const renewed = await this.nudge.harness.commit(async (tx) => {
+        const doc = await tx.doc(PushDoc, playerId, null);
+        const found = doc.subscriptions.find(
+          (s) => s.endpoint === old.endpoint && sameSecret(s.auth, old.auth),
+        );
+        if (found === undefined) return false;
+        doc.subscriptions = [
+          ...doc.subscriptions.filter(
+            (s) => s.endpoint !== old.endpoint && s.endpoint !== target.endpoint,
+          ),
+          {
+            endpoint: target.endpoint,
+            p256dh: target.keys.p256dh,
+            auth: target.keys.auth,
+            clientId: found.clientId,
+            createdAt: Date.now(),
+          },
+        ];
+        return true;
+      }, context);
+      if (renewed) return true;
+    }
+    return false;
+  }
+
   /** Which native pushes this server sends. */
   get platforms(): { apns: boolean; fcm: boolean } {
     return { apns: this.native.apns !== undefined, fcm: this.native.fcm !== undefined };
@@ -277,6 +314,12 @@ export class Pushes {
 function clip(text: string): string {
   const flat = text.replace(/\s+/g, " ").trim();
   return flat.length <= PREVIEW ? flat : `${flat.slice(0, PREVIEW - 1)}…`;
+}
+
+function sameSecret(a: string, b: string): boolean {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  return left.length === right.length && timingSafeEqual(left, right);
 }
 
 /**

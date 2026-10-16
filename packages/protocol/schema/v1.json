@@ -3057,6 +3057,45 @@
         }
       }
     },
+    "PushRenewRequest": {
+      "type": "object",
+      "required": ["old", "subscription"],
+      "properties": {
+        "old": {
+          "type": "object",
+          "required": ["endpoint", "auth"],
+          "properties": {
+            "endpoint": {
+              "type": "string"
+            },
+            "auth": {
+              "type": "string"
+            }
+          }
+        },
+        "subscription": {
+          "type": "object",
+          "required": ["endpoint", "keys"],
+          "properties": {
+            "endpoint": {
+              "type": "string"
+            },
+            "keys": {
+              "type": "object",
+              "required": ["p256dh", "auth"],
+              "properties": {
+                "p256dh": {
+                  "type": "string"
+                },
+                "auth": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "DeviceRequest": {
       "type": "object",
       "required": ["platform", "token"],
