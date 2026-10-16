@@ -1,6 +1,7 @@
 import { Type } from "@earendil-works/pi-ai";
 import { defineTool, type ToolRegistration } from "@earendil-works/pi-durable";
 import { roomOf } from "../identity/directory.ts";
+import { currentTurn } from "../privacy/turn.ts";
 import type { Nudges } from "./nudges.ts";
 import { formatTime, parseTime, type ScheduledNudge } from "./schedule.ts";
 
@@ -19,7 +20,11 @@ export function createNudgeTools(options: NudgeToolOptions): ToolRegistration[] 
   const describe = (nudge: ScheduledNudge) =>
     `${nudge.id}: ${formatTime(nudge.fireAt, timeZone)}` +
     (nudge.every === undefined ? "" : `, then every ${minutes(nudge.every)}`) +
+    (nudge.privateTo === undefined ? "" : ` (private to ${nudge.privateTo.displayName})`) +
     ` — ${nudge.message}`;
+  // A private nudge exists only in its owner's private turns.
+  const visible = (nudge: ScheduledNudge) =>
+    nudge.privateTo === undefined || nudge.privateTo.playerId === currentTurn().privateTo?.playerId;
   const text = (value: string, isError = false) => ({
     output: [{ type: "text" as const, text: value }],
     ...(isError ? { isError } : {}),
@@ -74,7 +79,7 @@ export function createNudgeTools(options: NudgeToolOptions): ToolRegistration[] 
     replay: "safe",
     execute: async (_args, api, context) => {
       const room = await roomOf(api, api.conversationId, context);
-      const nudges = await options.nudges().list(context, [room.id]);
+      const nudges = (await options.nudges().list(context, [room.id])).filter(visible);
       return text(nudges.length === 0 ? "No nudges scheduled." : nudges.map(describe).join("\n"));
     },
   });
@@ -89,7 +94,7 @@ export function createNudgeTools(options: NudgeToolOptions): ToolRegistration[] 
       const nudges = options.nudges();
       const nudge = await nudges.get(args.id, context);
       // Another room's nudges do not exist from here.
-      if (nudge === undefined || nudge.roomId !== room.id)
+      if (nudge === undefined || nudge.roomId !== room.id || !visible(nudge))
         return text(`No nudge ${args.id} in this conversation.`, true);
       await nudges.cancel(args.id, context);
       return text(`Cancelled nudge ${describe(nudge)}`);

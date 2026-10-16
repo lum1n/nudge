@@ -92,14 +92,20 @@ export class ChatRenderer {
   private line(item: TimelineItem): string | undefined {
     switch (item.type) {
       case "user":
-        return `${item.author?.displayName ?? "you"}: ${item.text}`;
+        return hidden(item)
+          ? `· ${item.author?.displayName ?? "someone"} sent a private message`
+          : `${item.author?.displayName ?? "you"}: ${mine(item)}${item.text}`;
       case "nudge":
-        return `nudge: ${item.text}`;
+        return hidden(item)
+          ? `nudge for ${item.privateTo!.displayName}`
+          : `nudge: ${mine(item)}${item.text}`;
       case "approval":
         return `${item.approvalId} ${item.status} by ${item.decidedBy ?? "nobody"}: ${item.summary}`;
       case "marker":
         return item.kind === "compacted" ? "· earlier messages summarized" : "· started over";
       case "answer": {
+        if (item.privateTo !== undefined && item.parts.length === 0)
+          return `answered ${item.privateTo.displayName} privately`;
         const text = item.parts
           .map((part) => (part.type === "text" ? part.text : ""))
           .join("")
@@ -115,7 +121,14 @@ export class ChatRenderer {
     if (item.type === "user") {
       if (item.clientId === this.ownClientId) return;
       this.endText();
-      this.write(`${bold(`${item.author?.displayName ?? "someone"}:`)} ${item.text}\n`);
+      if (hidden(item))
+        this.write(
+          `${dim(`  · ${item.author?.displayName ?? "someone"} sent a private message`)}\n`,
+        );
+      else
+        this.write(
+          `${bold(`${item.author?.displayName ?? "someone"}:`)} ${mine(item)}${item.text}\n`,
+        );
       return;
     }
     const line = this.line(item);
@@ -148,7 +161,11 @@ export class ChatRenderer {
     this.progress.delete(item.id);
     this.done.add(item.id);
     this.endText();
-    if (item.status === "failed") this.write(`  ! failed: ${item.error ?? "unknown error"}\n`);
+    if (item.privateTo !== undefined && item.parts.length === 0)
+      this.write(
+        `${dim(`  · ${this.assistantName} answered ${item.privateTo.displayName} privately`)}\n`,
+      );
+    else if (item.status === "failed") this.write(`  ! failed: ${item.error ?? "unknown error"}\n`);
     else if (item.status === "stopped") this.write(`${dim("  · stopped")}\n`);
   }
 
@@ -187,6 +204,16 @@ export class ChatRenderer {
     this.shown = "";
     this.write("\n");
   }
+}
+
+/** Something private to someone else: the server sent it emptied. */
+function hidden(item: Extract<TimelineItem, { type: "user" | "nudge" }>): boolean {
+  return item.privateTo !== undefined && item.text === "";
+}
+
+/** Marks what is private to the reader, so they know the others don't see it. */
+function mine(item: Extract<TimelineItem, { type: "user" | "nudge" }>): string {
+  return item.privateTo === undefined ? "" : dim("(only you) ");
 }
 
 /** A connector as the connectors extension's panel sends it; never its key. */

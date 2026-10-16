@@ -10,6 +10,7 @@ import {
 import type { Change } from "../changes.ts";
 import type { Room } from "../identity/directory.ts";
 import type { Rooms } from "../identity/rooms.ts";
+import { currentTurn, inTurn, type Owner } from "../privacy/turn.ts";
 
 export type ApprovalStatus = "pending" | "approved" | "denied" | "done" | "failed";
 
@@ -31,6 +32,8 @@ export type Approval = {
   decidedAt?: number;
   /** What the handler reported, once it ran. */
   result?: string;
+  /** Asked for in answer to something private: only this player sees and decides it. */
+  privateTo?: Owner;
 };
 
 export type ApprovalsState = {
@@ -56,6 +59,8 @@ export type ApprovalEntryData = {
   readonly summary: string;
   readonly status: ApprovalStatus;
   readonly decidedBy?: string;
+  /** As on the approval; the answer to the outcome is private too. */
+  readonly privateTo?: Owner;
 };
 
 export type ApprovalDraft = {
@@ -107,6 +112,8 @@ export async function requestApproval(
     requestedAt: now,
     status: "pending",
   };
+  const { privateTo } = currentTurn();
+  if (privateTo !== undefined) approval.privateTo = { ...privateTo };
   state.next += 1;
   state.items.push(structuredClone(approval));
   return approval;
@@ -160,6 +167,8 @@ export class Approvals {
     if (room === undefined) throw new Error(`No room "${roomId}"`);
     const by = { playerId: decision.by.playerId, displayName: decision.by.displayName };
     const decided = await this.update(roomId, id, context, (item) => {
+      if (item.privateTo !== undefined && item.privateTo.playerId !== by.playerId)
+        throw new ApprovalNotFound(`No approval ${id} in room "${roomId}"`);
       if (item.status !== "pending") throw new AlreadyDecided(`Approval ${id} is ${item.status}`);
       item.status = decision.approve ? "approved" : "denied";
       item.decidedBy = by;
@@ -206,12 +215,16 @@ export class Approvals {
         isError: true,
       };
     try {
-      return await handler(approval.payload, {
-        room,
-        approval,
-        commit: (apply) => this.harness.commit(apply, context),
-        context,
-      });
+      // What the action asks for in turn, such as another approval, stays as private as it is.
+      const turn = approval.privateTo === undefined ? {} : { privateTo: approval.privateTo };
+      return await inTurn(turn, () =>
+        handler(approval.payload, {
+          room,
+          approval,
+          commit: (apply) => this.harness.commit(apply, context),
+          context,
+        }),
+      );
     } catch (error) {
       return { text: (error as Error).message, isError: true };
     }
@@ -254,7 +267,10 @@ export class Approvals {
     await conversation.submit(
       {
         type: "input",
-        content: `${content}\nTell the room briefly.`,
+        content:
+          approval.privateTo === undefined
+            ? `${content}\nTell the room briefly.`
+            : `${content}\nTell ${approval.privateTo.displayName} briefly; only they see this and your answer.`,
         whenBusy: "followUp",
         requestId: `approval:${approval.id}:${approval.status}`,
         entry: {
@@ -264,6 +280,7 @@ export class Approvals {
             summary: approval.summary,
             status: approval.status,
             ...(approval.decidedBy ? { decidedBy: approval.decidedBy.displayName } : {}),
+            ...(approval.privateTo ? { privateTo: approval.privateTo } : {}),
           } satisfies ApprovalEntryData,
         },
       },

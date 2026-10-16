@@ -28,7 +28,9 @@ export type ChatOptions = {
 
 const HELP =
   "Commands: /steer <text> joins the running answer, /stop stops it, " +
-  "/private <value> keeps a value from the model, /who lists who can read along, " +
+  "/private <value> keeps a value from the model and from everyone but you, /hidden lists " +
+  "those values and /hidden forget <placeholder> drops one for good, /whisper <text> sends a " +
+  "message only you see, and the answer to it, /who lists who can read along, " +
   "/nudges lists scheduled nudges, /nudges cancel <id> cancels one, " +
   "/memory lists what the assistant remembers here, /memory add <text> and /memory forget <id> " +
   "change it, /approvals lists actions waiting for approval, /approve <id> and /deny <id> " +
@@ -249,7 +251,20 @@ export async function chat(options: ChatOptions): Promise<void> {
         }
       } else if (line.startsWith("/private ")) {
         const placeholder = await session.protect(line.slice("/private ".length));
-        console.log(`  The model will see ${placeholder} instead.`);
+        console.log(`  The model and everyone else will see ${placeholder} instead.`);
+      } else if (line === "/hidden") {
+        const values = await session.privateValues();
+        if (values.length === 0) console.log("  No values only you see.");
+        for (const value of values) console.log(`  ${value.placeholder} ${value.value}`);
+      } else if (line.startsWith("/hidden ")) {
+        const placeholder = /^\/hidden\s+forget\s+(\S+)$/.exec(line)?.[1];
+        if (placeholder === undefined) console.log("  Usage: /hidden forget <placeholder>");
+        else {
+          await session.forgetValue(placeholder);
+          console.log(`  Forgotten: everyone now sees only ${placeholder}.`);
+        }
+      } else if (line.startsWith("/whisper ")) {
+        await session.send(line.slice("/whisper ".length), "followUp", true);
       } else {
         const steer = line.startsWith("/steer ");
         await session.send(

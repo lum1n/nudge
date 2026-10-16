@@ -16,6 +16,8 @@ import type {
   Player,
   PlayerMemoryResponse,
   PlayerResponse,
+  PrivateValue,
+  PrivateValuesResponse,
   ProtectResponse,
   PushKeyResponse,
   PushSubscribeRequest,
@@ -211,10 +213,30 @@ export class Api {
     return this.request("DELETE", `/nudges/${encodeURIComponent(nudge)}`);
   }
 
-  /** A placeholder that stands for `value` in what the model sees. */
-  async protect(value: string, kind?: string): Promise<string> {
-    const body = kind === undefined ? { value } : { value, kind };
+  /**
+   * A placeholder that stands for `value` in what the model sees. `private` also hides it from
+   * everyone else, wherever it shows.
+   */
+  async protect(
+    value: string,
+    options: { readonly kind?: string; readonly private?: boolean } = {},
+  ): Promise<string> {
+    const body = {
+      value,
+      ...(options.kind === undefined ? {} : { kind: options.kind }),
+      ...(options.private === true ? { private: true } : {}),
+    };
     return (await this.request<ProtectResponse>("POST", "/protect", body)).placeholder;
+  }
+
+  /** The values only this player sees. */
+  async privateValues(): Promise<PrivateValue[]> {
+    return (await this.request<PrivateValuesResponse>("GET", "/me/private")).values;
+  }
+
+  /** Drops a value for good: from now on everyone, the model included, sees only `placeholder`. */
+  forgetValue(placeholder: string): Promise<void> {
+    return this.request("DELETE", `/vault/${encodeURIComponent(placeholder)}`);
   }
 
   // Admin routes, for players with the admin flag.

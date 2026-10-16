@@ -57,6 +57,44 @@ describe("Vault", () => {
     expect(vault.rehydrate("⟦NAME4⟧, ⟦NAME5⟧ and ⟦NAME9⟧")).toBe("Bo, Eli and ⟦NAME9⟧");
   });
 
+  it("shows a value its owner made private to them alone, and forgets it for good", () => {
+    const vault = new Vault();
+    expect(vault.redact(`Mail ${EMAIL}`, builtinDetectors)).toBe("Mail ⟦EMAIL1⟧");
+    // Private from now on, also where it was shown before: owned values hide written out, too.
+    vault.protect(EMAIL, "EMAIL", "ann");
+    vault.protect("Storgata 5", "PRIVATE", "bo");
+    const text = `Mail ⟦EMAIL1⟧ at ${EMAIL}, meet at Storgata 5`;
+    expect(vault.showTo("ann", text)).toBe(`Mail ${EMAIL} at ${EMAIL}, meet at ⟦PRIVATE1⟧`);
+    expect(vault.showTo("bo", text)).toBe("Mail ⟦EMAIL1⟧ at ⟦EMAIL1⟧, meet at Storgata 5");
+    expect(vault.showTo(undefined, text)).toBe("Mail ⟦EMAIL1⟧ at ⟦EMAIL1⟧, meet at ⟦PRIVATE1⟧");
+    // Nobody can take a value someone else owns.
+    vault.protect(EMAIL, "EMAIL", "bo");
+    expect(vault.get("⟦EMAIL1⟧")?.owner).toBe("ann");
+    // A value first seen with an owner gets it; one seen before keeps none.
+    vault.redact(`${PHONE} and ${EMAIL}`, builtinDetectors, "bo");
+    expect(vault.get("⟦PHONE1⟧")?.owner).toBe("bo");
+
+    const before = vault.version;
+    expect(vault.forget("⟦EMAIL1⟧")).toBe(true);
+    expect(vault.version).toBeGreaterThan(before);
+    expect(vault.forget("⟦EMAIL1⟧")).toBe(false);
+    expect(vault.rehydrate("⟦EMAIL1⟧")).toBe("⟦EMAIL1⟧");
+    expect(vault.showTo("ann", "⟦EMAIL1⟧")).toBe("⟦EMAIL1⟧");
+    // Its number is never given to another value, and saved entries keep the tombstone.
+    expect(vault.redact("Mail other@example.no", builtinDetectors)).toBe("Mail ⟦EMAIL2⟧");
+    const saved = vault.takeUnsaved();
+    expect(saved).toContainEqual({
+      value: "",
+      kind: "EMAIL",
+      placeholder: "⟦EMAIL1⟧",
+      owner: "ann",
+      forgotten: true,
+    });
+    const reopened = new Vault(vault.entries);
+    expect(reopened.rehydrate("⟦EMAIL1⟧ ⟦EMAIL2⟧")).toBe("⟦EMAIL1⟧ other@example.no");
+    expect(reopened.redact(EMAIL, builtinDetectors)).toBe("⟦EMAIL3⟧");
+  });
+
   it("holds back a placeholder cut off at the end of a stream", () => {
     expect(withoutPartialPlaceholder("Hello ⟦NA")).toBe("Hello ");
     expect(withoutPartialPlaceholder("Hello ⟦NAME1⟧")).toBe("Hello ⟦NAME1⟧");

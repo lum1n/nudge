@@ -180,13 +180,18 @@ export class Pushes {
   }
 
   private async notify(event: RoomEvent): Promise<void> {
-    const message = await this.message(event);
-    if (message === undefined) return;
     const directory = await this.nudge.harness.snapshot(DirectoryDoc, context);
     const clients = new Set(Object.values(directory?.tokens ?? {}).map((t) => t.clientId));
-    const members = await this.nudge.rooms.members(event.roomId, context);
+    const privateTo =
+      event.type === "answer" ? event.privateTo?.playerId : event.approval.privateTo?.playerId;
+    const members = (await this.nudge.rooms.members(event.roomId, context)).filter(
+      (player) => privateTo === undefined || player.id === privateTo,
+    );
     await Promise.all(
       members.map(async (player) => {
+        // Each member's preview shows only what they may see.
+        const message = await this.message(event, player.id);
+        if (message === undefined) return;
         const doc = await this.nudge.harness.snapshot(PushDoc, player.id, context);
         const gone: string[] = [];
         await Promise.all(
@@ -248,7 +253,8 @@ export class Pushes {
     });
   }
 
-  private async message(event: RoomEvent): Promise<PushMessage | undefined> {
+  private async message(event: RoomEvent, playerId: string): Promise<PushMessage | undefined> {
+    const show = (text: string) => this.nudge.showTo(playerId, text);
     const room = await this.nudge.rooms.get(event.roomId, context);
     if (room === undefined) return undefined;
     const base = {
@@ -263,14 +269,14 @@ export class Pushes {
         ...base,
         kind: "approval",
         body: preview
-          ? `Waiting for approval: ${clip(event.approval.summary)}`
+          ? `Waiting for approval: ${clip(show(event.approval.summary))}`
           : "An action waits for approval",
       };
     if (event.status === "stopped") return undefined;
     if (event.status === "failed")
       return { ...base, kind: "answer", body: `${this.nudge.displayName} couldn't answer` };
     if (event.text === "") return undefined;
-    return { ...base, kind: "answer", body: preview ? clip(event.text) : "New message" };
+    return { ...base, kind: "answer", body: preview ? clip(show(event.text)) : "New message" };
   }
 }
 

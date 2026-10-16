@@ -1,9 +1,16 @@
-import { defineExtension, type Extension, section } from "@earendil-works/pi-durable";
+import type { Context } from "@earendil-works/chord";
+import {
+  type ConversationId,
+  defineExtension,
+  type Extension,
+  section,
+} from "@earendil-works/pi-durable";
 import { DirectoryDoc, type DirectoryState } from "../identity/directory.ts";
 import { createMemoryTools, memorySection } from "../memory/memory.ts";
 import type { Nudges } from "../nudges/nudges.ts";
 import { NudgeTimer } from "../nudges/timer-task.ts";
 import { createNudgeTools } from "../nudges/tools.ts";
+import type { Turn } from "../privacy/turn.ts";
 import { BUILTIN_NAME } from "./define.ts";
 
 export type BuiltinOptions = {
@@ -12,6 +19,8 @@ export type BuiltinOptions = {
   readonly now: () => number;
   /** Resolved at call time: the extension is installed before the assistant opens. */
   readonly nudges: () => Nudges;
+  /** The turn a conversation is in, for what shows only in private turns. */
+  readonly turn: (conversationId: ConversationId, context: Context) => Promise<Turn>;
 };
 
 /**
@@ -34,7 +43,7 @@ export function createBuiltinExtension(options: BuiltinOptions): Extension {
       section("members", async (input, context) =>
         describeRoom(await input.read.snapshot(DirectoryDoc, context), input.conversationId),
       ),
-      memorySection(),
+      memorySection(options.turn),
       // Rendered to the hour: a section that changes on every request defeats prompt caching.
       section("time", () => formatHour(options.now(), options.timeZone)),
     ],

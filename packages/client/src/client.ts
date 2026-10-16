@@ -69,14 +69,20 @@ export class NudgeClient {
   async send(
     room: string,
     text: string,
-    options: { whenBusy?: WhenBusy; requestId?: string } = {},
+    options: { whenBusy?: WhenBusy; requestId?: string; private?: boolean } = {},
   ): Promise<MessageResponse> {
     const requestId = options.requestId ?? newRequestId();
     const store = this.storeOf(room);
     const { whenBusy } = options;
-    store?.sending({ requestId, text, ...(whenBusy && { whenBusy }) });
+    const secret = options.private === true ? { private: true } : {};
+    store?.sending({ requestId, text, ...(whenBusy && { whenBusy }), ...secret });
     try {
-      return await this.api.send(room, { text, requestId, ...(whenBusy && { whenBusy }) });
+      return await this.api.send(room, {
+        text,
+        requestId,
+        ...(whenBusy && { whenBusy }),
+        ...secret,
+      });
     } catch (error) {
       store?.failed(requestId, (error as Error).message);
       throw error;
@@ -92,6 +98,7 @@ export class NudgeClient {
     return this.send(room, message.text, {
       requestId,
       ...(message.whenBusy && { whenBusy: message.whenBusy }),
+      ...(message.private === true && { private: true }),
     });
   }
 

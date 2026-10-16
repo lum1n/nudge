@@ -1,4 +1,5 @@
 import { defineTask } from "@earendil-works/pi-durable";
+import type { Owner } from "../privacy/turn.ts";
 import { nextFire, ScheduleDoc } from "./schedule.ts";
 
 export type NudgeInput = {
@@ -8,6 +9,8 @@ export type NudgeInput = {
   fireAt: number;
   /** Repeat interval in ms; absent for a one-off. */
   every?: number;
+  /** See `ScheduledNudge.privateTo`. */
+  privateTo?: Owner;
 };
 
 /** `count` is how many times the nudge has fired. */
@@ -24,6 +27,8 @@ export type FireEntryData = {
   nudgeId: string;
   message: string;
   fireAt: number;
+  /** See `ScheduledNudge.privateTo`; the answer is private too. */
+  privateTo?: Owner;
 };
 
 /**
@@ -46,7 +51,7 @@ export const NudgeTimer = defineTask<NudgeInput, NudgeCheckpoint, NudgeResult>({
     },
     fire: async (task, runtime, context) => {
       const { fireAt, count } = task.state.checkpoint;
-      const { message, every } = task.input;
+      const { message, every, privateTo } = task.input;
       const nudgeId = String(runtime.taskId);
       const room = await runtime.conversation(runtime.conversationId, context);
       if (room === undefined) throw new Error(`Nudge ${nudgeId} has no room`);
@@ -56,10 +61,20 @@ export const NudgeTimer = defineTask<NudgeInput, NudgeCheckpoint, NudgeResult>({
           type: "input",
           content:
             `A nudge you scheduled is due now: ${message}\n` +
-            `Say it to the room now, in your own words. Nothing needs scheduling.`,
+            (privateTo === undefined
+              ? `Say it to the room now, in your own words. Nothing needs scheduling.`
+              : `Say it to ${privateTo.displayName} now, in your own words; only they see it and your answer. Nothing needs scheduling.`),
           whenBusy: "followUp",
           requestId: `nudge:${nudgeId}:${count}`,
-          entry: { kind: FIRE_ENTRY, data: { nudgeId, message, fireAt } satisfies FireEntryData },
+          entry: {
+            kind: FIRE_ENTRY,
+            data: {
+              nudgeId,
+              message,
+              fireAt,
+              ...(privateTo === undefined ? {} : { privateTo }),
+            } satisfies FireEntryData,
+          },
         },
         context,
       );

@@ -5,6 +5,7 @@ import {
   ClientFrame,
   diff,
   PROTOCOL_VERSION,
+  type RoomView,
   type ServerFrame,
   type Target,
 } from "@nudge/protocol";
@@ -141,6 +142,8 @@ export class Connection {
 
     let lease: Lease<Hub<unknown>> | undefined;
     let allowed: () => boolean = () => true;
+    // A home hub is the player's own already; a room hub's view is everyone's.
+    let see: (view: unknown) => unknown = (view) => view;
     if (target === "home") {
       const home = await this.options.hubs.home(player.id);
       await home.hub.ready();
@@ -158,6 +161,8 @@ export class Connection {
           },
         };
         allowed = () => room.hub.allows(player.id);
+        const viewer = this.options.hubs.viewer(player.id);
+        see = (view) => viewer.room(view as RoomView);
       }
     }
     if (lease === undefined)
@@ -167,6 +172,7 @@ export class Connection {
     const subscription = new Subscription(target, lease, this.options.flushMs, {
       send: (frame) => this.send(frame),
       allowed,
+      see,
       ended: (reason) => {
         if (this.subscriptions.get(target) !== subscription) return;
         this.subscriptions.delete(target);
@@ -193,6 +199,8 @@ type SubscriptionEvents = {
   readonly send: (frame: ServerFrame) => void;
   /** Whether the player may still see the target. */
   readonly allowed: () => boolean;
+  /** The hub's view as the player may see it. */
+  readonly see: (view: unknown) => unknown;
   readonly ended: (reason: "not-found" | "removed" | "closed") => void;
 };
 
@@ -212,7 +220,7 @@ class Subscription {
   ) {}
 
   start(): void {
-    this.sent = this.lease.hub.view();
+    this.sent = this.events.see(this.lease.hub.view());
     this.events.send({
       type: "snapshot",
       target: this.target,
@@ -246,7 +254,7 @@ class Subscription {
     if (this.stopped) return;
     if (!this.events.allowed()) return this.end("removed");
     this.lastFlush = Date.now();
-    const view = this.lease.hub.view();
+    const view = this.events.see(this.lease.hub.view());
     const ops = diff(this.sent, view);
     this.sent = view;
     if (ops.length > 0)

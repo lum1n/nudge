@@ -67,8 +67,11 @@ type Link = {
 export type BridgeState = {
   /** By sender id. */
   links: Record<string, Link>;
-  /** The room each chat talks to, by chat id. Direct chats default to the player's own room. */
-  chats: Record<string, { roomId: string }>;
+  /**
+   * The room each chat talks to, by chat id. Direct chats default to the player's own room, and
+   * name the player, who alone reads them: only they get what is private to them.
+   */
+  chats: Record<string, { roomId: string; playerId?: string }>;
   /** Where the transport is in the service's stream, such as Telegram's update offset. */
   cursor?: string;
 };
@@ -76,7 +79,8 @@ export type BridgeState = {
 const HELP =
   "Commands: /link <code> links this account to a player (a code from `nudge pair <player>`), " +
   "/rooms lists your rooms, /room <id> picks the room this chat talks to, /approve <id> and " +
-  "/deny <id> decide an approval, /stop stops the answer in progress, /unlink undoes /link. " +
+  "/deny <id> decide an approval, /whisper <text> sends a message only you see, and the " +
+  "answer to it (in a direct chat), /stop stops the answer in progress, /unlink undoes /link. " +
   "Anything else goes to the room as your message.";
 
 /**
@@ -150,6 +154,11 @@ export class ChatBridge {
         if (room !== undefined) await this.nudge.abort(room.id, context);
         return;
       }
+      case "whisper":
+        // In a group, everyone would read it.
+        if (!inbound.chat.private) return reply("Send /whisper in a direct chat with me.");
+        if (argument === "") return reply("Send /whisper <text>.");
+        break;
       case undefined:
         break;
       default:
@@ -160,30 +169,41 @@ export class ChatBridge {
     await this.nudge.submit(
       room.id,
       {
-        text,
+        text: command === "whisper" ? argument : text,
         author: { playerId: player.id, displayName: player.displayName, clientId: player.clientId },
         requestId: `${this.transport.name}:${inbound.chat.id}:${inbound.id}`,
+        ...(command === "whisper" ? { private: true } : {}),
       },
       context,
     );
   }
 
-  /** Passes a room's answers and approvals to the chats that talk to it. */
+  /**
+   * Passes a room's answers and approvals to the chats that talk to it, as the chat's player may
+   * see them; a group chat gets only what everyone may see.
+   */
   async onRoomEvent(event: RoomEvent): Promise<void> {
     const state = await this.state();
-    const chats = Object.entries(state.chats)
-      .filter(([, chat]) => chat.roomId === event.roomId)
-      .map(([id]) => id);
-    for (const chatId of chats) {
+    const privateTo =
+      event.type === "answer" ? event.privateTo?.playerId : event.approval.privateTo?.playerId;
+    const chats = Object.entries(state.chats).filter(
+      ([, chat]) =>
+        chat.roomId === event.roomId && (privateTo === undefined || chat.playerId === privateTo),
+    );
+    for (const [chatId, chat] of chats) {
+      const show = (text: string) => this.nudge.showTo(chat.playerId, text);
       try {
         if (event.type === "answer") {
           if (event.status === "stopped" || event.text === "") continue;
           await this.say(
             chatId,
-            event.status === "failed" ? `${this.nudge.displayName} couldn't answer.` : event.text,
+            event.status === "failed"
+              ? `${this.nudge.displayName} couldn't answer.`
+              : show(event.text),
           );
         } else {
-          const { id, summary } = event.approval;
+          const id = event.approval.id;
+          const summary = show(event.approval.summary);
           if (this.transport.buttons)
             await this.transport.send(chatId, `Waiting for approval (${id}): ${summary}`, [
               { label: "Approve", data: actionData(event.roomId, id, true) },
@@ -217,7 +237,7 @@ export class ChatBridge {
       const state = await tx.doc(this.doc);
       const old = state.links[sender.id];
       state.links[sender.id] = { playerId: paired.player.id, clientId: paired.clientId };
-      state.chats[chat.id] = { roomId: room.id };
+      state.chats[chat.id] = { roomId: room.id, playerId: paired.player.id };
       return old;
     }, context);
     await this.say(
@@ -275,7 +295,9 @@ export class ChatBridge {
     if (!(await this.nudge.extensionEnabled(room.id, this.extension, context)))
       return this.say(chat.id, `${this.transport.name} is turned off in "${room.name}".`);
     await this.nudge.harness.commit(async (tx) => {
-      (await tx.doc(this.doc)).chats[chat.id] = { roomId: room.id };
+      (await tx.doc(this.doc)).chats[chat.id] = chat.private
+        ? { roomId: room.id, playerId: player.id }
+        : { roomId: room.id };
     }, context);
     await this.say(chat.id, `This chat talks to "${room.name}" now.`);
   }
@@ -308,7 +330,8 @@ export class ChatBridge {
     if (id === "") return this.say(chat.id, `Which one? /${approve ? "approve" : "deny"} <id>`);
     const room = await this.roomFor(chat, player);
     if (room === undefined) return;
-    await this.say(chat.id, await this.decide(room.id, id, player, approve));
+    const outcome = await this.decide(room.id, id, player, approve);
+    await this.say(chat.id, this.nudge.showTo(chat.private ? player.id : undefined, outcome));
   }
 
   private async action(inbound: Extract<Inbound, { type: "action" }>): Promise<void> {
@@ -319,7 +342,11 @@ export class ChatBridge {
     const room = await this.nudge.rooms.get(parsed.roomId, context);
     if (player === undefined || room === undefined || !canUse(room, player.id))
       return void (await answer("You can't decide this one"));
-    const outcome = await this.decide(room.id, parsed.id, player, parsed.approve);
+    const viewer = inbound.chat.private ? player.id : undefined;
+    const outcome = this.nudge.showTo(
+      viewer,
+      await this.decide(room.id, parsed.id, player, parsed.approve),
+    );
     await answer(outcome.slice(0, 190));
     const approval = await this.nudge.approvals.get(room.id, parsed.id, context);
     if (inbound.messageId !== undefined && approval !== undefined)
@@ -327,7 +354,7 @@ export class ChatBridge {
         .edit?.(
           inbound.chat.id,
           inbound.messageId,
-          `Approval (${approval.id}): ${approval.summary}\n${outcome}`,
+          `Approval (${approval.id}): ${this.nudge.showTo(viewer, approval.summary)}\n${outcome}`,
         )
         .catch(this.report);
   }

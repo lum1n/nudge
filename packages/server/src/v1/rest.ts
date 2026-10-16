@@ -8,6 +8,7 @@ import {
   ConfigError,
   type Credential,
   ExtensionNotFound,
+  NotAllowed,
   type Nudge,
   type Player as CorePlayer,
   type Room as CoreRoom,
@@ -40,6 +41,7 @@ import {
   type PlayerResponse,
   type PlayersResponse,
   ProtectRequest,
+  type PrivateValuesResponse,
   type ProtectResponse,
   type PushKeyResponse,
   PushSubscribeRequest,
@@ -163,6 +165,10 @@ export function restRoutes(options: RestOptions): Hono {
 
   const api = new Hono<Env>();
   api.use(findAssistant);
+
+  /** What the caller may see of what a route answers. */
+  const viewerOf = (c: HonoContext<Env>) =>
+    options.hubsOf(c.var.nudge).viewer(c.var.credential.player.id);
 
   // Before `authenticate`: a new client has no token yet.
   api.post("/pair", async (c) => {
@@ -344,6 +350,7 @@ export function restRoutes(options: RestOptions): Hono {
           author: { playerId: player.id, displayName: player.displayName, clientId },
           requestId: body.requestId,
           whenBusy: body.whenBusy,
+          ...(body.private === true ? { private: true } : {}),
         },
         context,
       );
@@ -358,7 +365,7 @@ export function restRoutes(options: RestOptions): Hono {
   api.get("/rooms/:room/model-view", async (c) => {
     const room = await usableRoom(c);
     return c.json({
-      messages: await c.var.nudge.modelView(room.id, context),
+      messages: await c.var.nudge.modelView(room.id, context, c.var.credential.player.id),
     } satisfies ModelViewResponse);
   });
 
@@ -405,7 +412,7 @@ export function restRoutes(options: RestOptions): Hono {
     } while (next !== undefined);
     const page = pager.page();
     return c.json({
-      items: page.items,
+      items: viewerOf(c).timeline(page.items),
       ...(page.before === undefined ? {} : { before: encodeCursor({ before: page.before }) }),
     } satisfies TimelineResponse);
   });
@@ -429,7 +436,11 @@ export function restRoutes(options: RestOptions): Hono {
   api.delete("/rooms/:room/memory/:fact", async (c) => {
     const room = await usableRoom(c);
     const id = c.req.param("fact");
-    if (!(await c.var.nudge.memory.forget(room.id, id, context)))
+    if (
+      !(await c.var.nudge.memory.forget(room.id, id, context, {
+        playerId: c.var.credential.player.id,
+      }))
+    )
       throw new HttpError(404, `No fact "${id}"`);
     return c.body(null, 204);
   });
@@ -470,7 +481,7 @@ export function restRoutes(options: RestOptions): Hono {
         { approve: body.approve, by: { playerId: player.id, displayName: player.displayName } },
         context,
       );
-      return c.json(toApproval(approval));
+      return c.json(viewerOf(c).strings(toApproval(approval)));
     } catch (error) {
       if (error instanceof ApprovalNotFound) throw new HttpError(404, error.message);
       if (error instanceof AlreadyDecided) throw new HttpError(409, error.message);
@@ -483,7 +494,12 @@ export function restRoutes(options: RestOptions): Hono {
     const nudge = await c.var.nudge.nudges.get(id, context);
     const room =
       nudge === undefined ? undefined : await c.var.nudge.rooms.get(nudge.roomId, context);
-    if (room === undefined || !canUse(room, c.var.credential.player.id))
+    const playerId = c.var.credential.player.id;
+    if (
+      room === undefined ||
+      !canUse(room, playerId) ||
+      (nudge?.privateTo !== undefined && nudge.privateTo.playerId !== playerId)
+    )
       throw new HttpError(404, `No nudge "${id}"`);
     await c.var.nudge.nudges.cancel(id, context);
     return c.body(null, 204);
@@ -492,8 +508,36 @@ export function restRoutes(options: RestOptions): Hono {
   api.post("/protect", async (c) => {
     const body = await readBody(c, ProtectRequest);
     if (body.value.trim() === "") throw new HttpError(400, "Nothing to protect");
-    const placeholder = await c.var.nudge.protect(body.value.trim(), body.kind);
+    const placeholder = await c.var.nudge.protect(
+      body.value.trim(),
+      body.kind,
+      body.private === true ? { owner: c.var.credential.player.id } : {},
+    );
     return c.json({ placeholder } satisfies ProtectResponse);
+  });
+
+  api.get("/me/private", (c) =>
+    c.json({
+      values: c.var.nudge.privateValues(c.var.credential.player.id),
+    } satisfies PrivateValuesResponse),
+  );
+
+  // Its owner may forget a private value; any other value needs an admin, since it may show in
+  // rooms the caller isn't in.
+  api.delete("/vault/:placeholder", async (c) => {
+    const placeholder = c.req.param("placeholder");
+    const { player } = c.var.credential;
+    try {
+      const forgotten = await c.var.nudge.forgetValue(placeholder, {
+        playerId: player.id,
+        admin: await c.var.nudge.players.isAdmin(player.id, context),
+      });
+      if (!forgotten) throw new HttpError(404, `No value ${placeholder}`);
+    } catch (error) {
+      if (error instanceof NotAllowed) throw new HttpError(403, error.message);
+      throw error;
+    }
+    return c.body(null, 204);
   });
 
   api.post("/admin/players", admin, async (c) => {
@@ -561,7 +605,14 @@ export function restRoutes(options: RestOptions): Hono {
 
   api.get("/admin/nudges", admin, async (c) => {
     const pending = await c.var.nudge.nudges.list(context);
-    return c.json({ nudges: pending.map(toHomeNudge) } satisfies NudgesResponse);
+    // Admins see that others' private nudges exist, not what they say.
+    const viewer = viewerOf(c);
+    return c.json({
+      nudges: pending.map((nudge) => {
+        const shown = viewer.strings(toHomeNudge(nudge));
+        return viewer.sees(shown.privateTo) ? shown : { ...shown, message: "" };
+      }),
+    } satisfies NudgesResponse);
   });
 
   api.post("/admin/pairing-codes", admin, async (c) => {

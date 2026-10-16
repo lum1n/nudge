@@ -1,3 +1,4 @@
+import type { Owner } from "../privacy/turn.ts";
 import { defineDoc } from "@earendil-works/pi-durable";
 
 // Stored in a document, so plain JSON.
@@ -13,6 +14,8 @@ export type ScheduledNudge = {
   /** Repeat interval in ms; absent for a one-off. */
   every?: number;
   createdAt: number;
+  /** Set in answer to something private: only this player sees it, and what it leads to. */
+  privateTo?: Owner;
 };
 
 export type ScheduleState = {

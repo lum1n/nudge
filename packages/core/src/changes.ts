@@ -1,6 +1,9 @@
-/** What changed: the room list, or one room's memory, nudges or approvals. */
+/**
+ * What changed: the room list, one room's memory, nudges or approvals, or who may see which
+ * values (a value made private or forgotten), which changes what every view shows.
+ */
 export type Change =
-  | { readonly kind: "rooms" }
+  | { readonly kind: "rooms" | "vault" }
   | { readonly kind: "memory" | "nudges" | "approvals"; readonly roomId: string };
 
 export type ChangeListener = (change: Change) => void;

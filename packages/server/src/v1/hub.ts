@@ -17,7 +17,7 @@ import {
   type ScheduledNudge,
 } from "@nudge/core";
 import type { HomeRoom, HomeView, Player, Room, RoomView } from "@nudge/protocol";
-import { projectHome, RoomProjector, toPlayer, toRoom } from "@nudge/protocol/project";
+import { projectHome, RoomProjector, toPlayer, toRoom, Viewer } from "@nudge/protocol/project";
 
 const context: Context = BACKGROUND_CONTEXT;
 
@@ -45,11 +45,29 @@ export class Hubs {
   private readonly rooms = new Shared<RoomHub>();
   private readonly homes = new Shared<HomeHub>();
   private directory: Promise<Directory> | undefined;
+  private readonly viewers = new Map<string, Viewer>();
 
   constructor(
     readonly nudge: Nudge,
     private readonly report: (error: unknown) => void,
   ) {}
+
+  /**
+   * What a player may see of the views: the hubs project once for everyone, and each player's
+   * copy goes through this before it leaves the server.
+   */
+  viewer(playerId: string): Viewer {
+    let viewer = this.viewers.get(playerId);
+    if (viewer === undefined) {
+      viewer = new Viewer(
+        playerId,
+        (text) => this.nudge.showTo(playerId, text),
+        () => this.nudge.vaultVersion,
+      );
+      this.viewers.set(playerId, viewer);
+    }
+    return viewer;
+  }
 
   /** Sockets that have a room open, by player and room. */
   private readonly open = new Map<string, number>();
@@ -319,7 +337,9 @@ export class RoomHub implements Hub<RoomView> {
     });
     this.unsubscribe.push(
       this.nudge.changes.subscribe((change: Change) => {
-        if (change.kind !== "rooms" && change.roomId === this.roomId) this.read([change.kind]);
+        // Who may see which values changed: every viewer's copy is worked out again.
+        if (change.kind === "vault") this.listeners.changed();
+        else if ("roomId" in change && change.roomId === this.roomId) this.read([change.kind]);
       }),
       this.directory.listen(() => {
         const core = this.directory.value.rooms[this.roomId];
@@ -407,7 +427,9 @@ export class HomeHub implements Hub<HomeView> {
       rooms.push(this.row(lease.hub));
       nudges.push(...lease.hub.nudgesNow());
     }
-    this.projected = projectHome({ player: this.player, rooms, nudges });
+    this.projected = this.hubs
+      .viewer(this.playerId)
+      .home(projectHome({ player: this.player, rooms, nudges }));
     return this.projected;
   }
 
@@ -472,7 +494,8 @@ export class HomeHub implements Hub<HomeView> {
   }
 
   private row(hub: RoomHub): HomeRoom {
-    const view = hub.view();
+    // Counted as the player sees the room, so others' private approvals and messages don't show.
+    const view = this.hubs.viewer(this.playerId).room(hub.view());
     const kept = this.rows.get(hub.roomId);
     if (kept?.view === view) return kept.row;
     const lastItemAt = view.timeline.reduce<number | undefined>((last, item) => {

@@ -11,7 +11,7 @@ import {
   openAssistant,
   type Room as CoreRoom,
 } from "@nudge/core";
-import type { Approval, Fact, RoomExtension, RoomView } from "@nudge/protocol";
+import type { Approval, Fact, PrivateValue, RoomExtension, RoomView } from "@nudge/protocol";
 import { toApproval, toFact } from "@nudge/protocol/project";
 import { Hubs } from "@nudge/server";
 import { UsageError } from "./errors.ts";
@@ -27,9 +27,15 @@ export interface ChatSession {
   readonly clientId: string;
   /** Resolves with the room's view now; `listener` then gets every later one. */
   watch(listener: (view: RoomView) => void): Promise<RoomView>;
-  send(text: string, whenBusy: "steer" | "followUp"): Promise<void>;
+  /** `secret`: only this player sees the message and the answer to it. */
+  send(text: string, whenBusy: "steer" | "followUp", secret?: boolean): Promise<void>;
   abort(): Promise<void>;
+  /** Keeps a value from the model, and from everyone but this player. */
   protect(value: string): Promise<string>;
+  /** The values only this player sees. */
+  privateValues(): Promise<PrivateValue[]>;
+  /** Drops one of them for good. */
+  forgetValue(placeholder: string): Promise<void>;
   cancelNudge(id: string): Promise<void>;
   remember(text: string): Promise<Fact>;
   forget(id: string): Promise<void>;
@@ -134,8 +140,10 @@ class LocalSession implements ChatSession {
     const lease = await this.hubs.room(this.room.id);
     if (lease === undefined) throw new UsageError(`No room "${this.room.id}"`);
     const { hub } = lease;
+    // As the server would show it to this player.
+    const viewer = this.hubs.viewer(this.author.playerId);
     const unlisten = hub.listen({
-      changed: () => listener(hub.view()),
+      changed: () => listener(viewer.room(hub.view())),
       ended: (reason) =>
         this.onProblem(reason === "gone" ? "this room is gone" : "the assistant shut down"),
     });
@@ -143,13 +151,19 @@ class LocalSession implements ChatSession {
       unlisten();
       lease.release();
     };
-    return hub.view();
+    return viewer.room(hub.view());
   }
 
-  async send(text: string, whenBusy: "steer" | "followUp"): Promise<void> {
+  async send(text: string, whenBusy: "steer" | "followUp", secret = false): Promise<void> {
     const submission = await this.nudge.submit(
       this.room.id,
-      { text, author: this.author, requestId: randomUUID(), whenBusy },
+      {
+        text,
+        author: this.author,
+        requestId: randomUUID(),
+        whenBusy,
+        ...(secret ? { private: true } : {}),
+      },
       context,
     );
     void submission.wait(context).then(
@@ -166,12 +180,25 @@ class LocalSession implements ChatSession {
   }
 
   protect(value: string): Promise<string> {
-    return this.nudge.protect(value);
+    return this.nudge.protect(value, "PRIVATE", { owner: this.author.playerId });
+  }
+
+  async privateValues(): Promise<PrivateValue[]> {
+    return this.nudge.privateValues(this.author.playerId);
+  }
+
+  async forgetValue(placeholder: string): Promise<void> {
+    const owner = this.nudge.privateValues(this.author.playerId);
+    if (!owner.some((value) => value.placeholder === placeholder))
+      throw new UsageError(`No private value ${placeholder} of yours`);
+    await this.nudge.forgetValue(placeholder, { playerId: this.author.playerId });
   }
 
   async cancelNudge(id: string): Promise<void> {
     const nudge = await this.nudge.nudges.get(id, context);
-    if (nudge?.roomId !== this.room.id || !(await this.nudge.nudges.cancel(id, context)))
+    const theirs =
+      nudge?.privateTo !== undefined && nudge.privateTo.playerId !== this.author.playerId;
+    if (nudge?.roomId !== this.room.id || theirs || !(await this.nudge.nudges.cancel(id, context)))
       throw new UsageError(`No nudge ${id} here`);
   }
 
@@ -180,15 +207,18 @@ class LocalSession implements ChatSession {
   }
 
   async forget(id: string): Promise<void> {
-    if (!(await this.nudge.memory.forget(this.room.id, id, context)))
+    if (
+      !(await this.nudge.memory.forget(this.room.id, id, context, {
+        playerId: this.author.playerId,
+      }))
+    )
       throw new UsageError(`No fact ${id} here`);
   }
 
   async decide(id: string, approve: boolean): Promise<Approval> {
     const by = { playerId: this.author.playerId, displayName: this.author.displayName };
-    return toApproval(
-      await this.nudge.approvals.decide(this.room.id, id, { approve, by }, context),
-    );
+    const approval = await this.nudge.approvals.decide(this.room.id, id, { approve, by }, context);
+    return this.hubs.viewer(this.author.playerId).strings(toApproval(approval));
   }
 
   extensions(): Promise<RoomExtension[]> {
@@ -343,8 +373,8 @@ class RemoteSession implements ChatSession {
     });
   }
 
-  async send(text: string, whenBusy: "steer" | "followUp"): Promise<void> {
-    await this.client.send(this.room, text, { whenBusy });
+  async send(text: string, whenBusy: "steer" | "followUp", secret = false): Promise<void> {
+    await this.client.send(this.room, text, { whenBusy, ...(secret ? { private: true } : {}) });
   }
 
   abort(): Promise<void> {
@@ -352,7 +382,18 @@ class RemoteSession implements ChatSession {
   }
 
   protect(value: string): Promise<string> {
-    return this.client.api.protect(value);
+    return this.client.api.protect(value, { private: true });
+  }
+
+  privateValues(): Promise<PrivateValue[]> {
+    return this.client.api.privateValues();
+  }
+
+  async forgetValue(placeholder: string): Promise<void> {
+    await this.notFound(
+      this.client.api.forgetValue(placeholder),
+      `No private value ${placeholder} of yours`,
+    );
   }
 
   async cancelNudge(id: string): Promise<void> {

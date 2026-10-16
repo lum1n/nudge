@@ -74,6 +74,8 @@ export const TimelineItem = Type.Union([
     clientId: Type.Optional(Type.String()),
     /** The id its sender chose, so that sender can swap its optimistic copy for this one. */
     requestId: Type.Optional(Type.String()),
+    /** A private message: only its author sees the text; everyone else gets it empty. */
+    privateTo: Type.Optional(Player),
   }),
   /** A scheduled nudge that fired; the assistant answers it like a message. */
   Type.Object({
@@ -81,6 +83,8 @@ export const TimelineItem = Type.Union([
     id: Type.String(),
     text: Type.String(),
     firedAt: Type.Number(),
+    /** Only this player sees it; everyone else gets it emptied, so they know there was one. */
+    privateTo: Type.Optional(Player),
   }),
   /** How an action people were asked to approve ended; the assistant answers it like a message. */
   Type.Object({
@@ -91,6 +95,8 @@ export const TimelineItem = Type.Union([
     status: ApprovalStatus,
     /** The display name of who decided. */
     decidedBy: Type.Optional(Type.String()),
+    /** Only this player sees it; everyone else gets it emptied, so they know there was one. */
+    privateTo: Type.Optional(Player),
   }),
   /** One answer: every model response and tool round between two messages. */
   Type.Object({
@@ -104,6 +110,8 @@ export const TimelineItem = Type.Union([
     ]),
     error: Type.Optional(Type.String()),
     parts: Type.Array(Part),
+    /** It answers something private: only this player sees its parts; everyone else gets none. */
+    privateTo: Type.Optional(Player),
   }),
   /** Where the transcript starts over: earlier messages were summarized, or cleared. */
   Type.Object({
@@ -139,6 +147,8 @@ export const QueuedMessage = Type.Object({
   requestId: Type.Optional(Type.String()),
   /** A fired nudge or an ended approval rather than someone's message. */
   nudge: Type.Boolean(),
+  /** Only this player sees it; everyone else gets it emptied, so they know there was one. */
+  privateTo: Type.Optional(Player),
 });
 export type QueuedMessage = Static<typeof QueuedMessage>;
 
@@ -152,6 +162,8 @@ export const Approval = Type.Object({
   decidedAt: Type.Optional(Type.Number()),
   /** What the action reported, once it ran. */
   result: Type.Optional(Type.String()),
+  /** Asked for in answer to something private: only this player sees and decides it. */
+  privateTo: Type.Optional(Player),
 });
 export type Approval = Static<typeof Approval>;
 
@@ -163,6 +175,8 @@ export const Fact = Type.Object({
   by: Type.Optional(Player),
   /** Set on a member's own fact that the room shows because they share their memory. */
   owner: Type.Optional(Player),
+  /** Remembered in answer to something private: only this player sees it. */
+  privateTo: Type.Optional(Player),
 });
 export type Fact = Static<typeof Fact>;
 
@@ -172,6 +186,8 @@ export const RoomNudge = Type.Object({
   fireAt: Type.Number(),
   /** Repeat interval in ms; absent for a one-off. */
   every: Type.Optional(Type.Number()),
+  /** Scheduled in answer to something private: only this player sees it, and what it leads to. */
+  privateTo: Type.Optional(Player),
 });
 export type RoomNudge = Static<typeof RoomNudge>;
 
@@ -208,6 +224,7 @@ export const HomeNudge = Type.Object({
   message: Type.String(),
   fireAt: Type.Number(),
   every: Type.Optional(Type.Number()),
+  privateTo: Type.Optional(Player),
 });
 export type HomeNudge = Static<typeof HomeNudge>;
 
@@ -351,6 +368,8 @@ export const MessageRequest = Type.Object({
   requestId: Type.String(),
   /** What to do while the assistant is answering. Default `followUp`. */
   whenBusy: Type.Optional(WhenBusy),
+  /** Only the sender sees the message and the answer to it; the room sees that there was one. */
+  private: Type.Optional(Type.Boolean()),
 });
 export type MessageRequest = Static<typeof MessageRequest>;
 
@@ -518,11 +537,25 @@ export const ProtectRequest = Type.Object({
   value: Type.String(),
   /** Upper-case letters, such as `NAME`; default `PRIVATE`. */
   kind: Type.Optional(Type.String({ pattern: "^[A-Z]+$" })),
+  /** Also hide the value from everyone but the caller, wherever it shows. */
+  private: Type.Optional(Type.Boolean()),
 });
 export type ProtectRequest = Static<typeof ProtectRequest>;
 
 export const ProtectResponse = Type.Object({ placeholder: Type.String() });
 export type ProtectResponse = Static<typeof ProtectResponse>;
+
+/** A value only its owner sees; others see `placeholder`. */
+export const PrivateValue = Type.Object({
+  placeholder: Type.String(),
+  kind: Type.String(),
+  value: Type.String(),
+});
+export type PrivateValue = Static<typeof PrivateValue>;
+
+/** The caller's private values, in the order they were made private. */
+export const PrivateValuesResponse = Type.Object({ values: Type.Array(PrivateValue) });
+export type PrivateValuesResponse = Static<typeof PrivateValuesResponse>;
 
 export const CreatePlayerRequest = Type.Object({ displayName: Type.String() });
 export type CreatePlayerRequest = Static<typeof CreatePlayerRequest>;
@@ -644,6 +677,8 @@ export const SCHEMAS = {
   SetRoomExtensionRequest,
   ProtectRequest,
   ProtectResponse,
+  PrivateValue,
+  PrivateValuesResponse,
   CreatePlayerRequest,
   PlayerResponse,
   PairingCodeRequest,

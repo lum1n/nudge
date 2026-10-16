@@ -7,9 +7,11 @@ import {
   ExtensionNotFound,
   type InstalledExtension,
   type ModelViewMessage,
+  NotAllowed,
   Nudge,
   type NudgeOptions,
   type PrivacyOptions,
+  type PrivateValue,
   type RoomExtension,
   RoomNotFound,
 } from "./nudge.ts";
@@ -161,9 +163,11 @@ export { DatabaseInUse, lockDatabase } from "./storage-lock.ts";
 export {
   ExtensionNotFound,
   type InstalledExtension,
+  NotAllowed,
   Nudge,
   type NudgeOptions,
   type PrivacyOptions,
+  type PrivateValue,
   type RoomExtension,
   RoomNotFound,
 };

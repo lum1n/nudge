@@ -112,6 +112,8 @@ export type PendingMessage = {
   readonly requestId: string;
   readonly text: string;
   readonly whenBusy?: WhenBusy;
+  /** Only the sender sees it and the answer to it. */
+  readonly private?: boolean;
   /** Why sending it failed; send it again with the same `requestId`, or drop it. */
   readonly error?: string;
 };

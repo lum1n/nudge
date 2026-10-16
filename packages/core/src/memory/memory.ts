@@ -1,6 +1,7 @@
 import type { Context } from "@earendil-works/chord";
 import { Type } from "@earendil-works/pi-ai";
 import {
+  type ConversationId,
   type DocumentReader,
   defineDocFamily,
   defineTool,
@@ -13,6 +14,7 @@ import {
 import type { Change } from "../changes.ts";
 import { DirectoryDoc, type Room, roomOf } from "../identity/directory.ts";
 import type { Rooms } from "../identity/rooms.ts";
+import { currentTurn, type Turn } from "../privacy/turn.ts";
 
 /** A person, as a fact names them. */
 export type FactPerson = { playerId: string; displayName: string };
@@ -25,6 +27,8 @@ export type Fact = {
   createdAt: number;
   /** Who remembered it; absent when the assistant did. */
   by?: FactPerson;
+  /** Remembered in answer to something private: only this player sees it, and the model only in their private turns. */
+  privateTo?: FactPerson;
 };
 
 /** A fact as a room shows it: the room's own, or one of a member's own facts. */
@@ -112,11 +116,13 @@ function push(
     throw new Error(`A fact is at most ${MAX_FACT_LENGTH} characters`);
   if (memory.facts.length >= MAX_FACTS)
     throw new MemoryFull(`This memory holds ${MAX_FACTS} facts already; forget one first`);
+  const { privateTo } = currentTurn();
   const added: Fact = {
     id: `${prefix}${memory.next}`,
     text: fact,
     createdAt: now,
     ...(by === undefined ? {} : { by: { ...by } }),
+    ...(privateTo === undefined ? {} : { privateTo: { ...privateTo } }),
   };
   memory.next += 1;
   memory.facts.push(structuredClone(added));
@@ -177,9 +183,16 @@ export class Memory {
     return fact;
   }
 
-  /** False when the room has no fact with that id. */
-  async forget(roomId: string, id: string, context: Context): Promise<boolean> {
-    if (!(await readFacts(this.harness, roomId, context)).some((fact) => fact.id === id))
+  /** False when the room has no fact with that id, or none `by` may see. */
+  async forget(
+    roomId: string,
+    id: string,
+    context: Context,
+    by?: { readonly playerId: string },
+  ): Promise<boolean> {
+    const fact = (await readFacts(this.harness, roomId, context)).find((fact) => fact.id === id);
+    if (fact === undefined) return false;
+    if (by !== undefined && fact.privateTo !== undefined && fact.privateTo.playerId !== by.playerId)
       return false;
     const dropped = await this.harness.commit((tx) => dropFact(tx, roomId, id), context);
     if (dropped) this.changed({ kind: "memory", roomId });
@@ -267,17 +280,32 @@ async function sharedFacts(
   return found;
 }
 
-/** The `memory` section: the calling room's facts and its members' shared ones, if any. */
-export function memorySection(): PromptSection {
+/**
+ * The `memory` section: the calling room's facts and its members' shared ones, if any. A private
+ * fact shows only in its owner's private turns.
+ */
+export function memorySection(
+  turn: (conversationId: ConversationId, context: Context) => Promise<Turn>,
+): PromptSection {
   return section("memory", async (input, context) => {
     const room = await roomOf(input.read, input.conversationId, context);
-    const facts = await readFacts(input.read, room.id, context);
+    const all = await readFacts(input.read, room.id, context);
+    const owner = all.some((fact) => fact.privateTo !== undefined)
+      ? (await turn(input.conversationId, context)).privateTo?.playerId
+      : undefined;
+    const facts = all.filter((fact) => visibleIn(fact, owner));
     const shared = await sharedFacts(input.read, room, context);
     const parts: string[] = [];
     if (facts.length > 0)
       parts.push(
         "What you were asked to remember in this conversation:\n" +
-          facts.map((fact) => `- ${fact.id}: ${fact.text}`).join("\n"),
+          facts
+            .map((fact) =>
+              fact.privateTo === undefined
+                ? `- ${fact.id}: ${fact.text}`
+                : `- ${fact.id} (private to ${fact.privateTo.displayName}): ${fact.text}`,
+            )
+            .join("\n"),
       );
     for (const { owner, facts } of shared)
       parts.push(
@@ -286,6 +314,11 @@ export function memorySection(): PromptSection {
       );
     return parts.length === 0 ? undefined : parts.join("\n\n");
   });
+}
+
+/** Whether a fact shows in a turn private to `owner`, or in a public turn without one. */
+function visibleIn(fact: Fact, owner: string | undefined): boolean {
+  return fact.privateTo === undefined || fact.privateTo.playerId === owner;
 }
 
 /** `remember` and `forget`, about the room the model talks in. */
@@ -346,6 +379,11 @@ export function createMemoryTools(now: () => number): ToolRegistration[] {
           `${args.id} is someone's own memory; they can forget it in their personal conversation.`,
           true,
         );
+      if (!args.id.startsWith("p")) {
+        const fact = (await readFacts(api, room.id, context)).find((fact) => fact.id === args.id);
+        if (fact !== undefined && !visibleIn(fact, currentTurn().privateTo?.playerId))
+          return text(`No fact ${args.id} in this conversation.`, true);
+      }
       const dropped = await api.commit(
         (tx) =>
           args.id.startsWith("p")

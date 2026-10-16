@@ -34,6 +34,8 @@ import type {
   ToolPart,
 } from "./schema.ts";
 
+export { Viewer } from "./viewer.ts";
+
 /**
  * How a host turns its rooms into protocol views. This is the one place that reads pi-durable's
  * shapes; clients only see what comes out.
@@ -134,9 +136,13 @@ function reuse<T>(before: Kept<T> | undefined, sources: readonly unknown[], buil
  */
 export function projectTimeline(
   entries: readonly EntryRecord[],
-  options: { readonly after?: string } = {},
+  options: {
+    readonly after?: string;
+    /** The entry `after` names, so an answer to it is as private as it is. */
+    readonly afterEntry?: EntryRecord;
+  } = {},
 ): TimelineItem[] {
-  return items(entries, undefined, { after: options.after });
+  return items(entries, undefined, { after: options.after, afterEntry: options.afterEntry });
 }
 
 /**
@@ -194,7 +200,7 @@ export class TimelinePager {
     const entries = [...this.held].reverse();
     if (this.next === undefined) return { items: projectTimeline(entries) };
     return {
-      items: projectTimeline(entries, { after: `entry:${this.next.id}` }),
+      items: projectTimeline(entries, { after: `entry:${this.next.id}`, afterEntry: this.next }),
       before: this.next.id + 1,
     };
   }
@@ -205,6 +211,7 @@ function items(
   live: LiveState | undefined,
   options: {
     readonly after?: string | undefined;
+    readonly afterEntry?: EntryRecord | undefined;
     readonly keep?: (
       id: string,
       sources: readonly unknown[],
@@ -227,6 +234,8 @@ function items(
   // before it, so the answer in flight keeps its id once its entry is written.
   let answer: EntryRecord[] = [];
   let after = options.after ?? "start";
+  // The item before the answer: when it is private to someone, so is its answer.
+  let before: EntryRecord | undefined = options.afterEntry;
   const endAnswer = (live?: LiveState) => {
     const generated = live?.generation?.message as AssistantMessage | undefined;
     if (answer.length === 0 && generated === undefined && !(live?.tools?.length ?? 0)) return;
@@ -234,10 +243,21 @@ function items(
     const callResults = answerEntries.flatMap((entry) =>
       toolCalls(entry).map((call) => results.get(call.id)),
     );
-    const sources = [...answerEntries, ...callResults, generated, live?.tools, live !== undefined];
+    const sources = [
+      before,
+      ...answerEntries,
+      ...callResults,
+      generated,
+      live?.tools,
+      live !== undefined,
+    ];
     const id = `answer:${after}`;
+    const owner = before === undefined ? undefined : privateToOf(before);
     timeline.push(
-      keep(id, sources, () => buildAnswer(id, answerEntries, results, live, generated)),
+      keep(id, sources, () => {
+        const built = buildAnswer(id, answerEntries, results, live, generated);
+        return owner === undefined ? built : { ...built, privateTo: owner };
+      }),
     );
     if (answerEntries[0] !== undefined) options.start?.(answerEntries[0].id);
     answer = [];
@@ -251,6 +271,7 @@ function items(
       timeline.push(keep(id, [entry], () => entryItem(id, entry)));
       options.start?.(entry.id);
       after = id;
+      before = entry;
     }
     // Anything else is a system prompt, a tool result (shown with its call) or bookkeeping.
   }
@@ -275,11 +296,12 @@ function entryItem(id: string, entry: EntryRecord): TimelineItem {
         sentAt: data.sentAt,
         ...(data.clientId === undefined ? {} : { clientId: data.clientId }),
         ...(data.requestId === undefined ? {} : { requestId: data.requestId }),
+        ...privately(entry),
       };
     }
     case FIRE_ENTRY: {
       const data = entry.data as FireEntryData;
-      return { type: "nudge", id, text: data.message, firedAt: data.fireAt };
+      return { type: "nudge", id, text: data.message, firedAt: data.fireAt, ...privately(entry) };
     }
     case APPROVAL_ENTRY: {
       const data = entry.data as ApprovalEntryData;
@@ -290,6 +312,7 @@ function entryItem(id: string, entry: EntryRecord): TimelineItem {
         summary: data.summary,
         status: data.status,
         ...(data.decidedBy === undefined ? {} : { decidedBy: data.decidedBy }),
+        ...privately(entry),
       };
     }
     case "pi.compaction":
@@ -300,6 +323,29 @@ function entryItem(id: string, entry: EntryRecord): TimelineItem {
       return { type: "user", id, text: message === undefined ? "" : text(message.content) };
     }
   }
+}
+
+/** Who a message, fired nudge or approval outcome is private to, as a player. */
+function privateToOf(entry: {
+  readonly kind?: string;
+  readonly data?: unknown;
+}): Player | undefined {
+  if (entry.kind === MESSAGE_ENTRY) {
+    const data = entry.data as MessageEntryData;
+    return data.private === true ? { id: data.playerId, displayName: data.displayName } : undefined;
+  }
+  if (entry.kind === FIRE_ENTRY || entry.kind === APPROVAL_ENTRY) {
+    const owner = (entry.data as FireEntryData | ApprovalEntryData).privateTo;
+    return owner === undefined ? undefined : { id: owner.playerId, displayName: owner.displayName };
+  }
+  return undefined;
+}
+
+function privately(entry: { readonly kind?: string; readonly data?: unknown }): {
+  privateTo?: Player;
+} {
+  const owner = privateToOf(entry);
+  return owner === undefined ? {} : { privateTo: owner };
 }
 
 function buildAnswer(
@@ -395,14 +441,24 @@ function queued(item: InboxItem): QueuedMessage[] {
         ...(data.clientId === undefined ? {} : { clientId: data.clientId }),
         ...(data.requestId === undefined ? {} : { requestId: data.requestId }),
         nudge: false,
+        ...privately(entry),
       },
     ];
   }
   if (entry?.kind === FIRE_ENTRY)
-    return [{ ...base, text: (entry.data as FireEntryData).message, nudge: true }];
+    return [
+      { ...base, text: (entry.data as FireEntryData).message, nudge: true, ...privately(entry) },
+    ];
   if (entry?.kind === APPROVAL_ENTRY) {
     const data = entry.data as ApprovalEntryData;
-    return [{ ...base, text: `${data.id} ${data.status}: ${data.summary}`, nudge: true }];
+    return [
+      {
+        ...base,
+        text: `${data.id} ${data.status}: ${data.summary}`,
+        nudge: true,
+        ...privately(entry),
+      },
+    ];
   }
   return [
     {
@@ -470,7 +526,12 @@ export function toApproval(approval: CoreApproval): Approval {
         }),
     ...(approval.decidedAt === undefined ? {} : { decidedAt: approval.decidedAt }),
     ...(approval.result === undefined ? {} : { result: approval.result }),
+    ...(approval.privateTo === undefined ? {} : { privateTo: player(approval.privateTo) }),
   };
+}
+
+function player(owner: { readonly playerId: string; readonly displayName: string }): Player {
+  return { id: owner.playerId, displayName: owner.displayName };
 }
 
 export function toFact(fact: CoreRoomFact): Fact {
@@ -481,6 +542,7 @@ export function toFact(fact: CoreRoomFact): Fact {
     createdAt: fact.createdAt,
     ...(fact.by === undefined ? {} : { by: person(fact.by) }),
     ...(fact.owner === undefined ? {} : { owner: person(fact.owner) }),
+    ...(fact.privateTo === undefined ? {} : { privateTo: person(fact.privateTo) }),
   };
 }
 
@@ -490,6 +552,7 @@ export function toRoomNudge(nudge: ScheduledNudge): RoomNudge {
     message: nudge.message,
     fireAt: nudge.fireAt,
     ...(nudge.every === undefined ? {} : { every: nudge.every }),
+    ...(nudge.privateTo === undefined ? {} : { privateTo: player(nudge.privateTo) }),
   };
 }
 

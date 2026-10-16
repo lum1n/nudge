@@ -10,6 +10,7 @@ import { APPROVAL_ENTRY } from "./approvals/approvals.ts";
 import type { DirectoryState, Room } from "./identity/directory.ts";
 import { MESSAGE_ENTRY } from "./host-api.ts";
 import { FIRE_ENTRY } from "./nudges/timer-task.ts";
+import type { Owner } from "./privacy/turn.ts";
 
 /** What prompted an answer: a person's message, a fired nudge or the outcome of an approval. */
 export type AnswerCause = "message" | "nudge" | "approval";
@@ -26,6 +27,8 @@ export type RoomEvent =
       /** Id of the answer's last entry. */
       readonly entryId: number;
       readonly status: "done" | "stopped" | "failed";
+      /** It answers something private: only this player may hear of it. */
+      readonly privateTo?: Owner;
     }
   | {
       /** An action waits for someone in the room to approve it. */
@@ -48,7 +51,10 @@ export class RoomEvents {
   private readonly listeners = new Set<RoomEventListener>();
   private rooms = new Map<number, string>();
   /** Per conversation: the answer's text so far and what it answers. */
-  private readonly answers = new Map<number, { parts: string[]; cause: AnswerCause }>();
+  private readonly answers = new Map<
+    number,
+    { parts: string[]; cause: AnswerCause; privateTo?: Owner }
+  >();
   /** Per room: approval ids already pending, so each is announced once. */
   private readonly pending = new Map<string, Set<string>>();
   private readonly stop: () => void;
@@ -101,7 +107,12 @@ export class RoomEvents {
     if (roomId === undefined) return undefined;
     const cause = causeOf(entry.kind);
     if (cause !== undefined) {
-      this.answers.set(entry.conversationId, { parts: [], cause });
+      const privateTo = privateToOf(entry);
+      this.answers.set(entry.conversationId, {
+        parts: [],
+        cause,
+        ...(privateTo === undefined ? {} : { privateTo }),
+      });
       return undefined;
     }
     if (entry.kind !== "pi.assistant") return undefined;
@@ -126,6 +137,7 @@ export class RoomEvents {
       cause: answer.cause,
       entryId: entry.id,
       status,
+      ...(answer.privateTo === undefined ? {} : { privateTo: answer.privateTo }),
     };
   }
 
@@ -161,6 +173,18 @@ function causeOf(kind: string): AnswerCause | undefined {
   if (kind === APPROVAL_ENTRY) return "approval";
   if (kind === MESSAGE_ENTRY || kind === "pi.user") return "message";
   return undefined;
+}
+
+/** Who a message, fired nudge or approval outcome is private to, if anyone. */
+function privateToOf(entry: EntryRecord): Owner | undefined {
+  const data = entry.data as
+    | { private?: true; playerId?: string; displayName?: string; privateTo?: Owner }
+    | undefined;
+  if (entry.kind === MESSAGE_ENTRY)
+    return data?.private === true && data.playerId !== undefined
+      ? { playerId: data.playerId, displayName: data.displayName ?? data.playerId }
+      : undefined;
+  return data?.privateTo;
 }
 
 function pendingIds(state: ApprovalsState): Set<string> {

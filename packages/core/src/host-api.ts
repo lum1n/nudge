@@ -24,6 +24,11 @@ export type MessageDraft = {
   readonly requestId?: string;
   /** What happens when the room is mid-answer. Default `followUp`. */
   readonly whenBusy?: "steer" | "followUp" | "reject";
+  /**
+   * Only the author sees the message and the answer to it; the room's other members see that
+   * there was one. Needs an author.
+   */
+  readonly private?: boolean;
 };
 
 export const MESSAGE_ENTRY = "nudge.message";
@@ -36,6 +41,8 @@ export type MessageEntryData = {
   /** The sender's own id for this message, so its client can match what it sent. */
   readonly requestId?: string;
   readonly sentAt: number;
+  /** See `MessageDraft.private`. */
+  readonly private?: true;
 };
 
 export async function submitMessage(
@@ -48,10 +55,16 @@ export async function submitMessage(
   const conversation = await harness.conversation(conversationId, context);
   if (conversation === undefined) throw new Error(`No conversation ${conversationId}`);
   const { author, requestId } = draft;
+  const secret = draft.private === true && author !== undefined;
   return conversation.submit(
     {
       type: "input",
-      content: author === undefined ? draft.text : `${author.displayName}: ${draft.text}`,
+      content:
+        author === undefined
+          ? draft.text
+          : secret
+            ? `${author.displayName} (privately: only ${author.displayName} sees this message and your answer to it; don't bring it up with anyone else): ${draft.text}`
+            : `${author.displayName}: ${draft.text}`,
       requestId:
         requestId === undefined || author?.clientId === undefined
           ? requestId
@@ -69,6 +82,7 @@ export async function submitMessage(
                 ...(author.clientId === undefined ? {} : { clientId: author.clientId }),
                 ...(requestId === undefined ? {} : { requestId }),
                 sentAt: now,
+                ...(secret ? { private: true as const } : {}),
               } satisfies MessageEntryData,
             },
     },

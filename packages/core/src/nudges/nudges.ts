@@ -2,6 +2,7 @@ import type { Context } from "@earendil-works/chord";
 import type { ConversationId, Harness, TaskId } from "@earendil-works/pi-durable";
 import type { Change } from "../changes.ts";
 import type { Rooms } from "../identity/rooms.ts";
+import { currentTurn, type Owner } from "../privacy/turn.ts";
 import { ScheduleDoc, type ScheduledNudge } from "./schedule.ts";
 import { NudgeTimer } from "./timer-task.ts";
 
@@ -11,6 +12,8 @@ export type NudgeDraft = {
   readonly fireAt: number;
   /** Repeat interval in ms; absent for a one-off. */
   readonly every?: number;
+  /** Default: the player whose private message, nudge or approval the current tool call answers. */
+  readonly privateTo?: Owner;
 };
 
 /** Messages the assistant delivers to a room on its own, at a set time. */
@@ -30,6 +33,8 @@ export class Nudges {
     if (!Number.isFinite(draft.fireAt)) throw new Error("A nudge needs a time");
     if (draft.every !== undefined && !(draft.every > 0))
       throw new Error("A nudge repeats after a positive interval");
+    const privateTo = draft.privateTo ?? currentTurn().privateTo;
+    const owner = privateTo === undefined ? {} : { privateTo: { ...privateTo } };
     // The task and its schedule entry commit together, so neither exists alone.
     const scheduled = await this.harness.commit(async (tx) => {
       const id = await tx.createTask(
@@ -39,6 +44,7 @@ export class Nudges {
           message,
           fireAt: draft.fireAt,
           ...(draft.every === undefined ? {} : { every: draft.every }),
+          ...owner,
         },
         {
           ownership: { kind: "conversation" },
@@ -54,6 +60,7 @@ export class Nudges {
         fireAt: draft.fireAt,
         ...(draft.every === undefined ? {} : { every: draft.every }),
         createdAt: this.now(),
+        ...owner,
       };
       (await tx.doc(ScheduleDoc)).nudges[nudge.id] = { ...nudge };
       return nudge;

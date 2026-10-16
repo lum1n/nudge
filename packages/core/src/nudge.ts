@@ -9,6 +9,7 @@ import {
   type Conversation,
   type ConversationId,
   type ConversationWatch,
+  type EntryRecord,
   createRegistry,
   Harness,
   type HarnessSettings,
@@ -18,7 +19,12 @@ import {
   type Storage,
   type Submission,
 } from "@earendil-works/pi-durable";
-import { Approvals, ApprovalsDoc, type ApprovalsState } from "./approvals/approvals.ts";
+import {
+  APPROVAL_ENTRY,
+  Approvals,
+  ApprovalsDoc,
+  type ApprovalsState,
+} from "./approvals/approvals.ts";
 import { type Change, Changes } from "./changes.ts";
 import { createBuiltinExtension } from "./extensions/builtin.ts";
 import {
@@ -28,7 +34,7 @@ import {
   type SetUpExtension,
   setUpExtension,
 } from "./extensions/define.ts";
-import { attach, type MessageDraft, submitMessage } from "./host-api.ts";
+import { attach, MESSAGE_ENTRY, type MessageDraft, submitMessage } from "./host-api.ts";
 import { DirectoryDoc, type Room } from "./identity/directory.ts";
 import { Players } from "./identity/players.ts";
 import { Rooms } from "./identity/rooms.ts";
@@ -36,6 +42,7 @@ import { Memory } from "./memory/memory.ts";
 import { Nudges } from "./nudges/nudges.ts";
 import { RedactingModels, type RedactionOptions } from "./models/redacting-models.ts";
 import { builtinDetectors, type PiiDetector } from "./privacy/detectors.ts";
+import { type Owner, turnOf, withTurns } from "./privacy/turn.ts";
 import { Vault } from "./privacy/vault.ts";
 import { VaultDoc } from "./privacy/vault-doc.ts";
 import { openDatabaseStorage } from "./encrypted-storage.ts";
@@ -185,8 +192,19 @@ export class Nudge {
       if (opened === undefined) throw new Error("The assistant is not open yet");
       return opened;
     };
+    // Tools learn whether they answer something private through `currentTurn()`.
+    const turn = (id: ConversationId, context: Context) => turnOf(whenOpen().harness, id, context);
     registry.install(
-      createBuiltinExtension({ displayName, timeZone, now, nudges: () => whenOpen().nudges }),
+      withTurns(
+        createBuiltinExtension({
+          displayName,
+          timeZone,
+          now,
+          nudges: () => whenOpen().nudges,
+          turn,
+        }),
+        turn,
+      ),
     );
     const host: Parts["host"] = {
       displayName,
@@ -210,7 +228,7 @@ export class Nudge {
       await unlock();
       throw error;
     }
-    for (const { extension } of installed) registry.install(extension);
+    for (const { extension } of installed) registry.install(withTurns(extension, turn));
     const detectors = options.privacy?.detectors ?? builtinDetectors;
     const models = new RedactingModels(options.models, {
       detectors: withExtensionDetectors(detectors, installed),
@@ -238,7 +256,15 @@ export class Nudge {
       const saved = await harness.snapshot(VaultDoc, context);
       models.bind(new Vault(saved?.entries ?? []), (entries) =>
         harness.commit(async (tx) => {
-          (await tx.doc(VaultDoc)).entries.push(...entries.map((entry) => ({ ...entry })));
+          const doc = await tx.doc(VaultDoc);
+          const at = new Map(doc.entries.map((entry, index) => [entry.placeholder, index]));
+          for (const entry of entries) {
+            const index = at.get(entry.placeholder);
+            if (index === undefined) {
+              at.set(entry.placeholder, doc.entries.length);
+              doc.entries.push({ ...entry });
+            } else doc.entries[index] = { ...entry };
+          }
         }, BACKGROUND_CONTEXT),
       );
       const agent: AgentChange = {
@@ -324,7 +350,10 @@ export class Nudge {
       const names = new Set(next.map(({ extension }) => extension.name));
       for (const { extension } of this.installed)
         if (!names.has(extension.name)) this.registry.uninstall(extension);
-      for (const { extension } of next) this.registry.install(extension);
+      for (const { extension } of next)
+        this.registry.install(
+          withTurns(extension, (id, context) => turnOf(this.harness, id, context)),
+        );
       this.models.detectors = withExtensionDetectors(this.detectors, next);
       const replaced = this.installed;
       this.installed = next;
@@ -514,6 +543,13 @@ export class Nudge {
     if (refusal !== undefined) throw new BudgetReached(refusal);
     // The model sees "<name>: <text>"; the name is personal, so it goes to the vault first.
     if (draft.author !== undefined) this.models.vault.protect(draft.author.displayName, "NAME");
+    // What a private message reveals for the first time is its author's alone.
+    if (draft.private === true && draft.author !== undefined) {
+      const before = this.models.vault.version;
+      this.models.vault.redact(draft.text, this.models.detectors, draft.author.playerId);
+      await this.models.flush();
+      if (this.models.vault.version !== before) this.changes.emit({ kind: "vault" });
+    }
     return submitMessage(
       this.harness,
       room.conversationId as ConversationId,
@@ -530,12 +566,63 @@ export class Nudge {
 
   /**
    * Keeps a value from the model, such as an address or a relative's name: from now on it only
-   * ever sees the returned placeholder. `kind` is upper-case letters.
+   * ever sees the returned placeholder. `kind` is upper-case letters. With `owner`, the value is
+   * also hidden from everyone but that player, wherever it shows (see `showTo`).
    */
-  async protect(value: string, kind = "PRIVATE"): Promise<string> {
-    const placeholder = this.models.vault.protect(value, kind);
+  async protect(
+    value: string,
+    kind = "PRIVATE",
+    options: { readonly owner?: string } = {},
+  ): Promise<string> {
+    const vault = this.models.vault;
+    const before = vault.version;
+    const placeholder = vault.protect(value, kind, options.owner);
     await this.models.flush();
+    if (options.owner !== undefined && vault.version !== before)
+      this.changes.emit({ kind: "vault" });
     return placeholder;
+  }
+
+  /**
+   * Drops a value from the vault for good: from now on everyone, the model and tools see only its
+   * placeholder. Only its owner may forget a private value; anyone else needs `admin`. False when
+   * there is no such value.
+   */
+  async forgetValue(
+    placeholder: string,
+    by: { readonly playerId?: string; readonly admin?: boolean } = { admin: true },
+  ): Promise<boolean> {
+    const vault = this.models.vault;
+    const entry = vault.get(placeholder);
+    if (entry === undefined || entry.forgotten) return false;
+    if (!by.admin && (entry.owner === undefined || entry.owner !== by.playerId))
+      throw new NotAllowed(`Only its owner or an admin may forget ${placeholder}`);
+    vault.forget(placeholder);
+    await this.models.flush();
+    this.changes.emit({ kind: "vault" });
+    return true;
+  }
+
+  /** The values only `playerId` may see, in the order they were made private. */
+  privateValues(playerId: string): PrivateValue[] {
+    return this.models.vault.entries.flatMap((entry) =>
+      entry.owner === playerId && !entry.forgotten
+        ? [{ placeholder: entry.placeholder, kind: entry.kind, value: entry.value }]
+        : [],
+    );
+  }
+
+  /**
+   * Text as a player may see it: values others made private become placeholders, and placeholders
+   * of values they may see are put back. Hosts run everything they show a person through this.
+   */
+  showTo(playerId: string | undefined, text: string): string {
+    return this.models.vault.showTo(playerId, text);
+  }
+
+  /** Goes up whenever `showTo` may give something new for the same text. */
+  get vaultVersion(): number {
+    return this.models.vault.version;
   }
 
   /**
@@ -543,13 +630,32 @@ export class Nudge {
    * tool calls included, with personal values as placeholders. Only what is committed; a request
    * also carries the tools' definitions, which are not personal.
    */
-  async modelView(roomId: string, context: Context): Promise<ModelViewMessage[]> {
+  async modelView(
+    roomId: string,
+    context: Context,
+    /** Leaves out what is private to others: a turn private to someone shows only who it was for. */
+    viewer?: string,
+  ): Promise<ModelViewMessage[]> {
     const conversation = await this.conversation(roomId, context);
-    const { messages } = await conversation.context(context);
-    return messages.map((message) => ({
+    const view = await conversation.context(context);
+    const shown = (message: Message) => ({
       role: message.role,
       text: this.redact(messageText(message)),
-    }));
+    });
+    if (viewer === undefined) return view.messages.map(shown);
+    const out: ModelViewMessage[] = [];
+    let owner: Owner | undefined;
+    view.entries.forEach((entry, index) => {
+      if (TURN_ENTRIES.has(entry.kind)) owner = privateOwner(entry);
+      const messages = view.contributions[index] ?? [];
+      if (owner === undefined || owner.playerId === viewer) out.push(...messages.map(shown));
+      else if (messages.length > 0)
+        out.push({
+          role: messages[0]!.role,
+          text: this.redact(`(Private to ${owner.displayName}.)`),
+        });
+    });
+    return out;
   }
 
   /** What the model would see for `text`: personal values replaced by placeholders. */
@@ -587,6 +693,41 @@ export class Nudge {
       await this.unlock();
     }
   }
+}
+
+/** Entries that start a turn: what comes after them, up to the next, answers them. */
+const TURN_ENTRIES: ReadonlySet<string> = new Set([
+  MESSAGE_ENTRY,
+  "pi.user",
+  FIRE_ENTRY,
+  APPROVAL_ENTRY,
+  "pi.compaction",
+  "pi.reset",
+]);
+
+/** Who a turn-starting entry is private to, if anyone. */
+function privateOwner(entry: EntryRecord): Owner | undefined {
+  const data = entry.data as
+    | { private?: true; playerId?: string; displayName?: string; privateTo?: Owner }
+    | undefined;
+  if (entry.kind === MESSAGE_ENTRY)
+    return data?.private === true && data.playerId !== undefined
+      ? { playerId: data.playerId, displayName: data.displayName ?? data.playerId }
+      : undefined;
+  if (entry.kind === FIRE_ENTRY || entry.kind === APPROVAL_ENTRY) return data?.privateTo;
+  return undefined;
+}
+
+/** A value only one player may see. */
+export type PrivateValue = {
+  readonly placeholder: string;
+  readonly kind: string;
+  readonly value: string;
+};
+
+/** Someone tried what only others may do. */
+export class NotAllowed extends Error {
+  override name = "NotAllowed";
 }
 
 /** One message of a room's model context, as text. */
