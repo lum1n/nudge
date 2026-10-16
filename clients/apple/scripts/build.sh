@@ -33,6 +33,9 @@ MODULE
 [[ "${1:-}" == "--xcframework" ]] || exit 0
 
 targets=(aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios aarch64-apple-darwin x86_64-apple-darwin)
+# Match apps/apple/project.yml, so rustc and the C in crates like aws-lc-sys build for the same
+# OS versions; otherwise rustc links for iOS 10 and misses symbols the C expects.
+export IPHONEOS_DEPLOYMENT_TARGET=26.0 MACOSX_DEPLOYMENT_TARGET=26.0
 for target in "${targets[@]}"; do
   cargo build --release -p nudge-ffi --target "$target"
 done
