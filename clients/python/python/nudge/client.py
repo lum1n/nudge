@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import atexit
+import json
 import os
 import weakref
 from collections.abc import AsyncIterator, Callable, Sequence
@@ -17,32 +18,40 @@ from nudge import _ffi
 from nudge._ffi import (
     Approval,
     ConnectionStatus,
+    DevicePlatform,
+    ExtensionSetup,
     Fact,
     GoneReason,
     HomeUpdate,
     Live,
     MeInfo,
+    ModelMessage,
     Paired,
     PairingCode,
+    PanelStatus,
     PendingMessage,
     Player,
     PlayerMemory,
+    PushEnvironment,
+    PushPlatforms,
     QueuedMessage,
     Room,
     RoomExtension,
     RoomNudge,
     RoomUpdate,
+    SavedExtensionSetup,
     Sent,
     SyncStatus,
     TimelineChange,
     TimelineItem,
     TokenInfo,
     TokenStore,
+    Usage,
     WhenBusy,
 )
 from nudge.tokens import MemoryTokens
 
-__all__ = ["Client", "RoomState", "RoomWatch", "Watch", "apply_changes"]
+__all__ = ["Client", "Panel", "RoomState", "RoomWatch", "Watch", "apply_changes"]
 
 try:
     VERSION = metadata.version("nudge-client")
@@ -95,8 +104,8 @@ def apply_changes(
     return tuple(items)
 
 
-# Watches whose listener may still be called, cancelled at exit.
-_open: weakref.WeakSet[Watch] = weakref.WeakSet()
+# Watches and panels whose listener may still be called, cancelled at exit.
+_open: weakref.WeakSet[Watch | Panel] = weakref.WeakSet()
 
 
 @atexit.register
@@ -244,6 +253,102 @@ class _RoomListener(_ffi.RoomListener):
             watch._deliver(update)
 
 
+class Panel:
+    """A room's socket to an extension's panel, such as `lists`, `documents`, `connectors` or
+    `browser`: the extension's frames as dicts, every one and in order (`async for`, or
+    `wait_for`), and `send` for its inputs. The frames are the extension's own, such as
+    `{"type": "lists", ...}`, and `ok` and `error` replies that echo an input's `ref`. It
+    reconnects on its own, and the extension sends its view again then. `statuses` watches the
+    socket: `PanelStatus.CLOSED` with code 4404 when the room has no such extension. `close()` or
+    leaving an `async with` stops it."""
+
+    def __init__(self, loop: asyncio.AbstractEventLoop):
+        self._loop = loop
+        self._frames: asyncio.Queue[dict | None] = asyncio.Queue()
+        self._closed = False
+        self._ffi: _ffi.Panel | None = None
+        self.statuses: Watch[PanelStatus] = Watch(loop, lambda _, status: status)
+        _open.add(self)
+
+    @property
+    def status(self) -> PanelStatus | None:
+        """The socket's latest status, None before the first."""
+        return self.statuses.current
+
+    @property
+    def closed(self) -> bool:
+        return self._closed
+
+    def send(self, frame: dict) -> None:
+        """Sends one of the extension's inputs; dropped while the socket isn't open."""
+        assert self._ffi is not None
+        self._ffi.send(json.dumps(frame))
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        _open.discard(self)
+        if self._ffi is not None:
+            self._ffi.disconnect()
+        self.statuses.close()
+        self._frames.put_nowait(None)
+
+    async def __aenter__(self) -> Panel:
+        return self
+
+    async def __aexit__(self, *_: object) -> None:
+        self.close()
+
+    def __aiter__(self) -> AsyncIterator[dict]:
+        return self._each()
+
+    async def _each(self) -> AsyncIterator[dict]:
+        while not self._closed:
+            frame = await self._frames.get()
+            if frame is None:
+                return
+            yield frame
+
+    async def wait_for(
+        self, predicate: Callable[[dict], bool], timeout: float | None = None
+    ) -> dict:
+        """The next frame `predicate` accepts; the ones before it are passed over. Raises
+        TimeoutError after `timeout` seconds, and EOFError if the panel closes first."""
+
+        async def first() -> dict:
+            async for frame in self:
+                if predicate(frame):
+                    return frame
+            raise EOFError("panel closed")
+
+        return await asyncio.wait_for(first(), timeout)
+
+    # Called on a library thread.
+    def _deliver(self, frame: dict) -> None:
+        try:
+            self._loop.call_soon_threadsafe(self._push, frame)
+        except RuntimeError:
+            pass  # The loop is closed; nobody is listening.
+
+    def _push(self, frame: dict) -> None:
+        if not self._closed:
+            self._frames.put_nowait(frame)
+
+
+class _PanelListener(_ffi.PanelListener):
+    def __init__(self, panel: Panel):
+        self._panel = weakref.ref(panel)
+
+    def on_status(self, status: PanelStatus) -> None:
+        if panel := self._panel():
+            panel.statuses._deliver(status)
+
+    def on_frame(self, json_: str) -> None:
+        if panel := self._panel():
+            panel._deliver(json.loads(json_))
+
+
 class Client:
     """A client of one assistant on a Nudge server: commands, a socket that reconnects on its
     own, watches of the views, and an outbox that delivers what didn't get through once the
@@ -275,14 +380,14 @@ class Client:
             cache_path=os.fspath(cache) if cache is not None else None,
         )
         self.ffi = _ffi.NudgeClient(config, self.tokens)
-        self._watches: weakref.WeakSet[Watch] = weakref.WeakSet()
+        self._watches: weakref.WeakSet[Watch | Panel] = weakref.WeakSet()
 
     def open(self) -> None:
         """Connects the socket; watched views are subscribed once it is open."""
         self.ffi.connect()
 
     def close(self) -> None:
-        """Closes the socket and every watch of this client."""
+        """Closes the socket and every watch and panel of this client."""
         for watch in list(self._watches):
             watch.close()
         self.ffi.disconnect()
@@ -323,12 +428,24 @@ class Client:
         self._watches.add(watch)
         return watch
 
+    def panel(self, room: str, extension: str) -> Panel:
+        """A room's socket to an extension's panel, such as `lists` or `documents`."""
+        panel = Panel(asyncio.get_running_loop())
+        panel._ffi = self.ffi.open_panel(room, extension, _PanelListener(panel))
+        self._watches.add(panel)
+        return panel
+
     async def pair(self, code: str) -> Paired:
         """Trades a pairing code for a token, and stores it."""
         return await self.ffi.pair(code)
 
     async def me(self) -> MeInfo:
         return await self.ffi.me()
+
+    async def sign_out(self) -> None:
+        """Revokes this client's token on the server and forgets it; the socket closes with
+        4401."""
+        await self.ffi.sign_out()
 
     async def create_room(self, name: str, members: Sequence[str] = ()) -> Room:
         """A shared room with the caller and `members` (player ids)."""
@@ -395,6 +512,31 @@ class Client:
         """A placeholder that stands for `value` in what the model sees."""
         return await self.ffi.protect(value, kind)
 
+    async def model_view(self, room: str) -> list[ModelMessage]:
+        """What the model saw in the room, as sent: placeholders, not the values."""
+        return await self.ffi.model_view(room)
+
+    async def usage(self) -> Usage:
+        """This month's model spend; every month, room and player for admins."""
+        return await self.ffi.usage()
+
+    async def push_platforms(self) -> PushPlatforms:
+        """Which native pushes the server sends; `NudgeError.Status` 404 when it sends none."""
+        return await self.ffi.push_platforms()
+
+    async def register_device(
+        self,
+        platform: DevicePlatform,
+        token: str,
+        environment: PushEnvironment | None = None,
+    ) -> None:
+        """Has the server push to a device (an APNs device token in hex, or an FCM registration
+        token) when one of the player's rooms has news; `environment` is for APNs."""
+        await self.ffi.register_device(platform, token, environment)
+
+    async def unregister_device(self, token: str) -> None:
+        await self.ffi.unregister_device(token)
+
     # Admin commands, for players with the admin flag.
 
     async def create_player(self, display_name: str) -> Player:
@@ -409,3 +551,16 @@ class Client:
     async def revoke(self, client_id: str) -> None:
         """Revokes a client's token; its sockets close with 4401."""
         await self.ffi.revoke(client_id)
+
+    async def extension_setups(self) -> list[ExtensionSetup]:
+        """The assistant's extensions and the ones it could add, with their settings and JSON
+        Schemas as JSON text (`json.loads(setup.settings_json)`)."""
+        return await self.ffi.extension_setups()
+
+    async def save_extension_setups(
+        self, extensions: Sequence[SavedExtensionSetup]
+    ) -> list[ExtensionSetup]:
+        """Installs `extensions`, in order, in place of the assistant's, and keeps them in its
+        config; ones left out are removed. `NudgeError.Status` 400, and nothing changed, when one
+        won't start."""
+        return await self.ffi.save_extension_setups(list(extensions))

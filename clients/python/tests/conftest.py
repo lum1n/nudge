@@ -47,5 +47,11 @@ def server() -> Iterator[FauxServer]:
             bo=started["tokens"]["bo"],
         )
     finally:
-        process.kill()
-        process.wait()
+        # Stopped by closing stdin, so it removes its temporary directory.
+        assert process.stdin is not None
+        process.stdin.close()
+        try:
+            process.wait(10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import socket
 import stat
@@ -267,3 +268,103 @@ def test_exit_with_a_watch_open(server) -> None:
     )
     done = subprocess.run([sys.executable, "-c", script], timeout=60)
     assert done.returncode == 0
+
+
+def test_a_panel_usage_and_the_model_view(server) -> None:
+    async def test() -> None:
+        async with Client(server.url, server.assistant, MemoryTokens(server.ann)) as ann:
+            usage = await ann.usage()
+            assert len(usage.month) == 7 and usage.total >= 0
+            messages = await ann.model_view("trip")
+            assert all(m.role != nudge.ModelRole.USER for m in messages)
+
+            async with ann.panel("trip", "lists") as lists:
+                assert await lists.wait_for(lambda f: f["type"] == "lists", TIMEOUT) == {
+                    "type": "lists",
+                    "lists": [],
+                }
+                assert lists.status == nudge.PanelStatus.OPEN()
+                lists.send({"type": "add", "list": "Shopping", "text": "Milk", "ref": "r1"})
+                assert await lists.wait_for(lambda f: f.get("ref") == "r1", TIMEOUT) == {
+                    "type": "ok",
+                    "ref": "r1",
+                }
+                shown = await lists.wait_for(lambda f: f["type"] == "lists", TIMEOUT)
+                assert shown["lists"][0]["name"] == "shopping"
+                assert shown["lists"][0]["items"][0]["text"] == "Milk"
+
+            nowhere = ann.panel("nowhere", "lists")
+            closed = await nowhere.statuses.wait_for(lambda s: s.is_closed(), TIMEOUT)
+            assert closed.code == 4404
+            nowhere.close()
+
+    run(test())
+
+
+def test_devices_and_signing_out(server) -> None:
+    async def test() -> None:
+        async with Client(server.url, server.assistant, MemoryTokens(server.ann)) as ann:
+            cy = await ann.create_player("Cy")
+            code = await ann.pairing_code(cy.id)
+
+        tokens = MemoryTokens()
+        async with Client(server.url, server.assistant, tokens) as cy:
+            await cy.pair(code.code)
+            # The faux server sends no pushes.
+            with pytest.raises(NudgeError.Status) as refused:
+                await cy.push_platforms()
+            assert refused.value.status == 404
+            with pytest.raises(NudgeError.Status) as refused:
+                await cy.register_device(nudge.DevicePlatform.FCM, "token")
+            assert refused.value.status == 404
+            with pytest.raises(NudgeError.Status) as refused:
+                await cy.unregister_device("token")
+            assert refused.value.status == 404
+
+            connection = cy.connection()
+            await connection.wait_for(lambda s: s.is_open(), TIMEOUT)
+            await cy.sign_out()
+            closed = await connection.wait_for(lambda s: s.is_closed(), TIMEOUT)
+            assert closed.code == 4401
+            with pytest.raises(NudgeError.Status) as refused:
+                await cy.me()
+            assert refused.value.status == 401
+
+    run(test())
+
+
+def test_extension_settings(server) -> None:
+    async def test() -> None:
+        async with Client(server.url, server.assistant, MemoryTokens(server.bo)) as bo:
+            with pytest.raises(NudgeError.Status) as refused:
+                await bo.extension_setups()
+            assert refused.value.status == 403
+
+        async with Client(server.url, server.assistant, MemoryTokens(server.ann)) as ann:
+            setups = await ann.extension_setups()
+            documents = next(s for s in setups if s.name == "documents")
+            assert documents.configured and documents.enabled
+            schema = json.loads(documents.schema_json)
+            assert list(schema["properties"]) == ["maxMegabytes", "maxPerRoom"]
+            assert not next(s for s in setups if s.name == "mail").configured
+
+            def saved(settings: dict) -> list[nudge.SavedExtensionSetup]:
+                return [
+                    nudge.SavedExtensionSetup(
+                        _from=s._from,
+                        enabled=s.enabled,
+                        settings_json=json.dumps(settings) if s is documents else s.settings_json,
+                        rooms=s.rooms,
+                    )
+                    for s in setups
+                    if s.configured
+                ]
+
+            after = await ann.save_extension_setups(saved({"maxMegabytes": 5}))
+            documents_after = next(s for s in after if s.name == "documents")
+            assert json.loads(documents_after.settings_json) == {"maxMegabytes": 5}
+            with pytest.raises(NudgeError.Status) as refused:
+                await ann.save_extension_setups(saved({"maxMegabytes": "lots"}))
+            assert refused.value.status == 400
+
+    run(test())
