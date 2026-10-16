@@ -167,6 +167,39 @@ def test_approvals_and_nudges(server) -> None:
     run(test())
 
 
+def test_private_messages_and_values(server) -> None:
+    async def test() -> None:
+        async with (
+            Client(server.url, server.assistant, MemoryTokens(server.ann)) as ann,
+            Client(server.url, server.assistant, MemoryTokens(server.bo)) as bo,
+        ):
+            async with bo.room("trip") as room:
+                await room.wait_for(lambda s: s.status == SyncStatus.LIVE, TIMEOUT)
+                await ann.send("trip", "My door code is 4455", private=True)
+                state = await room.wait_for(lambda s: len(answers(s)) == 1, TIMEOUT)
+                first = state.timeline[0]
+                assert first.is_user() and first.text == ""
+                assert first.private_to is not None and first.private_to.id == "ann"
+
+                placeholder = await ann.protect("Storgata 5", private=True)
+                assert [v.value for v in await ann.private_values()] == ["Storgata 5"]
+                assert await bo.private_values() == []
+                await ann.send("trip", "Meet at Storgata 5")
+                await room.wait_for(
+                    lambda s: any(
+                        i.is_user() and i.text == f"Meet at {placeholder}" for i in s.timeline
+                    ),
+                    TIMEOUT,
+                )
+                with pytest.raises(NudgeError.Status) as refused:
+                    await bo.forget_value(placeholder)
+                assert refused.value.status == 403
+                await ann.forget_value(placeholder)
+                assert await ann.private_values() == []
+
+    run(test())
+
+
 def test_own_memory_and_room_extensions(server) -> None:
     async def test() -> None:
         async with Client(server.url, server.assistant, MemoryTokens(server.bo)) as bo:

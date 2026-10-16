@@ -27,6 +27,7 @@ from nudge._ffi import (
     PendingMessage,
     Player,
     PlayerMemory,
+    PrivateValue,
     QueuedMessage,
     Room,
     RoomExtension,
@@ -338,11 +339,14 @@ class Client:
         """The caller's personal room, made on first use."""
         return await self.ffi.personal_room()
 
-    async def send(self, room: str, text: str, *, when_busy: WhenBusy | None = None) -> Sent:
+    async def send(
+        self, room: str, text: str, *, when_busy: WhenBusy | None = None, private: bool = False
+    ) -> Sent:
         """Sends a message, pending in the room's state until the timeline has it. `Sent.QUEUED`
         means it is in the outbox, to go out when the server can be reached; refused messages
-        raise `NudgeError` and stay pending with the error until `resend` or `dismiss`."""
-        return await self.ffi.send(room, text, when_busy)
+        raise `NudgeError` and stay pending with the error until `resend` or `dismiss`. With
+        `private`, only this player sees it and the answer to it."""
+        return await self.ffi.send(room, text, when_busy, private)
 
     async def resend(self, room: str, request_id: str) -> Sent:
         return await self.ffi.resend(room, request_id)
@@ -391,9 +395,19 @@ class Client:
     async def cancel_nudge(self, nudge_id: str) -> None:
         await self.ffi.cancel_nudge(nudge_id)
 
-    async def protect(self, value: str, kind: str | None = None) -> str:
-        """A placeholder that stands for `value` in what the model sees."""
-        return await self.ffi.protect(value, kind)
+    async def protect(self, value: str, kind: str | None = None, *, private: bool = False) -> str:
+        """A placeholder that stands for `value` in what the model sees. With `private`,
+        everyone but this player sees the placeholder too, wherever the value shows."""
+        return await self.ffi.protect(value, kind, private)
+
+    async def private_values(self) -> list[PrivateValue]:
+        """The values only this player sees."""
+        return await self.ffi.private_values()
+
+    async def forget_value(self, placeholder: str) -> None:
+        """Drops a value for good: from now on everyone, the model included, sees only
+        `placeholder`."""
+        await self.ffi.forget_value(placeholder)
 
     # Admin commands, for players with the admin flag.
 
