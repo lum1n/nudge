@@ -29,8 +29,14 @@ xcodebuild -version >/dev/null 2>&1 ||
 command -v xcodegen >/dev/null || fail "No XcodeGen: brew install xcodegen"
 
 if [[ "$rust" == yes ]]; then
-  command -v cargo >/dev/null || fail "No Rust: install it from https://rustup.rs"
   command -v rustup >/dev/null || fail "No rustup: the Apple targets come from rustup (https://rustup.rs)"
+  # The targets below go into rustup's toolchain; a cargo or rustc from elsewhere on the PATH,
+  # such as Homebrew's, would build without them. So rustup's own go first.
+  toolchain="$(dirname "$(rustup which rustc)")"
+  if [[ "$(command -v rustc || true)" != "$toolchain/rustc" ]]; then
+    echo "Using rustup's Rust ($toolchain) rather than $(command -v rustc || echo none)"
+  fi
+  export PATH="$toolchain:$PATH"
   targets=(aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios aarch64-apple-darwin x86_64-apple-darwin)
   installed="$(rustup target list --installed)"
   missing=()
