@@ -2,7 +2,8 @@ import Nudge
 import SwiftUI
 import UserNotifications
 
-/// The account, the player's own memory, this month's spend, notifications, and signing out.
+/// The account, the assistant's extensions (for admins), the player's own memory, this month's
+/// spend, notifications, and signing out.
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -22,6 +23,17 @@ struct SettingsView: View {
                     LabeledContent("Signed in as", value: model.me?.player.displayName ?? "…")
                     LabeledContent("Assistant", value: account.assistantName)
                     LabeledContent("Server", value: account.server)
+                }
+                if model.me?.admin == true {
+                    Section {
+                        NavigationLink { ExtensionsView(client: client) } label: {
+                            Label("Extensions", systemImage: "puzzlepiece.extension")
+                        }
+                    } header: {
+                        Text("Assistant")
+                    } footer: {
+                        Text("Turn them on or off and change their settings, for every room.")
+                    }
                 }
                 Section {
                     if let memory {

@@ -665,6 +665,60 @@ pub struct SetRoomExtensionRequest {
     pub enabled: Option<bool>,
 }
 
+/// One of the assistant's extensions as an admin sets it up, or one found beside the config that
+/// nobody added yet.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtensionSetup {
+    /// As the config writes it; sent back to say which one.
+    pub from: String,
+    /// Absent when the module could not be loaded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// In the config; false for one found in `extensions/` that nobody added yet.
+    pub configured: bool,
+    /// Installed: configured and not turned off.
+    pub enabled: bool,
+    /// The kinds of room it is on in by default; absent for every kind.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rooms: Option<Vec<RoomKind>>,
+    pub settings: serde_json::Map<String, Value>,
+    /// Its settings as JSON Schema; absent when it takes none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schema: Option<Value>,
+    /// `${NAME}` references in its settings that the server's environment doesn't set.
+    pub missing_env: Vec<String>,
+    /// Why the module could not be loaded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ExtensionSetupsResponse {
+    pub extensions: Vec<ExtensionSetup>,
+}
+
+/// One extension of a `SaveExtensionSetupsRequest`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SavedExtensionSetup {
+    pub from: String,
+    pub enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settings: Option<serde_json::Map<String, Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rooms: Option<Vec<RoomKind>>,
+}
+
+/// The assistant's extensions, in the order they are installed; ones left out are removed.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SaveExtensionSetupsRequest {
+    pub extensions: Vec<SavedExtensionSetup>,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ProtectRequest {
     pub value: String,

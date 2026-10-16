@@ -248,6 +248,113 @@ class ClientTest {
     }
 
     @Test
+    fun documentsPanel() = runBlocking {
+        val bo = client(MemoryTokens(this@ClientTest.bo))
+        val documents = bo.observeDocuments("trip")
+        suspend fun until(predicate: (DocumentsState) -> Boolean) =
+            withTimeout(15_000) { documents.state.first(predicate) }
+        until { it.documents == emptyList<DocumentInfo>() }
+        val receipt = "Receipt: one bicycle, 4000 kr".toByteArray()
+        val id = documents.upload("receipt.txt", "text/plain", receipt)
+        val shown = until { it.documents?.size == 1 }.documents!!.single()
+        assertEquals(id, shown.id)
+        assertEquals("receipt.txt", shown.name)
+        assertEquals("Bo", shown.addedBy)
+        assertEquals(receipt.size.toLong(), shown.size)
+        val file = documents.download(shown)
+        assertEquals("receipt.txt", file.name)
+        assertEquals(String(receipt), String(file.bytes))
+        try {
+            documents.upload("again.txt", "text/plain", receipt)
+            error("not refused")
+        } catch (refused: PanelRefusal) {
+            assertTrue(refused.message!!.contains("here already"))
+        }
+        documents.remove(shown)
+        until { it.documents?.isEmpty() == true }
+        documents.close()
+    }
+
+    @Test
+    fun connectorsPanel() = runBlocking {
+        val bo = client(MemoryTokens(this@ClientTest.bo))
+        val room = bo.observeRoomState("trip")
+        room.awaitState { it.status == SyncStatus.LIVE }
+        // The model asks to add "Weather"; it needs an approval.
+        bo.send("trip", "Please add a connector for the weather", null)
+        val approval = room.awaitState { state -> state.approvals.any { it.status == ApprovalStatus.PENDING } }.approvals[0]
+        bo.decide("trip", approval.id, true)
+        room.close()
+
+        val connectors = bo.observeConnectors("trip")
+        suspend fun until(predicate: (ConnectorsState) -> Boolean) =
+            withTimeout(15_000) { connectors.state.first(predicate) }
+        val weather = until { it.connectors?.size == 1 }.connectors!!.single()
+        assertEquals("Weather", weather.name)
+        assertEquals("header", weather.auth?.placement)
+        assertFalse(weather.hasKey)
+        assertFalse(until { it.connectors != null }.admin)
+        connectors.setKey(weather, "secret-key")
+        until { it.connectors?.single()?.hasKey == true }
+        connectors.allowPrivateNetwork(weather, true)
+        until { it.connectors?.single()?.allowPrivateNetwork == true }
+        connectors.setReadPaths(weather, listOf("POST /graphql"))
+        until { it.connectors?.single()?.readPaths == listOf("POST /graphql") }
+        connectors.setReadPaths(weather, listOf("GET /x"))
+        until { it.error != null }
+        connectors.clearKey(weather)
+        until { it.connectors?.single()?.hasKey == false && it.error == null }
+        connectors.remove(weather)
+        until { it.connectors?.isEmpty() == true }
+        connectors.close()
+    }
+
+    @Test
+    fun extensionSettings() = runBlocking {
+        val member = client(MemoryTokens(bo))
+        try {
+            member.extensionSetups()
+            error("not refused")
+        } catch (e: NudgeException.Status) {
+            assertEquals(403.toUShort(), e.status)
+        }
+        val admin = client(MemoryTokens(ann))
+        val setups = admin.extensionSetups()
+        val documents = setups.first { it.name == "documents" }
+        val fields = settingFields(documents.schemaJson)
+        assertEquals(listOf("maxMegabytes", "maxPerRoom"), fields.map { it.name })
+        assertEquals("Max megabytes", fields[0].label)
+        assertEquals(SettingKind.Number(integer = false, minimum = 1.0, maximum = 100.0), fields[0].kind)
+
+        // Mail, not added yet: a list of accounts, each with nested servers and a password.
+        val mail = setups.first { it.name == "mail" }
+        assertFalse(mail.configured)
+        val accounts = settingFields(mail.schemaJson).single().kind as SettingKind.Items
+        assertEquals(listOf("id", "from", "imap", "smtp", "rooms"), accounts.fields.map { it.name })
+        val imap = accounts.fields.first { it.name == "imap" }
+        assertEquals("IMAP", imap.label)
+        val server = (imap.kind as SettingKind.Group).fields
+        assertEquals(listOf("host", "port", "secure", "user", "password"), server.map { it.name })
+        assertEquals(SettingKind.Text(secret = true), server.first { it.name == "password" }.kind)
+        assertEquals(SettingKind.Toggle, server.first { it.name == "secure" }.kind)
+        assertTrue(server.first { it.name == "user" }.required)
+        assertEquals(SettingKind.Lines, accounts.fields.first { it.name == "rooms" }.kind)
+
+        val browser = setups.first { it.name == "browser" }
+        val reasoning = settingFields(browser.schemaJson).first { it.name == "reasoning" }
+        assertEquals(4, (reasoning.kind as SettingKind.Choice).options.size)
+
+        val smaller = kotlinx.serialization.json.buildJsonObject { put("maxMegabytes", kotlinx.serialization.json.JsonPrimitive(5)) }
+        val saved = admin.saveExtensionSetups(
+            setups.filter { it.configured }.map { setup ->
+                setup.saved(setup.enabled, if (setup == documents) smaller else setup.settings, setup.rooms)
+            },
+        )
+        assertEquals(smaller, saved.first { it.name == "documents" }.settings)
+        assertTrue(saved.first { it.name == "lists" }.enabled)
+    }
+
+    @Test
     fun pairingLinks() {
         assertEquals(
             PairingLink("https://nudge.example/x", "robin", "7K3Q-M9XD"),

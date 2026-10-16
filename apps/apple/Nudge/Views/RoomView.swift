@@ -12,7 +12,7 @@ struct RoomView: View {
     @State private var problem: String?
 
     enum Sheet: String, Identifiable {
-        case lists, info
+        case lists, info, browser
         var id: String { rawValue }
     }
 
@@ -32,8 +32,10 @@ struct RoomView: View {
                 switch sheet {
                 case .lists: ListsView(client: client, roomId: roomId)
                 case .info: RoomInfoView(client: client, roomId: roomId, observed: observed)
+                case .browser: PanelSheet { BrowserView(client: client, roomId: roomId) }
                 }
             }
+            .environment(\.openBrowser, { showing = .browser })
             .alert("Something went wrong", isPresented: Binding(get: { problem != nil }, set: { if !$0 { problem = nil } })) {
                 Button("OK") { problem = nil }
             } message: {
@@ -293,5 +295,22 @@ struct PendingRow: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+}
+
+/// A panel of the room's on its own, as a sheet with Done.
+struct PanelSheet<Content: View>: View {
+    @Environment(\.dismiss) private var dismiss
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        NavigationStack {
+            content.toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
+        }
+        #if os(macOS)
+        .frame(minWidth: 520, minHeight: 600)
+        #endif
     }
 }

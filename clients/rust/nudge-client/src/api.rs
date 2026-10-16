@@ -366,6 +366,28 @@ impl Api {
         .await
     }
 
+    /// The assistant's extensions and the ones it could add, with their settings and schemas;
+    /// 404 when the server can't set up extensions.
+    pub async fn extension_setups(&self) -> Result<Vec<ExtensionSetup>, ApiError> {
+        let response: ExtensionSetupsResponse = self
+            .request(Method::GET, &["admin", "extensions"], &[], NO_BODY)
+            .await?;
+        Ok(response.extensions)
+    }
+
+    /// Installs `extensions`, in order, in place of the assistant's, and keeps them in its
+    /// config; 400, and nothing changed, when one won't start.
+    pub async fn save_extension_setups(
+        &self,
+        extensions: Vec<SavedExtensionSetup>,
+    ) -> Result<Vec<ExtensionSetup>, ApiError> {
+        let body = SaveExtensionSetupsRequest { extensions };
+        let response: ExtensionSetupsResponse = self
+            .request(Method::PUT, &["admin", "extensions"], &[], Some(&body))
+            .await?;
+        Ok(response.extensions)
+    }
+
     async fn request<T: DeserializeOwned>(
         &self,
         method: Method,

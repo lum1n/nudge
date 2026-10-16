@@ -206,6 +206,43 @@ pub struct RoomExtension {
     pub by_default: bool,
 }
 
+/// One of the assistant's extensions as an admin sets it up, or one found beside the config that
+/// nobody added yet. Its settings and their JSON Schema cross as JSON strings.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct ExtensionSetup {
+    /// As the config writes it; sent back to say which one.
+    pub from: String,
+    /// Absent when the module could not be loaded.
+    pub name: Option<String>,
+    pub version: Option<String>,
+    pub description: Option<String>,
+    /// In the config; false for one that nobody added yet.
+    pub configured: bool,
+    /// Installed: configured and not turned off.
+    pub enabled: bool,
+    /// The kinds of room it is on in by default; absent for every kind.
+    pub rooms: Option<Vec<RoomKind>>,
+    /// Its settings, a JSON object.
+    pub settings_json: String,
+    /// Its settings' JSON Schema; absent when it takes none.
+    pub schema_json: Option<String>,
+    /// `${NAME}` references in its settings that the server's environment doesn't set.
+    pub missing_env: Vec<String>,
+    /// Why the module could not be loaded.
+    pub error: Option<String>,
+}
+
+/// An extension as `save_extension_setups` installs it.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct SavedExtensionSetup {
+    pub from: String,
+    pub enabled: bool,
+    /// A JSON object; absent for no settings.
+    pub settings_json: Option<String>,
+    /// Absent for every kind of room.
+    pub rooms: Option<Vec<RoomKind>>,
+}
+
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
 pub struct RoomNudge {
     pub id: String,
@@ -343,15 +380,51 @@ impl From<p::Player> for Player {
     }
 }
 
+impl From<p::RoomKind> for RoomKind {
+    fn from(kind: p::RoomKind) -> Self {
+        match kind {
+            p::RoomKind::Lobby => RoomKind::Lobby,
+            p::RoomKind::Personal => RoomKind::Personal,
+            p::RoomKind::Shared => RoomKind::Shared,
+        }
+    }
+}
+
+impl From<RoomKind> for p::RoomKind {
+    fn from(kind: RoomKind) -> Self {
+        match kind {
+            RoomKind::Lobby => p::RoomKind::Lobby,
+            RoomKind::Personal => p::RoomKind::Personal,
+            RoomKind::Shared => p::RoomKind::Shared,
+        }
+    }
+}
+
+impl From<p::ExtensionSetup> for ExtensionSetup {
+    fn from(setup: p::ExtensionSetup) -> Self {
+        ExtensionSetup {
+            from: setup.from,
+            name: setup.name,
+            version: setup.version,
+            description: setup.description,
+            configured: setup.configured,
+            enabled: setup.enabled,
+            rooms: setup
+                .rooms
+                .map(|rooms| rooms.into_iter().map(Into::into).collect()),
+            settings_json: serde_json::Value::Object(setup.settings).to_string(),
+            schema_json: setup.schema.as_ref().map(ToString::to_string),
+            missing_env: setup.missing_env,
+            error: setup.error,
+        }
+    }
+}
+
 impl From<p::Room> for Room {
     fn from(room: p::Room) -> Self {
         Room {
             id: room.id,
-            kind: match room.kind {
-                p::RoomKind::Lobby => RoomKind::Lobby,
-                p::RoomKind::Personal => RoomKind::Personal,
-                p::RoomKind::Shared => RoomKind::Shared,
-            },
+            kind: room.kind.into(),
             name: room.name,
             members: room.members.into_iter().map(Into::into).collect(),
         }

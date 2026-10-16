@@ -3731,6 +3731,182 @@
         }
       }
     },
+    "ExtensionSetup": {
+      "type": "object",
+      "required": ["from", "configured", "enabled", "settings", "missingEnv"],
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "configured": {
+          "type": "boolean"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "rooms": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "lobby"
+              },
+              {
+                "type": "string",
+                "const": "personal"
+              },
+              {
+                "type": "string",
+                "const": "shared"
+              }
+            ]
+          },
+          "uniqueItems": true
+        },
+        "settings": {
+          "type": "object",
+          "patternProperties": {
+            "^.*$": {}
+          }
+        },
+        "schema": {},
+        "missingEnv": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "error": {
+          "type": "string"
+        }
+      }
+    },
+    "ExtensionSetupsResponse": {
+      "type": "object",
+      "required": ["extensions"],
+      "properties": {
+        "extensions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["from", "configured", "enabled", "settings", "missingEnv"],
+            "properties": {
+              "from": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "configured": {
+                "type": "boolean"
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "rooms": {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "const": "lobby"
+                    },
+                    {
+                      "type": "string",
+                      "const": "personal"
+                    },
+                    {
+                      "type": "string",
+                      "const": "shared"
+                    }
+                  ]
+                },
+                "uniqueItems": true
+              },
+              "settings": {
+                "type": "object",
+                "patternProperties": {
+                  "^.*$": {}
+                }
+              },
+              "schema": {},
+              "missingEnv": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "error": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "SaveExtensionSetupsRequest": {
+      "type": "object",
+      "required": ["extensions"],
+      "properties": {
+        "extensions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["from", "enabled"],
+            "properties": {
+              "from": {
+                "type": "string"
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "settings": {
+                "type": "object",
+                "patternProperties": {
+                  "^.*$": {}
+                }
+              },
+              "rooms": {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "const": "lobby"
+                    },
+                    {
+                      "type": "string",
+                      "const": "personal"
+                    },
+                    {
+                      "type": "string",
+                      "const": "shared"
+                    }
+                  ]
+                },
+                "uniqueItems": true
+              }
+            }
+          }
+        }
+      }
+    },
     "ProtectRequest": {
       "type": "object",
       "required": ["value"],

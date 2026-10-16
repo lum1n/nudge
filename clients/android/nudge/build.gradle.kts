@@ -113,7 +113,7 @@ tasks.named("preBuild") {
 dependencies {
     implementation("${libs.jna.get()}@aar")
     api(libs.coroutines.core)
-    implementation(libs.serialization.json)
+    api(libs.serialization.json)
     testImplementation(libs.jna)
     testImplementation(libs.junit)
 }

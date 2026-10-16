@@ -36,7 +36,10 @@ fun NudgeApp(model: AppModel, askForNotifications: () -> Unit) {
     }
 }
 
-/** What the detail and extra panes show: a room, and in the extra pane its lists or its details. */
+/**
+ * What the detail and extra panes show: a room, and in the extra pane its lists, its details, its
+ * documents, its connectors or its browser.
+ */
 private data class Destination(val room: String, val extra: Extra? = null) {
     // Kept as a string: the navigator saves its history.
     fun key(): String = if (extra == null) room else "$room\u0000${extra.name}"
@@ -50,7 +53,7 @@ private data class Destination(val room: String, val extra: Extra? = null) {
     }
 }
 
-private enum class Extra { LISTS, INFO }
+private enum class Extra { LISTS, INFO, DOCUMENTS, CONNECTORS, BROWSER }
 
 /**
  * The rooms beside the open room, the Android way: one pane on a phone, list and detail side by
@@ -133,6 +136,7 @@ private fun SignedIn(model: AppModel, session: Session) {
                         back = if (listVisible) null else ({ scope.launch { navigator.navigateBack() } }),
                         lists = { open(Destination(room, Extra.LISTS)) },
                         info = { open(Destination(room, Extra.INFO)) },
+                        browser = { open(Destination(room, Extra.BROWSER)) },
                     )
                 }
             }
@@ -144,7 +148,15 @@ private fun SignedIn(model: AppModel, session: Session) {
                     val close = { scope.launch { navigator.navigateBack() }; Unit }
                     when (extra) {
                         Extra.LISTS -> ListsScreen(session.client, shown.room, close)
-                        Extra.INFO -> RoomInfoScreen(session.client, shown.room, close)
+                        Extra.INFO -> RoomInfoScreen(
+                            session.client, shown.room, close,
+                            documents = { open(Destination(shown.room, Extra.DOCUMENTS)) },
+                            connectors = { open(Destination(shown.room, Extra.CONNECTORS)) },
+                            browser = { open(Destination(shown.room, Extra.BROWSER)) },
+                        )
+                        Extra.DOCUMENTS -> DocumentsScreen(session.client, shown.room, close)
+                        Extra.CONNECTORS -> ConnectorsScreen(session.client, shown.room, close)
+                        Extra.BROWSER -> BrowserScreen(session.client, shown.room, close)
                     }
                 }
             }

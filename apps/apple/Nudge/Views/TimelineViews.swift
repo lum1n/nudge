@@ -89,6 +89,9 @@ struct AnswerView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 14))
+                case .tool(let tool) where tool.needsLogin:
+                    // The browser stopped for a login only a person can type.
+                    LoginButton()
                 case .tool(let tool):
                     ToolView(tool: tool)
                 }
@@ -113,6 +116,21 @@ struct AnswerView: View {
         let options = AttributedString.MarkdownParsingOptions(
             interpretedSyntax: .inlineOnlyPreservingWhitespace, failurePolicy: .returnPartiallyParsedIfPossible)
         return (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
+    }
+}
+
+extension EnvironmentValues {
+    /// Opens the room's browser, to log in where it asks.
+    @Entry var openBrowser: (() -> Void)?
+}
+
+struct LoginButton: View {
+    @Environment(\.openBrowser) private var openBrowser
+
+    var body: some View {
+        Button("Open the room's browser to log in", systemImage: "globe") { openBrowser?() }
+            .buttonStyle(.glassProminent)
+            .disabled(openBrowser == nil)
     }
 }
 

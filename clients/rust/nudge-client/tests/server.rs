@@ -604,3 +604,60 @@ async fn keeps_a_private_message_and_a_private_value_from_the_others() {
     ann.api().forget_value(&placeholder).await.unwrap();
     assert!(ann.api().private_values().await.unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn sets_up_extensions_for_admins() {
+    let Some(server) = faux_server().await else {
+        return;
+    };
+    let bo = Api::new(&server.url, "robin", tokens(Some(&server.bo))).unwrap();
+    assert_eq!(bo.extension_setups().await.unwrap_err().status(), Some(403));
+
+    let api = Api::new(&server.url, "robin", tokens(Some(&server.ann))).unwrap();
+    let setups = api.extension_setups().await.unwrap();
+    let documents = setups
+        .iter()
+        .find(|s| s.name.as_deref() == Some("documents"))
+        .expect("documents");
+    assert!(documents.configured && documents.enabled);
+    assert_eq!(
+        documents.schema.as_ref().unwrap()["properties"]["maxMegabytes"]["default"],
+        20
+    );
+    let mail = setups
+        .iter()
+        .find(|s| s.name.as_deref() == Some("mail"))
+        .expect("mail");
+    assert!(!mail.configured);
+
+    let saved = |settings: Value| -> Vec<SavedExtensionSetup> {
+        setups
+            .iter()
+            .filter(|s| s.configured)
+            .map(|s| SavedExtensionSetup {
+                from: s.from.clone(),
+                enabled: s.enabled,
+                settings: Some(if s.name.as_deref() == Some("documents") {
+                    settings.as_object().unwrap().clone()
+                } else {
+                    s.settings.clone()
+                }),
+                rooms: s.rooms.clone(),
+            })
+            .collect()
+    };
+    let after = api
+        .save_extension_setups(saved(serde_json::json!({ "maxMegabytes": 5 })))
+        .await
+        .unwrap();
+    let documents = after
+        .iter()
+        .find(|s| s.name.as_deref() == Some("documents"))
+        .unwrap();
+    assert_eq!(documents.settings["maxMegabytes"], 5);
+    let refused = api
+        .save_extension_setups(saved(serde_json::json!({ "maxMegabytes": "lots" })))
+        .await
+        .unwrap_err();
+    assert_eq!(refused.status(), Some(400));
+}

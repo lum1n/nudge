@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.PanTool
 import androidx.compose.material3.Button
@@ -47,6 +48,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import java.text.DateFormat
 import java.util.Date
+import nudge.client.needsLogin
 import nudge.ffi.AnswerStatus
 import nudge.ffi.ApprovalStatus
 import nudge.ffi.MarkerKind
@@ -66,10 +68,10 @@ val TimelineItem.itemId: String
         is TimelineItem.Marker -> id
     }
 
-/** One item of a room's timeline. */
+/** One item of a room's timeline; `openBrowser` opens the room's browser, to log in where it asks. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun TimelineRow(item: TimelineItem, me: String?, decide: (String, Boolean) -> Unit) {
+fun TimelineRow(item: TimelineItem, me: String?, decide: (String, Boolean) -> Unit, openBrowser: () -> Unit) {
     when (item) {
         is TimelineItem.User -> {
             val mine = item.author == null || item.author?.id == me
@@ -93,7 +95,7 @@ fun TimelineRow(item: TimelineItem, me: String?, decide: (String, Boolean) -> Un
         is TimelineItem.Approval -> ApprovalCard(item.summary, item.status, item.decidedBy) { approve ->
             decide(item.approvalId, approve)
         }
-        is TimelineItem.Answer -> Answer(item)
+        is TimelineItem.Answer -> Answer(item, openBrowser)
         is TimelineItem.Marker -> Row(verticalAlignment = Alignment.CenterVertically) {
             HorizontalDivider(Modifier.weight(1f))
             Text(
@@ -153,7 +155,7 @@ fun PendingRow(message: PendingMessage, retry: () -> Unit, dismiss: () -> Unit) 
 /** The assistant's answer: its text, what it thought, and the tools it used, as they stream. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun Answer(answer: TimelineItem.Answer) {
+private fun Answer(answer: TimelineItem.Answer, openBrowser: () -> Unit) {
     Column(Modifier.fillMaxWidth().animateContentSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         answer.parts.forEach { part ->
             when (part) {
@@ -161,7 +163,16 @@ private fun Answer(answer: TimelineItem.Answer) {
                 is Part.Reasoning -> Expandable("Thinking") {
                     Text(part.text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                is Part.Tool -> Tool(part.tool)
+                // The browser stopped for a login only a person can type.
+                is Part.Tool -> if (part.tool.needsLogin) {
+                    Button(onClick = openBrowser, shapes = ButtonDefaults.shapes()) {
+                        Icon(Icons.Outlined.Language, null, Modifier.size(ButtonDefaults.IconSize))
+                        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                        Text("Open the room's browser to log in")
+                    }
+                } else {
+                    Tool(part.tool)
+                }
             }
         }
         when (answer.status) {

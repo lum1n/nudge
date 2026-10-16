@@ -1,5 +1,6 @@
 package app.nudge.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -12,10 +13,12 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Dns
+import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.Share
@@ -44,6 +47,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -62,7 +66,10 @@ import kotlinx.coroutines.launch
 import nudge.ffi.PlayerMemory
 import nudge.ffi.Usage
 
-/** The account, the player's own memory, this month's spend, notifications, and signing out. */
+/**
+ * The account, the assistant's extensions (for admins), the player's own memory, this month's
+ * spend, notifications, and signing out.
+ */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
@@ -77,6 +84,7 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
     var confirmSignOut by remember { mutableStateOf(false) }
     val notificationsOn = NotificationManagerCompat.from(LocalContext.current).areNotificationsEnabled()
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    var extensions by rememberSaveable { mutableStateOf(false) }
 
     fun change(action: suspend () -> Unit) = scope.launch {
         try {
@@ -95,6 +103,12 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
         } catch (error: Exception) {
             problem = explain(error)
         }
+    }
+
+    if (extensions) {
+        BackHandler { extensions = false }
+        ExtensionsScreen(client, close = { extensions = false })
+        return
     }
 
     Scaffold(
@@ -144,6 +158,23 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                     },
                 ),
             )
+
+            if (me?.admin == true) {
+                group(
+                    "Assistant",
+                    listOf(
+                        { shapes ->
+                            SegmentedListItem(
+                                onClick = { extensions = true },
+                                shapes = shapes,
+                                leadingContent = { Icon(Icons.Outlined.Extension, null) },
+                                supportingContent = { Text("Turn them on or off and change their settings, for every room") },
+                                trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) },
+                            ) { Text("Extensions") }
+                        },
+                    ),
+                )
+            }
 
             val mine = memory
             group(

@@ -91,6 +91,104 @@ final class ClientTests: XCTestCase {
         XCTAssertEqual(closed.status, .closed(code: 4404, reason: #"No room "nowhere" with extension "lists""#))
     }
 
+    func testDocumentsPanel() async throws {
+        let bo = try client(MemoryTokens(server.bo))
+        let documents = try bo.observeDocuments("trip")
+        _ = try await within { try await documents.first { $0.documents == [] } }
+        let receipt = Data("Receipt: one bicycle, 4000 kr".utf8)
+        let id = try await documents.upload(name: "receipt.txt", mime: "text/plain", data: receipt)
+        let shown = try await within { try await documents.first { $0.documents?.count == 1 } }
+        let document = try XCTUnwrap(shown.documents?.first)
+        XCTAssertEqual(document.id, id)
+        XCTAssertEqual(document.name, "receipt.txt")
+        XCTAssertEqual(document.addedBy, "Bo")
+        XCTAssertEqual(document.size, receipt.count)
+        let file = try await documents.download(document)
+        XCTAssertEqual(file.data, receipt)
+        do {
+            try await documents.upload(name: "again.txt", mime: "text/plain", data: receipt)
+            XCTFail("not refused")
+        } catch let refusal as PanelRefusal {
+            XCTAssertTrue(refusal.message.contains("here already"))
+        }
+        documents.remove(document)
+        _ = try await within { try await documents.first { $0.documents?.isEmpty == true } }
+        documents.close()
+    }
+
+    func testConnectorsPanel() async throws {
+        let bo = try client(MemoryTokens(server.bo))
+        let room = bo.observeRoomState("trip")
+        _ = try await within { try await room.first { $0.status == .live } }
+        // The model asks to add "Weather"; it needs an approval.
+        _ = try await bo.send(room: "trip", text: "Please add a connector for the weather", whenBusy: nil)
+        let waiting = try await within { try await room.first { $0.approvals.contains { $0.status == .pending } } }
+        _ = try await bo.decide(room: "trip", approvalId: waiting.approvals[0].id, approve: true)
+        room.close()
+
+        let connectors = try bo.observeConnectors("trip")
+        let shown = try await within { try await connectors.first { $0.connectors?.count == 1 } }
+        let weather = try XCTUnwrap(shown.connectors?.first)
+        XCTAssertEqual(weather.name, "Weather")
+        XCTAssertEqual(weather.auth?.placement, "header")
+        XCTAssertFalse(weather.hasKey)
+        XCTAssertFalse(shown.admin)
+        connectors.setKey("secret-key", for: weather)
+        _ = try await within { try await connectors.first { $0.connectors?.first?.hasKey == true } }
+        connectors.allowPrivateNetwork(true, for: weather)
+        _ = try await within { try await connectors.first { $0.connectors?.first?.allowPrivateNetwork == true } }
+        connectors.setReadPaths(["POST /graphql"], for: weather)
+        _ = try await within { try await connectors.first { $0.connectors?.first?.readPaths == ["POST /graphql"] } }
+        connectors.setReadPaths(["GET /x"], for: weather)
+        _ = try await within { try await connectors.first { $0.error != nil } }
+        connectors.clearKey(of: weather)
+        _ = try await within { try await connectors.first { $0.connectors?.first?.hasKey == false && $0.error == nil } }
+        connectors.remove(weather)
+        _ = try await within { try await connectors.first { $0.connectors?.isEmpty == true } }
+        connectors.close()
+    }
+
+    func testExtensionSettings() async throws {
+        let member = try client(MemoryTokens(server.bo))
+        do {
+            _ = try await member.extensionSetups()
+            XCTFail("not refused")
+        } catch NudgeError.Status(let status, _) {
+            XCTAssertEqual(status, 403)
+        }
+        let admin = try client(MemoryTokens(server.ann))
+        let setups = try await admin.extensionSetups()
+        let documents = try XCTUnwrap(setups.first { $0.name == "documents" })
+        XCTAssertEqual(documents.settingFields.map(\.name), ["maxMegabytes", "maxPerRoom"])
+        XCTAssertEqual(documents.settingFields[0].label, "Max megabytes")
+        XCTAssertEqual(documents.settingFields[0].kind, .number(integer: false, minimum: 1, maximum: 100))
+
+        // Mail, not added yet: a list of accounts, each with nested servers and a password.
+        let mail = try XCTUnwrap(setups.first { $0.name == "mail" })
+        XCTAssertFalse(mail.configured)
+        guard case .items(let account) = mail.settingFields.first?.kind else { return XCTFail() }
+        XCTAssertEqual(account.map(\.name), ["id", "from", "imap", "smtp", "rooms"])
+        let imap = try XCTUnwrap(account.first { $0.name == "imap" })
+        XCTAssertEqual(imap.label, "IMAP")
+        guard case .group(let server) = imap.kind else { return XCTFail() }
+        XCTAssertEqual(server.map(\.name), ["host", "port", "secure", "user", "password"])
+        XCTAssertEqual(server.first { $0.name == "password" }?.kind, .text(secret: true))
+        XCTAssertEqual(server.first { $0.name == "secure" }?.kind, .toggle)
+        XCTAssertEqual(server.first { $0.name == "user" }?.required, true)
+        XCTAssertEqual(account.first { $0.name == "rooms" }?.kind, .lines)
+        let browser = try XCTUnwrap(setups.first { $0.name == "browser" })
+        guard case .choice(let levels) = browser.settingFields.first(where: { $0.name == "reasoning" })?.kind
+        else { return XCTFail() }
+        XCTAssertEqual(levels, [.string("minimal"), .string("low"), .string("medium"), .string("high")])
+
+        let smaller: [String: JSONValue] = ["maxMegabytes": .number(5)]
+        let saved = try await admin.saveExtensionSetups(
+            extensions: setups.filter(\.configured).map { setup in
+                setup.saved(enabled: setup.enabled, settings: setup == documents ? smaller : setup.settings, rooms: setup.rooms)
+            })
+        XCTAssertEqual(saved.first { $0.name == "documents" }?.settings, smaller)
+    }
+
     func testPairingLinks() {
         let link = PairingLink(URL(string: "nudge://pair?server=https%3A%2F%2Fnudge.example%2Fx&assistant=robin&code=7K3Q-M9XD")!)
         XCTAssertEqual(link, PairingLink(server: "https://nudge.example/x", assistant: "robin", code: "7K3Q-M9XD"))
