@@ -184,7 +184,7 @@ fun SignInScreen(model: AppModel, askForNotifications: () -> Unit) {
                     ),
                     keyboardActions = KeyboardActions(onDone = { signIn() }),
                     supportingText = {
-                        Text("Ask whoever runs the server for one: nudge pair <your name>. It works once, for ten minutes.")
+                        Text("Ask whoever runs the server for one: nudge pair <your name>. It works once, for ten minutes. A token (nudge_…) works here too.")
                     },
                     shape = MaterialTheme.shapes.large,
                     modifier = Modifier.fillMaxWidth(),

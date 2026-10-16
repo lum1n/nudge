@@ -83,10 +83,19 @@ class AppModel(private val context: Context) {
     /** Trades a pairing code for a token, and signs in. */
     suspend fun signIn(server: String, assistant: Assistant, code: String) {
         val account = Account(server, assistant.name, assistant.displayName)
-        val client = NudgeClient(config(account), tokens(account))
+        val tokens = tokens(account)
+        val client = NudgeClient(config(account), tokens)
+        val entered = code.trim()
         try {
-            client.pair(code)
+            if (entered.startsWith("nudge_")) {
+                // A token from `nudge token <player>` signs in as it is; checked before it is kept.
+                tokens.set(entered)
+                client.me()
+            } else {
+                client.pair(entered)
+            }
         } catch (error: Exception) {
+            if (entered.startsWith("nudge_")) tokens.set(null)
             client.close()
             throw error
         }
@@ -196,7 +205,12 @@ class AppModel(private val context: Context) {
 /** What to tell the user. */
 fun explain(error: Throwable): String = when (error) {
     is NudgeException.Status ->
-        if (error.status.toInt() == 401) "That code didn't work. Ask for a new one." else error.detail
+        if (error.status.toInt() == 401) {
+            "That didn't work. A pairing code from nudge pair <your name> works once, for ten minutes; " +
+                "a token from nudge token <your name> until it is revoked."
+        } else {
+            error.detail
+        }
     is NudgeException.Network -> "Can't reach the server: ${error.detail}"
     is NudgeException.Decode -> "The server's answer made no sense: ${error.detail}"
     is NudgeException.Config -> error.detail

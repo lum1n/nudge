@@ -57,7 +57,7 @@ struct SignInView: View {
                 } header: {
                     Text("Pairing code")
                 } footer: {
-                    Text("Ask whoever runs the server for one: `nudge pair <your name>`. It works once, for ten minutes.")
+                    Text("Ask whoever runs the server for one: `nudge pair <your name>`. It works once, for ten minutes. A token (`nudge_…`) works here too.")
                 }
                 if let problem {
                     Section { Text(problem).foregroundStyle(.red) }

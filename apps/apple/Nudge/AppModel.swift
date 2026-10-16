@@ -49,7 +49,19 @@ final class AppModel {
         let account = Account(server: server, assistant: assistant.name, assistantName: assistant.displayName)
         let tokens = KeychainTokens(account: account.keychainAccount)
         let client = try NudgeClient(config: config(for: account), tokens: tokens)
-        _ = try await client.pair(code: code)
+        let entered = code.trimmingCharacters(in: .whitespacesAndNewlines)
+        if entered.hasPrefix("nudge_") {
+            // A token from `nudge token <player>` signs in as it is; checked before it is kept.
+            tokens.set(token: entered)
+            do {
+                _ = try await client.me()
+            } catch {
+                tokens.set(token: nil)
+                throw error
+            }
+        } else {
+            _ = try await client.pair(code: entered)
+        }
         defaults.set(try JSONEncoder().encode(account), forKey: Self.accountKey)
         signedOutBecause = nil
         start(account, client: client)
@@ -169,7 +181,9 @@ extension NudgeError {
     var explanation: String {
         switch self {
         case .Status(let status, let detail):
-            status == 401 ? "That code didn't work. Ask for a new one." : detail
+            status == 401
+                ? "That didn't work. A pairing code from `nudge pair <your name>` works once, for ten minutes; a token from `nudge token <your name>` until it is revoked."
+                : detail
         case .Network(let detail): "Can't reach the server: \(detail)"
         case .Decode(let detail): "The server's answer made no sense: \(detail)"
         case .Config(let detail): detail
