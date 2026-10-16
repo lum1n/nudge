@@ -175,7 +175,10 @@ final class ClientTests: XCTestCase {
         XCTAssertEqual(server.first { $0.name == "password" }?.kind, .text(secret: true))
         XCTAssertEqual(server.first { $0.name == "secure" }?.kind, .toggle)
         XCTAssertEqual(server.first { $0.name == "user" }?.required, true)
-        XCTAssertEqual(account.first { $0.name == "rooms" }?.kind, .lines)
+        // Rooms are offered by name, from every room of the assistant.
+        XCTAssertEqual(account.first { $0.name == "rooms" }?.kind, .rooms)
+        let rooms = try await admin.allRooms()
+        XCTAssertTrue(rooms.contains { $0.id == "trip" && $0.name == "Trip" })
         let browser = try XCTUnwrap(setups.first { $0.name == "browser" })
         guard case .choice(let levels) = browser.settingFields.first(where: { $0.name == "reasoning" })?.kind
         else { return XCTFail() }

@@ -23,6 +23,8 @@ public struct SettingField: Equatable, Sendable, Identifiable {
         case choice([JSONValue])
         /// A list of strings, one per line.
         case lines
+        /// Some of the assistant's rooms, by id, or `*` for every room: offer them by name.
+        case rooms
         /// An object of its own fields.
         case group([SettingField])
         /// A list of objects, such as mail accounts, each with these fields.
@@ -49,6 +51,7 @@ public struct SettingField: Equatable, Sendable, Identifiable {
     }
 
     private static func kind(of schema: Schema, named name: String) -> SettingKind {
+        if schema["x-nudge"]?.value.string == "rooms" { return .rooms }
         if let choices = schema.choices { return .choice(choices) }
         switch schema.type {
         case "boolean": return .toggle

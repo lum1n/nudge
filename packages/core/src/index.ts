@@ -75,6 +75,8 @@ export {
 export { describeRoom, formatHour } from "./extensions/builtin.ts";
 export {
   defineNudgeExtension,
+  ROOMS_SETTING,
+  roomsSetting,
   type ExtensionDocuments,
   type ExtensionHost,
   type ExtensionInput,

@@ -28,6 +28,9 @@ sealed interface SettingKind {
     /** A list of strings, one per line. */
     data object Lines : SettingKind
 
+    /** Some of the assistant's rooms, by id, or `*` for every room: offer them by name. */
+    data object Rooms : SettingKind
+
     /** An object of its own fields. */
     data class Group(val fields: List<SettingField>) : SettingKind
 
@@ -76,6 +79,7 @@ private fun fieldsOf(schema: JsonObject): List<SettingField> {
 }
 
 private fun kindOf(name: String, schema: JsonObject): SettingKind {
+    if (schema.string("x-nudge") == "rooms") return SettingKind.Rooms
     choicesOf(schema)?.let { return SettingKind.Choice(it) }
     return when (typeOf(schema)) {
         "boolean" -> SettingKind.Toggle

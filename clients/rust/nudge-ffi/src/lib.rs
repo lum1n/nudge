@@ -747,6 +747,16 @@ impl NudgeClient {
         })
     }
 
+    /// Every room of the assistant, not only this player's, such as for settings that pick rooms.
+    pub async fn all_rooms(&self) -> Result<Vec<Room>, NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.all_rooms().await })
+            .await?
+            .into_iter()
+            .map(Into::into)
+            .collect())
+    }
+
     pub async fn list_tokens(
         &self,
         player_id: Option<String>,

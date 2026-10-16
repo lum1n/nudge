@@ -15,6 +15,7 @@ import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -33,8 +34,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -49,6 +53,10 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import nudge.client.SettingField
 import nudge.client.SettingKind
+import nudge.ffi.Room
+
+/** The assistant's rooms, for settings that pick some of them; empty until loaded. */
+val LocalRooms = staticCompositionLocalOf<List<Room>> { emptyList() }
 
 /** Controls for `fields`; a field set to null is left out of the object. */
 @Composable
@@ -176,6 +184,26 @@ private fun SettingControl(field: SettingField, value: JsonElement?, onChange: (
             )
             Help(field)
         }
+        // Rooms by name, with every room as one choice; ids it no longer knows stay, by id.
+        SettingKind.Rooms -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            val rooms = LocalRooms.current
+            val chosen = lines(value)
+            val every = "*" in chosen
+            fun set(next: List<String>) = onChange(if (next.isEmpty()) null else JsonArray(next.map(::JsonPrimitive)))
+            Text(label, style = MaterialTheme.typography.titleSmall)
+            Help(field)
+            Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+                Column(Modifier.padding(vertical = 4.dp)) {
+                    CheckRow("Every room", every) { on -> set(if (on) listOf("*") else emptyList()) }
+                    if (!every) {
+                        val unknown = chosen.filter { id -> rooms.none { it.id == id } }
+                        (rooms.map { it.id to it.name } + unknown.map { it to it }).forEach { (id, name) ->
+                            CheckRow(name, id in chosen) { on -> set(if (on) chosen + id else chosen - id) }
+                        }
+                    }
+                }
+            }
+        }
         is SettingKind.Group -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(label, style = MaterialTheme.typography.titleSmall)
             Help(field)
@@ -280,3 +308,16 @@ private fun lines(value: JsonElement?): List<String> =
     (value as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty()
 
 private fun split(text: String): List<String> = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
+
+@Composable
+private fun CheckRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().toggleable(value = checked, role = Role.Checkbox, onValueChange = onChange)
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Checkbox(checked = checked, onCheckedChange = null)
+        Text(label)
+    }
+}

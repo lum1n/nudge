@@ -5,6 +5,7 @@ import {
   formatTime,
   requestApproval,
   roomOf,
+  roomsSetting,
   section,
   Type,
 } from "@nudge/core";
@@ -90,10 +91,7 @@ const AccountSettings = Type.Object({
     }),
   ),
   /** Room ids that may use the account; `*` for every room. */
-  rooms: Type.Array(Type.String(), {
-    minItems: 1,
-    description: "Ids of the rooms that may use this account; * for every room.",
-  }),
+  rooms: roomsSetting({ title: "Rooms", description: "The rooms that may use this account." }),
 });
 
 const Settings = Type.Object({

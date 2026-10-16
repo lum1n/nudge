@@ -12,6 +12,8 @@ struct ExtensionsView: View {
     @State private var problem: String?
     @State private var saving = false
     @State private var saved = false
+    /// For settings that pick rooms, such as which rooms may use a mail account.
+    @State private var rooms: [Room] = []
 
     /// One extension as the screen edits it, before it is saved.
     struct Draft: Equatable {
@@ -40,6 +42,7 @@ struct ExtensionsView: View {
                 }
             }
             .task { await load() }
+            .environment(\.settingRooms, rooms)
     }
 
     @ViewBuilder private var content: some View {
@@ -95,6 +98,7 @@ struct ExtensionsView: View {
     private func load() async {
         do {
             show(try await client.extensionSetups())
+            rooms = (try? await client.allRooms()) ?? []
         } catch NudgeError.Status(404, _) {
             loadProblem = "This server can't set up extensions from the app. Run it with nudge serve."
         } catch {
@@ -257,6 +261,9 @@ private struct SettingControl: View {
             case .lines:
                 Text(label).font(.subheadline)
                 LinesField(value: $value)
+            case .rooms:
+                Text(label).font(.subheadline)
+                RoomsField(value: $value)
             case .group(let fields):
                 Text(label).font(.headline)
                 SettingGroup(fields: fields, value: $value)
@@ -349,6 +356,35 @@ private struct SettingItems: View {
 }
 
 /// A list of strings, one per line; kept as typed until it changes from elsewhere.
+extension EnvironmentValues {
+    /// The assistant's rooms, for settings that pick some of them; empty until loaded.
+    @Entry var settingRooms: [Room] = []
+}
+
+/// Rooms by name, with every room as one choice; ids it no longer knows stay, by id.
+private struct RoomsField: View {
+    @Binding var value: JSONValue?
+    @Environment(\.settingRooms) private var rooms
+
+    var body: some View {
+        let chosen = value?.array?.compactMap(\.string) ?? []
+        let every = chosen.contains("*")
+        Toggle("Every room", isOn: Binding(get: { every }, set: { set($0 ? ["*"] : []) }))
+        if !every {
+            let unknown = chosen.filter { id in !rooms.contains { $0.id == id } }
+            ForEach(rooms.map { ($0.id, $0.name) } + unknown.map { ($0, $0) }, id: \.0) { id, name in
+                Toggle(name, isOn: Binding(
+                    get: { chosen.contains(id) },
+                    set: { on in set(on ? chosen + [id] : chosen.filter { $0 != id }) }))
+            }
+        }
+    }
+
+    private func set(_ ids: [String]) {
+        value = ids.isEmpty ? nil : .array(ids.map(JSONValue.string))
+    }
+}
+
 private struct LinesField: View {
     @Binding var value: JSONValue?
     @State private var text = ""

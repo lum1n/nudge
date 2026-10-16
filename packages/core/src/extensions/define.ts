@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import type { Extension, Session } from "@earendil-works/pi-durable";
 import type { ApprovalHandler } from "../approvals/approvals.ts";
-import type { Static, TSchema } from "typebox";
+import { type Static, type TSchema, Type } from "typebox";
 import { Value } from "typebox/value";
 import { ConfigError } from "../config.ts";
 import type { Player, Room, RoomKind } from "../identity/directory.ts";
@@ -127,6 +127,19 @@ export type ExtensionUse = {
 export type ExtensionInput = Extension | NudgeExtension | ExtensionUse;
 
 const NAME = /^[a-z][a-z0-9-]*$/;
+
+/** What `roomsSetting` marks its schema with, for settings forms to offer a choice of rooms. */
+export const ROOMS_SETTING = "rooms";
+
+/**
+ * A setting that is a list of rooms, by id, with `*` for every room. Settings forms show it as
+ * a choice among the assistant's rooms by name, so nobody has to know an id.
+ */
+export function roomsSetting(
+  options: { readonly description?: string; readonly title?: string } = {},
+) {
+  return Type.Array(Type.String(), { minItems: 1, ...options, "x-nudge": ROOMS_SETTING });
+}
 
 /** The name the built-in extension uses; nothing else may take it. */
 export const BUILTIN_NAME = "nudge";

@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { createContext, useContext, useEffect, useId, useState } from "react";
 
 /** The parts of JSON Schema that TypeBox writes for extensions' settings. */
 export type Schema = {
@@ -18,7 +18,12 @@ export type Schema = {
   maximum?: number;
   minLength?: number;
   pattern?: string;
+  /** Nudge's own hints: `rooms` is a list of room ids with `*` for every room (`roomsSetting`). */
+  "x-nudge"?: string;
 };
+
+/** The assistant's rooms, for settings that pick some of them; empty until loaded. */
+export const RoomsContext = createContext<readonly { id: string; name: string }[]>([]);
 
 type Value = Record<string, unknown>;
 
@@ -137,6 +142,8 @@ function Field({
         className={`${INPUT} font-mono`}
       />
     );
+  else if (schema["x-nudge"] === "rooms")
+    control = <RoomsInput value={value as string[] | undefined} onChange={onChange} />;
   else if (type === "array" && typeOf(schema.items ?? {}) === "string")
     control = (
       <LinesInput
@@ -257,6 +264,54 @@ function NumberInput({
 }
 
 /** A list of strings, one per line. */
+/** Rooms by name, with every room as one choice; ids it no longer knows are kept, by id. */
+function RoomsInput({
+  value,
+  onChange,
+}: {
+  value: string[] | undefined;
+  onChange: (next: string[] | undefined) => void;
+}) {
+  const rooms = useContext(RoomsContext);
+  const chosen = value ?? [];
+  const every = chosen.includes("*");
+  const toggle = (id: string, on: boolean) => {
+    const next = on
+      ? [...chosen.filter((item) => item !== id), id]
+      : chosen.filter((item) => item !== id);
+    onChange(next.length === 0 ? undefined : next);
+  };
+  const unknown = chosen.filter((id) => id !== "*" && !rooms.some((room) => room.id === id));
+  return (
+    <div className="flex flex-col gap-1 rounded border border-stone-200 bg-white p-2">
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          className="size-4"
+          checked={every}
+          onChange={(event) => onChange(event.target.checked ? ["*"] : undefined)}
+        />
+        Every room
+      </label>
+      {!every &&
+        [
+          ...rooms.map((room) => ({ id: room.id, name: room.name })),
+          ...unknown.map((id) => ({ id, name: id })),
+        ].map((room) => (
+          <label key={room.id} className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="size-4"
+              checked={chosen.includes(room.id)}
+              onChange={(event) => toggle(room.id, event.target.checked)}
+            />
+            {room.name}
+          </label>
+        ))}
+    </div>
+  );
+}
+
 function LinesInput({
   id,
   value,

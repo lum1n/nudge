@@ -31,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +51,7 @@ import nudge.client.settings
 import nudge.ffi.ExtensionSetup
 import nudge.ffi.NudgeClient
 import nudge.ffi.NudgeException
+import nudge.ffi.Room
 import nudge.ffi.RoomKind
 
 /** One extension as the screen edits it, before it is saved. */
@@ -74,6 +76,8 @@ fun ExtensionsScreen(client: NudgeClient, close: () -> Unit) {
     var problem by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     var saved by remember { mutableStateOf(false) }
+    // For settings that pick rooms, such as which rooms may use a mail account.
+    var rooms by remember { mutableStateOf<List<Room>>(emptyList()) }
 
     fun show(next: List<ExtensionSetup>) {
         setups = next
@@ -83,6 +87,7 @@ fun ExtensionsScreen(client: NudgeClient, close: () -> Unit) {
     LaunchedEffect(client) {
         try {
             show(client.extensionSetups())
+            rooms = runCatching { client.allRooms() }.getOrDefault(emptyList())
         } catch (error: Exception) {
             loadProblem = if (error is NudgeException.Status && error.status.toInt() == 404) {
                 "This server can't set up extensions from the app. Run it with nudge serve."
@@ -120,7 +125,7 @@ fun ExtensionsScreen(client: NudgeClient, close: () -> Unit) {
         }
     }
 
-    Scaffold(
+    CompositionLocalProvider(LocalRooms provides rooms) { Scaffold(
         containerColor = groupedBackground(),
         topBar = {
             TopAppBar(
@@ -201,7 +206,7 @@ fun ExtensionsScreen(client: NudgeClient, close: () -> Unit) {
                 }
             }
         }
-    }
+    } }
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)

@@ -536,6 +536,12 @@ fn http_bodies_match_the_schema() {
         },
     );
     check(
+        "RoomsResponse",
+        &RoomsResponse {
+            rooms: vec![room()],
+        },
+    );
+    check(
         "TokensResponse",
         &TokensResponse {
             tokens: vec![TokenInfo {

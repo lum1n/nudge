@@ -338,7 +338,9 @@ class ClientTest {
         assertEquals(SettingKind.Text(secret = true), server.first { it.name == "password" }.kind)
         assertEquals(SettingKind.Toggle, server.first { it.name == "secure" }.kind)
         assertTrue(server.first { it.name == "user" }.required)
-        assertEquals(SettingKind.Lines, accounts.fields.first { it.name == "rooms" }.kind)
+        // Rooms are offered by name, from every room of the assistant.
+        assertEquals(SettingKind.Rooms, accounts.fields.first { it.name == "rooms" }.kind)
+        assertTrue(admin.allRooms().any { it.id == "trip" && it.name == "Trip" })
 
         val browser = setups.first { it.name == "browser" }
         val reasoning = settingFields(browser.schemaJson).first { it.name == "reasoning" }

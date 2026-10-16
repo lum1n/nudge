@@ -4,7 +4,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { type ReactNode, useEffect, useState } from "react";
 import { ApiError, clientFor } from "../../api.ts";
 import { meQuery } from "../../queries.ts";
-import { ObjectFields, type Schema, withoutDefaults } from "../../schema-form.tsx";
+import { ObjectFields, RoomsContext, type Schema, withoutDefaults } from "../../schema-form.tsx";
 
 export const Route = createFileRoute("/$assistant/settings")({ component: Settings });
 
@@ -40,6 +40,12 @@ function Settings() {
   const setups = useQuery({
     queryKey: key,
     queryFn: () => clientFor(assistant).api.extensionSetups(),
+    enabled: me.data?.admin === true,
+  });
+  // For settings that pick rooms, such as which rooms may use a mail account.
+  const rooms = useQuery({
+    queryKey: [assistant, "all-rooms"],
+    queryFn: () => clientFor(assistant).api.allRooms(),
     enabled: me.data?.admin === true,
   });
   const [drafts, setDrafts] = useState<Draft[]>();
@@ -113,68 +119,70 @@ function Settings() {
   );
 
   return (
-    <section className="mx-auto flex max-w-3xl flex-col gap-4 p-3 pb-28 sm:p-4 sm:pb-28">
-      <div>
-        <h2 className="text-lg font-medium">Extensions</h2>
-        <p className="text-sm text-stone-600">
-          What the assistant can do beyond talking. Saving installs them again right away and writes
-          them to the server's nudge.json; if one fails to start, nothing changes. Each room can
-          still turn them on or off for itself.
-        </p>
-      </div>
-      {configured.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">Added</h3>
-          {configured.map(card)}
+    <RoomsContext value={rooms.data ?? []}>
+      <section className="mx-auto flex max-w-3xl flex-col gap-4 p-3 pb-28 sm:p-4 sm:pb-28">
+        <div>
+          <h2 className="text-lg font-medium">Extensions</h2>
+          <p className="text-sm text-stone-600">
+            What the assistant can do beyond talking. Saving installs them again right away and
+            writes them to the server's nudge.json; if one fails to start, nothing changes. Each
+            room can still turn them on or off for itself.
+          </p>
         </div>
-      )}
-      {available.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">
-            Not added yet
-          </h3>
-          {available.map(card)}
-        </div>
-      )}
-      {(dirty || error !== undefined || saved) && (
-        <div className="fixed inset-x-0 bottom-0 z-10 border-t border-stone-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
-          <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-3 px-3 py-3 sm:px-4">
-            <p className="min-w-0 flex-1 text-sm">
-              {error !== undefined ? (
-                <span className="text-red-700">{error}</span>
-              ) : dirty ? (
-                "Unsaved changes"
-              ) : (
-                <span className="text-emerald-700">Saved and installed.</span>
-              )}
-            </p>
-            {dirty && (
-              <span className="flex shrink-0 gap-2">
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={() => {
-                    setError(undefined);
-                    setDrafts(setups.data.map(draftOf));
-                  }}
-                  className="rounded border border-stone-300 px-3 py-1.5 text-sm disabled:opacity-50"
-                >
-                  Discard
-                </button>
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={() => void save()}
-                  className="rounded bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-50"
-                >
-                  {saving ? "Saving…" : "Save"}
-                </button>
-              </span>
-            )}
+        {configured.length > 0 && (
+          <div className="flex flex-col gap-3">
+            <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">Added</h3>
+            {configured.map(card)}
           </div>
-        </div>
-      )}
-    </section>
+        )}
+        {available.length > 0 && (
+          <div className="flex flex-col gap-3">
+            <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">
+              Not added yet
+            </h3>
+            {available.map(card)}
+          </div>
+        )}
+        {(dirty || error !== undefined || saved) && (
+          <div className="fixed inset-x-0 bottom-0 z-10 border-t border-stone-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
+            <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-3 px-3 py-3 sm:px-4">
+              <p className="min-w-0 flex-1 text-sm">
+                {error !== undefined ? (
+                  <span className="text-red-700">{error}</span>
+                ) : dirty ? (
+                  "Unsaved changes"
+                ) : (
+                  <span className="text-emerald-700">Saved and installed.</span>
+                )}
+              </p>
+              {dirty && (
+                <span className="flex shrink-0 gap-2">
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => {
+                      setError(undefined);
+                      setDrafts(setups.data.map(draftOf));
+                    }}
+                    className="rounded border border-stone-300 px-3 py-1.5 text-sm disabled:opacity-50"
+                  >
+                    Discard
+                  </button>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void save()}
+                    className="rounded bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+                  >
+                    {saving ? "Saving…" : "Save"}
+                  </button>
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+      </section>
+    </RoomsContext>
   );
 }
 

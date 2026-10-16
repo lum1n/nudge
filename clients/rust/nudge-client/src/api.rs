@@ -347,6 +347,14 @@ impl Api {
             .await
     }
 
+    /// Every room of the assistant, not only the caller's.
+    pub async fn all_rooms(&self) -> Result<Vec<Room>, ApiError> {
+        let response: RoomsResponse = self
+            .request(Method::GET, &["admin", "rooms"], &[], NO_BODY)
+            .await?;
+        Ok(response.rooms)
+    }
+
     pub async fn list_tokens(&self, player_id: Option<&str>) -> Result<Vec<TokenInfo>, ApiError> {
         let query: Vec<(&str, &str)> = player_id.map(|id| ("player", id)).into_iter().collect();
         let response: TokensResponse = self

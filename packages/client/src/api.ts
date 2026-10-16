@@ -24,6 +24,7 @@ import type {
   Room,
   RoomExtension,
   RoomExtensionsResponse,
+  RoomsResponse,
   SaveExtensionSetupsRequest,
   TimelineResponse,
   TokenInfo,
@@ -247,6 +248,11 @@ export class Api {
 
   pairingCode(playerId: string): Promise<PairingCodeResponse> {
     return this.request("POST", "/admin/pairing-codes", { playerId });
+  }
+
+  /** Every room of the assistant, not only the caller's. */
+  async allRooms(): Promise<Room[]> {
+    return (await this.request<RoomsResponse>("GET", "/admin/rooms")).rooms;
   }
 
   async listTokens(playerId?: string): Promise<TokenInfo[]> {

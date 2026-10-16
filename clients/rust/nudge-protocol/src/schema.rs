@@ -791,6 +791,12 @@ pub struct TokensResponse {
     pub tokens: Vec<TokenInfo>,
 }
 
+/// Every room of the assistant, for admins.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RoomsResponse {
+    pub rooms: Vec<Room>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum DevicePlatform {
