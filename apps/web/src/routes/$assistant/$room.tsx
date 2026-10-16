@@ -9,6 +9,7 @@ import {
   ThreadPrimitive,
   type ToolCallMessagePartProps,
   useExternalStoreRuntime,
+  useMessagePartText,
 } from "@assistant-ui/react";
 import { MarkdownTextPrimitive } from "@assistant-ui/react-markdown";
 import type {
@@ -21,12 +22,21 @@ import type {
 } from "@nudge/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { createContext, type FormEvent, useCallback, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  type FormEvent,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 import { clientFor, forgetToken, useConnection, useRoom } from "../../api.ts";
 import {
   appendText,
   buildQueueAdapter,
   type Lane,
+  PLACEHOLDER,
   toThreadMessageLike,
 } from "../../assistant-runtime.ts";
 import { meQuery } from "../../queries.ts";
@@ -140,6 +150,7 @@ function Room() {
           </div>
           <ApprovalsPanel approvals={view.approvals} />
           <MemoryPanel view={view} />
+          <PrivateValuesPanel />
           <NudgesPanel view={view} />
           <ExtensionsPanel />
         </aside>
@@ -174,16 +185,22 @@ function Room() {
 function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view: RoomView }) {
   const { assistant, room } = Route.useParams();
   const me = useQuery(meQuery(assistant)).data?.player.id ?? "";
+  // Only in a shared room is there anyone to keep a message from.
+  const shared = view.room.kind !== "personal";
+  const [secret, setSecret] = useState(false);
   const dispatch = useCallback(
     (message: AppendMessage, lane: Lane) => {
       const text = appendText(message).trim();
       if (text === "") return;
       // A failed send stays in the store's `pending` with its error; the page offers it again.
       clientFor(assistant)
-        .send(room, text, lane === "steer" ? { whenBusy: "steer" } : {})
+        .send(room, text, {
+          ...(lane === "steer" ? { whenBusy: "steer" as const } : {}),
+          ...(secret && shared ? { private: true } : {}),
+        })
         .catch(() => {});
     },
-    [assistant, room],
+    [assistant, room, secret, shared],
   );
   const convertMessage = useCallback(
     (item: RoomView["timeline"][number]) => toThreadMessageLike(item, me),
@@ -228,8 +245,23 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
             )}
           </ComposerPrimitive.Queue>
           <div className="flex gap-2">
+            {shared && (
+              <button
+                type="button"
+                aria-pressed={secret}
+                onClick={() => setSecret((on) => !on)}
+                title="Only you see a private message and the answer to it; the others see that there was one"
+                className={`shrink-0 rounded border px-2 text-sm ${
+                  secret ? "border-violet-700 bg-violet-700 text-white" : "bg-white text-stone-600"
+                }`}
+              >
+                Private
+              </button>
+            )}
             <ComposerPrimitive.Input
-              placeholder="Message"
+              placeholder={
+                secret && shared ? "Private message: only you see it and the answer" : "Message"
+              }
               className="max-h-40 min-w-0 flex-1 resize-none rounded border border-stone-300 bg-white px-2 py-1.5"
             />
             {view.live.running ? (
@@ -319,7 +351,9 @@ function MessageRow({ message }: { message: MessageState }) {
 }
 
 function UserMessage({ message }: { message: MessageState }) {
-  const custom = message.metadata.custom as { author?: string; mine?: boolean } | undefined;
+  const custom = message.metadata.custom as
+    | { author?: string; mine?: boolean; private?: boolean }
+    | undefined;
   const mine = custom?.mine ?? false;
   return (
     <MessagePrimitive.Root>
@@ -334,6 +368,7 @@ function UserMessage({ message }: { message: MessageState }) {
               {custom?.author ?? "Someone"}
             </p>
           )}
+          {custom?.private === true && <OnlyYou light={mine} />}
           <MessagePrimitive.Parts components={{ Text: TextPart }} />
         </div>
       </div>
@@ -342,10 +377,12 @@ function UserMessage({ message }: { message: MessageState }) {
 }
 
 function AssistantMessage({ message }: { message: Extract<MessageState, { role: "assistant" }> }) {
+  const secret = (message.metadata.custom as { private?: boolean } | undefined)?.private === true;
   return (
     <MessagePrimitive.Root>
       <div className="flex justify-start">
         <div className="max-w-full min-w-0 rounded-2xl border border-stone-200 bg-white px-3 py-2 [overflow-wrap:anywhere] md:max-w-[85%]">
+          {secret && <OnlyYou />}
           <MessagePrimitive.Parts
             components={{
               Text: MarkdownText,
@@ -372,6 +409,13 @@ function SystemMessage({ message }: { message: MessageState }) {
       </p>
     );
   if (custom?.kind === "marker") return <hr className="border-stone-200" />;
+  if (custom?.kind === "private")
+    return (
+      <p className="text-center text-sm text-violet-700 italic">
+        <span aria-hidden>🔒 </span>
+        {custom.text}
+      </p>
+    );
   if (custom?.kind === "approval") {
     const data = custom as { summary: string; status: string; decidedBy?: string };
     return (
@@ -385,8 +429,43 @@ function SystemMessage({ message }: { message: MessageState }) {
   return null;
 }
 
+/** Says a message is the reader's alone, so they know the others don't see it. */
+function OnlyYou({ light = false }: { light?: boolean }) {
+  return (
+    <p className={`mb-0.5 text-xs font-medium ${light ? "text-sky-100" : "text-violet-700"}`}>
+      🔒 Only you
+    </p>
+  );
+}
+
+/** A value the server hid: someone else made it private, or it was forgotten. */
+function Hidden({ placeholder }: { placeholder: string }) {
+  return (
+    <span
+      title={`Hidden from you (${placeholder})`}
+      className="mx-0.5 inline-block rounded bg-stone-700 px-1.5 text-xs leading-5 text-white"
+    >
+      hidden
+    </span>
+  );
+}
+
+/** Text with each placeholder shown as a hidden chip. */
+function withHidden(text: string): ReactNode[] {
+  const out: ReactNode[] = [];
+  let last = 0;
+  for (const match of text.matchAll(PLACEHOLDER)) {
+    out.push(text.slice(last, match.index));
+    out.push(<Hidden key={match.index} placeholder={match[0]} />);
+    last = match.index + match[0].length;
+  }
+  out.push(text.slice(last));
+  return out;
+}
+
 function TextPart() {
-  return <MessagePartPrimitive.Text component="p" />;
+  const { text } = useMessagePartText();
+  return <p className="whitespace-pre-wrap">{withHidden(text)}</p>;
 }
 
 // No `@tailwindcss/typography`: everything else in this app is hand-rolled utility classes (see
@@ -394,6 +473,18 @@ function TextPart() {
 function MarkdownText() {
   return (
     <MarkdownTextPrimitive
+      // Placeholders become links to `#hidden`, which `a` draws as a chip.
+      preprocess={(text) => text.replace(PLACEHOLDER, (placeholder) => `[${placeholder}](#hidden)`)}
+      components={{
+        a: ({ href, children, ...rest }) =>
+          href === "#hidden" ? (
+            <Hidden placeholder={String(children)} />
+          ) : (
+            <a href={href} {...rest}>
+              {children}
+            </a>
+          ),
+      }}
       className="[&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-stone-300
         [&_blockquote]:pl-2 [&_blockquote]:text-stone-600 [&_code]:rounded [&_code]:bg-stone-200
         [&_code]:px-1 [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold
@@ -589,6 +680,9 @@ function MemoryPanel({ view }: { view: RoomView }) {
               {fact.owner !== undefined && (
                 <span className="text-stone-500"> · {fact.owner.displayName}'s own</span>
               )}
+              {fact.privateTo !== undefined && (
+                <span className="text-violet-700"> · 🔒 only you</span>
+              )}
             </span>
             {(fact.owner === undefined || fact.owner.id === me) && (
               <button
@@ -632,6 +726,84 @@ function MemoryPanel({ view }: { view: RoomView }) {
   );
 }
 
+/**
+ * Values only this player sees: everyone else, and the model, get a placeholder wherever they
+ * show. Hiding one here works in every room; forgetting one drops it for good.
+ */
+function PrivateValuesPanel() {
+  const { assistant } = Route.useParams();
+  const values = useQuery({
+    queryKey: [assistant, "private-values"],
+    queryFn: () => clientFor(assistant).api.privateValues(),
+  });
+  const [text, setText] = useState("");
+  const [error, setError] = useState<string>();
+
+  async function run(action: () => Promise<unknown>) {
+    setError(undefined);
+    try {
+      await action();
+      await values.refetch();
+    } catch (caught) {
+      setError((caught as Error).message);
+    }
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const value = text.trim();
+    if (value.length < 2) return;
+    await run(async () => {
+      await clientFor(assistant).api.protect(value, { private: true });
+      setText("");
+    });
+  }
+
+  return (
+    <section className="flex flex-col gap-2 rounded border border-stone-200 bg-white p-3">
+      <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">Only you see</h3>
+      {values.data?.length === 0 && (
+        <p className="text-sm text-stone-500">
+          Hide an address, a name or a number: others and the model see a placeholder.
+        </p>
+      )}
+      <ul className="flex flex-col gap-1">
+        {values.data?.map((value) => (
+          <li key={value.placeholder} className="flex items-baseline justify-between gap-2 text-sm">
+            <span className="min-w-0 [overflow-wrap:anywhere]">{value.value}</span>
+            <button
+              type="button"
+              title="Forget it for good: from now on everyone sees only the placeholder"
+              onClick={() =>
+                void run(() => clientFor(assistant).api.forgetValue(value.placeholder))
+              }
+              className="shrink-0 text-stone-500 underline"
+            >
+              Forget
+            </button>
+          </li>
+        ))}
+      </ul>
+      <form onSubmit={(event) => void submit(event)} className="flex gap-2">
+        <input
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          placeholder="Hide a value"
+          className="min-w-0 flex-1 rounded border border-stone-300 px-2 py-1 text-sm"
+        />
+        <button
+          type="submit"
+          disabled={text.trim().length < 2}
+          className="shrink-0 rounded border px-2 text-sm disabled:opacity-50"
+        >
+          Hide
+        </button>
+      </form>
+      {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
+    </section>
+  );
+}
+
 function NudgesPanel({ view }: { view: RoomView }) {
   const { assistant } = Route.useParams();
   const [error, setError] = useState<string>();
@@ -657,6 +829,9 @@ function NudgesPanel({ view }: { view: RoomView }) {
           <li key={nudge.id} className="flex items-baseline justify-between gap-2 text-sm">
             <span>
               {new Date(nudge.fireAt).toLocaleString()} — {nudge.message}
+              {nudge.privateTo !== undefined && (
+                <span className="text-violet-700"> · 🔒 only you</span>
+              )}
             </span>
             <button
               type="button"

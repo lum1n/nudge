@@ -11,6 +11,9 @@ import type { Part, PendingMessage, QueuedMessage, TimelineItem } from "@nudge/c
 export function toThreadMessageLike(item: TimelineItem, me: string): ThreadMessageLike {
   switch (item.type) {
     case "user":
+      // Someone else's private message: the server sent it empty, so it is a line, not a bubble.
+      if (item.privateTo !== undefined && item.text === "")
+        return privateLine(item.id, `${item.privateTo.displayName} sent a private message`);
       return {
         id: item.id,
         role: "user",
@@ -20,13 +23,19 @@ export function toThreadMessageLike(item: TimelineItem, me: string): ThreadMessa
           ? {}
           : {
               metadata: {
-                custom: { author: item.author.displayName, mine: item.author.id === me },
+                custom: {
+                  author: item.author.displayName,
+                  mine: item.author.id === me,
+                  private: item.privateTo !== undefined,
+                },
               },
             }),
       };
     // assistant-ui takes a system message with exactly one text part, so what kind of line it
     // is and its data ride along in `metadata.custom`.
     case "nudge":
+      if (item.privateTo !== undefined && item.text === "")
+        return privateLine(item.id, `A nudge for ${item.privateTo.displayName}`);
       return {
         id: item.id,
         role: "system",
@@ -35,6 +44,8 @@ export function toThreadMessageLike(item: TimelineItem, me: string): ThreadMessa
         metadata: { custom: { kind: "nudge", text: item.text } },
       };
     case "approval":
+      if (item.privateTo !== undefined && item.summary === "")
+        return privateLine(item.id, `An approval for ${item.privateTo.displayName} ended`);
       return {
         id: item.id,
         role: "system",
@@ -57,6 +68,13 @@ export function toThreadMessageLike(item: TimelineItem, me: string): ThreadMessa
         metadata: { custom: { kind: "marker", marker: item.kind } },
       };
     case "answer":
+      if (item.privateTo !== undefined && item.privateTo.id !== me)
+        return privateLine(
+          item.id,
+          item.status === "running"
+            ? `Answering ${item.privateTo.displayName} privately…`
+            : `Answered ${item.privateTo.displayName} privately`,
+        );
       return {
         id: item.id,
         role: "assistant",
@@ -64,9 +82,23 @@ export function toThreadMessageLike(item: TimelineItem, me: string): ThreadMessa
         // between our `unknown`-valued `Record` and assistant-ui's `ReadonlyJSONObject`.
         content: item.parts.map(toPart) as ThreadMessageLike["content"],
         status: toStatus(item),
+        ...(item.privateTo === undefined ? {} : { metadata: { custom: { private: true } } }),
       };
   }
 }
+
+/** A line saying something private to someone else happened, without what. */
+function privateLine(id: string, text: string): ThreadMessageLike {
+  return {
+    id,
+    role: "system",
+    content: [{ type: "text", text }],
+    metadata: { custom: { kind: "private", text } },
+  };
+}
+
+/** `⟦EMAIL1⟧` and the like: a value the server hid from this player. */
+export const PLACEHOLDER = /⟦[A-Z]+\d+⟧/g;
 
 function toPart(part: Part) {
   switch (part.type) {
@@ -106,7 +138,9 @@ function toStatus(answer: Extract<TimelineItem, { type: "answer" }>): MessageSta
 }
 
 function queueItem(id: string | number, text: string): QueueItemState {
-  return { id: String(id), prompt: text, parts: [{ type: "text", text }] };
+  // Someone else's private message waits as an empty one.
+  const shown = text === "" ? "A private message" : text;
+  return { id: String(id), prompt: shown, parts: [{ type: "text", text: shown }] };
 }
 
 /** The text of a newly composed message, joining its text parts. */
