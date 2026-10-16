@@ -173,6 +173,43 @@ describe("ChatRenderer", () => {
     expect(out).toContain("\x1b[2mAnn: hi\x1b[22m");
   });
 
+  it("shows what a running tool is doing, each step once", () => {
+    let out = "";
+    const renderer = new ChatRenderer((text) => (out += text), "Nudge", "me");
+    renderer.history(view([]));
+    const browsing = (output: string | undefined, status: "running" | "done" = "running") =>
+      view(
+        [
+          {
+            type: "answer",
+            id: "a",
+            status: "running",
+            parts: [
+              {
+                type: "tool",
+                callId: "c1",
+                name: "browse",
+                args: { task: "Find a GLC" },
+                status,
+                ...(output === undefined ? {} : { output }),
+                ...(status === "done" ? { result: "Found three." } : {}),
+              },
+            ],
+          },
+        ],
+        true,
+      );
+    renderer.update(browsing(undefined));
+    renderer.update(browsing("Starting the browser…\n"));
+    renderer.update(browsing("Starting the browser…\nOpening finn.no…\n"));
+    renderer.update(browsing("Starting the browser…\nOpening finn.no…\n"));
+    renderer.update(browsing('Starting the browser…\nOpening finn.no…\nClicking "Search"…\n'));
+    renderer.update(browsing(undefined, "done"));
+    expect(plain(out)).toBe(
+      '  · browse\n    Starting the browser…\n    Opening finn.no…\n    Clicking "Search"…\n',
+    );
+  });
+
   it("says when an answer failed or stopped, and when a model call is retried", () => {
     let out = "";
     const renderer = new ChatRenderer((text) => (out += text), "Nudge", "me");

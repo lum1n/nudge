@@ -84,8 +84,22 @@ function toPart(part: Part) {
         ...(part.result === undefined ? {} : { result: part.result }),
         ...(part.isError === undefined ? {} : { isError: part.isError }),
         ...(part.details === undefined ? {} : { artifact: part.details }),
+        // While it runs, what the tool says it is doing, such as browse's `Clicking "Search"…`.
+        ...(part.result !== undefined || part.output === undefined
+          ? {}
+          : { artifact: { progress: progressLine(part.output) } }),
       };
   }
+}
+
+/** A running tool's current step: the last line of its output so far, cut short. */
+export function progressLine(output: string): string | undefined {
+  const line = output
+    .split("\n")
+    .map((text) => text.trim())
+    .findLast((text) => text !== "");
+  if (line === undefined) return undefined;
+  return line.length > 100 ? `${line.slice(0, 99)}…` : line;
 }
 
 function toStatus(answer: Extract<TimelineItem, { type: "answer" }>): MessageStatus {

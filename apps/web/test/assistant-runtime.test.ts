@@ -1,9 +1,42 @@
 import { type AppendMessage, fromThreadMessageLike } from "@assistant-ui/react";
 import { describe, expect, it } from "vitest";
-import { appendText, buildQueueAdapter, toThreadMessageLike } from "../src/assistant-runtime.ts";
+import {
+  appendText,
+  buildQueueAdapter,
+  progressLine,
+  toThreadMessageLike,
+} from "../src/assistant-runtime.ts";
 import type { QueuedMessage, TimelineItem } from "@nudge/client";
 
 describe("toThreadMessageLike", () => {
+  it("gives a running tool's last line of output as its progress, and drops it once done", () => {
+    const answer = (status: "running" | "done"): TimelineItem => ({
+      type: "answer",
+      id: "answer:1",
+      status: "running",
+      parts: [
+        {
+          type: "tool",
+          callId: "c1",
+          name: "browse",
+          args: { task: "Find a GLC" },
+          status,
+          ...(status === "done"
+            ? { result: "Found three.", details: { steps: 3 } }
+            : { output: 'Starting the browser…\nClicking "Search"…\n' }),
+        },
+      ],
+    });
+    expect(toThreadMessageLike(answer("running"), "ann").content).toMatchObject([
+      { type: "tool-call", artifact: { progress: 'Clicking "Search"…' } },
+    ]);
+    expect(toThreadMessageLike(answer("done"), "ann").content).toMatchObject([
+      { type: "tool-call", result: "Found three.", artifact: { steps: 3 } },
+    ]);
+    expect(progressLine("\n\n")).toBeUndefined();
+    expect(progressLine(`${"x".repeat(150)}\n`)).toHaveLength(100);
+  });
+
   it("names the author, and marks my own messages", () => {
     const message: TimelineItem = {
       type: "user",

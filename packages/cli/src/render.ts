@@ -39,6 +39,16 @@ export function describeExtension(extension: RoomExtension): string {
 
 type Answer = Extract<TimelineItem, { type: "answer" }>;
 
+/** A running tool's current step: the last line of its output so far, cut short. */
+export function progressLine(output: string | undefined): string | undefined {
+  const line = output
+    ?.split("\n")
+    .map((text) => text.trim())
+    .findLast((text) => text !== "");
+  if (line === undefined) return undefined;
+  return line.length > 100 ? `${line.slice(0, 99)}…` : line;
+}
+
 /**
  * Turns a room's successive views into terminal text. Answers stream in as their text grows;
  * messages from other clients print whole. Our own messages are already on screen.
@@ -50,6 +60,8 @@ export class ChatRenderer {
   private readonly progress = new Map<string, number>();
   /** Tool calls already announced. */
   private readonly tools = new Set<string>();
+  /** The progress line last printed per running tool call. */
+  private readonly doing = new Map<string, string>();
   /** The text part on screen now (`<answer id>/<index>`), and its text so far. */
   private streaming: string | undefined;
   private shown = "";
@@ -134,10 +146,19 @@ export class ChatRenderer {
       if (part.type === "text") {
         this.showText(`${item.id}/${index}`, part.text);
         if (finished) this.endText();
-      } else if (part.type === "tool" && !this.tools.has(part.callId)) {
-        this.tools.add(part.callId);
-        this.endText();
-        this.write(`${dim(`  · ${part.name}`)}\n`);
+      } else if (part.type === "tool") {
+        if (!this.tools.has(part.callId)) {
+          this.tools.add(part.callId);
+          this.endText();
+          this.write(`${dim(`  · ${part.name}`)}\n`);
+        }
+        // What a running tool says it is doing, such as browse's `Clicking "Search"…`.
+        const doing = part.status === "done" ? undefined : progressLine(part.output);
+        if (doing !== undefined && this.doing.get(part.callId) !== doing) {
+          this.doing.set(part.callId, doing);
+          this.endText();
+          this.write(`${dim(`    ${doing}`)}\n`);
+        }
       }
       if (finished) next = index + 1;
     }

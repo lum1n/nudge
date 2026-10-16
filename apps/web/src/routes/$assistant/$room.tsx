@@ -425,9 +425,17 @@ function ToolCallPart({ toolName, status, result, isError, artifact }: ToolCallM
     );
   const approval = (artifact as { approval?: string } | undefined)?.approval;
   if (typeof approval === "string") return <ApprovalCard id={approval} />;
+  const progress = (artifact as { progress?: string } | undefined)?.progress;
   return (
     <p className="text-sm [overflow-wrap:anywhere] text-stone-500">
-      {toolName} — {result !== undefined ? (isError ? "failed" : "done") : status.type}
+      {toolName} —{" "}
+      {result !== undefined
+        ? isError
+          ? "failed"
+          : "done"
+        : typeof progress === "string"
+          ? progress
+          : status.type}
     </p>
   );
 }
