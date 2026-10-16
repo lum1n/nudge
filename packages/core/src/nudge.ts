@@ -188,6 +188,8 @@ export class Nudge {
       harness,
       this.rooms,
       now,
+      // Actions act on values, so their models put them back (ADR 9).
+      parts.models.withValues(),
       (extension, kind) =>
         this.installed.find((installed) => installed.extension.name === extension)?.approvals[kind],
       changed,

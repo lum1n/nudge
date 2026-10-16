@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ApiError, clientFor } from "./api.ts";
+import { ApiError, clientFor, tokenFor } from "./api.ts";
 
 // Which assistants this browser's push subscription is registered with, by URL name. A browser
 // has one subscription per site, shared by every assistant on the server.
@@ -14,7 +14,9 @@ function supported(): boolean {
 /** Registers the service worker, which shows pushes; once per page load. */
 export function registerServiceWorker(): void {
   if (!("serviceWorker" in navigator)) return;
-  navigator.serviceWorker.register("/sw.js").catch((error: unknown) => console.warn(error));
+  navigator.serviceWorker
+    .register("/sw.js")
+    .then(resyncPush, (error: unknown) => console.warn(error));
 }
 
 function registered(): string[] {
@@ -50,10 +52,15 @@ async function state(assistant: string): Promise<PushState> {
 
 /** Asks for permission, subscribes this browser and tells the assistant where to push. */
 async function enable(assistant: string): Promise<void> {
-  const { api } = clientFor(assistant);
-  const key = fromBase64Url(await api.pushKey());
+  const key = fromBase64Url(await clientFor(assistant).api.pushKey());
   if ((await Notification.requestPermission()) !== "granted")
     throw new Error("Notifications are not allowed for this site");
+  await register(assistant, key);
+  setRegistered(assistant, true);
+}
+
+/** Subscribes this browser with `key`, unless it is already, and tells the assistant. */
+async function register(assistant: string, key: Uint8Array<ArrayBuffer>): Promise<void> {
   const registration = await navigator.serviceWorker.ready;
   let subscription = await registration.pushManager.getSubscription();
   // A subscription made for another server key (say, after the server's keys were made anew) won't work.
@@ -66,11 +73,26 @@ async function enable(assistant: string): Promise<void> {
     applicationServerKey: key,
   });
   const json = subscription.toJSON();
-  await api.subscribePush({
+  await clientFor(assistant).api.subscribePush({
     endpoint: subscription.endpoint,
     keys: { p256dh: json.keys?.p256dh ?? "", auth: json.keys?.auth ?? "" },
   });
-  setRegistered(assistant, true);
+}
+
+/**
+ * Tells each assistant this browser takes pushes from its current subscription, once per page
+ * load. The service worker renews a subscription the browser replaced (`pushsubscriptionchange`),
+ * but not when the browser dropped it without saying which it was; this catches that case.
+ */
+export function resyncPush(): void {
+  if (!supported() || Notification.permission !== "granted") return;
+  for (const assistant of registered()) {
+    if (tokenFor(assistant) === undefined) continue;
+    clientFor(assistant)
+      .api.pushKey()
+      .then((key) => register(assistant, fromBase64Url(key)))
+      .catch((error: unknown) => console.warn(error));
+  }
 }
 
 /** Tells the assistant to stop; the browser's subscription goes once no assistant uses it. */

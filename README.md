@@ -78,7 +78,7 @@ nudge room Trip --members ann,bo      # a shared room "trip"; `nudge room` lists
 nudge serve                           # web UI at http://127.0.0.1:8787, API under /v1
 ```
 
-`nudge invite` also prints a sign-in link for the web UI (`/login#token=…`; pass `--port` or `--url` if the server isn't on 127.0.0.1:8787). The web UI keeps the token for the browser tab only. `nudge serve --web <dir>` serves another build, `--web none` only the API.
+`nudge invite` also prints a sign-in link for the web UI (`/login#token=…`; pass `--port` or `--url` if the server isn't on 127.0.0.1:8787). The web UI keeps the token for the browser tab only, unless "Remember this device" is ticked at sign-in. `nudge serve --web <dir>` serves another build, `--web none` only the API.
 
 Or each person connects from their own terminal, and all of them see the same conversation live:
 
@@ -92,11 +92,11 @@ Every client, the web UI, `nudge chat --url` and the native apps, talks [protoco
 
 ## Web UI
 
-Sign in at `/login` with a token, the link `nudge invite` prints (`/login#token=…`, which never reaches the server or its logs), or a pairing code from `nudge pair`. The token lives in that browser tab's `sessionStorage` only; opening another tab or browser needs its own sign-in.
+Sign in at `/login` with a token, the link `nudge invite` prints (`/login#token=…`, which never reaches the server or its logs), or a pairing code from `nudge pair`. The token lives in that browser tab's `sessionStorage` only, so opening another tab or browser needs its own sign-in, unless you tick **Remember this device**: then it is kept in the browser's `localStorage`, and every tab, and a notification opened after the tab closed, stays signed in until **Sign out**, which forgets it in both. Leave it unticked on a shared computer.
 
 A room page shows the same conversation the CLI and the API see, live, for everyone in it: each message with who sent it, the assistant's answer streaming in with its tool calls, and fired nudges, rendered as markdown. Send a follow-up or steer while it's still answering — it queues the same way a second CLI client's would — or stop it; "Load earlier" fetches older history past what first loaded. A room's Memory, Nudges and approval panels list, add, forget, cancel and decide the same things `/memory`, `/nudges` and `/approve` do in the terminal, and update live whoever made the change. The web UI talks [protocol v1](docs/protocol/v1.md) through `@nudge/client`, like the native apps will. "Open my room" and "New shared room" on the room list open the same rooms `nudge chat me` and `nudge room` do.
 
-Notifications: "Turn on" under Notifications on the room list subscribes the browser to Web Push. Then answers, fired nudges and approvals in that player's rooms arrive as notifications, except for a room that is open in a visible tab. They need HTTPS, or `localhost`, and on an iPhone the site added to the home screen. Pushes are encrypted for the browser, so Google's, Mozilla's or Apple's push service only relays them. By default a notification says only which room has news; `"push": { "preview": "text" }` in `nudge.json` adds the start of the text. `nudge serve` makes the server's push keys on first start (`push-vapid.json` beside the first assistant's database); losing them means browsers must turn notifications on again.
+Notifications: "Turn on" under Notifications on the room list subscribes the browser to Web Push. Then answers, fired nudges and approvals in that player's rooms arrive as notifications, except for a room that is open in a visible tab. They need HTTPS, or `localhost`, and on an iPhone the site added to the home screen. Pushes are encrypted for the browser, so Google's, Mozilla's or Apple's push service only relays them. By default a notification says only which room has news; `"push": { "preview": "text" }` in `nudge.json` adds the start of the text. `nudge serve` makes the server's push keys on first start (`push-vapid.json` beside the first assistant's database); losing them means browsers must turn notifications on again. When a browser renews its subscription by itself, the service worker hands the new one to the server without asking you.
 
 The iOS, macOS and Android apps (`apps/apple`, `apps/android`) get the same notifications through APNs and FCM. The server sends them directly, so it needs credentials for them in `nudge.json` (paths relative to it):
 
@@ -178,7 +178,8 @@ An entry's `rooms` lists the kinds of room it is on in by default (`"lobby"`, `"
 - `model` is `provider/model` and defaults to `anthropic/claude-haiku-5-5`, which did best in our tests at a fraction of the cost of larger models. Without an Anthropic key, pick one from your provider, such as `openai/gpt-5-mini`. Weak models struggle with multi-step browsing.
 - The model never sees the screen. It reads each page as compact text (open dialogs first, one line per search result) and acts on element refs, so any tool-calling model can drive it and every page passes through the same redaction as the rest of Nudge.
 - The browser is headed, because many sites block headless ones, and runs on its own virtual display (needs `Xvfb`). Each room keeps its own browser profile under `<database>.extensions/browser/profiles`, so cookies and consents stick; a room's browser closes after `idleMinutes` (default 10).
-- It does not buy or send messages. It logs in with your help: the first time a site needs a login, `browse` stops and asks you to open the room's **Browser** page in the web UI, a live view of that room's browser. Log in there yourself (password, BankID, a code, whatever the site asks) and press **Done**. With "Remember logins I type here" ticked, the username and password you typed are saved, and next time the agent's `browser_login` tool fills them in on that same host by itself. The model never sees them: password and one-time-code fields always read `[hidden]` in its view of a page, saved values are hidden wherever they appear, and the tools never return them.
+- It does not buy, book, send, sign up or enter your details on its own. When a task needs that, it gets everything ready, stops, and asks the room to approve the exact step ("Click \"Pay 1 290 kr\" on sas.no to book …"), as an approval like any other: in the chat, `/approve` in the terminal, and the apps. Approving it starts the browser agent again in the room's browser, where it left off, allowed to do exactly that step; the room then hears how it went. Deciding waits until that run is done. It logs in with your help: the first time a site needs a login, `browse` stops and asks you to open the room's **Browser** page in the web UI, a live view of that room's browser. Log in there yourself (password, BankID, a code, whatever the site asks) and press **Done**. With "Remember logins I type here" ticked, the username and password you typed are saved, and next time the agent's `browser_login` tool fills them in on that same host by itself. The model never sees them: password and one-time-code fields always read `[hidden]` in its view of a page, saved values are hidden wherever they appear, and the tools never return them.
+- While `browse` runs, the chat and the terminal show what it is doing, one short line at a time (`Clicking "Search"…`).
 - When `browse` stops for a login, the chat shows an **Open the room's browser to log in** button. The Browser page lists the room's saved logins (site and username, never the password) with a **Forget** button.
 - Everyone in the room can open its browser. The first one in controls it; the others watch and can **Take control**.
 - Saved logins are kept per room in `<database>.extensions/browser/logins/logins.enc`, encrypted (AES-256-GCM) under the key file next to it, both readable by their owner only, or under `NUDGE_BROWSER_KEY` (32 random bytes, base64) when you set it. The key protects copies of the database and backups; whoever has the key can read the logins.
@@ -186,7 +187,7 @@ An entry's `rooms` lists the kinds of room it is on in by default (`"lobby"`, `"
 - **Site notes:** after a run that took a few actions, the browser agent writes short notes on how it used each site (where the filters are, URL parameters that worked, which button closes the cookie dialog), and gets them back the next time it reaches that site, in any room. They hold no results and nothing about the user, and cost one small extra request. `"siteNotes": false` turns them off.
 - `nudge doctor` also checks the browser model's credentials.
 - Install its browser once with `pnpm -C extensions/browser exec patchright install chromium`.
-- `pnpm -C extensions/browser eval -- --model anthropic/claude-haiku-5-5,openai/gpt-5-mini` runs a set of everyday tasks against each model and writes results to `extensions/browser/.eval/`. Keys come only from your environment.
+- `pnpm -C extensions/browser eval -- --model anthropic/claude-haiku-5-5,openai/gpt-5-mini` runs a set of everyday tasks against each model, twice each (`--runs 3` for more), through the same redaction as Nudge, after `pnpm build`. It writes each run's result, every request the providers got, and a summary table (answered, expected answer seen, steps, seconds, cost, leaks) to `extensions/browser/.eval/`. Some tasks carry made-up personal details; a leak is one of them reaching a request as it is, and makes the run exit with an error. Keys come only from your environment; without one for a model it stops before opening a browser.
 
 ### MCP servers
 
@@ -371,6 +372,13 @@ Requires Node ≥ 22.19 and pnpm.
 pnpm install
 pnpm check   # typecheck, lint, test
 pnpm build   # every package, and the web UI into apps/web/dist
+```
+
+The browser extension's tests on fixture pages (consent dialogs, hidden checkboxes, carousels, cards, logins) drive a real headless Chromium, so they run only when asked:
+
+```bash
+pnpm -C extensions/browser exec patchright install chromium
+NUDGE_BROWSER_TESTS=1 pnpm exec vitest run extensions/browser
 ```
 
 The Rust client needs a Rust toolchain (edition 2024). Its tests start a server on a faux model with `node packages/server/scripts/faux-server.ts`, which runs the built packages, so `pnpm build` first:

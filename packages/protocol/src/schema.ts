@@ -450,6 +450,16 @@ export const PushSubscribeRequest = Type.Object({
 export type PushSubscribeRequest = Static<typeof PushSubscribeRequest>;
 
 /**
+ * A service worker's new subscription after `pushsubscriptionchange`, sent without a token: the
+ * old subscription's endpoint and auth secret show it comes from the browser that had it.
+ */
+export const PushRenewRequest = Type.Object({
+  old: Type.Object({ endpoint: Type.String(), auth: Type.String() }),
+  subscription: PushSubscribeRequest,
+});
+export type PushRenewRequest = Static<typeof PushRenewRequest>;
+
+/**
  * A phone or a Mac that takes native pushes: an APNs device token (hex) or an FCM registration
  * token. `sandbox` is for apps built for development, which APNs reaches through its sandbox.
  */
@@ -666,6 +676,7 @@ export const SCHEMAS = {
   ShareMemoryRequest,
   PushKeyResponse,
   PushSubscribeRequest,
+  PushRenewRequest,
   DeviceRequest,
   DevicesResponse,
   ModelViewResponse,

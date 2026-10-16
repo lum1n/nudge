@@ -12,15 +12,29 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 
 export { ApiError, listAssistants };
 
-// Tokens live for the browser tab only: one per assistant, keyed by the assistant's URL name.
+// One token per assistant, keyed by the assistant's URL name. They live for the browser tab only
+// (sessionStorage), unless "Remember this device" was ticked at sign-in (localStorage), so that a
+// notification opened after the tab closed doesn't ask to sign in again.
 const TOKENS = "nudge.tokens";
 
-function readTokens(): Record<string, string> {
+function readFrom(storage: Storage): Record<string, string> {
   try {
-    return JSON.parse(sessionStorage.getItem(TOKENS) ?? "{}") as Record<string, string>;
+    return JSON.parse(storage.getItem(TOKENS) ?? "{}") as Record<string, string>;
   } catch {
     return {};
   }
+}
+
+function readTokens(): Record<string, string> {
+  return { ...readFrom(localStorage), ...readFrom(sessionStorage) };
+}
+
+function writeTo(storage: Storage, assistant: string, token: string | undefined): void {
+  const { [assistant]: _, ...rest } = readFrom(storage);
+  storage.setItem(
+    TOKENS,
+    JSON.stringify(token === undefined ? rest : { ...rest, [assistant]: token }),
+  );
 }
 
 export function tokenFor(assistant: string): string | undefined {
@@ -32,30 +46,42 @@ export function signedIn(): string[] {
   return Object.keys(readTokens());
 }
 
-function saveToken(assistant: string, token: string): void {
-  sessionStorage.setItem(TOKENS, JSON.stringify({ ...readTokens(), [assistant]: token }));
+/** Keeps the token in one storage only: the device's when remembered, else the tab's. */
+function saveToken(assistant: string, token: string, remember: boolean): void {
+  writeTo(remember ? localStorage : sessionStorage, assistant, token);
+  writeTo(remember ? sessionStorage : localStorage, assistant, undefined);
 }
 
 /**
- * Forgets the assistant's token and closes its client. The client stays, so pages still mounted
- * don't make a new one (which, without a token, would close with 4401 and sign out again).
+ * Forgets the assistant's token, in the tab and on the device, and closes its client. The client
+ * stays, so pages still mounted don't make a new one (which, without a token, would close with
+ * 4401 and sign out again).
  */
 export function forgetToken(assistant: string): void {
-  const { [assistant]: _, ...rest } = readTokens();
-  sessionStorage.setItem(TOKENS, JSON.stringify(rest));
+  writeTo(sessionStorage, assistant, undefined);
+  writeTo(localStorage, assistant, undefined);
   clients.get(assistant)?.close();
 }
 
 /** Keeps a token, and connects the assistant's client with it. */
-function signedInWith(assistant: string, token: string): void {
-  saveToken(assistant, token);
+function signedInWith(assistant: string, token: string, remember: boolean): void {
+  saveToken(assistant, token, remember);
   clients.get(assistant)?.open();
 }
 
-function tokenStore(assistant: string): TokenStore {
+/** Whether the assistant's current token is kept on the device rather than in the tab. */
+function remembered(assistant: string): boolean {
+  return readFrom(localStorage)[assistant] !== undefined;
+}
+
+/** A new token is kept where the old one was, unless `remember` says where. */
+function tokenStore(assistant: string, remember?: boolean): TokenStore {
   return {
     get: () => tokenFor(assistant),
-    set: (token) => (token === undefined ? forgetToken(assistant) : signedInWith(assistant, token)),
+    set: (token) =>
+      token === undefined
+        ? forgetToken(assistant)
+        : signedInWith(assistant, token, remember ?? remembered(assistant)),
   };
 }
 
@@ -129,20 +155,20 @@ function useStoreState<T>(
 }
 
 /**
- * Finds the assistant a token belongs to by asking each one who the token is, and keeps it.
- * Undefined when no assistant knows it.
+ * Finds the assistant a token belongs to by asking each one who the token is, and keeps it, on
+ * the device with `remember`. Undefined when no assistant knows it.
  */
-export async function signIn(token: string): Promise<string | undefined> {
+export async function signIn(token: string, remember: boolean): Promise<string | undefined> {
   return firstAssistant(async (assistant) => {
     await new Api({ server: "", assistant, tokens: fixedToken(token) }).me();
-    signedInWith(assistant, token);
+    signedInWith(assistant, token, remember);
   });
 }
 
 /** Trades a pairing code from `nudge pair` for a token of whichever assistant made it. */
-export async function pair(code: string): Promise<string | undefined> {
+export async function pair(code: string, remember: boolean): Promise<string | undefined> {
   return firstAssistant(async (assistant) => {
-    await new Api({ server: "", assistant, tokens: tokenStore(assistant) }).pair(code, {
+    await new Api({ server: "", assistant, tokens: tokenStore(assistant, remember) }).pair(code, {
       name: CLIENT.name,
       platform: CLIENT.platform,
     });

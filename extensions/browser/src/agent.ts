@@ -9,7 +9,7 @@ import type {
   ToolResultMessage,
   Usage,
 } from "@earendil-works/pi-ai";
-import { browserTools, type Browser, runBatch } from "./tools.ts";
+import { browserTools, type Browser, progressLine, runBatch } from "./tools.ts";
 
 /** What the browser agent runs on unless configured otherwise. */
 export const DEFAULT_BROWSER_MODEL = "anthropic/claude-haiku-5-5";
@@ -26,6 +26,11 @@ export interface BrowserAgentOptions {
   now?: () => number;
   signal?: AbortSignal;
   onStep?: (step: BrowserStep) => void;
+  /**
+   * An action the user approved after an earlier run stopped for it (`needs-confirmation`); this
+   * run may do exactly that, once.
+   */
+  approved?: string;
   /**
    * Notes kept per site from earlier runs: shown the first time a run reaches the site, and asked
    * for again after a run that answered with at least `minActions` actions.
@@ -69,11 +74,15 @@ export function notesRequest(hosts: readonly string[]): string {
 
 export type BrowserStep =
   | { type: "note"; step: number; text: string }
+  /** Before an action runs: what it is about to do, for people watching (`progressLine`). */
+  | { type: "doing"; step: number; tool: string; text: string }
   | { type: "action"; step: number; tool: string; args: unknown; ok: boolean; result: string };
 
 export interface BrowserAgentResult {
-  outcome: "answered" | "needs-login" | "max-steps" | "error" | "aborted";
+  outcome: "answered" | "needs-login" | "needs-confirmation" | "max-steps" | "error" | "aborted";
   answer: string;
+  /** With `needs-confirmation`: the action the user is asked to approve. */
+  action?: string;
   error?: string;
   steps: number;
   actions: number;
@@ -99,7 +108,7 @@ You see pages as text: open dialogs first, then the page with controls marked by
 - You may send several tool calls in one turn; they run in order and stop at the first failure. After your last call you see the page again.
 - If the page is long, use browser_find or read the next page instead of scrolling repeatedly.
 - Check that the results really match every part of the request before answering. If something cannot be found, say so.
-- Do not buy, send messages or submit personal data. To log in, use browser_login (the user's saved login for the site; you never see it). If there is none, or the site asks for a code or BankID, call browser_request_login.
+- Never buy, book, send messages or forms, sign up, post, or enter the user's personal data on your own. When the task needs one of these, get to the point just before it and call browser_confirm with the exact action; the user decides. To log in, use browser_login (the user's saved login for the site; you never see it). If there is none, or the site asks for a code or BankID, call browser_request_login.
 - State only what you saw on the pages in this session, not what you believe from elsewhere.
 - Your last message is the answer to the task: brief, with links, and without notes about your process.`;
 }
@@ -130,7 +139,11 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<Bro
     new Date(now()),
     options.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
   );
-  const messages: Message[] = [{ role: "user", content: options.task, timestamp: now() }];
+  const task =
+    options.approved === undefined
+      ? options.task
+      : `${options.task}\n\nYou stopped earlier to ask the user to approve this action, and they approved it: ${options.approved}\nThe browser is where you left it. Do exactly that action, once, then finish the task. Anything else that needs approval still needs browser_confirm.`;
+  const messages: Message[] = [{ role: "user", content: task, timestamp: now() }];
   const usage: Usage = {
     input: 0,
     output: 0,
@@ -192,6 +205,13 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<Bro
         name: c.name,
         arguments: c.arguments as Record<string, unknown>,
       })),
+      (call) =>
+        options.onStep?.({
+          type: "doing",
+          step: result.steps,
+          tool: call.name,
+          text: progressLine(options.browser, call),
+        }),
     );
     for (const output of outputs) {
       const host = observedHost(output.text);
@@ -222,9 +242,10 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<Bro
       messages.push(toolResult);
     }
     const ended = outputs.find((output) => output.ends);
-    if (ended) {
-      result.outcome = "needs-login";
+    if (ended?.ends) {
+      result.outcome = ended.ends;
       result.answer = ended.text;
+      if (ended.ends === "needs-confirmation") result.action = String(ended.args?.action ?? "");
       break;
     }
   }

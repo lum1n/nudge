@@ -222,6 +222,32 @@ describe("web push", () => {
       } satisfies PushMessage);
     });
 
+    it("swaps a subscription the browser replaced, given the old one's auth secret", async () => {
+      const old = browser("https://push.example/old");
+      await call("POST", "/push", tokens.Ann!, old.subscription);
+      const fresh = browser("https://push.example/new");
+      const renew = (auth: string, endpoint = old.subscription.endpoint) =>
+        fetch(`${server.url}/v1/a/robin/push/renew`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ old: { endpoint, auth }, subscription: fresh.subscription }),
+        }).then((response) => response.status);
+      // Knowing the endpoint is not enough: the push service knows it too.
+      expect(await renew(fresh.subscription.keys.auth)).toBe(404);
+      expect(await renew(old.subscription.keys.auth, "https://push.example/other")).toBe(404);
+      expect(await renew(old.subscription.keys.auth)).toBe(204);
+      const doc = await nudge.harness.snapshot(PushDoc, "ann", context);
+      expect(doc?.subscriptions.map((s) => s.endpoint)).toEqual(["https://push.example/new"]);
+      // It is gone now, so the old secret works only once.
+      expect(await renew(old.subscription.keys.auth)).toBe(404);
+
+      faux.setResponses([fauxAssistantMessage("Done.")]);
+      await call("POST", "/rooms/trip/messages", tokens.Ann!, { text: "Hi", requestId: "r1" });
+      await until(() => received.length === 1);
+      expect(received[0]!.endpoint).toBe("https://push.example/new");
+      expect(fresh.decrypt(received[0]!.body)).toMatchObject({ body: "Done." });
+    });
+
     it("pushes approvals, and forgets browsers that left or whose token was revoked", async () => {
       const ann = browser("https://push.example/ann");
       const bo = browser("https://push.example/bo");

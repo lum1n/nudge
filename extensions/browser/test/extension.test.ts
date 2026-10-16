@@ -7,6 +7,7 @@ import {
   fauxText,
   fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
+import { LiveDoc, UsageDoc } from "@earendil-works/pi-durable";
 import { createNudge, LOBBY, type Nudge } from "@nudge/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import browser from "../src/extension.ts";
@@ -116,6 +117,103 @@ describe("browser extension", () => {
     expect(json(roomAgain)).toContain("The contact address is ⟦EMAIL1⟧.");
     for (const request of requests) expect(json(request)).not.toContain(EMAIL);
     expect(profiles.at(-1)).toMatch(/conversation-\d+$/);
+  });
+
+  it("asks the room to approve a consequential step, and carries on in the same browser once approved", async () => {
+    const { faux, requests, reply, open } = setup();
+    const action = 'Click "Send" to send the contact form to example.no';
+    faux.setResponses([
+      reply(
+        fauxAssistantMessage([fauxToolCall("browse", { task: "Ask example.no for a quote" })], {
+          stopReason: "toolUse",
+        }),
+      ),
+      reply(
+        fauxAssistantMessage([fauxToolCall("browser_confirm", { action })], {
+          stopReason: "toolUse",
+        }),
+      ),
+      reply(fauxAssistantMessage([fauxText("It waits for your approval.")])),
+      // Approved: the worker again, told it may send, then the room hears how it went.
+      reply(
+        fauxAssistantMessage([fauxToolCall("browser_click", { ref: "e9" })], {
+          stopReason: "toolUse",
+        }),
+      ),
+      reply(fauxAssistantMessage([fauxText("Sent the form.")])),
+      reply(fauxAssistantMessage([fauxText("The form is sent.")])),
+    ]);
+    nudge = await open();
+    await say(nudge, "Ask example.no for a quote");
+
+    const [pending] = await nudge.approvals.list(LOBBY, context);
+    expect(pending).toMatchObject({
+      extension: "browser",
+      kind: "confirm",
+      status: "pending",
+      summary: `In the browser: ${action}`,
+    });
+    // The room's model learns it waits; the chat shows Approve and Deny through `approval`.
+    expect(json(requests[2])).toContain(`approval ${pending!.id}`);
+    expect(fake.calls).not.toContain("click e9");
+    const before = profiles.at(-1);
+
+    const decided = await nudge.approvals.decide(
+      LOBBY,
+      pending!.id,
+      { approve: true, by: { playerId: "owner", displayName: "Vegard" } },
+      context,
+    );
+    expect(decided).toMatchObject({ status: "done", result: "Sent the form." });
+    expect(isWorker(requests[3]!)).toBe(true);
+    expect(json(requests[3])).toContain("they approved it");
+    expect(fake.calls.at(-1)).toBe("click e9");
+    expect(profiles.at(-1)).toBe(before);
+    // Its spend counts for the room like the tool's.
+    const room = await nudge.rooms.get(LOBBY, context);
+    const usage = await nudge.harness.snapshot(UsageDoc, room!.conversationId as never, context);
+    expect(usage?.tools["browser/confirm"]).toBeDefined();
+    for (let i = 0; i < 100 && requests.length < 6; i++)
+      await new Promise((r) => setTimeout(r, 20));
+    expect(json(requests[5])).toContain("Sent the form.");
+  });
+
+  it("says what it is doing while it runs", async () => {
+    const { faux, reply, open } = setup();
+    let release!: () => void;
+    const clicked = new Promise<void>((resolve) => (release = resolve));
+    const click = fake.browser.click;
+    fake.browser.click = async (ref, options) => {
+      await clicked;
+      return click(ref, options);
+    };
+    faux.setResponses([
+      reply(
+        fauxAssistantMessage([fauxToolCall("browse", { task: "Search example.no" })], {
+          stopReason: "toolUse",
+        }),
+      ),
+      reply(
+        fauxAssistantMessage([fauxToolCall("browser_click", { ref: "e5" })], {
+          stopReason: "toolUse",
+        }),
+      ),
+      reply(fauxAssistantMessage([fauxText("Nothing there.")])),
+      reply(fauxAssistantMessage([fauxText("Nothing there.")])),
+    ]);
+    nudge = await open();
+    const room = await nudge.rooms.get(LOBBY, context);
+    const answered = say(nudge, "Search example.no");
+    let output: string | undefined;
+    for (let i = 0; i < 200 && !output?.includes("Clicking"); i++) {
+      await new Promise((r) => setTimeout(r, 10));
+      const live = await nudge.harness.snapshot(LiveDoc, room!.conversationId as never, context);
+      output = live?.tools?.find((tool) => tool.name === "browse")?.output;
+    }
+    release();
+    await answered;
+    fake.browser.click = click;
+    expect(output).toBe('Starting the browser…\nClicking "Button e5"…\n');
   });
 
   it("explains a browser model the assistant does not know", async () => {

@@ -1,4 +1,5 @@
 import type { Context } from "@earendil-works/chord";
+import type { Models, Usage } from "@earendil-works/pi-ai";
 import type { JsonValue } from "@earendil-works/chord/delta";
 import {
   type ConversationId,
@@ -6,6 +7,7 @@ import {
   defineDocFamily,
   type Harness,
   type Tx,
+  UsageDoc,
 } from "@earendil-works/pi-durable";
 import type { Change } from "../changes.ts";
 import type { Room } from "../identity/directory.ts";
@@ -79,10 +81,17 @@ export type ApprovalRun = {
   readonly approval: Readonly<Approval>;
   /** Commits to the assistant's documents, like a tool's `api.commit`. */
   commit<T>(apply: (tx: Tx) => Promise<T> | T): Promise<T>;
+  /** The assistant's models, redacting and putting values back like a tool's `api.models`. */
+  readonly models: Models;
   readonly context: Context;
 };
 
-export type ApprovalOutcome = { readonly text: string; readonly isError?: boolean };
+export type ApprovalOutcome = {
+  readonly text: string;
+  readonly isError?: boolean;
+  /** What model requests the action made cost; it counts for the room, like a tool's. */
+  readonly usage?: Usage;
+};
 
 /** Runs one kind of approved action. A throw counts as a failure with its message. */
 export type ApprovalHandler = (payload: JsonValue, run: ApprovalRun) => Promise<ApprovalOutcome>;
@@ -142,6 +151,7 @@ export class Approvals {
     private readonly harness: Harness,
     private readonly rooms: Rooms,
     private readonly now: () => number,
+    private readonly models: Models,
     /** The handler an installed extension has for `kind`, looked up when an approval runs. */
     private readonly handler: (extension: string, kind: string) => ApprovalHandler | undefined,
     private readonly changed: (change: Change) => void = () => {},
@@ -188,10 +198,21 @@ export class Approvals {
     }
     // Marked approved before it runs: after a crash it is never run a second time.
     const outcome = await this.run(room, decided, context);
-    const finished = await this.update(roomId, id, context, (item) => {
-      item.status = outcome.isError ? "failed" : "done";
-      item.result = this.redact(outcome.text);
-    });
+    const finished = await this.update(
+      roomId,
+      id,
+      context,
+      (item) => {
+        item.status = outcome.isError ? "failed" : "done";
+        item.result = this.redact(outcome.text);
+      },
+      async (tx) => {
+        if (outcome.usage === undefined) return;
+        const usage = await tx.doc(UsageDoc, room.conversationId as ConversationId);
+        const key = `${decided.extension}/${decided.kind}`;
+        usage.tools[key] = sumUsage(usage.tools[key], outcome.usage);
+      },
+    );
     await this.tell(room, finished, context);
     return finished;
   }
@@ -230,6 +251,7 @@ export class Approvals {
           room,
           approval,
           commit: (apply) => this.harness.commit(apply, context),
+          models: this.models,
           context,
         }),
       );
@@ -243,8 +265,11 @@ export class Approvals {
     id: string,
     context: Context,
     change: (item: Approval) => void,
+    /** More to change in the same commit. */
+    also?: (tx: Tx) => Promise<void>,
   ): Promise<Approval> {
     const updated = await this.harness.commit(async (tx) => {
+      await also?.(tx);
       const state = await tx.doc(ApprovalsDoc, roomId, null);
       const item = state.items.find((stored) => stored.id === id);
       if (item === undefined) throw new ApprovalNotFound(`No approval ${id} in room "${roomId}"`);
@@ -300,6 +325,24 @@ export class Approvals {
 async function readItems(read: DocumentReader, roomId: string, context: Context) {
   const state = await read.snapshot(ApprovalsDoc, roomId, context);
   return (state?.items ?? []).map(copy);
+}
+
+function sumUsage(total: Readonly<Usage> | undefined, add: Usage): Usage {
+  const cost = (key: keyof Usage["cost"]) => (total?.cost[key] ?? 0) + add.cost[key];
+  return {
+    input: (total?.input ?? 0) + add.input,
+    output: (total?.output ?? 0) + add.output,
+    cacheRead: (total?.cacheRead ?? 0) + add.cacheRead,
+    cacheWrite: (total?.cacheWrite ?? 0) + add.cacheWrite,
+    totalTokens: (total?.totalTokens ?? 0) + add.totalTokens,
+    cost: {
+      input: cost("input"),
+      output: cost("output"),
+      cacheRead: cost("cacheRead"),
+      cacheWrite: cost("cacheWrite"),
+      total: cost("total"),
+    },
+  };
 }
 
 /** A plain copy of a stored approval; documents hand out proxies. */
