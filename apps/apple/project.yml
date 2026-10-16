@@ -64,6 +64,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.nudge.dev
         PRODUCT_NAME: Nudge
+        # Not "Nudge": that is the Swift package's module, which the app imports.
+        PRODUCT_MODULE_NAME: NudgeApp
         TARGETED_DEVICE_FAMILY: "1,2"
   Nudge-macOS:
     type: application
@@ -94,4 +96,6 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.nudge.dev
         PRODUCT_NAME: Nudge
+        # Not "Nudge": that is the Swift package's module, which the app imports.
+        PRODUCT_MODULE_NAME: NudgeApp
         ENABLE_HARDENED_RUNTIME: YES
