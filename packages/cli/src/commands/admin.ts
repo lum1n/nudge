@@ -1,6 +1,13 @@
 import { readFile } from "node:fs/promises";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { DatabaseInUse, findAssistant, loadConfig, type Nudge, openAssistant } from "@nudge/core";
+import {
+  DatabaseInUse,
+  findAssistant,
+  loadConfig,
+  type Nudge,
+  openAssistant,
+  parseAddress,
+} from "@nudge/core";
 import type {
   AdminPlayer,
   ErrorResponse,
@@ -45,6 +52,7 @@ export type ServerAccess = {
 export async function invite(
   options: AdminOptions & ServerAccess & { readonly name: string },
 ): Promise<void> {
+  if (parseAddress(options.name) !== undefined) return inviteAddress(options, options.name);
   await withAssistantOrServer(
     options,
     async (nudge) => {
@@ -70,6 +78,45 @@ export async function invite(
         }),
       );
     },
+  );
+}
+
+type FederationInvite = { invite: { address: string; expiresAt: number }; link: string };
+
+/** Lets someone whose home is another assistant join, through the federation extension (ADR 10). */
+async function inviteAddress(options: AdminOptions & ServerAccess, address: string): Promise<void> {
+  const print = ({ invite, link }: FederationInvite) => {
+    console.log(`Invited ${invite.address} until ${new Date(invite.expiresAt).toLocaleString()}.`);
+    console.log(`They join from their app, signed in at home, with this link:\n\n  ${link}\n`);
+    console.log(renderUnicodeCompact(link));
+  };
+  await withAssistantOrServer(
+    options,
+    async (nudge) => {
+      const found = nudge.extensionRoute("federation", "POST", "/invites");
+      if (found === undefined)
+        throw new UsageError(
+          "Inviting people from other assistants needs the federation extension",
+        );
+      const players = await nudge.players.list(context);
+      const admins = await Promise.all(players.map((p) => nudge.players.isAdmin(p.id, context)));
+      const by = players.find((_, index) => admins[index]);
+      if (by === undefined)
+        throw new UsageError("Invite someone of your own first: nudge invite <name>");
+      const response = await found.route.handle(
+        new Request("http://localhost/", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ address }),
+        }),
+        { player: by, admin: true, params: found.params, context },
+      );
+      const body = (await response.json()) as FederationInvite | ErrorResponse;
+      if ("error" in body) throw new UsageError(body.error);
+      print(body);
+    },
+    async (server) =>
+      print(await server.call<FederationInvite>("POST", "/ext/federation/invites", { address })),
   );
 }
 

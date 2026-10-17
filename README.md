@@ -22,6 +22,7 @@ An extendable, multiplayer personal assistant that keeps personal data away from
 - `@nudge/ext-browser`: lets the assistant use the web (`extensions/browser`).
 - `@nudge/ext-mcp`: gives the assistant the tools of MCP servers (`extensions/mcp`).
 - `@nudge/ext-codemode`: lets the model run short scripts that call the room's tools (`extensions/codemode`).
+- `@nudge/ext-federation`: lets people from other assistants join, with their home vouching for them (`extensions/federation`).
 
 ## Use
 
@@ -319,6 +320,16 @@ An entry's `rooms` lists the kinds of room it is on in by default (`"lobby"`, `"
 `extensions/matrix` does the same as a Matrix bot account. Set `homeserver` in its settings and the account's access token in `MATRIX_ACCESS_TOKEN`. It joins rooms it is invited to, and a room with two members counts as a direct chat. It reads and writes rooms without end-to-end encryption only; encrypted messages are ignored. Like Signal, approvals ask for `/approve <id>` or `/deny <id>`.
 
 The shared parts (links, chats to rooms, commands, relaying) live in `packages/bridge` for other chat services.
+
+### Homes and other assistants
+
+`extensions/federation` lets people from other Nudge assistants join this one, and people here join others (ADR 10). Everyone's home is the assistant they joined first; their address is their id there, the home's server and the assistant's name, such as `vegard@nudge.example.com/robin`. Set `server` to the address other servers reach this one at:
+
+```json
+{ "from": "./extensions/federation", "settings": { "server": "https://nudge.example.com" } }
+```
+
+An admin invites someone by address, `nudge invite ann@other.example/team`, which prints a `nudge://join` link that works for seven days. Their app asks their home to vouch for them (`POST /ext/federation/assert` there, with the assistant they join), and hands what the home signed to this one (`POST /ext/federation/join`), which checks it against the key the home publishes and answers with a token, as pairing does. They become a player here like anyone else, shown with their address. Their name, picture, time zone, language and settings come from their home, which sends them again whenever they change them there. Each assistant signs with an Ed25519 key of its own, kept with the extension's secrets and in backups; an assistant that loses it can no longer vouch for its people elsewhere.
 
 ### Write an extension
 

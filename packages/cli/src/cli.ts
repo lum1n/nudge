@@ -28,7 +28,8 @@ Commands:
   chat [room]        Chat in this terminal; room is a room id, or "me" for your own
                      (default: the lobby)
   serve              Run every assistant behind an HTTP and WebSocket server
-  invite <name>      Add a player and print their token
+  invite <name>      Add a player and print their token; with an address such as
+                     ann@nudge.example.com/robin, let someone from another assistant join
   pair <player>      Print a one-time code, link and QR code that signs an app in
   token <player>     Print a new token for a player, such as for a lost one
   tokens [player]    List the tokens of a player, or of everyone, by client id
