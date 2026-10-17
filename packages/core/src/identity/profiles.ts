@@ -34,7 +34,8 @@ export type ProfileUpdate = {
   readonly timeZone?: string | null;
   readonly language?: string | null;
   readonly notifications?: NotificationPrefs | null;
-  readonly extensions?: Record<string, JsonObject> | null;
+  /** By extension name: each one named is replaced, `null` clears it; `null` for all clears them all. */
+  readonly extensions?: Record<string, JsonObject | null> | null;
 };
 
 /**
@@ -62,6 +63,8 @@ export class Profiles {
     private readonly harness: Harness,
     private readonly players: Players,
     private readonly changed: (playerId: string) => void = () => {},
+    /** Throws `InvalidProfile` when an extension doesn't take what a player chose for it. */
+    private readonly checkExtension: (name: string, chosen: JsonObject) => void = () => {},
   ) {}
 
   /** Undefined for a player who doesn't exist. */
@@ -73,6 +76,8 @@ export class Profiles {
     const player = await this.players.get(playerId, context);
     if (player === undefined) throw new Error(`No player "${playerId}"`);
     check(update);
+    for (const [name, chosen] of Object.entries(update.extensions ?? {}))
+      if (chosen !== null) this.checkExtension(name, chosen);
     if (update.displayName !== undefined && update.displayName.trim() !== player.displayName)
       await this.players.rename(playerId, update.displayName, context);
     await this.harness.commit(async (tx) => {
@@ -86,8 +91,14 @@ export class Profiles {
       else if (update.notifications !== undefined)
         profile.notifications = { ...update.notifications };
       if (update.extensions === null) delete profile.extensions;
-      else if (update.extensions !== undefined)
-        profile.extensions = structuredClone(update.extensions);
+      else if (update.extensions !== undefined) {
+        const extensions = profile.extensions ?? {};
+        for (const [name, chosen] of Object.entries(update.extensions))
+          if (chosen === null) delete extensions[name];
+          else extensions[name] = structuredClone(chosen);
+        if (Object.keys(extensions).length === 0) delete profile.extensions;
+        else profile.extensions = extensions;
+      }
     }, context);
     this.changed(playerId);
     return (await this.get(playerId, context))!;

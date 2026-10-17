@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { Context as ModelContext } from "@earendil-works/pi-ai";
+import type { JsonObject } from "@earendil-works/pi-durable";
 import { createModels } from "@earendil-works/pi-ai/models";
 import {
   fauxAssistantMessage,
@@ -274,6 +275,76 @@ describe("extensions", () => {
     expect(await protect!("Storgata 1", "ADDRESS")).toBe("⟦ADDRESS1⟧");
     await say(nudge, "I live in Storgata 1.");
     expect(last()).toContain("I live in ⟦ADDRESS1⟧.");
+    await nudge.close(context);
+  });
+
+  it("keeps each player's settings for an extension in their profile, checked on write", async () => {
+    expect(() =>
+      defineNudgeExtension({
+        name: "strict",
+        version: "1",
+        playerSettings: Type.Object({ units: Type.String() }),
+        setup: () => ({}),
+      }),
+    ).toThrow(/default/);
+    let read: ((playerId: string) => Promise<unknown>) | undefined;
+    const weather = defineNudgeExtension({
+      name: "weather",
+      version: "1",
+      playerSettings: Type.Object({
+        units: Type.Union([Type.Literal("metric"), Type.Literal("imperial")], {
+          default: "metric",
+        }),
+        city: Type.Optional(Type.String()),
+      }),
+      setup: (host) => {
+        read = (playerId) => host.playerSettings(playerId, context);
+        return {};
+      },
+    });
+    const plain = defineNudgeExtension({ name: "plain", version: "1", setup: () => ({}) });
+    const { options } = setup({ extensions: [weather, plain] });
+    const nudge = await createNudge(options, context);
+    const ann = (await nudge.players.invite("Ann", context)).player;
+    expect(nudge.playerSettings().map(({ name }) => name)).toEqual(["weather"]);
+
+    expect(await read!(ann.id)).toEqual({ units: "metric" });
+    expect(await read!("nobody")).toBeUndefined();
+    await nudge.profiles.update(ann.id, { extensions: { weather: { city: "Bergen" } } }, context);
+    expect(await read!(ann.id)).toEqual({ units: "metric", city: "Bergen" });
+    for (const extensions of [
+      { weather: { units: "kelvin" } } as Record<string, JsonObject>,
+      { plain: { anything: true } },
+      { missing: {} },
+    ])
+      await expect(nudge.profiles.update(ann.id, { extensions }, context)).rejects.toThrow();
+    // What the profile keeps is what the player chose; null clears one extension's.
+    expect((await nudge.profiles.get(ann.id, context))?.extensions).toEqual({
+      weather: { city: "Bergen" },
+    });
+    await nudge.profiles.update(ann.id, { extensions: { weather: null } }, context);
+    expect((await nudge.profiles.get(ann.id, context))?.extensions).toBeUndefined();
+    await nudge.close(context);
+  });
+
+  it("rolls the dice the asker chose in their profile", async () => {
+    const { options, faux } = setup({ extensions: [hello] });
+    const nudge = await createNudge(options, context);
+    await nudge.players.ensure("owner", "Vegard", context);
+    await nudge.profiles.update("owner", { extensions: { hello: { sides: 2 } } }, context);
+    const outputs: string[] = [];
+    faux.setResponses([
+      () =>
+        fauxAssistantMessage([fauxToolCall("roll_dice", { count: 20 })], {
+          stopReason: "toolUse",
+        }),
+      (request: ModelContext) => {
+        outputs.push(lastToolResult(request) ?? "");
+        return fauxAssistantMessage("Done.");
+      },
+    ]);
+    await say(nudge, "Roll 20 dice");
+    expect(outputs[0]!.split(", ").every((roll) => roll === "1" || roll === "2")).toBe(true);
     await nudge.close(context);
   });
 

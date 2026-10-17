@@ -1,6 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { Context } from "@earendil-works/chord";
+import type { TSchema } from "typebox";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { JsonValue, Message, Models } from "@earendil-works/pi-ai";
 import {
@@ -31,6 +32,7 @@ import {
   type HostBase,
   type ExtensionInput,
   type RoomSocketHandler,
+  checkPlayerSettings,
   type SetUpExtension,
   setUpExtension,
 } from "./extensions/define.ts";
@@ -86,6 +88,13 @@ export type NudgeOptions = {
 
 /** An installed extension, as `Nudge.extensions` lists it. */
 export type InstalledExtension = { readonly name: string; readonly version?: string };
+
+/** An installed extension that takes settings from each player. */
+export type PlayerSettingsSchema = InstalledExtension & {
+  readonly description?: string;
+  /** TypeBox schema of the settings, as `NudgeExtension.playerSettings` declares it. */
+  readonly schema: TSchema;
+};
 
 /** An installed extension as one room has it. */
 export type RoomExtension = InstalledExtension & {
@@ -178,8 +187,11 @@ export class Nudge {
     this.events.subscribe((event) => this.deliver(event));
     this.players = new Players(harness, (name) => this.protect(name, "NAME").then(() => {}), now);
     const changed = (change: Change) => this.changes.emit(change);
-    this.profiles = new Profiles(harness, this.players, (playerId) =>
-      changed({ kind: "profile", playerId }),
+    this.profiles = new Profiles(
+      harness,
+      this.players,
+      (playerId) => changed({ kind: "profile", playerId }),
+      (name, chosen) => checkPlayerSettings(this.installed, name, chosen),
     );
     this.rooms = new Rooms(
       harness,
@@ -365,6 +377,22 @@ export class Nudge {
       name: extension.name,
       ...(version === undefined ? {} : { version }),
     }));
+  }
+
+  /** The installed extensions that take settings from each player, with their schemas. */
+  playerSettings(): PlayerSettingsSchema[] {
+    return this.installed.flatMap(({ extension, version, description, playerSettings }) =>
+      playerSettings === undefined
+        ? []
+        : [
+            {
+              name: extension.name,
+              ...(version === undefined ? {} : { version }),
+              ...(description === undefined ? {} : { description }),
+              schema: playerSettings,
+            },
+          ],
+    );
   }
 
   /**

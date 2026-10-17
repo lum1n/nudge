@@ -430,14 +430,31 @@ export const UpdateProfileRequest = Type.Object({
   timeZone: Type.Optional(Type.Union([Type.String(), Type.Null()])),
   language: Type.Optional(Type.Union([Type.String(), Type.Null()])),
   notifications: Type.Optional(Type.Union([NotificationPrefs, Type.Null()])),
+  /** By extension name: each one named is replaced, `null` clears it; `null` for all clears them all. */
   extensions: Type.Optional(
     Type.Union([
-      Type.Record(Type.String(), Type.Record(Type.String(), Type.Unknown())),
+      Type.Record(
+        Type.String(),
+        Type.Union([Type.Record(Type.String(), Type.Unknown()), Type.Null()]),
+      ),
       Type.Null(),
     ]),
   ),
 });
 export type UpdateProfileRequest = Static<typeof UpdateProfileRequest>;
+
+/** An installed extension that takes settings from each player, for a profile's settings form. */
+export const PlayerSettingsSchema = Type.Object({
+  name: Type.String(),
+  version: Type.Optional(Type.String()),
+  description: Type.Optional(Type.String()),
+  /** JSON Schema of what the player may choose, with the defaults of what they leave out. */
+  schema: Type.Unknown(),
+});
+export type PlayerSettingsSchema = Static<typeof PlayerSettingsSchema>;
+
+export const PlayerSettingsResponse = Type.Object({ extensions: Type.Array(PlayerSettingsSchema) });
+export type PlayerSettingsResponse = Static<typeof PlayerSettingsResponse>;
 
 /** A room's model context as its next request would send it, personal values as placeholders. */
 export const ModelViewResponse = Type.Object({
@@ -720,6 +737,8 @@ export const SCHEMAS = {
   NotificationPrefs,
   Profile,
   UpdateProfileRequest,
+  PlayerSettingsSchema,
+  PlayerSettingsResponse,
   PushKeyResponse,
   PushSubscribeRequest,
   PushRenewRequest,

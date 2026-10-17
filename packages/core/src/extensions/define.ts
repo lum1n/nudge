@@ -1,19 +1,30 @@
 import { join } from "node:path";
-import type { Extension, Session } from "@earendil-works/pi-durable";
+import type { Context } from "@earendil-works/chord";
+import type { Extension, JsonObject, Session } from "@earendil-works/pi-durable";
 import type { ApprovalHandler } from "../approvals/approvals.ts";
 import { type Static, type TSchema, Type } from "typebox";
 import { Value } from "typebox/value";
 import { ConfigError } from "../config.ts";
 import type { Player, Room, RoomKind } from "../identity/directory.ts";
+import { InvalidProfile } from "../identity/profiles.ts";
 import type { PiiDetector } from "../privacy/detectors.ts";
 import type { RoomEvent } from "../room-events.ts";
 import type { Nudge } from "../nudge.ts";
 import { SecretStore } from "../secrets.ts";
 
 /** What an extension's `setup` gets from the assistant it is installed in. */
-export type ExtensionHost<Settings> = {
+export type ExtensionHost<Settings, PlayerSettings = undefined> = {
   /** The extension's settings from the config, checked against its schema, defaults filled in. */
   readonly settings: Settings;
+  /**
+   * A player's settings for the extension from their profile, defaults filled in; the defaults
+   * alone when they set none or what they set no longer fits the schema. Undefined for a player
+   * who doesn't exist. Throws until the assistant is open.
+   */
+  readonly playerSettings: (
+    playerId: string,
+    context: Context,
+  ) => Promise<PlayerSettings | undefined>;
   /** What the assistant calls itself. */
   readonly displayName: string;
   readonly timeZone: string;
@@ -44,7 +55,10 @@ export type ExtensionDocuments = Pick<Session, "snapshot" | "watchDoc" | "commit
  * What the assistant gives every extension; `setUpExtension` adds the settings and each one's
  * `dataDir` and `secrets`.
  */
-export type HostBase = Omit<ExtensionHost<unknown>, "settings" | "dataDir" | "secrets"> & {
+export type HostBase = Omit<
+  ExtensionHost<unknown>,
+  "settings" | "playerSettings" | "dataDir" | "secrets"
+> & {
   /** Parent of the extensions' data directories. */
   readonly dataRoot?: string;
 };
@@ -102,7 +116,7 @@ export type ExtensionParts = Omit<Extension, "name"> & {
   readonly close?: () => void | Promise<void>;
 };
 
-export type NudgeExtension<S extends TSchema = TSchema> = {
+export type NudgeExtension<S extends TSchema = TSchema, P extends TSchema = TSchema> = {
   readonly kind: "nudge.extension";
   /** Lower-case letters, digits and dashes. Installing another extension with this name replaces it. */
   readonly name: string;
@@ -110,8 +124,14 @@ export type NudgeExtension<S extends TSchema = TSchema> = {
   readonly description?: string;
   /** TypeBox schema of the settings; without one the extension takes none. */
   readonly settings?: S;
+  /**
+   * TypeBox schema of what each player chooses for themselves, kept in their profile and carried
+   * to the other assistants they are in (ADR 10). Defaults alone must fit it, for players who
+   * chose nothing.
+   */
+  readonly playerSettings?: P;
   /** Runs once per assistant at open, and again on every reload. */
-  setup(host: ExtensionHost<Static<S>>): ExtensionParts | Promise<ExtensionParts>;
+  setup(host: ExtensionHost<Static<S>, Static<P>>): ExtensionParts | Promise<ExtensionParts>;
 };
 
 /** An extension and its settings, as the config gives them. */
@@ -144,15 +164,20 @@ export function roomsSetting(
 /** The name the built-in extension uses; nothing else may take it. */
 export const BUILTIN_NAME = "nudge";
 
-export function defineNudgeExtension<S extends TSchema = TSchema>(
-  extension: Omit<NudgeExtension<S>, "kind">,
-): NudgeExtension<S> {
+export function defineNudgeExtension<S extends TSchema = TSchema, P extends TSchema = TSchema>(
+  extension: Omit<NudgeExtension<S, P>, "kind">,
+): NudgeExtension<S, P> {
   if (!NAME.test(extension.name))
     throw new Error(
       `Extension name "${extension.name}" is not lower-case letters, digits and dashes`,
     );
   if (extension.name === BUILTIN_NAME)
     throw new Error(`"${BUILTIN_NAME}" is the built-in extension`);
+  const players = extension.playerSettings;
+  if (players !== undefined && !Value.Check(players, Value.Default(players, {})))
+    throw new Error(
+      `The player settings of extension "${extension.name}" need a default for every required one`,
+    );
   return { kind: "nudge.extension", ...extension };
 }
 
@@ -168,6 +193,8 @@ export type SetUpExtension = {
   readonly extension: Extension;
   readonly version?: string;
   readonly description?: string;
+  /** See `NudgeExtension.playerSettings`. */
+  readonly playerSettings?: TSchema;
   /** Default every kind; see `ExtensionUse.rooms`. */
   readonly rooms?: readonly RoomKind[];
   readonly detectors: readonly PiiDetector[];
@@ -203,6 +230,12 @@ export async function setUpExtension(
   const settings = checkSettings(definition, use.settings);
   const { dataRoot, ...base } = host;
   const dataDir = dataRoot === undefined ? undefined : join(dataRoot, definition.name);
+  const schema = definition.playerSettings;
+  const playerSettings = async (playerId: string, context: Context) => {
+    const profile = await base.assistant().profiles.get(playerId, context);
+    if (profile === undefined || schema === undefined) return undefined;
+    return fillPlayerSettings(schema, profile.extensions?.[definition.name]);
+  };
   const secrets = new SecretStore(dataDir === undefined ? undefined : join(dataDir, "secrets"));
   const {
     detectors = [],
@@ -215,6 +248,7 @@ export async function setUpExtension(
   } = await definition.setup({
     ...base,
     settings,
+    playerSettings,
     secrets,
     ...(dataDir === undefined ? {} : { dataDir }),
   });
@@ -222,6 +256,7 @@ export async function setUpExtension(
     extension: { ...parts, name: definition.name },
     version: definition.version,
     ...(definition.description === undefined ? {} : { description: definition.description }),
+    ...(schema === undefined ? {} : { playerSettings: schema }),
     ...rooms,
     detectors,
     models,
@@ -248,6 +283,35 @@ function checkSettings(extension: NudgeExtension, settings: unknown): unknown {
     );
   }
   return value;
+}
+
+/** A player's settings over the defaults; the defaults alone when they don't fit. */
+function fillPlayerSettings(schema: TSchema, chosen: JsonObject | undefined): unknown {
+  const value = Value.Default(schema, Value.Clone(chosen ?? {}));
+  return Value.Check(schema, value) ? value : Value.Default(schema, {});
+}
+
+/**
+ * Checks what a player chose for an installed extension, before their profile keeps it. Throws
+ * `InvalidProfile` for an extension that isn't installed or takes no player settings.
+ */
+export function checkPlayerSettings(
+  installed: readonly SetUpExtension[],
+  name: string,
+  chosen: JsonObject,
+): void {
+  const found = installed.find(({ extension }) => extension.name === name);
+  if (found === undefined) throw new InvalidProfile(`No extension "${name}"`);
+  const schema = found.playerSettings;
+  if (schema === undefined)
+    throw new InvalidProfile(`Extension "${name}" takes no player settings`);
+  const value = Value.Default(schema, Value.Clone(chosen));
+  if (!Value.Check(schema, value)) {
+    const problems = [...Value.Errors(schema, value)]
+      .slice(0, 5)
+      .map((error) => `${error.instancePath || "/"} ${error.message}`);
+    throw new InvalidProfile(`Invalid settings for extension "${name}": ${problems.join("; ")}`);
+  }
 }
 
 function isEmptyObject(value: unknown): boolean {

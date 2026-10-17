@@ -44,6 +44,7 @@ import {
   type PlayersResponse,
   ProtectRequest,
   type PrivateValuesResponse,
+  type PlayerSettingsResponse,
   type Profile,
   type ProtectResponse,
   type PushKeyResponse,
@@ -278,6 +279,18 @@ export function restRoutes(options: RestOptions): Hono {
     if (profile === undefined) throw new HttpError(404, "No such player");
     return c.json(profile satisfies Profile);
   });
+
+  api.get("/me/profile/extensions", (c) =>
+    c.json({
+      // Through JSON: TypeBox keeps its own markers on symbols, which clients have no use for.
+      extensions: c.var.nudge
+        .playerSettings()
+        .map((extension) => ({
+          ...extension,
+          schema: JSON.parse(JSON.stringify(extension.schema)),
+        })),
+    } satisfies PlayerSettingsResponse),
+  );
 
   api.patch("/me/profile", async (c) => {
     const body = await readBody(c, UpdateProfileRequest);

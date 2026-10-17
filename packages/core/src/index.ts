@@ -12,6 +12,7 @@ import {
   type NudgeOptions,
   type PrivacyOptions,
   type PrivateValue,
+  type PlayerSettingsSchema,
   type RoomExtension,
   RoomNotFound,
 } from "./nudge.ts";
@@ -183,6 +184,7 @@ export {
   type NudgeOptions,
   type PrivacyOptions,
   type PrivateValue,
+  type PlayerSettingsSchema,
   type RoomExtension,
   RoomNotFound,
 };

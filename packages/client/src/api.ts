@@ -18,6 +18,8 @@ import type {
   PlayerResponse,
   PrivateValue,
   PrivateValuesResponse,
+  PlayerSettingsResponse,
+  PlayerSettingsSchema,
   Profile,
   ProtectResponse,
   PushKeyResponse,
@@ -180,6 +182,11 @@ export class Api {
   /** Changes the fields given; `null` clears one. */
   updateProfile(update: UpdateProfileRequest): Promise<Profile> {
     return this.request("PATCH", "/me/profile", update);
+  }
+
+  /** The installed extensions that take settings from each player, with their schemas. */
+  async playerSettings(): Promise<PlayerSettingsSchema[]> {
+    return (await this.request<PlayerSettingsResponse>("GET", "/me/profile/extensions")).extensions;
   }
 
   /** What the model sees of the room: its next request's messages, personal values as placeholders. */

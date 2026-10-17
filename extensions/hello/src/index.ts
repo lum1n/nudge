@@ -1,8 +1,15 @@
-import { defineNudgeExtension, defineTool, regexDetector, section, Type } from "@nudge/core";
+import {
+  currentTurn,
+  defineNudgeExtension,
+  defineTool,
+  regexDetector,
+  section,
+  Type,
+} from "@nudge/core";
 
 /**
- * The smallest useful extension: a prompt section that uses a setting, a tool, and a detector that
- * keeps Norwegian licence plates from the model.
+ * The smallest useful extension: a prompt section that uses a setting, a tool with a setting each
+ * player chooses, and a detector that keeps Norwegian licence plates from the model.
  */
 export default defineNudgeExtension({
   name: "hello",
@@ -21,7 +28,14 @@ export default defineNudgeExtension({
       description: "Most sides a die may have when someone asks for a dice roll.",
     }),
   }),
-  setup: ({ settings, displayName }) => ({
+  playerSettings: Type.Object({
+    sides: Type.Integer({
+      default: 6,
+      minimum: 2,
+      description: "Sides of your dice when you don't say how many.",
+    }),
+  }),
+  setup: ({ settings, playerSettings, displayName }) => ({
     sections: [
       section(
         "greeting",
@@ -33,12 +47,17 @@ export default defineNudgeExtension({
         name: "roll_dice",
         description: "Roll dice; use it whenever someone asks for a random number or a dice roll.",
         parameters: Type.Object({
-          sides: Type.Optional(Type.Integer({ minimum: 2, description: "Default 6." })),
+          sides: Type.Optional(
+            Type.Integer({ minimum: 2, description: "Default: what the asker chose, or 6." }),
+          ),
           count: Type.Optional(
             Type.Integer({ minimum: 1, maximum: 20, description: "Default 1." }),
           ),
         }),
-        execute: async ({ sides = 6, count = 1 }) => {
+        execute: async ({ sides: asked, count = 1 }, _api, context) => {
+          const by = currentTurn().by;
+          const chosen = by === undefined ? undefined : await playerSettings(by.playerId, context);
+          const sides = asked ?? chosen?.sides ?? 6;
           if (sides > settings.maxSides)
             return {
               output: [{ type: "text", text: `At most ${settings.maxSides} sides.` }],

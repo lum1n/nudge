@@ -3534,10 +3534,17 @@
               "type": "object",
               "patternProperties": {
                 "^.*$": {
-                  "type": "object",
-                  "patternProperties": {
-                    "^.*$": {}
-                  }
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "patternProperties": {
+                        "^.*$": {}
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 }
               }
             },
@@ -3545,6 +3552,47 @@
               "type": "null"
             }
           ]
+        }
+      }
+    },
+    "PlayerSettingsSchema": {
+      "type": "object",
+      "required": ["name", "schema"],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "schema": {}
+      }
+    },
+    "PlayerSettingsResponse": {
+      "type": "object",
+      "required": ["extensions"],
+      "properties": {
+        "extensions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "schema"],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "schema": {}
+            }
+          }
         }
       }
     },

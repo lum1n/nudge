@@ -1,7 +1,14 @@
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
-import { ConfigError, createNudge, type Nudge, requestApproval } from "@nudge/core";
+import {
+  ConfigError,
+  createNudge,
+  defineNudgeExtension,
+  type Nudge,
+  requestApproval,
+  Type,
+} from "@nudge/core";
 import {
   AdminPlayer,
   CLOSE,
@@ -12,6 +19,7 @@ import {
   PairResponse,
   PlayerMemoryResponse,
   PlayersResponse,
+  PlayerSettingsResponse,
   Profile,
   Room,
   RoomsResponse,
@@ -68,6 +76,14 @@ describe("v1 HTTP", () => {
         database: ":memory:",
         models,
         model: { provider: faux.provider.id, modelId: faux.getModel().id },
+        extensions: [
+          defineNudgeExtension({
+            name: "mail",
+            version: "1",
+            playerSettings: Type.Object({ sign: Type.Boolean({ default: false }) }),
+            setup: () => ({}),
+          }),
+        ],
       },
       context,
     );
@@ -168,6 +184,33 @@ describe("v1 HTTP", () => {
     expect(
       (await call("PATCH", "/me/profile", { token: tokens.Bo, body: { language: 7 } })).status,
     ).toBe(400);
+    expect(
+      await call("PATCH", "/me/profile", {
+        token: tokens.Bo,
+        body: { extensions: { mail: { sign: "yes" } } },
+      }),
+    ).toMatchObject({ status: 400, json: { error: expect.stringContaining("mail") } });
+    expect(
+      await call("GET", "/me/profile/extensions", {
+        token: tokens.Bo,
+        schema: PlayerSettingsResponse,
+      }),
+    ).toEqual({
+      status: 200,
+      json: {
+        extensions: [
+          {
+            name: "mail",
+            version: "1",
+            schema: {
+              type: "object",
+              properties: { sign: { type: "boolean", default: false } },
+              required: ["sign"],
+            },
+          },
+        ],
+      },
+    });
     expect((await call("GET", "/me/profile")).status).toBe(401);
   });
 

@@ -1,8 +1,9 @@
-import type { Profile } from "@nudge/client";
+import type { PlayerSettingsSchema, Profile } from "@nudge/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { type FormEvent, useEffect, useState } from "react";
 import { clientFor } from "../../api.ts";
+import { ObjectFields, type Schema, withoutDefaults } from "../../schema-form.tsx";
 
 export const Route = createFileRoute("/$assistant/profile")({ component: ProfilePage });
 
@@ -13,6 +14,8 @@ type Draft = {
   avatar?: string;
   answers: boolean;
   approvals: boolean;
+  /** What the player chose per extension, by name. */
+  extensions: Record<string, Record<string, unknown>>;
 };
 
 function draftOf(profile: Profile): Draft {
@@ -23,6 +26,7 @@ function draftOf(profile: Profile): Draft {
     ...(profile.avatar === undefined ? {} : { avatar: profile.avatar }),
     answers: profile.notifications?.answers ?? true,
     approvals: profile.notifications?.approvals ?? true,
+    extensions: structuredClone(profile.extensions ?? {}),
   };
 }
 
@@ -55,6 +59,10 @@ function ProfilePage() {
   const queryClient = useQueryClient();
   const key = [assistant, "profile"];
   const profile = useQuery({ queryKey: key, queryFn: () => clientFor(assistant).api.profile() });
+  const extensions = useQuery({
+    queryKey: [assistant, "player-settings"],
+    queryFn: () => clientFor(assistant).api.playerSettings(),
+  });
   const [draft, setDraft] = useState<Draft>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -83,6 +91,12 @@ function ProfilePage() {
         language: draft.language.trim() === "" ? null : draft.language.trim(),
         avatar: draft.avatar ?? null,
         notifications: { answers: draft.answers, approvals: draft.approvals },
+        extensions: Object.fromEntries(
+          (extensions.data ?? []).map(({ name, schema }) => {
+            const chosen = withoutDefaults(draft.extensions[name] ?? {}, schema as Schema);
+            return [name, Object.keys(chosen).length === 0 ? null : chosen];
+          }),
+        ),
       });
       queryClient.setQueryData(key, next);
       // The name shows in the header and in rooms.
@@ -189,6 +203,16 @@ function ProfilePage() {
             Actions waiting for approval
           </label>
         </fieldset>
+        {(extensions.data ?? []).map((extension) => (
+          <ExtensionFields
+            key={extension.name}
+            extension={extension}
+            value={draft.extensions[extension.name] ?? {}}
+            onChange={(next) =>
+              change({ extensions: { ...draft.extensions, [extension.name]: next } })
+            }
+          />
+        ))}
         <div className="flex items-center gap-3">
           <button
             type="submit"
@@ -202,6 +226,27 @@ function ProfilePage() {
         </div>
       </form>
     </Page>
+  );
+}
+
+/** One extension's settings for the player, in the form the settings page uses. */
+function ExtensionFields({
+  extension,
+  value,
+  onChange,
+}: {
+  extension: PlayerSettingsSchema;
+  value: Record<string, unknown>;
+  onChange: (next: Record<string, unknown>) => void;
+}) {
+  return (
+    <fieldset className="flex flex-col gap-2 border-t border-stone-200 pt-3">
+      <legend className="text-sm font-medium">{extension.name}</legend>
+      {extension.description !== undefined && (
+        <p className="text-xs text-stone-500">{extension.description}</p>
+      )}
+      <ObjectFields schema={extension.schema as Schema} value={value} onChange={onChange} />
+    </fieldset>
   );
 }
 
