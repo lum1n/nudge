@@ -30,6 +30,8 @@ targets:
   Nudge-iOS:
     type: application
     platform: iOS
+    # A shared scheme, so Xcode lists the app instead of guessing schemes of its own.
+    scheme: {}
     sources:
       - path: Nudge
       - path: Shared
@@ -82,6 +84,8 @@ targets:
   Nudge-macOS:
     type: application
     platform: macOS
+    # A shared scheme, so Xcode lists the app instead of guessing schemes of its own.
+    scheme: {}
     sources:
       - path: Nudge
       - path: Shared
