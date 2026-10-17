@@ -26,12 +26,12 @@ To try it without a real model: `pnpm build` in the repository, then `node packa
 
 ## Push
 
-The server sends to APNs itself, so it needs an APNs key: in the Apple Developer account, Keys → create a key with Apple Push Notifications service, download the `.p8`, and note its key id and your team id. Then in `nudge.json`:
+The server sends to APNs itself, so it needs an APNs key: in the Apple Developer account, Keys → create a key with Apple Push Notifications service, download the `.p8`, and note its key id and your team id. Then in the settings of the server's push extension (see the repository's README):
 
 ```json
-"push": {
-  "apns": { "keyFile": "apns-key.p8", "keyId": "ABC123DEFG", "teamId": "XYZ987TEAM", "bundleId": "app.nudge.dev" }
-}
+"apns": { "keyFile": "apns-key.p8", "keyId": "ABC123DEFG", "teamId": "XYZ987TEAM", "bundleId": "app.nudge.dev" }
 ```
+
+A server without the key can still reach the app through a push relay (`packages/relay`) that has it. Set `NUDGE_PUSH_RELAY` in project.yml to the relay's address: when a server lists that relay in its push extension's `relays`, the app registers its APNs token with the relay and gives the server the relay's handle and a key of its own, kept in a keychain group it shares with its notification service extension (`NotificationService/`). Those pushes arrive as "New message" with the real one sealed for that key, and the extension opens it before it is shown. Both need the keychain group, so set a team.
 
 Builds run from Xcode register as `sandbox` devices and get their pushes through Apple's sandbox; release builds through production. One key serves both. The simulator gets no pushes from APNs.

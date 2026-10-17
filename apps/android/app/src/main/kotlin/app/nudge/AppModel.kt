@@ -21,12 +21,16 @@ import nudge.client.observeHomeState
 import nudge.ffi.Assistant
 import nudge.ffi.ClientConfig
 import nudge.ffi.ConnectionStatus
+import nudge.ffi.DeviceKey
 import nudge.ffi.DevicePlatform
 import nudge.ffi.HomeUpdate
 import nudge.ffi.MeInfo
 import nudge.ffi.NudgeClient
 import nudge.ffi.NudgeException
+import nudge.ffi.PushPayload
 import nudge.ffi.PushPlatforms
+import nudge.ffi.newDeviceKey
+import nudge.ffi.registerWithRelay
 
 /** Where the app signs in. */
 data class Account(val server: String, val assistant: String, val assistantName: String) {
@@ -71,6 +75,27 @@ class AppModel(private val context: Context) {
 
     private var deviceToken: String? = null
     private var registeredToken: String? = null
+    /** What the server knows the device by: the FCM token, or the relay's handle for it. */
+    private var registeredDevice: String? = null
+
+    /**
+     * The device's key for pushes through the relay, made once and kept in the app's private
+     * preferences; the relay and Firebase see only what is sealed for it.
+     */
+    private val deviceKey: DeviceKey by lazy {
+        val publicKey = preferences.getString("deviceKey.public", null)
+        val privateKey = preferences.getString("deviceKey.private", null)
+        if (publicKey != null && privateKey != null) {
+            DeviceKey(publicKey, privateKey)
+        } else {
+            newDeviceKey().also { key ->
+                preferences.edit()
+                    .putString("deviceKey.public", key.publicKey)
+                    .putString("deviceKey.private", key.privateKey)
+                    .apply()
+            }
+        }
+    }
 
     init {
         val server = preferences.getString("server", null)
@@ -113,13 +138,14 @@ class AppModel(private val context: Context) {
         val session = mutableSession.value ?: return
         // Cleared first: revoking the token closes the socket with 4401, which mustn't sign out
         // a second time.
-        val device = registeredToken
+        val device = registeredDevice
         mutableSession.value = null
         session.connection.close()
         session.home.close()
         mutableMe.value = null
         mutablePushPlatforms.value = null
         registeredToken = null
+        registeredDevice = null
         selectedRoom.value = null
         requestedRoom.value = null
         signedOutBecause.value = because
@@ -151,6 +177,9 @@ class AppModel(private val context: Context) {
         scope.launch { registerDevice() }
     }
 
+    /** What a push through the relay says, opened with the device's key; null if it isn't for it. */
+    fun openPush(sealed: String): PushPayload? = nudge.ffi.openPush(deviceKey.privateKey, sealed)
+
     /** A tapped notification: open its room, if it is for this account's assistant. */
     fun open(assistant: String?, room: String?) {
         if (room == null) return
@@ -173,12 +202,26 @@ class AppModel(private val context: Context) {
         }
     }
 
+    /**
+     * Registers the FCM token with the server: directly when it sends to this app itself, else
+     * through the relay this build knows, if the server sends through it too.
+     */
     private suspend fun registerDevice() {
         val client = mutableSession.value?.client ?: return
         val token = deviceToken ?: return
-        if (token == registeredToken || mutablePushPlatforms.value?.fcm != true) return
+        val platforms = mutablePushPlatforms.value ?: return
+        if (token == registeredToken) return
         try {
-            client.registerDevice(DevicePlatform.FCM, token, null)
+            if (platforms.fcm) {
+                client.registerDevice(DevicePlatform.FCM, token, null)
+                registeredDevice = token
+            } else {
+                val relay = BuildConfig.PUSH_RELAY
+                if (relay.isEmpty() || platforms.relays.none { it.trimEnd('/') == relay }) return
+                val handle = registerWithRelay(relay, DevicePlatform.FCM, token, null)
+                client.registerRelayDevice(relay, handle, deviceKey.publicKey)
+                registeredDevice = handle
+            }
             registeredToken = token
         } catch (_: NudgeException) {
             // Tried again on the next start or token.

@@ -1,5 +1,6 @@
 // FCM data messages from the server: an answer is ready or an action waits for approval in one
-// of the player's rooms. The app makes the notification itself, so a tap opens the room.
+// of the player's rooms. The app makes the notification itself, so a tap opens the room. Through
+// the push relay they come sealed for this device, and are opened here first.
 package app.nudge
 
 import android.app.NotificationManager
@@ -17,7 +18,19 @@ class PushService : FirebaseMessagingService() {
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
-        val data = message.data
+        val data = message.data["sealed"]?.let { sealed ->
+            // Not for this device's key, such as one sealed before the app was reinstalled.
+            val push = model.openPush(sealed) ?: return
+            mapOf(
+                "assistant" to push.assistant,
+                "roomId" to push.roomId,
+                "kind" to push.kind,
+                "url" to push.url,
+                "title" to push.title,
+                "body" to push.body,
+                "tag" to push.tag,
+            )
+        } ?: message.data
         val room = data["roomId"] ?: return
         // The room is on screen: the timeline shows it already.
         if (model.foreground && model.selectedRoom.value == room) return

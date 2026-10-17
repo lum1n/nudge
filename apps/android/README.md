@@ -32,4 +32,6 @@ adb shell am start -a android.intent.action.VIEW -d '"nudge://pair?server=http%3
 Notifications need a Firebase project:
 
 1. In the [Firebase console](https://console.firebase.google.com), add an Android app with the package name `app.nudge.dev` and download its `google-services.json` into `app/` (it is ignored by git). The build applies the Google services plugin only when the file is there; without it the app works without notifications.
-2. Under Project settings → Service accounts, generate a private key, and give the JSON file to the server as `push.fcm.serviceAccountFile` in `nudge.json` (see the repository's README).
+2. Under Project settings → Service accounts, generate a private key, and give the JSON file to the server's push extension as `fcm.serviceAccountFile` (see the repository's README).
+
+A server without that service account can still reach the app through a push relay (`packages/relay`) that has it. Build with `-Pnudge.pushRelay=https://relay.example`: when a server lists that relay in its push extension's `relays`, the app registers its FCM token with the relay and gives the server the relay's handle and a key of its own, made once and kept in the app's private storage. Those pushes arrive sealed for that key, and `PushService` opens them before it makes the notification.

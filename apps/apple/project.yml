@@ -20,6 +20,9 @@ settings:
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    # The push relay for servers without this app's APNs key, such as https://relay.example;
+    # empty for none.
+    NUDGE_PUSH_RELAY: ""
 packages:
   Nudge:
     path: ../../clients/apple
@@ -29,13 +32,16 @@ targets:
     platform: iOS
     sources:
       - path: Nudge
+      - path: Shared
     dependencies:
       - package: Nudge
         product: Nudge
+      - target: NudgeNotifications-iOS
     entitlements:
       path: Support/Nudge-iOS.entitlements
       properties:
         aps-environment: development
+        keychain-access-groups: [$(AppIdentifierPrefix)app.nudge.dev.push]
     info:
       path: Support/Info-Nudge-iOS.plist
       properties:
@@ -46,6 +52,8 @@ targets:
           - CFBundleURLName: app.nudge.dev.pair
             CFBundleURLSchemes: [nudge]
         ITSAppUsesNonExemptEncryption: false
+        NudgePushRelay: $(NUDGE_PUSH_RELAY)
+        NudgeKeychainGroup: $(AppIdentifierPrefix)app.nudge.dev.push
         UILaunchScreen: {}
         NSLocalNetworkUsageDescription: Nudge reaches a Nudge server on your network.
         # Plain HTTP only to servers on the local network (private addresses, .local names);
@@ -76,15 +84,18 @@ targets:
     platform: macOS
     sources:
       - path: Nudge
+      - path: Shared
     dependencies:
       - package: Nudge
         product: Nudge
+      - target: NudgeNotifications-macOS
     entitlements:
       path: Support/Nudge-macOS.entitlements
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
         com.apple.developer.aps-environment: development
+        keychain-access-groups: [$(AppIdentifierPrefix)app.nudge.dev.push]
     info:
       path: Support/Info-Nudge-macOS.plist
       properties:
@@ -95,6 +106,8 @@ targets:
           - CFBundleURLName: app.nudge.dev.pair
             CFBundleURLSchemes: [nudge]
         ITSAppUsesNonExemptEncryption: false
+        NudgePushRelay: $(NUDGE_PUSH_RELAY)
+        NudgeKeychainGroup: $(AppIdentifierPrefix)app.nudge.dev.push
         LSApplicationCategoryType: public.app-category.productivity
         # Plain HTTP only to servers on the local network (private addresses, .local names);
         # everywhere else HTTPS, as App Transport Security wants.
@@ -106,4 +119,54 @@ targets:
         PRODUCT_NAME: Nudge
         # Not "Nudge": that is the Swift package's module, which the app imports.
         PRODUCT_MODULE_NAME: NudgeApp
+        ENABLE_HARDENED_RUNTIME: YES
+  # Opens pushes that came through the push relay, sealed for the device, before they are shown.
+  NudgeNotifications-iOS:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: NotificationService
+      - path: Shared
+    entitlements:
+      path: Support/NudgeNotifications-iOS.entitlements
+      properties:
+        keychain-access-groups: [$(AppIdentifierPrefix)app.nudge.dev.push]
+    info:
+      path: Support/Info-NudgeNotifications-iOS.plist
+      properties:
+        CFBundleDisplayName: Nudge
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NudgeKeychainGroup: $(AppIdentifierPrefix)app.nudge.dev.push
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.nudge.dev.notifications
+        TARGETED_DEVICE_FAMILY: "1,2"
+  NudgeNotifications-macOS:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: NotificationService
+      - path: Shared
+    entitlements:
+      path: Support/NudgeNotifications-macOS.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        keychain-access-groups: [$(AppIdentifierPrefix)app.nudge.dev.push]
+    info:
+      path: Support/Info-NudgeNotifications-macOS.plist
+      properties:
+        CFBundleDisplayName: Nudge
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NudgeKeychainGroup: $(AppIdentifierPrefix)app.nudge.dev.push
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.nudge.dev.notifications
         ENABLE_HARDENED_RUNTIME: YES

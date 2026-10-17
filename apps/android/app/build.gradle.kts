@@ -8,6 +8,8 @@ plugins {
 
 val firebase = file("google-services.json").exists()
 if (firebase) apply(plugin = libs.plugins.google.services.get().pluginId)
+// The push relay for servers without this app's Firebase credentials: -Pnudge.pushRelay=https://…
+val pushRelay = (findProperty("nudge.pushRelay") as String?)?.trimEnd('/') ?: ""
 
 android {
     namespace = "app.nudge"
@@ -20,6 +22,7 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         buildConfigField("boolean", "FIREBASE", firebase.toString())
+        buildConfigField("String", "PUSH_RELAY", "\"$pushRelay\"")
     }
 
     buildFeatures {

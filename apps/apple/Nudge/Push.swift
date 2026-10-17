@@ -19,6 +19,14 @@ enum Push {
     static let environment = PushEnvironment.production
     #endif
 
+    /// The push relay for servers without this app's APNs key, from Info.plist (`NUDGE_PUSH_RELAY`
+    /// in project.yml); nil when the build has none.
+    static let relay: String? = {
+        let relay = (Bundle.main.object(forInfoDictionaryKey: "NudgePushRelay") as? String)?
+            .trimmingCharacters(in: ["/", " "])
+        return relay?.isEmpty == false ? relay : nil
+    }()
+
     #if os(iOS)
     static let platformName = "ios"
     #else

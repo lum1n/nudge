@@ -33,6 +33,8 @@ final class AppModel {
 
     @ObservationIgnored private var deviceToken: String?
     @ObservationIgnored private var registeredToken: String?
+    /// What the server knows the device by: the APNs token, or the relay's handle for it.
+    @ObservationIgnored private var registeredDevice: String?
     @ObservationIgnored private let defaults = UserDefaults.standard
     private static let accountKey = "account"
 
@@ -73,7 +75,7 @@ final class AppModel {
         guard let account, let client else { return }
         // Cleared first: revoking the token closes the socket with 4401, which mustn't sign out
         // a second time.
-        let device = registeredToken
+        let device = registeredDevice
         connection?.close()
         home?.close()
         self.account = nil
@@ -83,6 +85,7 @@ final class AppModel {
         me = nil
         pushPlatforms = nil
         registeredToken = nil
+        registeredDevice = nil
         selectedRoom = nil
         signedOutBecause = reason
         defaults.removeObject(forKey: Self.accountKey)
@@ -148,12 +151,26 @@ final class AppModel {
         Push.registerIfAllowed()
     }
 
+    /// Registers the APNs token with the server: directly when it sends to this app itself, else
+    /// through the push relay this build knows, if the server sends through it too. Pushes from
+    /// the relay are sealed for the device's key, which the notification service extension opens.
     private func registerDevice() async {
-        guard let client, let deviceToken, deviceToken != registeredToken,
-            pushPlatforms?.apns == true
+        guard let client, let deviceToken, deviceToken != registeredToken, let pushPlatforms
         else { return }
         do {
-            try await client.registerDevice(platform: .apns, token: deviceToken, environment: Push.environment)
+            if pushPlatforms.apns {
+                try await client.registerDevice(platform: .apns, token: deviceToken, environment: Push.environment)
+                registeredDevice = deviceToken
+            } else {
+                guard let relay = Push.relay,
+                    pushPlatforms.relays.contains(where: { $0.trimmingCharacters(in: ["/"]) == relay })
+                else { return }
+                let handle = try await registerWithRelay(
+                    relay: relay, platform: .apns, token: deviceToken, environment: Push.environment)
+                try await client.registerRelayDevice(
+                    relay: relay, handle: handle, deviceKey: PushKey.loadOrCreate().publicKey)
+                registeredDevice = handle
+            }
             registeredToken = deviceToken
         } catch {
             // Tried again on the next start or token.
