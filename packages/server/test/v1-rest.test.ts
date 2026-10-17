@@ -81,7 +81,36 @@ describe("v1 HTTP", () => {
             name: "mail",
             version: "1",
             playerSettings: Type.Object({ sign: Type.Boolean({ default: false }) }),
-            setup: () => ({}),
+            setup: () => ({
+              routes: [
+                {
+                  method: "GET",
+                  path: "/",
+                  auth: "none",
+                  handle: () => Response.json({ hello: "anyone" }),
+                },
+                {
+                  method: "GET",
+                  path: "/boxes/:box",
+                  auth: "player",
+                  handle: (_request, { player, admin, params }) =>
+                    Response.json({ player: player?.id, admin, box: params.box }),
+                },
+                {
+                  method: "GET",
+                  path: "/boxes/inbox",
+                  auth: "player",
+                  handle: () => Response.json({ fixed: true }),
+                },
+                {
+                  method: "POST",
+                  path: "/rules",
+                  auth: "admin",
+                  maxBodyBytes: 32,
+                  handle: async (request) => Response.json(await request.json(), { status: 201 }),
+                },
+              ],
+            }),
           }),
         ],
       },
@@ -212,6 +241,32 @@ describe("v1 HTTP", () => {
       },
     });
     expect((await call("GET", "/me/profile")).status).toBe(401);
+  });
+
+  it("serves extensions' own routes, checking tokens, admins and body sizes", async () => {
+    expect(await call("GET", "/ext/mail")).toEqual({ status: 200, json: { hello: "anyone" } });
+    expect((await call("GET", "/ext/mail/boxes/sent")).status).toBe(401);
+    expect(await call("GET", "/ext/mail/boxes/Sent%20mail", { token: tokens.Bo })).toEqual({
+      status: 200,
+      json: { player: "bo", admin: false, box: "Sent mail" },
+    });
+    expect((await call("GET", "/ext/mail/boxes/inbox", { token: tokens.Bo })).json).toEqual({
+      fixed: true,
+    });
+    for (const path of ["/ext/mail/nothing", "/ext/other", "/ext/mail/boxes"])
+      expect((await call("GET", path, { token: tokens.Bo })).status).toBe(404);
+    expect((await call("POST", "/ext/mail/rules", { token: tokens.Bo, body: {} })).status).toBe(
+      403,
+    );
+    await nudge.players.setAdmin("bo", true, context);
+    expect(await call("POST", "/ext/mail/rules", { token: tokens.Bo, body: { a: 1 } })).toEqual({
+      status: 201,
+      json: { a: 1 },
+    });
+    expect(
+      (await call("POST", "/ext/mail/rules", { token: tokens.Bo, body: { a: "x".repeat(40) } }))
+        .status,
+    ).toBe(413);
   });
 
   it("sends messages once per request id, and hides rooms from non-members", async () => {

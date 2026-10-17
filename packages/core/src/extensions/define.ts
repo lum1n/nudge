@@ -91,12 +91,45 @@ export type RoomSocketHandler = (
   socket: RoomSocket,
 ) => RoomSocketSession | Promise<RoomSocketSession>;
 
+/** Who may call an extension's route: any player with a token, admins only, or anyone. */
+export type RouteAuth = "player" | "admin" | "none";
+
+/** Who called an extension's route, and what its path said. */
+export type RouteCaller = {
+  /** Absent for routes with `auth: "none"`. */
+  readonly player?: Player;
+  /** Whether the player may use the admin API; false without a player. */
+  readonly admin: boolean;
+  /** The path's `:name` parts, decoded. */
+  readonly params: Readonly<Record<string, string>>;
+  readonly context: Context;
+};
+
+/**
+ * One HTTP route of an extension, served at `/v1/a/<assistant>/ext/<extension><path>`. The server
+ * checks the token for `auth` and the body's size before `handle` runs.
+ */
+export type ExtensionRoute = {
+  readonly method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  /** Below the extension's prefix, such as `/key` or `/invites/:id`; `/` for the prefix itself. */
+  readonly path: string;
+  readonly auth: RouteAuth;
+  /** Most bytes the request body may have; default 64 KiB. */
+  readonly maxBodyBytes?: number;
+  handle(request: Request, caller: RouteCaller): Response | Promise<Response>;
+};
+
+/** Default most bytes of an extension route's request body. */
+export const MAX_ROUTE_BODY = 64 * 1024;
+
 /** What `setup` returns: a Pi Durable extension without its name, and detectors for redaction. */
 export type ExtensionParts = Omit<Extension, "name"> & {
   /** Personal data the extension knows how to find; they run after the assistant's own. */
   readonly detectors?: readonly PiiDetector[];
   /** A WebSocket per room for the extension's own client UI. */
   readonly roomSocket?: RoomSocketHandler;
+  /** HTTP routes of its own, such as for other assistants or webhooks to call. */
+  readonly routes?: readonly ExtensionRoute[];
   /** Models the extension calls itself, so `nudge doctor` can check their credentials. */
   readonly models?: readonly { readonly provider: string; readonly modelId: string }[];
   /**
@@ -199,6 +232,7 @@ export type SetUpExtension = {
   readonly rooms?: readonly RoomKind[];
   readonly detectors: readonly PiiDetector[];
   readonly roomSocket?: RoomSocketHandler;
+  readonly routes: readonly ExtensionRoute[];
   readonly models: readonly { readonly provider: string; readonly modelId: string }[];
   readonly approvals: Readonly<Record<string, ApprovalHandler>>;
   readonly onRoomEvent?: (event: RoomEvent) => void | Promise<void>;
@@ -224,7 +258,7 @@ export async function setUpExtension(
       throw new ConfigError(
         `${extension.name} is a plain Pi Durable extension; it takes no settings`,
       );
-    return { extension, detectors: [], models: [], approvals: {}, ...rooms };
+    return { extension, detectors: [], routes: [], models: [], approvals: {}, ...rooms };
   }
   const definition = use.extension;
   const settings = checkSettings(definition, use.settings);
@@ -240,6 +274,7 @@ export async function setUpExtension(
   const {
     detectors = [],
     roomSocket,
+    routes = [],
     models = [],
     approvals = {},
     onRoomEvent,
@@ -252,6 +287,7 @@ export async function setUpExtension(
     secrets,
     ...(dataDir === undefined ? {} : { dataDir }),
   });
+  checkRoutes(definition.name, routes);
   return {
     extension: { ...parts, name: definition.name },
     version: definition.version,
@@ -259,6 +295,7 @@ export async function setUpExtension(
     ...(schema === undefined ? {} : { playerSettings: schema }),
     ...rooms,
     detectors,
+    routes,
     models,
     approvals,
     ...(roomSocket === undefined ? {} : { roomSocket }),
@@ -283,6 +320,64 @@ function checkSettings(extension: NudgeExtension, settings: unknown): unknown {
     );
   }
   return value;
+}
+
+const ROUTE_PATH = /^\/$|^(\/(:[A-Za-z_][A-Za-z0-9_]*|[A-Za-z0-9._~-]+))+$/;
+
+function checkRoutes(extension: string, routes: readonly ExtensionRoute[]): void {
+  const seen = new Set<string>();
+  for (const route of routes) {
+    if (!ROUTE_PATH.test(route.path))
+      throw new Error(`Extension "${extension}" has a route with a bad path "${route.path}"`);
+    // Two routes whose paths differ only in their params' names would shadow each other.
+    const shape = `${route.method} ${route.path.replace(/:[^/]+/g, ":")}`;
+    if (seen.has(shape))
+      throw new Error(`Extension "${extension}" has two routes for ${route.method} ${route.path}`);
+    seen.add(shape);
+  }
+}
+
+/**
+ * The route of `routes` for a request to `path` below the extension's prefix, and its params.
+ * Fixed segments win over params, so `/invites/new` comes before `/invites/:id`.
+ */
+export function matchRoute(
+  routes: readonly ExtensionRoute[],
+  method: string,
+  path: string,
+): { route: ExtensionRoute; params: Record<string, string> } | undefined {
+  const parts = segments(path);
+  if (parts === undefined) return undefined;
+  let best: { route: ExtensionRoute; params: Record<string, string>; fixed: number } | undefined;
+  for (const route of routes) {
+    if (route.method !== method) continue;
+    const pattern = segments(route.path)!;
+    if (pattern.length !== parts.length) continue;
+    const params: Record<string, string> = {};
+    let fixed = 0;
+    const matches = pattern.every((part, index) => {
+      if (part.startsWith(":")) {
+        params[part.slice(1)] = parts[index]!;
+        return true;
+      }
+      fixed++;
+      return part === parts[index];
+    });
+    if (matches && (best === undefined || fixed > best.fixed)) best = { route, params, fixed };
+  }
+  return best === undefined ? undefined : { route: best.route, params: best.params };
+}
+
+/** `/a/b%20c/` → `["a", "b c"]`; undefined for a segment that doesn't decode. */
+function segments(path: string): string[] | undefined {
+  try {
+    return path
+      .split("/")
+      .filter((part) => part !== "")
+      .map((part) => decodeURIComponent(part));
+  } catch {
+    return undefined;
+  }
 }
 
 /** A player's settings over the defaults; the defaults alone when they don't fit. */

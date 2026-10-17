@@ -327,6 +327,33 @@ describe("extensions", () => {
     await nudge.close(context);
   });
 
+  it("refuses routes with bad paths or that shadow each other", async () => {
+    const handle = () => new Response();
+    const routed = (...paths: string[]) =>
+      defineNudgeExtension({
+        name: "routed",
+        version: "1",
+        setup: () => ({
+          routes: paths.map((path) => ({ method: "GET", path, auth: "none", handle }) as const),
+        }),
+      });
+    const { options } = setup();
+    for (const paths of [["no-slash"], ["/a/"], ["/a b"], ["/a/:x", "/a/:y"]])
+      await expect(
+        createNudge({ ...options, extensions: [routed(...paths)] }, context),
+      ).rejects.toThrow(/route/);
+    const nudge = await createNudge(
+      { ...options, extensions: [routed("/", "/a/:x", "/a/b")] },
+      context,
+    );
+    expect(nudge.extensionRoute("routed", "GET", "/a/c")?.params).toEqual({ x: "c" });
+    expect(nudge.extensionRoute("routed", "GET", "/a/b")?.route.path).toBe("/a/b");
+    expect(nudge.extensionRoute("routed", "GET", "/")?.route.path).toBe("/");
+    expect(nudge.extensionRoute("routed", "POST", "/")).toBeUndefined();
+    expect(nudge.extensionRoute("other", "GET", "/")).toBeUndefined();
+    await nudge.close(context);
+  });
+
   it("rolls the dice the asker chose in their profile", async () => {
     const { options, faux } = setup({ extensions: [hello] });
     const nudge = await createNudge(options, context);

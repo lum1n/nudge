@@ -359,6 +359,7 @@ export default defineNudgeExtension({
 
 - `setup` runs when the assistant opens and on every reload. It gets the settings (checked against the schema, defaults filled in), the assistant's `displayName`, `timeZone` and clock, and `protect(value, kind)` to keep a value from the model.
 - `playerSettings` is a schema of what each player chooses for themselves, such as hello's default number of sides. Players set it on their profile, and `playerSettings(playerId, context)` in `setup`'s host reads it with defaults filled in; a tool finds who asked in `currentTurn().by`. Every required one needs a default, for players who chose nothing.
+- `setup` can also return `routes`, HTTP routes under `/v1/a/<assistant>/ext/<name>/`. Each takes a standard `Request` and returns a `Response`, and says whether it needs a player's token (`auth: "player"`), an admin's (`"admin"`) or none (`"none"`); the server checks the token and the body's size (`maxBodyBytes`, default 64 KiB) first.
 - It returns a [Pi Durable extension](https://www.npmjs.com/package/@earendil-works/pi-durable) without its name (`tools`, `sections`, `hooks`, `wraps`, `tasks`) plus `detectors`, which run after the built-in ones.
 - Export it as `default` (or as `extension`). Plain Pi Durable extensions load too, without settings.
 - Tool arguments arrive with personal values restored and tool output is redacted again before the model sees it, so tools work with real data.

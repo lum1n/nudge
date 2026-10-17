@@ -9,6 +9,7 @@ import {
   type Credential,
   ExtensionNotFound,
   InvalidProfile,
+  MAX_ROUTE_BODY,
   NotAllowed,
   type Nudge,
   type Player as CorePlayer,
@@ -75,6 +76,7 @@ import {
   windowStart,
 } from "@nudge/protocol/project";
 import { type Context as HonoContext, Hono, type MiddlewareHandler } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import type { Static, TSchema } from "typebox";
 import { Value } from "typebox/value";
 import { BadSubscription, type Pushes } from "../push/pushes.ts";
@@ -116,7 +118,7 @@ type Env = {
 
 export class HttpError extends Error {
   constructor(
-    readonly status: 400 | 401 | 403 | 404 | 409 | 429,
+    readonly status: 400 | 401 | 403 | 404 | 409 | 413 | 429,
     message: string,
   ) {
     super(message);
@@ -209,6 +211,42 @@ export function restRoutes(options: RestOptions): Hono {
     return c.body(null, 204);
   });
 
+  // Also before it: each route says whether it needs a token.
+  const extensionRoute = async (c: HonoContext<Env>) => {
+    const name = c.req.param("extension") ?? "";
+    const prefix = `/ext/${name}`;
+    const path = c.req.path.slice(c.req.path.indexOf(prefix) + prefix.length) || "/";
+    const found = c.var.nudge.extensionRoute(name, c.req.method, path);
+    if (found === undefined) throw new HttpError(404, "Not found");
+    const { route, params } = found;
+    let player: CorePlayer | undefined;
+    let isAdmin = false;
+    if (route.auth !== "none") {
+      await authenticate(c, async () => {});
+      player = c.var.credential.player;
+      isAdmin = await c.var.nudge.players.isAdmin(player.id, context);
+      if (route.auth === "admin" && !isAdmin) throw new HttpError(403, "Only admins may do that");
+    }
+    let response: Response | undefined;
+    const maxSize = route.maxBodyBytes ?? MAX_ROUTE_BODY;
+    await bodyLimit({
+      maxSize,
+      onError: () => {
+        throw new HttpError(413, `The body is over ${maxSize} bytes`);
+      },
+    })(c, async () => {
+      response = await route.handle(c.req.raw, {
+        ...(player === undefined ? {} : { player }),
+        admin: isAdmin,
+        params,
+        context,
+      });
+    });
+    return response!;
+  };
+  api.all("/ext/:extension", extensionRoute);
+  api.all("/ext/:extension/*", extensionRoute);
+
   api.use(authenticate);
 
   api.get("/me", async (c) => {
@@ -283,12 +321,10 @@ export function restRoutes(options: RestOptions): Hono {
   api.get("/me/profile/extensions", (c) =>
     c.json({
       // Through JSON: TypeBox keeps its own markers on symbols, which clients have no use for.
-      extensions: c.var.nudge
-        .playerSettings()
-        .map((extension) => ({
-          ...extension,
-          schema: JSON.parse(JSON.stringify(extension.schema)),
-        })),
+      extensions: c.var.nudge.playerSettings().map((extension) => ({
+        ...extension,
+        schema: JSON.parse(JSON.stringify(extension.schema)),
+      })),
     } satisfies PlayerSettingsResponse),
   );
 

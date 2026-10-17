@@ -33,6 +33,8 @@ import {
   type ExtensionInput,
   type RoomSocketHandler,
   checkPlayerSettings,
+  type ExtensionRoute,
+  matchRoute,
   type SetUpExtension,
   setUpExtension,
 } from "./extensions/define.ts";
@@ -593,6 +595,19 @@ export class Nudge {
   /** The room socket an installed extension serves, if any. */
   roomSocket(extension: string): RoomSocketHandler | undefined {
     return this.installed.find((installed) => installed.extension.name === extension)?.roomSocket;
+  }
+
+  /**
+   * The route of an installed extension that serves `method` at `path` below its prefix, and the
+   * path's params; undefined when there is none.
+   */
+  extensionRoute(
+    extension: string,
+    method: string,
+    path: string,
+  ): { route: ExtensionRoute; params: Record<string, string> } | undefined {
+    const installed = this.installed.find((found) => found.extension.name === extension);
+    return installed === undefined ? undefined : matchRoute(installed.routes, method, path);
   }
 
   /** The room's conversation, for what the room API does not cover. */
