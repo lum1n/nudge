@@ -6,6 +6,7 @@ import type { LocalProviderConfig, ModelChoice, ServerSettings } from "../config
 import { readRawConfig, writeRawConfig } from "../config-file.ts";
 import { type ClientInfo, normalizePairingCode, type Player } from "../identity/directory.ts";
 import type { Assistants } from "./assistants.ts";
+import { defaultExtensions } from "./defaults.ts";
 import type { ServerKeys } from "./keys.ts";
 import type { ServerOwner, ServerOwners } from "./owners.ts";
 
@@ -115,6 +116,7 @@ export async function completeSetup(
         ? {}
         : { displayName: choices.assistant.displayName }),
       model: choices.model,
+      extensions: defaultExtensions(target.configPath, choices.server?.publicUrl),
     });
   } catch (error) {
     // Still not set up, so setup can be tried again.

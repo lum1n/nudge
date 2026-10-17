@@ -6009,6 +6009,9 @@
               "minLength": 1
             }
           }
+        },
+        "invite": {
+          "type": "string"
         }
       }
     },
@@ -6110,6 +6113,9 @@
               }
             }
           ]
+        },
+        "joinLink": {
+          "type": "string"
         }
       }
     },

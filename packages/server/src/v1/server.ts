@@ -6,6 +6,7 @@ import {
   type Assistants,
   ConfigError,
   DEFAULT_MODEL,
+  defaultExtensions,
   LastOwner,
   type NudgeConfig,
   sealRecoveryKit,
@@ -142,8 +143,33 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
   );
 
   app.post("/assistants", async (c) => {
-    const { firstPlayer, ...draft } = await readJson(c, CreateAssistantRequest);
-    const nudge = await guard(() => control.assistants.create(draft));
+    const { firstPlayer, invite, ...draft } = await readJson(c, CreateAssistantRequest);
+    const extensions = defaultExtensions(control.assistants.configPath, options.publicUrl());
+    if (invite !== undefined && !extensions.some((e) => e.from.endsWith("federation")))
+      throw new HttpError(
+        400,
+        "Inviting someone needs federation, and this server has no public address for it",
+      );
+    const nudge = await guard(() => control.assistants.create({ ...draft, extensions }));
+    let joinLink: string | undefined;
+    if (invite !== undefined) {
+      const found = nudge.extensionRoute("federation", "POST", "/invites");
+      const answer = await found?.route.handle(
+        new Request("http://server/invites", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ address: invite }),
+        }),
+        { admin: true, params: {}, context },
+      );
+      const body = (await answer?.json()) as { link?: string; error?: string } | undefined;
+      if (answer?.ok !== true || body?.link === undefined)
+        throw new HttpError(
+          400,
+          `Made ${draft.name}, but couldn't invite ${invite}: ${body?.error}`,
+        );
+      joinLink = body.link;
+    }
     let pairing: CreateAssistantResponse["pairing"];
     if (firstPlayer !== undefined) {
       // The first player is its admin for good.
@@ -162,6 +188,7 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
       {
         assistant,
         ...(pairing === undefined ? {} : { pairing }),
+        ...(joinLink === undefined ? {} : { joinLink }),
       } satisfies CreateAssistantResponse,
       201,
     );

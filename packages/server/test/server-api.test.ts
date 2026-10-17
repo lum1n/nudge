@@ -1,6 +1,8 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { fauxProvider } from "@earendil-works/pi-ai/providers/faux";
@@ -131,6 +133,44 @@ describe("the server API", () => {
     expect(
       (await call("POST", "/server/assistants", { token, body: { name: "Not OK" } })).status,
     ).toBe(400);
+  });
+
+  it("makes an assistant for the owner, with federation, and invites them from home", async () => {
+    const token = await signIn();
+    // Without a public address there is no federation, so no one to invite.
+    expect(
+      (
+        await call("POST", "/server/assistants", {
+          token,
+          body: { name: "work", model, invite: "ann@home.example/robin" },
+        })
+      ).status,
+    ).toBe(400);
+
+    // As in a checkout, where the federation extension is beside the config.
+    await mkdir(join(dir, "extensions"));
+    await symlink(
+      fileURLToPath(new URL("../../../extensions/federation", import.meta.url)),
+      join(dir, "extensions", "federation"),
+    );
+    app = createApp({
+      assistants: assistants.running,
+      server: control,
+      publicUrl: "https://robin.example",
+    });
+    const created = await call("POST", "/server/assistants", {
+      token,
+      body: { name: "work", model, invite: "ann@home.example/robin" },
+    });
+    expect(created.status).toBe(201);
+    expect(created.json.joinLink).toBe(
+      "nudge://join?server=https%3A%2F%2Frobin.example&assistant=work",
+    );
+    const config = JSON.parse(readFileSync(join(dir, "nudge.json"), "utf8"));
+    // Bundled, or beside the config where the install has no bundle.
+    expect(config.assistants[1].extensions).toEqual([
+      { from: expect.stringMatching(/federation$/), settings: { server: "https://robin.example" } },
+    ]);
   });
 
   it("changes an assistant's settings while it runs", async () => {

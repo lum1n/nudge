@@ -327,7 +327,8 @@ class Federation {
         auth: "admin",
         handle: async (request, { player, context }) => {
           const { address } = await read(request, InviteRequest);
-          return this.invite(address, player!.id, context);
+          // Without a player, the server's owner is making the assistant for that person.
+          return this.invite(address, player?.id ?? "server", context);
         },
       },
       {

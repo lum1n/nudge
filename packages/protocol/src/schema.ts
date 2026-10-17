@@ -827,6 +827,12 @@ export const CreateAssistantRequest = Type.Object({
   budget: Type.Optional(AssistantBudget),
   /** Someone whose home it is to be: made its first player, so its admin, with a pairing code. */
   firstPlayer: Type.Optional(Type.Object({ displayName: Type.String({ minLength: 1 }) })),
+  /**
+   * An address to invite, such as the owner's own for an assistant that is "for me": their app
+   * then joins it from home, and as its first player they are its admin. Needs federation, which
+   * a new assistant has when the server has a public address.
+   */
+  invite: Type.Optional(Type.String()),
 });
 export type CreateAssistantRequest = Static<typeof CreateAssistantRequest>;
 
@@ -836,6 +842,8 @@ export const CreateAssistantResponse = Type.Object({
   pairing: Type.Optional(
     Type.Intersect([PairingCodeResponse, Type.Object({ playerId: Type.String() })]),
   ),
+  /** For `invite`: the link that joins, `nudge://join?server=…&assistant=…`. */
+  joinLink: Type.Optional(Type.String()),
 });
 export type CreateAssistantResponse = Static<typeof CreateAssistantResponse>;
 

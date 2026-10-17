@@ -1,4 +1,5 @@
 import { readdir, stat } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { ConfigError, type NudgeConfig, parseConfig, resolveExtension } from "../config.ts";
 import { rawAssistant, readRawConfig, writeRawConfig } from "../config-file.ts";
@@ -42,12 +43,13 @@ const VARIABLE = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g;
 
 /**
  * The assistant's extensions in config order, then the packages in `extensions/` beside the
- * config that it doesn't use yet, each with its settings schema.
+ * config and the bundled ones (`offered`) that it doesn't use yet, each with its settings schema.
  */
 export async function listExtensionSetups(
   configPath: string,
   assistant: string,
   env: Readonly<Record<string, string | undefined>> = process.env,
+  offered: readonly string[] = bundled(),
 ): Promise<ExtensionSetup[]> {
   const baseDir = dirname(resolve(configPath));
   const entries = rawAssistant(await readRawConfig(configPath), assistant).extensions ?? [];
@@ -69,8 +71,8 @@ export async function listExtensionSetups(
       ),
     );
   }
-  for (const from of await foundBeside(baseDir)) {
-    if (seen.has(resolvedOrSelf(from, baseDir))) continue;
+  for (const from of [...(await foundBeside(baseDir)), ...offered]) {
+    if (seen.has(resolvedOrSelf(from, baseDir)) || seen.has(from)) continue;
     setups.push(
       await describe(from, { configured: false, enabled: false, settings: {} }, baseDir, env),
     );
@@ -95,11 +97,15 @@ export async function saveExtensionSetups(
   const raw = await readRawConfig(path);
   const target = rawAssistant(raw, assistant);
   const before = target.extensions ?? [];
-  const allowed = new Set([...before.map((entry) => entry.from), ...(await foundBeside(baseDir))]);
+  const allowed = new Set([
+    ...before.map((entry) => entry.from),
+    ...(await foundBeside(baseDir)),
+    ...bundled(),
+  ]);
   const names = new Set<string>();
   target.extensions = choices.map((choice) => {
     if (!allowed.has(choice.from))
-      throw new ConfigError(`${choice.from} is not configured or in extensions/`);
+      throw new ConfigError(`${choice.from} is not configured, bundled or in extensions/`);
     if (names.has(choice.from)) throw new ConfigError(`${choice.from} is listed twice`);
     names.add(choice.from);
     const old = before.find((entry) => entry.from === choice.from);
@@ -146,6 +152,42 @@ async function describe(
   } catch (error) {
     return { from, ...state, missingEnv: [], error: (error as Error).message };
   }
+}
+
+/**
+ * The extensions a server release ships (packages/release), by package name: offered on every
+ * assistant's settings page where they can be loaded, as in a release, and not in a checkout,
+ * where `extensions/` beside the config has them.
+ */
+export const BUNDLED_EXTENSIONS: readonly string[] = [
+  "@nudge/ext-calendar",
+  "@nudge/ext-codemode",
+  "@nudge/ext-connectors",
+  "@nudge/ext-documents",
+  "@nudge/ext-federation",
+  "@nudge/ext-lists",
+  "@nudge/ext-mail",
+  "@nudge/ext-matrix",
+  "@nudge/ext-mcp",
+  "@nudge/ext-ner",
+  "@nudge/ext-push",
+  "@nudge/ext-search",
+  "@nudge/ext-signal",
+  "@nudge/ext-telegram",
+  "@nudge/ext-watches",
+];
+
+/** The bundled extensions this install has. */
+export function bundled(): string[] {
+  const require = createRequire(import.meta.url);
+  return BUNDLED_EXTENSIONS.filter((name) => {
+    try {
+      require.resolve(name);
+      return true;
+    } catch {
+      return false;
+    }
+  });
 }
 
 /** `./extensions/<dir>` for each package directory in `extensions/` beside the config. */

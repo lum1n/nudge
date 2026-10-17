@@ -65,7 +65,7 @@ afterEach(async () => {
 
 describe("listExtensionSetups", () => {
   it("lists configured extensions, then ones found beside the config", async () => {
-    const setups = await listExtensionSetups(config, "home", {});
+    const setups = await listExtensionSetups(config, "home", {}, []);
     expect(setups.map((s) => [s.from, s.name, s.configured, s.enabled])).toEqual([
       ["./extensions/bot", "bot", true, true],
       ["./extensions/lists", "lists", false, false],
@@ -73,14 +73,14 @@ describe("listExtensionSetups", () => {
     expect(setups[0]!.settings).toEqual({ pollSeconds: 5 });
     expect(setups[0]!.schema).toMatchObject({ properties: { token: { type: "string" } } });
     expect(setups[0]!.missingEnv).toEqual(["BOT_TOKEN"]);
-    expect((await listExtensionSetups(config, "home", { BOT_TOKEN: "x" }))[0]!.missingEnv).toEqual(
-      [],
-    );
+    expect(
+      (await listExtensionSetups(config, "home", { BOT_TOKEN: "x" }, []))[0]!.missingEnv,
+    ).toEqual([]);
   });
 
   it("names a module that does not load instead of failing", async () => {
     await writeFile(join(dir, "extensions", "lists", "index.js"), "throw new Error('broken');");
-    const [, lists] = await listExtensionSetups(config, "home", {});
+    const [, lists] = await listExtensionSetups(config, "home", {}, []);
     expect(lists!.name).toBeUndefined();
     expect(lists!.error).toMatch(/broken/);
   });

@@ -6,6 +6,7 @@ import {
   type AssistantConfig,
   ConfigError,
   ConfigMissing,
+  type ExtensionConfig,
   loadConfig,
   type NudgeConfig,
   parseConfig,
@@ -41,7 +42,8 @@ export class AssistantExists extends Error {
 }
 
 /** What a new assistant starts with; everything but its name can change later. */
-export type AssistantDraft = Pick<AssistantConfig, "name"> & AssistantChange;
+export type AssistantDraft = Pick<AssistantConfig, "name"> &
+  AssistantChange & { readonly extensions?: readonly ExtensionConfig[] };
 
 /** A change to an assistant's settings: a value sets it, `null` takes it out of the config. */
 export type AssistantChange = {
@@ -82,7 +84,8 @@ export class Assistants {
   /** The settings each running assistant was opened with, to tell what a reload changed. */
   private readonly opened = new WeakMap<Nudge, AssistantConfig>();
   private queue: Promise<unknown> = Promise.resolve();
-  private readonly configPath: string;
+  /** The config file it keeps, resolved. */
+  readonly configPath: string;
   private readonly say: (line: string) => void;
 
   private constructor(private readonly options: AssistantsOptions) {
@@ -128,6 +131,8 @@ export class Assistants {
         throw new AssistantExists(draft.name);
       const entry: RawAssistant = { name: draft.name };
       applyChange(entry, draft);
+      if (draft.extensions !== undefined && draft.extensions.length > 0)
+        entry.extensions = structuredClone([...draft.extensions]);
       raw.assistants.push(entry);
       const config = this.parse(raw);
       const parsed = config.assistants.find((assistant) => assistant.name === draft.name)!;

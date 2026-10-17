@@ -59,6 +59,7 @@ export {
   Assistants,
   type AssistantsOptions,
 } from "./server/assistants.ts";
+export { defaultExtensions } from "./server/defaults.ts";
 export { defaultConfigPath, serverHome } from "./server/home.ts";
 export {
   type KeySource,
@@ -146,6 +147,8 @@ export {
 } from "./extensions/define.ts";
 export { checkExtensions, type LoadOptions, loadExtensions } from "./extensions/loader.ts";
 export {
+  BUNDLED_EXTENSIONS,
+  bundled,
   type ExtensionChoice,
   type ExtensionSetup,
   listExtensionSetups,

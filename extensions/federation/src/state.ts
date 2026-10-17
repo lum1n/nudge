@@ -16,7 +16,7 @@ export type Keys = {
 export type Invite = {
   id: string;
   home: PlayerHome;
-  /** The admin who invited them. */
+  /** The admin who invited them, or "server" when the server's owner made the assistant for them. */
   by: string;
   createdAt: number;
   expiresAt: number;
