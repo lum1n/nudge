@@ -99,6 +99,7 @@ fn ann() -> Player {
     Player {
         id: "ann".into(),
         display_name: "Ann".into(),
+        address: Some("ann@home.example/robin".into()),
     }
 }
 
@@ -564,26 +565,36 @@ fn http_bodies_match_the_schema() {
     ] {
         check(
             "DeviceRequest",
-            &DeviceRequest {
+            &DeviceRequest::Native(NativeDevice {
                 platform,
                 token: "ab12".into(),
                 environment,
-            },
+            }),
         );
     }
     check(
         "DeviceRequest",
-        &DeviceRequest {
+        &DeviceRequest::Native(NativeDevice {
             platform: DevicePlatform::Fcm,
             token: "x".into(),
             environment: Some(PushEnvironment::Production),
-        },
+        }),
+    );
+    check(
+        "DeviceRequest",
+        &DeviceRequest::Relay(RelayDevice {
+            platform: RelayPlatform::Relay,
+            relay: "https://relay.example".into(),
+            handle: "h1.abc".into(),
+            device_key: "A".repeat(43),
+        }),
     );
     check(
         "DevicesResponse",
         &DevicesResponse {
             apns: true,
             fcm: false,
+            relays: vec!["https://relay.example".into()],
         },
     );
     let roles = [
@@ -641,7 +652,13 @@ fn reads_what_it_does_not_know() {
     assert_eq!(frame, ServerFrame::Unknown);
     let player: Player =
         serde_json::from_value(json!({ "id": "a", "displayName": "A", "avatar": "x" })).unwrap();
-    assert_eq!(player, ann_like("a", "A"));
+    assert_eq!(
+        player,
+        Player {
+            address: None,
+            ..ann_like("a", "A")
+        }
+    );
     assert_eq!(Target::parse("room:"), None);
     assert_eq!(Target::parse("rooms"), None);
     assert_eq!(Target::parse("room:a:b"), Some(Target::Room("a:b".into())));
@@ -651,5 +668,6 @@ fn ann_like(id: &str, name: &str) -> Player {
     Player {
         id: id.into(),
         display_name: name.into(),
+        address: Some(format!("{id}@home.example/robin")),
     }
 }

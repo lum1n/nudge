@@ -89,6 +89,29 @@ pub async fn list_assistants(server: &str) -> Result<AssistantsResponse, ApiErro
     read(reqwest::Client::new().get(url).send().await).await
 }
 
+/// Registers a device with a push relay (`packages/relay`) and returns its handle, which servers
+/// push to it through. `platform` and `environment` are as for `Api::register_device`.
+pub async fn register_with_relay(
+    relay: &str,
+    platform: DevicePlatform,
+    token: &str,
+    environment: Option<PushEnvironment>,
+) -> Result<String, ApiError> {
+    #[derive(serde::Deserialize)]
+    struct Registered {
+        handle: String,
+    }
+    let url = endpoint(&parse_server(relay)?, &["v1", "register"]);
+    let device = NativeDevice {
+        platform,
+        token: token.to_owned(),
+        environment,
+    };
+    let registered: Registered =
+        read(reqwest::Client::new().post(url).json(&device).send().await).await?;
+    Ok(registered.handle)
+}
+
 impl Api {
     /// `server` is the server's address, such as `https://nudge.example`.
     pub fn new(
@@ -321,7 +344,8 @@ impl Api {
 
     /// Which native pushes the server sends; 404 when it sends none.
     pub async fn push_platforms(&self) -> Result<DevicesResponse, ApiError> {
-        self.request(Method::GET, &["ext", "push", "devices"], &[], NO_BODY).await
+        self.request(Method::GET, &["ext", "push", "devices"], &[], NO_BODY)
+            .await
     }
 
     /// Has the server push to this device when one of the player's rooms has news and they don't
@@ -332,8 +356,13 @@ impl Api {
     }
 
     pub async fn unregister_device(&self, token: &str) -> Result<(), ApiError> {
-        self.request_empty(Method::DELETE, &["ext", "push", "devices", token], &[], NO_BODY)
-            .await
+        self.request_empty(
+            Method::DELETE,
+            &["ext", "push", "devices", token],
+            &[],
+            NO_BODY,
+        )
+        .await
     }
 
     // Admin routes, for players with the admin flag.

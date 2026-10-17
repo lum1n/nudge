@@ -341,6 +341,48 @@ pub struct TokenInfo {
     pub client_platform: Option<String>,
 }
 
+/// A new key pair for this device's pushes through a relay; make one per install and keep it.
+#[uniffi::export]
+pub fn new_device_key() -> DeviceKey {
+    let key = nudge_client::DeviceKey::generate();
+    DeviceKey {
+        public_key: key.public_key,
+        private_key: key.private_key,
+    }
+}
+
+/// What a relay's push says (its `sealed` field), if it was sealed for this device; `None` for
+/// one that wasn't, which the app should show as it came or drop.
+#[uniffi::export]
+pub fn open_push(private_key: String, sealed: String) -> Option<PushPayload> {
+    let push = nudge_client::open_push(&private_key, &sealed)?;
+    Some(PushPayload {
+        assistant: push.assistant,
+        room_id: push.room_id,
+        kind: push.kind,
+        url: push.url,
+        title: push.title,
+        body: push.body,
+        tag: push.tag,
+    })
+}
+
+/// Registers the device's APNs or FCM token with a push relay and returns its handle, for
+/// `register_relay_device` on each server. Needs no token.
+#[uniffi::export]
+pub async fn register_with_relay(
+    relay: String,
+    platform: DevicePlatform,
+    token: String,
+    environment: Option<PushEnvironment>,
+) -> Result<String, NudgeError> {
+    let (platform, environment) = (platform.into(), environment.map(Into::into));
+    Ok(run(async move {
+        nudge_client::register_with_relay(&relay, platform, &token, environment).await
+    })
+    .await?)
+}
+
 /// The assistants `server` hosts; needs no token.
 #[uniffi::export]
 pub async fn list_assistants(server: String) -> Result<Vec<Assistant>, NudgeError> {
@@ -582,6 +624,7 @@ impl NudgeClient {
         Ok(PushPlatforms {
             apns: platforms.apns,
             fcm: platforms.fcm,
+            relays: platforms.relays,
         })
     }
 
@@ -596,11 +639,31 @@ impl NudgeClient {
         environment: Option<PushEnvironment>,
     ) -> Result<(), NudgeError> {
         let api = self.client.api().clone();
-        let device = p::DeviceRequest {
+        let device = p::DeviceRequest::Native(p::NativeDevice {
             platform: platform.into(),
             token,
             environment: environment.map(Into::into),
-        };
+        });
+        Ok(run(async move { api.register_device(&device).await }).await?)
+    }
+
+    /// Has the server push to this device through `relay`, one of `push_platforms().relays`,
+    /// sealed for `device_key` (`new_device_key().public_key`). `handle` is what
+    /// `register_with_relay` gave. Call again with a new handle when the token changes; the
+    /// server knows the device by its key.
+    pub async fn register_relay_device(
+        &self,
+        relay: String,
+        handle: String,
+        device_key: String,
+    ) -> Result<(), NudgeError> {
+        let api = self.client.api().clone();
+        let device = p::DeviceRequest::Relay(p::RelayDevice {
+            platform: p::RelayPlatform::Relay,
+            relay,
+            handle,
+            device_key,
+        });
         Ok(run(async move { api.register_device(&device).await }).await?)
     }
 

@@ -9,6 +9,8 @@ use nudge_client::protocol as p;
 pub struct Player {
     pub id: String,
     pub display_name: String,
+    /// Where someone from another assistant lives, such as `vegard@nudge.example.com/robin`.
+    pub address: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, uniffi::Enum)]
@@ -376,6 +378,7 @@ impl From<p::Player> for Player {
         Player {
             id: player.id,
             display_name: player.display_name,
+            address: player.address,
         }
     }
 }
@@ -716,11 +719,35 @@ pub enum PushEnvironment {
     Sandbox,
 }
 
-/// Which native pushes the server sends.
+/// Which native pushes the server sends, and the push relays it sends through.
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
 pub struct PushPlatforms {
     pub apns: bool,
     pub fcm: bool,
+    pub relays: Vec<String>,
+}
+
+/// The device's X25519 key pair for pushes through a relay, each half 32 bytes in base64url.
+/// Keep the private half in the keychain or the app's private storage.
+#[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
+pub struct DeviceKey {
+    pub public_key: String,
+    pub private_key: String,
+}
+
+/// A push from a relay, once the device opened it.
+#[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
+pub struct PushPayload {
+    pub assistant: String,
+    pub room_id: String,
+    /// `answer` or `approval`.
+    pub kind: String,
+    /// The room's page, from the site's root: `/<assistant>/<room>`.
+    pub url: String,
+    pub title: String,
+    pub body: String,
+    /// The same for every push of a room, so a newer one replaces the older.
+    pub tag: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]

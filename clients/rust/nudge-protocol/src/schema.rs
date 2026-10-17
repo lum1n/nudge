@@ -15,6 +15,9 @@ pub const PROTOCOL_VERSION: u32 = 1;
 pub struct Player {
     pub id: String,
     pub display_name: String,
+    /// Where someone from another assistant lives, such as `vegard@nudge.example.com/robin`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub address: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -818,21 +821,49 @@ pub enum PushEnvironment {
     Sandbox,
 }
 
-/// A phone or a Mac that takes native pushes: an APNs device token (hex) or an FCM registration
-/// token.
+/// A phone or a Mac that takes native pushes: from the server itself, or through a push relay.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct DeviceRequest {
+#[serde(untagged)]
+pub enum DeviceRequest {
+    Native(NativeDevice),
+    Relay(RelayDevice),
+}
+
+/// An APNs device token (hex) or an FCM registration token, for a server that sends to the app
+/// with its own credentials.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct NativeDevice {
     pub platform: DevicePlatform,
     pub token: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub environment: Option<PushEnvironment>,
 }
 
-/// Which native pushes the server can send.
+/// Always `relay`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RelayPlatform {
+    Relay,
+}
+
+/// A push relay's handle for the device, and the device's X25519 key (32 bytes, base64url) that
+/// the server seals its pushes for.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RelayDevice {
+    pub platform: RelayPlatform,
+    pub relay: String,
+    pub handle: String,
+    pub device_key: String,
+}
+
+/// Which native pushes the server can send, and the push relays it sends through.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct DevicesResponse {
     pub apns: bool,
     pub fcm: bool,
+    #[serde(default)]
+    pub relays: Vec<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
