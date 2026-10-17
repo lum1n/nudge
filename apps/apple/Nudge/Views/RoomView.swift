@@ -42,11 +42,10 @@ struct RoomView: View {
             } message: {
                 Text(problem ?? "")
             }
+            // Let go of when the view goes, not on disappear: in a collapsed split view, the
+            // room opened again can appear before it disappeared from the last time, which
+            // left it with nothing observed and loading for good.
             .onAppear { if observed == nil { observed = client.observeRoomState(roomId) } }
-            .onDisappear {
-                observed?.close()
-                observed = nil
-            }
     }
 
     private var state: RoomState? { observed?.value }
