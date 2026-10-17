@@ -23,6 +23,7 @@ import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Payments
+import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material3.AlertDialog
@@ -46,6 +47,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -71,8 +73,8 @@ import nudge.ffi.PrivateValue
 import nudge.ffi.Usage
 
 /**
- * The account, the assistant's extensions (for admins), the player's own memory, this month's
- * spend, notifications, and signing out.
+ * The account, the extensions and invites of each assistant the player is an admin of, the
+ * player's own memory, this month's spend, notifications, and signing out.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -93,7 +95,13 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
     var confirmSignOut by remember { mutableStateOf(false) }
     val notificationsOn = NotificationManagerCompat.from(LocalContext.current).areNotificationsEnabled()
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    var extensions by rememberSaveable { mutableStateOf(false) }
+    // The assistant whose extensions or invites are open: home, or one joined from there.
+    var extensionsOf by remember { mutableStateOf<Session?>(null) }
+    var invitesOf by remember { mutableStateOf<Session?>(null) }
+    val places by model.places.collectAsStateWithLifecycle()
+    val administered = places.filter { place ->
+        key(place.account.key) { place.me.collectAsStateWithLifecycle().value?.admin == true }
+    }
 
     fun change(action: suspend () -> Unit) = scope.launch {
         try {
@@ -116,9 +124,14 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
         }
     }
 
-    if (extensions) {
-        BackHandler { extensions = false }
-        ExtensionsScreen(client, close = { extensions = false })
+    extensionsOf?.let { at ->
+        BackHandler { extensionsOf = null }
+        ExtensionsScreen(at.client, close = { extensionsOf = null })
+        return
+    }
+    invitesOf?.let { at ->
+        BackHandler { invitesOf = null }
+        InvitesScreen(at.client, at.account.assistantName, close = { invitesOf = null })
         return
     }
     if (profile) {
@@ -217,20 +230,35 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                 )
             }
 
-            if (me?.admin == true) {
+            // Home first, then the assistants joined from it where the player is an admin too.
+            val admin = listOfNotNull(session.takeIf { me?.admin == true }) + administered
+            admin.forEach { at ->
                 group(
-                    "Assistant",
-                    listOf(
-                        { shapes ->
+                    // Titles key the list, and assistants on different servers may share a name.
+                    if (at === session) "Assistant" else "${at.account.assistantName} on ${java.net.URI(at.account.server).host ?: at.account.server}",
+                    buildList<GroupRow> {
+                        add { shapes ->
                             SegmentedListItem(
-                                onClick = { extensions = true },
+                                onClick = { extensionsOf = at },
                                 shapes = shapes,
                                 leadingContent = { Icon(Icons.Outlined.Extension, null) },
                                 supportingContent = { Text("Turn them on or off and change their settings, for every room") },
                                 trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) },
                             ) { Text("Extensions") }
-                        },
-                    ),
+                        }
+                        // Without federation at home there are no memberships; joined ones have it.
+                        if (at !== session || memberships != null) {
+                            add { shapes ->
+                                SegmentedListItem(
+                                    onClick = { invitesOf = at },
+                                    shapes = shapes,
+                                    leadingContent = { Icon(Icons.Outlined.PersonAdd, null) },
+                                    supportingContent = { Text("Let someone from another assistant join, by their address") },
+                                    trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) },
+                                ) { Text("Invites") }
+                            }
+                        }
+                    },
                 )
             }
 

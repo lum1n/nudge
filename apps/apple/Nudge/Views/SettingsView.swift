@@ -2,8 +2,8 @@ import Nudge
 import SwiftUI
 import UserNotifications
 
-/// The account, the assistant's extensions (for admins), the player's own memory, this month's
-/// spend, notifications, and signing out.
+/// The account, the extensions and invites of each assistant the player is an admin of, the
+/// player's own memory, this month's spend, notifications, and signing out.
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -66,10 +66,29 @@ struct SettingsView: View {
                         NavigationLink { ExtensionsView(client: client) } label: {
                             Label("Extensions", systemImage: "puzzlepiece.extension")
                         }
+                        // Without federation at home there are no memberships.
+                        if model.memberships != nil {
+                            NavigationLink { InvitesView(client: client, assistantName: account.assistantName) } label: {
+                                Label("Invites", systemImage: "person.badge.plus")
+                            }
+                        }
                     } header: {
                         Text("Assistant")
                     } footer: {
-                        Text("Turn them on or off and change their settings, for every room.")
+                        Text("Turn extensions on or off and change their settings, for every room. Invite someone from another assistant by their address.")
+                    }
+                }
+                // The assistants joined from home where the player is an admin too.
+                ForEach(model.places.filter { $0.me?.admin == true }, id: \.account.keychainAccount) { place in
+                    Section {
+                        NavigationLink { ExtensionsView(client: place.client) } label: {
+                            Label("Extensions", systemImage: "puzzlepiece.extension")
+                        }
+                        NavigationLink { InvitesView(client: place.client, assistantName: place.account.assistantName) } label: {
+                            Label("Invites", systemImage: "person.badge.plus")
+                        }
+                    } header: {
+                        Text("\(place.account.assistantName) on \(URL(string: place.account.server)?.host() ?? place.account.server)")
                     }
                 }
                 Section {
