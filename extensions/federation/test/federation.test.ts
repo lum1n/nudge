@@ -6,7 +6,7 @@ import { createApp } from "@nudge/server";
 import type { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
-import { federationExtension, newKey, seal } from "../src/index.ts";
+import { federationExtension, newKey, publicKeyOf, seal } from "../src/index.ts";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -25,8 +25,12 @@ describe("federation", () => {
   const held: (() => void)[] = [];
   /** A server whose next inbox message arrives, but whose answer is lost on the way back. */
   let losing: string | undefined;
+  /** What a server's `GET /key` says instead, as if someone else answered for it. */
+  const keysAt = new Map<string, unknown>();
   const between: typeof fetch = async (input, init) => {
     const url = new URL(String(input));
+    if (url.pathname.endsWith("/key") && keysAt.has(url.origin))
+      return Response.json(keysAt.get(url.origin));
     const inbox = url.pathname.endsWith("/inbox");
     if (inbox || url.pathname.endsWith("/join")) wire.push(String(init?.body));
     const app = apps.get(url.origin);
@@ -94,6 +98,7 @@ describe("federation", () => {
     holding = undefined;
     held.length = 0;
     losing = undefined;
+    keysAt.clear();
     home = await open("robin", HOME);
     away = await open("team", AWAY);
     vegard = (await home.players.invite("Vegard", context)).token;
@@ -429,5 +434,58 @@ describe("federation", () => {
     expect(await texts(home)).toEqual(all);
     expect(await texts(away)).toEqual(all);
     expect(errors.splice(0)).toEqual([new Error("The answer was lost")]);
+  });
+
+  it("follows an assistant's new keys from the old ones, and nothing else", async () => {
+    await call(AWAY, "POST", "/ext/federation/invites", {
+      token: ann,
+      body: { address: "vegard@home.example/robin" },
+    });
+    await call(AWAY, "POST", "/ext/federation/join", { body: { assertion: await assertion() } });
+    await call(HOME, "PUT", "/ext/federation/memberships/memory", {
+      token: vegard,
+      body: { server: AWAY, assistant: "team", carry: true },
+    });
+    const texts = async (nudge: Nudge) =>
+      (await nudge.memory.ofPlayer("vegard", context)).facts.map((fact) => fact.text);
+
+    // An admin rotates either side.
+    const before = (await call(HOME, "GET", "/ext/federation/key")).json;
+    expect((await call(AWAY, "POST", "/ext/federation/keys", { token: ann })).status).toBe(200);
+    expect((await call(HOME, "POST", "/ext/federation/keys", { token: vegard })).status).toBe(200);
+    const after = (await call(HOME, "GET", "/ext/federation/key")).json;
+    expect(after.signingKey).not.toBe(before.signingKey);
+    expect(after.rotations).toHaveLength(1);
+
+    // Both sides still take each other's word, and messages sealed to old keys still open.
+    await call(HOME, "PATCH", "/me/profile", { token: vegard, body: { language: "nb" } });
+    await expect
+      .poll(async () => (await away.profiles.get("vegard", context))?.language)
+      .toBe("nb");
+    await away.memory.rememberFor("vegard", "Allergic to nuts", context);
+    await expect.poll(() => texts(home)).toEqual(["Allergic to nuts"]);
+    await home.memory.rememberFor("vegard", "Likes tea", context);
+    await expect.poll(() => texts(away)).toEqual(["Allergic to nuts", "Likes tea"]);
+
+    // A key nobody signed for is refused, also when the home's address answers with it.
+    const keys = (await call(AWAY, "GET", "/ext/federation/key")).json;
+    const stranger = newKey("ed25519");
+    const forged = () =>
+      seal(stranger, keys.encryptionKey, {
+        kind: "nudge.profile",
+        home: { server: HOME, assistant: "robin", playerId: "vegard" },
+        audience: { server: AWAY, assistant: "team" },
+        profile: { displayName: "Mallory" },
+        issuedAt: Date.now() + 1000,
+      });
+    const inbox = () =>
+      call(AWAY, "POST", "/ext/federation/inbox", { body: { message: forged() } });
+    expect((await inbox()).status).toBe(401);
+    keysAt.set(HOME, { ...after, signingKey: publicKeyOf(stranger), rotations: [] });
+    expect((await inbox()).status).toBe(401);
+    keysAt.set(HOME, { ...after, signingKey: publicKeyOf(stranger) });
+    expect((await inbox()).status).toBe(401);
+    await sleep(20);
+    expect((await away.profiles.get("vegard", context))?.displayName).toBe("Vegard");
   });
 });

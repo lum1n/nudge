@@ -33,12 +33,28 @@ export const FactBody = Type.Object({
   ),
 });
 
-/** The keys an assistant publishes at `GET /key`. */
+const SignedBody = Type.Object({ payload: Type.String(), signature: Type.String() });
+
+/** An assistant's old signing key → anyone: these are its keys now. */
+export const KeysClaim = Type.Object({
+  kind: Type.Literal("nudge.keys"),
+  server: Type.String(),
+  assistant: Type.String(),
+  signingKey: Type.String(),
+  encryptionKey: Type.String(),
+  issuedAt: Type.Number(),
+});
+
+/**
+ * The keys an assistant publishes at `GET /key`, with its latest rotations, oldest first: each a
+ * `KeysClaim` signed by the signing key before it, so whoever pinned an old key can follow it here.
+ */
 export const KeysBody = Type.Object({
   server: Type.String(),
   assistant: Type.String(),
   signingKey: Type.String(),
   encryptionKey: Type.String(),
+  rotations: Type.Optional(Type.Array(SignedBody)),
 });
 
 /** Home → app → the assistant joined: who they are, and their profile. */

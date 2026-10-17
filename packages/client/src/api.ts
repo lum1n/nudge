@@ -347,6 +347,11 @@ export class Api {
     return this.request("DELETE", `/ext/federation/invites/${encodeURIComponent(id)}`);
   }
 
+  /** New keys for joining and vouching; other assistants follow them from the old ones. */
+  async rotateFederationKeys(): Promise<void> {
+    await this.request("POST", "/ext/federation/keys");
+  }
+
   /** The assistant's extensions and the ones it could add, with their settings and schemas. */
   async extensionSetups(): Promise<ExtensionSetup[]> {
     return (await this.request<ExtensionSetupsResponse>("GET", "/admin/extensions")).extensions;

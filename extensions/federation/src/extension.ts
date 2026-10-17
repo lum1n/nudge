@@ -37,6 +37,7 @@ import {
   ForgetClaim,
   JoinClaim,
   KeysBody,
+  KeysClaim,
   LeaveClaim,
   MemoryClaim,
   PlaceBody,
@@ -53,6 +54,7 @@ import {
   seal,
   type Sealed,
   type Signed,
+  signPayload,
 } from "./signing.ts";
 import {
   emptyState,
@@ -84,6 +86,8 @@ const JOIN_TTL_MS = 5 * 60_000;
 const INVITE_TTL_MS = 7 * 24 * 60 * 60_000;
 /** How far apart two hosts' clocks may be. */
 const SKEW_MS = 60_000;
+/** How many rotations `GET /key` shows, and how many old encryption keys still open messages. */
+const MAX_ROTATIONS = 8;
 /** Sealed bodies carry a profile, with its avatar, or a whole memory. */
 const MAX_SEALED_BYTES = 512 * 1024;
 const PLACEHOLDER = /⟦[A-Z]+\d+⟧/g;
@@ -124,8 +128,12 @@ export function federationExtension(options: FederationOptions = {}) {
 class Federation {
   /** This assistant, as others name it. */
   private readonly self: Place;
-  private readonly signingKey: string;
-  private readonly encryptionKey: string;
+  private signingKey: string;
+  private encryptionKey: string;
+  /** Encryption keys from before the last rotations, newest first, for what is still sealed to them. */
+  private previousKeys: string[];
+  /** The last rotations, oldest first, as `GET /key` shows them. */
+  private rotations: Signed[];
   private unsubscribe: (() => void) | undefined;
   private closed = false;
   /** When the last message was signed, so each one signed later is newer. */
@@ -141,6 +149,8 @@ class Federation {
     this.self = { server: trimmed(host.settings.server), assistant: host.name };
     this.signingKey = this.ownKey("signing-key", "ed25519");
     this.encryptionKey = this.ownKey("encryption-key", "x25519");
+    this.previousKeys = this.listed("previous-encryption-keys") as string[];
+    this.rotations = this.listed("rotations") as Signed[];
     void host.whenOpen().then((nudge) => {
       if (this.closed) return;
       this.unsubscribe = nudge.changes.subscribe((change) => this.changed(change));
@@ -159,6 +169,56 @@ class Federation {
       this.host.secrets.set(SCOPE, name, key);
     }
     return key;
+  }
+
+  private listed(name: string): unknown[] {
+    const stored = this.host.secrets.get(SCOPE, name);
+    return stored === undefined ? [] : (JSON.parse(stored) as unknown[]);
+  }
+
+  /**
+   * New keys, signed for by the old signing key, so whoever pinned it follows along the next time
+   * a message from here doesn't check out. What was sealed to the old encryption key still opens.
+   * It doesn't help when a key leaked: whoever has it can sign for keys of their own.
+   */
+  private rotate(): Response {
+    const signingKey = newKey("ed25519");
+    const encryptionKey = newKey("x25519");
+    const rotation = signPayload(this.signingKey, {
+      kind: "nudge.keys",
+      ...this.self,
+      signingKey: publicKeyOf(signingKey),
+      encryptionKey: publicKeyOf(encryptionKey),
+      issuedAt: this.nextSignedAt(),
+    } satisfies Static<typeof KeysClaim>);
+    this.rotations = [...this.rotations, rotation].slice(-MAX_ROTATIONS);
+    this.previousKeys = [this.encryptionKey, ...this.previousKeys].slice(0, MAX_ROTATIONS);
+    this.signingKey = signingKey;
+    this.encryptionKey = encryptionKey;
+    const secrets = this.host.secrets;
+    secrets.set(SCOPE, "rotations", JSON.stringify(this.rotations));
+    secrets.set(SCOPE, "previous-encryption-keys", JSON.stringify(this.previousKeys));
+    secrets.set(SCOPE, "signing-key", signingKey);
+    secrets.set(SCOPE, "encryption-key", encryptionKey);
+    return Response.json(this.publicKeys());
+  }
+
+  private publicKeys(): Static<typeof KeysBody> {
+    return {
+      ...this.self,
+      signingKey: publicKeyOf(this.signingKey),
+      encryptionKey: publicKeyOf(this.encryptionKey),
+      ...(this.rotations.length === 0 ? {} : { rotations: this.rotations }),
+    };
+  }
+
+  /** The signed message in `sealed`, if it was sealed to this assistant's key, or an earlier one. */
+  private open(sealed: Sealed): Signed | undefined {
+    for (const key of [this.encryptionKey, ...this.previousKeys]) {
+      const signed = open(key, sealed);
+      if (signed !== undefined) return signed;
+    }
+    return undefined;
   }
 
   private changed(change: Change): void {
@@ -187,12 +247,13 @@ class Federation {
         method: "GET",
         path: "/key",
         auth: "none",
-        handle: () =>
-          Response.json({
-            ...this.self,
-            signingKey: publicKeyOf(this.signingKey),
-            encryptionKey: publicKeyOf(this.encryptionKey),
-          } satisfies Static<typeof KeysBody>),
+        handle: () => Response.json(this.publicKeys()),
+      },
+      {
+        method: "POST",
+        path: "/keys",
+        auth: "admin",
+        handle: () => this.rotate(),
       },
       // As a home.
       {
@@ -408,7 +469,7 @@ class Federation {
    * a player here with that home, and a token for it.
    */
   private async join(assertion: Sealed, context: Context): Promise<Response> {
-    const signed = open(this.encryptionKey, assertion);
+    const signed = this.open(assertion);
     if (signed === undefined) return problem(400, "That was not encrypted for this assistant");
     const claim = peek(signed);
     if (!Value.Check(JoinClaim, claim)) return problem(400, "Not a join assertion");
@@ -431,10 +492,12 @@ class Federation {
     );
     if (guest === undefined && !invited) return problem(403, `No invite for ${address}`);
     // Only once someone here vouched for the address: the home is fetched from what it says.
-    const keys = guest ?? (await this.keysOf(home));
-    if (keys === undefined) return problem(502, `Could not reach the home of ${address}`);
-    const claimed = checkSigned(keys.signingKey, signed);
-    if (!Value.Check(JoinClaim, claimed)) return problem(401, "The home did not sign that");
+    const pinned = guest ?? (await this.keysOf(home));
+    if (pinned === undefined) return problem(502, `Could not reach the home of ${address}`);
+    const checked = await this.checkFrom(home, pinned, signed, context);
+    if (checked === undefined || !Value.Check(JoinClaim, checked.claim))
+      return problem(401, "The home did not sign that");
+    const { claim: claimed, keys } = checked;
     const fresh = await this.commit((state) => {
       for (const [nonce, expiresAt] of Object.entries(state.used))
         if (expiresAt < now) delete state.used[nonce];
@@ -476,7 +539,7 @@ class Federation {
 
   /** A message from another assistant: opened, its sender checked, then applied once. */
   private async receive(message: Sealed, context: Context): Promise<Response> {
-    const signed = open(this.encryptionKey, message);
+    const signed = this.open(message);
     if (signed === undefined) return problem(400, "That was not encrypted for this assistant");
     const claim = peek(signed) as { kind?: unknown } | undefined;
     switch (claim?.kind) {
@@ -504,7 +567,8 @@ class Federation {
     const player = await this.nudge().players.byHome(claim.home, context);
     const guest = player === undefined ? undefined : (await this.state(context)).guests[player.id];
     if (player === undefined || guest === undefined) return problem(404, "No such guest");
-    const claimed = checkSigned(guest.signingKey, signed);
+    const checked = await this.checkFrom(claim.home, guest, signed, context);
+    const claimed = checked?.claim;
     if (!Value.Check(schema, claimed)) return problem(401, "The home did not sign that");
     // Not waited for: the home may be waiting for this player's queue here to answer it.
     void this.enqueue(player.id, async () => {
@@ -558,7 +622,8 @@ class Federation {
       samePlace(m, from),
     );
     if (membership === undefined) return problem(404, "No such membership");
-    const claimed = checkSigned(membership.signingKey, signed);
+    const checked = await this.checkFrom(from, membership, signed, context);
+    const claimed = checked?.claim;
     if (!Value.Check(schema, claimed)) return problem(401, "That assistant did not sign that");
     // Only with their consent: memory goes both ways or not at all.
     if (!membership.carry) return problem(403, "Their memory isn't carried there");
@@ -901,19 +966,67 @@ class Federation {
     nudge.changes.emit({ kind: "player-memory", playerId });
   }
 
-  /** The keys `place` publishes, if it answers for itself. */
-  private async keysOf(place: Place): Promise<Keys | undefined> {
+  /**
+   * What `signed` says, and the keys it was checked with, if `place` signed it with the key pinned
+   * for it, or with one that key signed for in a rotation. Then the new keys are pinned instead,
+   * everywhere the old one was.
+   */
+  private async checkFrom(
+    place: Place,
+    pinned: Keys,
+    signed: Signed,
+    context: Context,
+  ): Promise<{ claim: unknown; keys: Keys } | undefined> {
+    const claim = checkSigned(pinned.signingKey, signed);
+    if (claim !== undefined) return { claim, keys: pinned };
+    const keys = await this.keysOf(placeOf(place), pinned.signingKey);
+    if (keys === undefined || keys.signingKey === pinned.signingKey) return undefined;
+    const rotated = checkSigned(keys.signingKey, signed);
+    if (rotated === undefined) return undefined;
+    await this.commit((state) => {
+      const all = [...Object.values(state.guests), ...Object.values(state.memberships).flat()];
+      for (const held of all)
+        if (held.signingKey === pinned.signingKey) {
+          held.signingKey = keys.signingKey;
+          held.encryptionKey = keys.encryptionKey;
+        }
+    }, context);
+    return { claim: rotated, keys };
+  }
+
+  /**
+   * The keys `place` publishes, if it answers for itself. With `from`, only when its rotations
+   * lead from that signing key to them.
+   */
+  private async keysOf(place: Place, from?: string): Promise<Keys | undefined> {
+    let body: unknown;
     try {
       const response = await this.fetch(endpoint(place, "/key"));
       if (!response.ok) return undefined;
-      const body: unknown = await response.json();
-      if (!Value.Check(KeysBody, body) || !samePlace(trimmedPlace(body), placeOf(place)))
-        return undefined;
-      return { signingKey: body.signingKey, encryptionKey: body.encryptionKey };
+      body = await response.json();
     } catch (error) {
       this.report(error);
       return undefined;
     }
+    if (!Value.Check(KeysBody, body) || !samePlace(trimmedPlace(body), placeOf(place)))
+      return undefined;
+    const keys = { signingKey: body.signingKey, encryptionKey: body.encryptionKey };
+    if (from === undefined || from === keys.signingKey) return keys;
+    let signer: string | undefined;
+    let last: Keys | undefined;
+    for (const rotation of body.rotations ?? []) {
+      // The chain starts where the pinned key signed, and goes on unbroken from there.
+      const claim = checkSigned(signer ?? from, rotation);
+      if (!Value.Check(KeysClaim, claim) || !samePlace(trimmedPlace(claim), placeOf(place))) {
+        if (signer === undefined) continue;
+        return undefined;
+      }
+      signer = claim.signingKey;
+      last = { signingKey: claim.signingKey, encryptionKey: claim.encryptionKey };
+    }
+    return last?.signingKey === keys.signingKey && last.encryptionKey === keys.encryptionKey
+      ? keys
+      : undefined;
   }
 
   private nextSignedAt(): number {
