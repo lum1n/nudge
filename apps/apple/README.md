@@ -14,7 +14,7 @@ The Nudge app for iOS 26 and macOS 26 (and later), in SwiftUI, on the Swift pack
 
 ## Build
 
-On a Mac with Xcode 26, [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`) and Rust from [rustup](https://rustup.rs):
+On a Mac with Xcode 26, [XcodeGen](https://github.com/yonaskolb/XcodeGen) 2.45.1 or later (`brew install xcodegen`) and Rust from [rustup](https://rustup.rs):
 
 ```bash
 scripts/setup.sh

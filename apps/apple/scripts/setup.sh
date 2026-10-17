@@ -27,6 +27,10 @@ fail() { echo "$1" >&2; exit 1; }
 xcodebuild -version >/dev/null 2>&1 ||
   fail "No Xcode: install Xcode 26 from the App Store, then run: sudo xcode-select -s /Applications/Xcode.app"
 command -v xcodegen >/dev/null || fail "No XcodeGen: brew install xcodegen"
+# 2.45.1 is the first to take the app icon from Icon Composer (Nudge/AppIcon.icon).
+xcodegen_version="$(xcodegen --version | grep -Eo '[0-9]+(\.[0-9]+)+' | head -1)"
+[[ "$(printf '%s\n' 2.45.1 "$xcodegen_version" | sort -V | head -1)" == 2.45.1 ]] ||
+  fail "XcodeGen $xcodegen_version is too old for the app icon: brew upgrade xcodegen"
 
 if [[ "$rust" == yes ]]; then
   command -v rustup >/dev/null || fail "No rustup: the Apple targets come from rustup (https://rustup.rs)"
