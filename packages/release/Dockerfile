@@ -4,8 +4,16 @@
 # only needed for a newer launcher; nudge-server takes the image's release when it is newer.
 FROM debian:bookworm-slim
 
+# Besides certificates and tini: what the browser extension's Chromium needs, as Playwright lists
+# it for Debian 12, and Xvfb, the virtual display it runs headed on. Chromium itself is downloaded
+# the first time a room browses, into /data.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates tini \
+    xvfb xfonts-scalable fonts-liberation fonts-noto-color-emoji fonts-unifont fonts-ipafont-gothic \
+    fonts-wqy-zenhei fonts-tlwg-loma-otf fonts-freefont-ttf libfontconfig1 libfreetype6 \
+    libasound2 libatk-bridge2.0-0 libatk1.0-0 libatspi2.0-0 libcairo2 libcups2 libdbus-1-3 \
+    libdrm2 libgbm1 libglib2.0-0 libnspr4 libnss3 libpango-1.0-0 libx11-6 libxcb1 \
+    libxcomposite1 libxdamage1 libxext6 libxfixes3 libxkbcommon0 libxrandr2 \
   && rm -rf /var/lib/apt/lists/* \
   && useradd --system --uid 1000 --home-dir /data --shell /usr/sbin/nologin nudge \
   && mkdir /data && chown nudge:nudge /data

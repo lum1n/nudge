@@ -1,5 +1,8 @@
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, execFile, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
+import { delimiter, dirname, join } from "node:path";
+import { promisify } from "node:util";
 import { chromium, type BrowserContext, type Locator, type Page, type Request } from "patchright";
 import type { SavedLogin } from "./logins.ts";
 import { compactSnapshot, findLines } from "./snapshot.ts";
@@ -76,6 +79,10 @@ export class BrowserSession {
 
   static async open(options: BrowserOptions): Promise<BrowserSession> {
     const headless = options.headless ?? false;
+    // Said before the download, which is no use without a display; the assistant tells the room.
+    const problem = headless ? undefined : displayProblem();
+    if (problem !== undefined) throw new Error(problem);
+    await ensureChromium();
     const xvfb = !headless && !process.env.DISPLAY ? await startXvfb(options.viewport) : undefined;
     const viewport = options.viewport ?? { width: 1280, height: 900 };
     const context = await chromium.launchPersistentContext(options.profileDir, {
@@ -559,6 +566,50 @@ async function labelFor(locator: Locator): Promise<Locator | "self" | undefined>
     .catch(() => undefined);
   if (!id) return undefined;
   return locator.page().locator(`[id="${id}"]`);
+}
+
+let installing: Promise<void> | undefined;
+
+/**
+ * Chromium, downloaded the first time it is needed, as `patchright install chromium` does: into
+ * `~/.cache/ms-playwright`, or `PLAYWRIGHT_BROWSERS_PATH`. A server's release carries the extension
+ * but not the browser, which is large; the system libraries it needs come with the server's image.
+ */
+export function ensureChromium(): Promise<void> {
+  if (existsSync(chromium.executablePath())) return Promise.resolve();
+  installing ??= (async () => {
+    const cli = join(
+      dirname(createRequire(import.meta.url).resolve("patchright/package.json")),
+      "cli.js",
+    );
+    try {
+      await promisify(execFile)(process.execPath, [cli, "install", "chromium"], {
+        timeout: 10 * 60_000,
+        maxBuffer: 16 << 20,
+      });
+    } catch (error) {
+      throw new Error(
+        `Could not download Chromium: ${(error as Error).message.split("\n").at(-2) ?? ""}`.trim(),
+      );
+    }
+  })().finally(() => {
+    installing = undefined;
+  });
+  return installing;
+}
+
+/**
+ * Why the browser can't run headed here, if it can't: it needs a display, its own virtual one
+ * (`Xvfb`) when there is none. A server made from an image without it can only run headless.
+ */
+export function displayProblem(): string | undefined {
+  if (process.env.DISPLAY) return undefined;
+  const found = (process.env.PATH ?? "")
+    .split(delimiter)
+    .some((dir) => dir !== "" && existsSync(join(dir, "Xvfb")));
+  return found
+    ? undefined
+    : "This server has no virtual display (Xvfb) for the browser. A server made from an older Nudge image lacks it and Chromium's libraries: make a new server for the browser.";
 }
 
 async function startXvfb(viewport?: {

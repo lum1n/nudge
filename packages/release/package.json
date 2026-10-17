@@ -7,6 +7,7 @@
   "files": [],
   "dependencies": {
     "@nudge/cli": "workspace:*",
+    "@nudge/ext-browser": "workspace:*",
     "@nudge/ext-calendar": "workspace:*",
     "@nudge/ext-codemode": "workspace:*",
     "@nudge/ext-connectors": "workspace:*",

@@ -529,6 +529,9 @@ importers:
       '@nudge/cli':
         specifier: workspace:*
         version: link:../cli
+      '@nudge/ext-browser':
+        specifier: workspace:*
+        version: link:../../extensions/browser
       '@nudge/ext-calendar':
         specifier: workspace:*
         version: link:../../extensions/calendar
