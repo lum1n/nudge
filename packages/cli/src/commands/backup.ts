@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import {
   backupKey,
@@ -5,10 +6,12 @@ import {
   lastBackupAt,
   loadConfig,
   type NudgeConfig,
+  openRecoveryKit,
   pruneBackups,
   restoreBackup,
 } from "@nudge/core";
 import { UsageError } from "../errors.ts";
+import { promptHidden } from "./setup.ts";
 
 /** Where the backup key lives unless NUDGE_BACKUP_KEY is set. */
 export function keyPath(configPath: string, config: NudgeConfig): string {
@@ -45,17 +48,29 @@ export async function restore(options: {
   readonly file?: string;
   readonly to?: string;
   readonly force: boolean;
+  /** A recovery kit to take the backup key from, as on a new machine. */
+  readonly kit?: string;
 }): Promise<void> {
   if (options.file === undefined)
     throw new UsageError("restore needs a backup: nudge restore <file> --to <dir>");
   if (options.to === undefined)
     throw new UsageError("restore needs --to <dir>: an empty directory to unpack into");
-  const config = await loadConfig(options.config).catch(() => undefined);
-  const keyFile =
-    config === undefined
-      ? join(dirname(resolve(options.config)), "nudge-backup.key")
-      : keyPath(options.config, config);
-  const key = await backupKey(keyFile);
+  let key: Buffer;
+  if (options.kit !== undefined) {
+    const passphrase = await promptHidden(`Passphrase of ${options.kit}`);
+    try {
+      key = openRecoveryKit(await readFile(options.kit, "utf8"), passphrase);
+    } catch (error) {
+      throw new UsageError((error as Error).message);
+    }
+  } else {
+    const config = await loadConfig(options.config).catch(() => undefined);
+    const keyFile =
+      config === undefined
+        ? join(dirname(resolve(options.config)), "nudge-backup.key")
+        : keyPath(options.config, config);
+    key = await backupKey(keyFile);
+  }
   const manifest = await restoreBackup({
     file: options.file,
     key,

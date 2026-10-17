@@ -66,6 +66,7 @@ describe("the server API", () => {
       testKey: async (_provider, key) => {
         if (key !== "good") throw new Error("invalid x-api-key");
       },
+      backupKey: async () => Buffer.alloc(32, 1),
     };
     app = createApp({ assistants: assistants.running, server: control });
     const robin = assistants.running.get("robin")!;

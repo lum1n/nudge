@@ -83,9 +83,9 @@ export type RestOptions = {
   readonly assistants: ReadonlyMap<string, Nudge>;
   readonly hubsOf: (nudge: Nudge) => Hubs;
   /** The server's address as clients reach it, for pairing links; default the request's origin. */
-  readonly publicUrl?: string;
+  readonly publicUrl: () => string | undefined;
   /** Whether the request's origin is the one a proxy in front says (`X-Forwarded-*`). */
-  readonly trustProxy?: boolean;
+  readonly trustProxy: () => boolean;
   /** Setting up extensions from a client; the admin's settings routes answer 404 without. */
   readonly extensionSettings?: ExtensionSettings;
 };
@@ -113,7 +113,7 @@ type Env = {
 
 export class HttpError extends Error {
   constructor(
-    readonly status: 400 | 401 | 403 | 404 | 409 | 413 | 429,
+    readonly status: 400 | 401 | 403 | 404 | 409 | 410 | 413 | 429,
     message: string,
   ) {
     super(message);
@@ -176,7 +176,7 @@ export function restRoutes(options: RestOptions): Hono {
 
   // Before `authenticate`: a new client has no token yet.
   api.post("/pair", async (c) => {
-    const body = await readBody(c, PairRequest);
+    const body = await readJson(c, PairRequest);
     const paired = await c.var.nudge.players.pair(body.code, body.client, context);
     if (paired === undefined) throw new HttpError(401, "Unknown or expired pairing code");
     return c.json({
@@ -252,7 +252,7 @@ export function restRoutes(options: RestOptions): Hono {
   });
 
   api.post("/me/memory", async (c) => {
-    const body = await readBody(c, RememberRequest);
+    const body = await readJson(c, RememberRequest);
     if (body.text.trim() === "") throw new HttpError(400, "A fact needs text");
     const { player } = c.var.credential;
     const by = { playerId: player.id, displayName: player.displayName };
@@ -277,7 +277,7 @@ export function restRoutes(options: RestOptions): Hono {
 
   // Consent: everyone in the player's rooms, and the model there, then reads these facts.
   api.put("/me/memory/sharing", async (c) => {
-    const body = await readBody(c, ShareMemoryRequest);
+    const body = await readJson(c, ShareMemoryRequest);
     const id = c.var.credential.player.id;
     await c.var.nudge.memory.share(id, body.shared, context);
     const memory = await c.var.nudge.memory.ofPlayer(id, context);
@@ -310,7 +310,7 @@ export function restRoutes(options: RestOptions): Hono {
     const { home } = c.var.credential.player;
     if (home !== undefined)
       throw new HttpError(403, `Your profile comes from your home, ${addressOf(home)}`);
-    const body = await readBody(c, UpdateProfileRequest);
+    const body = await readJson(c, UpdateProfileRequest);
     try {
       const profile = await c.var.nudge.profiles.update(
         c.var.credential.player.id,
@@ -351,7 +351,7 @@ export function restRoutes(options: RestOptions): Hono {
   });
 
   api.post("/rooms", async (c) => {
-    const body = await readBody(c, CreateRoomRequest);
+    const body = await readJson(c, CreateRoomRequest);
     const name = body.name.trim();
     if (name === "") throw new HttpError(400, "A room needs a name");
     const me = c.var.credential.player.id;
@@ -380,7 +380,7 @@ export function restRoutes(options: RestOptions): Hono {
       (!canUse(found, me) && !(await c.var.nudge.players.isAdmin(me, context)))
     )
       throw new HttpError(404, `No room "${id}"`);
-    const body = await readBody(c, RenameRoomRequest);
+    const body = await readJson(c, RenameRoomRequest);
     if (body.name.trim() === "") throw new HttpError(400, "A room needs a name");
     try {
       const room = await c.var.nudge.renameRoom(id, body.name, context, { playerId: me });
@@ -393,7 +393,7 @@ export function restRoutes(options: RestOptions): Hono {
 
   api.post("/rooms/:room/messages", async (c) => {
     const room = await usableRoom(c);
-    const body = await readBody(c, MessageRequest);
+    const body = await readJson(c, MessageRequest);
     if (body.text.trim() === "") throw new HttpError(400, "A message needs text");
     const { player, clientId } = c.var.credential;
     let submission;
@@ -475,7 +475,7 @@ export function restRoutes(options: RestOptions): Hono {
 
   api.post("/rooms/:room/memory", async (c) => {
     const room = await usableRoom(c);
-    const body = await readBody(c, RememberRequest);
+    const body = await readJson(c, RememberRequest);
     if (body.text.trim() === "") throw new HttpError(400, "A fact needs text");
     try {
       const { player } = c.var.credential;
@@ -512,7 +512,7 @@ export function restRoutes(options: RestOptions): Hono {
   // Anyone in the room may change it, like its memory.
   api.put("/rooms/:room/extensions/:extension", async (c) => {
     const room = await usableRoom(c);
-    const body = await readBody(c, SetRoomExtensionRequest);
+    const body = await readJson(c, SetRoomExtensionRequest);
     try {
       return c.json(
         await c.var.nudge.setRoomExtension(
@@ -530,7 +530,7 @@ export function restRoutes(options: RestOptions): Hono {
 
   api.post("/rooms/:room/approvals/:approval", async (c) => {
     const room = await usableRoom(c);
-    const body = await readBody(c, DecideRequest);
+    const body = await readJson(c, DecideRequest);
     const { player } = c.var.credential;
     try {
       const approval = await c.var.nudge.approvals.decide(
@@ -564,7 +564,7 @@ export function restRoutes(options: RestOptions): Hono {
   });
 
   api.post("/protect", async (c) => {
-    const body = await readBody(c, ProtectRequest);
+    const body = await readJson(c, ProtectRequest);
     if (body.value.trim() === "") throw new HttpError(400, "Nothing to protect");
     const placeholder = await c.var.nudge.protect(
       body.value.trim(),
@@ -599,7 +599,7 @@ export function restRoutes(options: RestOptions): Hono {
   });
 
   api.post("/admin/players", admin, async (c) => {
-    const body = await readBody(c, CreatePlayerRequest);
+    const body = await readJson(c, CreatePlayerRequest);
     if (body.displayName.trim() === "") throw new HttpError(400, "A player needs a name");
     const player = await c.var.nudge.players.create(body.displayName, context);
     return c.json({ player: toPlayer(player) } satisfies PlayerResponse, 201);
@@ -615,7 +615,7 @@ export function restRoutes(options: RestOptions): Hono {
 
   // The first player stays an admin either way; the reply says so.
   api.put("/admin/players/:player/admin", admin, async (c) => {
-    const body = await readBody(c, SetAdminRequest);
+    const body = await readJson(c, SetAdminRequest);
     const id = c.req.param("player");
     if ((await c.var.nudge.players.get(id, context)) === undefined)
       throw new HttpError(404, `No player "${id}"`);
@@ -624,7 +624,7 @@ export function restRoutes(options: RestOptions): Hono {
   });
 
   api.post("/admin/tokens", admin, async (c) => {
-    const body = await readBody(c, IssueTokenRequest);
+    const body = await readJson(c, IssueTokenRequest);
     if ((await c.var.nudge.players.get(body.playerId, context)) === undefined)
       throw new HttpError(404, `No player "${body.playerId}"`);
     const issued = await c.var.nudge.players.issueToken(body.playerId, context);
@@ -648,7 +648,7 @@ export function restRoutes(options: RestOptions): Hono {
   });
 
   api.post("/admin/rooms", admin, async (c) => {
-    const body = await readBody(c, AdminCreateRoomRequest);
+    const body = await readJson(c, AdminCreateRoomRequest);
     const name = body.name.trim();
     if (name === "") throw new HttpError(400, "A room needs a name");
     if (body.members.length === 0) throw new HttpError(400, "A room needs members");
@@ -674,11 +674,11 @@ export function restRoutes(options: RestOptions): Hono {
   });
 
   api.post("/admin/pairing-codes", admin, async (c) => {
-    const body = await readBody(c, PairingCodeRequest);
+    const body = await readJson(c, PairingCodeRequest);
     if ((await c.var.nudge.players.get(body.playerId, context)) === undefined)
       throw new HttpError(404, `No player "${body.playerId}"`);
     const { code, expiresAt } = await c.var.nudge.players.pairingCode(body.playerId, context);
-    const server = options.publicUrl ?? requestOrigin(c.req.raw, options.trustProxy === true);
+    const server = options.publicUrl() ?? requestOrigin(c.req.raw, options.trustProxy());
     return c.json(
       {
         code,
@@ -720,7 +720,7 @@ export function restRoutes(options: RestOptions): Hono {
 
   // Reinstalls the extensions now, and writes the config only once that worked.
   api.put("/admin/extensions", admin, async (c) => {
-    const body = await readBody(c, SaveExtensionSetupsRequest);
+    const body = await readJson(c, SaveExtensionSetupsRequest);
     const extensions = await asBadRequest(() =>
       extensionSettings().save(c.var.name, body.extensions),
     );
@@ -776,7 +776,12 @@ function toTokenInfo(record: TokenRecord): TokenInfo {
 }
 
 /** The JSON body, checked against `schema`; a 400 naming the first problem otherwise. */
-async function readBody<S extends TSchema>(c: HonoContext<Env>, schema: S): Promise<Static<S>> {
+/** The request's JSON body, checked against `schema`; a 400 naming the first problem otherwise. */
+export async function readJson<S extends TSchema>(
+  // oxlint-disable-next-line no-explicit-any -- any route's context; only the body is read
+  c: HonoContext<any>,
+  schema: S,
+): Promise<Static<S>> {
   let body: unknown;
   try {
     body = await c.req.json();

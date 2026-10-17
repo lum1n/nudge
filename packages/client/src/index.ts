@@ -6,7 +6,14 @@ export {
   memoryTokens,
   type TokenStore,
 } from "./api.ts";
-export { ServerApi, type ServerApiOptions } from "./server-api.ts";
+export {
+  checkSetupCode,
+  checkSetupKey,
+  ServerApi,
+  type ServerApiOptions,
+  setUp,
+  setupInfo,
+} from "./server-api.ts";
 export { type Lease, NudgeClient, type NudgeClientOptions, newRequestId } from "./client.ts";
 export {
   Connection,

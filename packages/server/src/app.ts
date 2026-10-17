@@ -20,13 +20,15 @@ export type AppOptions = {
   readonly version?: string;
   readonly timing?: V1Options["timing"];
   /** The server's address as clients reach it, for pairing links; default each request's origin. */
-  readonly publicUrl?: string;
+  readonly publicUrl?: V1Options["publicUrl"];
   /** Whether to believe a proxy's `X-Forwarded-*` about the request's origin, as behind exe.dev's. */
-  readonly trustProxy?: boolean;
+  readonly trustProxy?: V1Options["trustProxy"];
   /** Setting up extensions from the web UI, such as in the config file; none without. */
   readonly extensionSettings?: V1Options["extensionSettings"];
   /** The server's own API for its owners (ADR 11); none without. */
   readonly server?: V1Options["server"];
+  /** Setup mode, for a server with no config yet (ADR 11); none without. */
+  readonly setup?: V1Options["setup"];
 };
 
 /** Nudge's HTTP and WebSocket API (protocol v1, under `/v1`) over one or more assistants. */
@@ -53,6 +55,7 @@ export function createApp(options: AppOptions): Hono {
       trustProxy: options.trustProxy,
       extensionSettings: options.extensionSettings,
       server: options.server,
+      setup: options.setup,
     }),
   );
   if (options.web !== undefined) serveWeb(app, options.web);

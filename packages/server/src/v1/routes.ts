@@ -8,20 +8,26 @@ import { ExtensionSocket } from "./extension-socket.ts";
 import { Hubs } from "./hub.ts";
 import { type ExtensionSettings, restRoutes } from "./rest.ts";
 import { type ServerControl, serverRoutes } from "./server.ts";
+import { type SetupControl, setupRoutes } from "./setup.ts";
 
 export type V1Options = {
   readonly assistants: ReadonlyMap<string, Nudge>;
   readonly upgradeWebSocket: UpgradeWebSocket;
   readonly version: string;
   readonly report: (error: unknown) => void;
-  /** The server's address as clients reach it, for pairing links; default each request's origin. */
-  readonly publicUrl?: string;
+  /**
+   * The server's address as clients reach it, for pairing links; default each request's origin.
+   * Read on every request, since setup may set it.
+   */
+  readonly publicUrl?: string | (() => string | undefined);
   /** Whether to believe a proxy's `X-Forwarded-*` about the request's origin. */
-  readonly trustProxy?: boolean;
+  readonly trustProxy?: boolean | (() => boolean);
   /** Setting up extensions from the web UI; none without. */
   readonly extensionSettings?: ExtensionSettings;
   /** The server's own API for its owners, at `/v1/server` (ADR 11); absent, it answers 404. */
   readonly server?: ServerControl;
+  /** Setup mode, at `/v1/setup`, for a server with no config yet; absent, it answers 404. */
+  readonly setup?: SetupControl;
   /** Defaults: 25 s heartbeat, 50 ms between patches, 10 s for the hello. */
   readonly timing?: Partial<Pick<ConnectionOptions, "heartbeatMs" | "flushMs" | "helloTimeoutMs">>;
 };
@@ -100,24 +106,23 @@ export function v1Routes(options: V1Options): Hono {
     }),
   );
 
+  const { publicUrl: url, trustProxy: trust } = options;
+  const publicUrl = typeof url === "function" ? url : () => url;
+  const trustProxy = typeof trust === "function" ? trust : () => trust === true;
   if (options.server !== undefined)
     app.route(
       "/server",
-      serverRoutes({
-        control: options.server,
-        version: options.version,
-        publicUrl: options.publicUrl,
-        trustProxy: options.trustProxy,
-      }),
+      serverRoutes({ control: options.server, version: options.version, publicUrl, trustProxy }),
     );
+  if (options.setup !== undefined) app.route("/setup", setupRoutes(options.setup));
 
   app.route(
     "/",
     restRoutes({
       assistants: options.assistants,
       hubsOf,
-      publicUrl: options.publicUrl,
-      trustProxy: options.trustProxy,
+      publicUrl,
+      trustProxy,
       extensionSettings: options.extensionSettings,
     }),
   );

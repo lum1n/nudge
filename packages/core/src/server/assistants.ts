@@ -5,6 +5,7 @@ import { dirname, resolve } from "node:path";
 import {
   type AssistantConfig,
   ConfigError,
+  ConfigMissing,
   loadConfig,
   type NudgeConfig,
   parseConfig,
@@ -63,6 +64,8 @@ export type AssistantsOptions = {
   readonly open: (config: NudgeConfig, assistant: AssistantConfig) => Promise<Nudge>;
   readonly context: Context;
   readonly say?: (line: string) => void;
+  /** Start with no assistants when there is no config yet, as a server being set up does. */
+  readonly allowMissing?: boolean;
 };
 
 /**
@@ -90,7 +93,13 @@ export class Assistants {
   /** Opens every assistant in the config; one that fails closes those already open. */
   static async open(options: AssistantsOptions): Promise<Assistants> {
     const assistants = new Assistants(options);
-    const config = await loadConfig(assistants.configPath);
+    let config: NudgeConfig;
+    try {
+      config = await loadConfig(assistants.configPath);
+    } catch (error) {
+      if (options.allowMissing === true && error instanceof ConfigMissing) return assistants;
+      throw error;
+    }
     try {
       for (const entry of config.assistants)
         assistants.running.set(entry.name, await assistants.track(config, entry));
@@ -101,9 +110,14 @@ export class Assistants {
     return assistants;
   }
 
-  /** The assistants' settings as the config has them, in its order. */
+  /** The assistants' settings as the config has them, in its order; none without a config. */
   async list(): Promise<AssistantConfig[]> {
-    return (await loadConfig(this.configPath)).assistants;
+    try {
+      return (await loadConfig(this.configPath)).assistants;
+    } catch (error) {
+      if (error instanceof ConfigMissing) return [];
+      throw error;
+    }
   }
 
   /** Adds an assistant with a database of its own and opens it. */

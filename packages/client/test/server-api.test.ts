@@ -42,6 +42,7 @@ it("signs an owner in to the server and manages its assistants", async () => {
       owners,
       backupBeforeDelete: async () => "backup",
       testKey: async () => {},
+      backupKey: async () => Buffer.alloc(32, 1),
     },
   });
   const fetcher: typeof fetch = async (input, init) => app.request(String(input), init);

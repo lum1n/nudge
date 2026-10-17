@@ -80,7 +80,16 @@ const BackupSchema = Type.Object({
   keyFile: Type.Optional(Type.String()),
 });
 
+/** How the server is reached (ADR 11); `nudge serve`'s flags override it. */
+const ServerSchema = Type.Object({
+  /** The address apps and other assistants reach it at, such as https://robin.exe.xyz. */
+  publicUrl: Type.Optional(Type.String({ pattern: "^https?://" })),
+  /** Behind a proxy that ends TLS, such as exe.dev's: believe its `X-Forwarded-*` headers. */
+  trustProxy: Type.Optional(Type.Boolean()),
+});
+
 export const NudgeConfigSchema = Type.Object({
+  server: Type.Optional(ServerSchema),
   /** None on a server set up but not given one yet, or whose last assistant was deleted. */
   assistants: Type.Array(AssistantSchema),
   providers: Type.Optional(Type.Array(LocalProviderSchema)),
@@ -91,6 +100,7 @@ export type NudgeConfig = Static<typeof NudgeConfigSchema>;
 export type AssistantConfig = Static<typeof AssistantSchema>;
 export type ExtensionConfig = Static<typeof ExtensionSchema>;
 export type LocalProviderConfig = Static<typeof LocalProviderSchema>;
+export type ServerSettings = Static<typeof ServerSchema>;
 export type ModelChoice = Static<typeof ModelRefSchema>;
 
 export const DEFAULT_MODEL: ModelChoice = { provider: "anthropic", modelId: "claude-sonnet-5" };

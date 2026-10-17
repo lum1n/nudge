@@ -18,7 +18,7 @@ import { chat } from "./commands/chat.ts";
 import { connector } from "./commands/connector.ts";
 import { db } from "./commands/db.ts";
 import { doctor } from "./commands/doctor.ts";
-import { init } from "./commands/init.ts";
+import { kit, setup } from "./commands/setup.ts";
 import { owner } from "./commands/owner.ts";
 import { serve } from "./commands/serve.ts";
 import { UsageError } from "./errors.ts";
@@ -26,7 +26,9 @@ import { UsageError } from "./errors.ts";
 const USAGE = `Usage: nudge <command> [options]
 
 Commands:
-  init               Write a nudge.json in the data directory ($NUDGE_HOME)
+  setup              Set this server up: name an assistant, pick its model and key, and
+                     become its owner (init does the same). Or run "nudge serve" without a
+                     config, and set it up in the browser with the code it prints
   chat [room]        Chat in this terminal; room is a room id, or "me" for your own
                      (default: the lobby)
   serve              Run every assistant behind an HTTP and WebSocket server
@@ -54,7 +56,9 @@ Commands:
                      from before placeholders were stored, so forgetting a value erases it
   backup             Make an encrypted backup of every assistant now, into --to <dir> or
                      the config's backup.dir; works while "nudge serve" runs
-  restore <file>     Unpack a backup into --to <dir> (--force overwrites files there)
+  restore <file>     Unpack a backup into --to <dir> (--force overwrites files there);
+                     --kit <file> takes the key from a recovery kit, as on a new machine
+  kit [file]         Write a recovery kit: the backup key, sealed with a passphrase
   owner [list|add <player>|remove <id>|token <player>]
                      The server's owners, who create, change and delete assistants and
                      set model keys over /v1/server; token prints one for an owner
@@ -111,6 +115,7 @@ async function main(argv: string[]): Promise<number> {
       privacy: { type: "boolean", default: false },
       remove: { type: "boolean", default: false },
       to: { type: "string" },
+      kit: { type: "string" },
       force: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
     },
@@ -126,7 +131,8 @@ async function main(argv: string[]): Promise<number> {
   const access = { ...admin, server, token: values.token };
   switch (command) {
     case "init":
-      await init(config);
+    case "setup":
+      await setup(config);
       return 0;
     case "chat":
       await chat({ ...values, ...admin, room: argument });
@@ -199,6 +205,7 @@ async function main(argv: string[]): Promise<number> {
         config,
         ...(argument === undefined ? {} : { file: argument }),
         ...(values.to === undefined ? {} : { to: values.to }),
+        ...(values.kit === undefined ? {} : { kit: values.kit }),
         force: values.force,
       });
       return 0;
@@ -224,6 +231,9 @@ async function main(argv: string[]): Promise<number> {
       )
         throw new UsageError("Usage: nudge db [encrypt|decrypt|redact]");
       await db({ ...admin, verb: argument });
+      return 0;
+    case "kit":
+      await kit(config, argument);
       return 0;
     case "owner":
       await owner({ ...admin, verb: argument, id: rest[0] });

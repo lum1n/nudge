@@ -29,12 +29,18 @@ An extendable, multiplayer personal assistant that keeps personal data away from
 
 ```bash
 pnpm install && pnpm build
-nudge init      # writes nudge.json in the data directory
+nudge serve     # not set up yet: prints a link with a one-time code for the setup wizard
 nudge doctor    # checks Node, config, storage and credentials; --ping sends one request
 nudge chat      # chat in this terminal; the conversation survives restarts
 ```
 
-Nudge keeps its config, databases and keys in one data directory: `$NUDGE_HOME`, or else `~/.local/share/nudge` (`~/Library/Application Support/Nudge` on a Mac). A `nudge.json` in the directory you run `nudge` in is used instead, as in a checkout, and `-c <file>` picks any other. Without a config, commands say so instead of starting a fresh assistant.
+A server that isn't set up starts in setup mode: open the link it prints (or its QR code), and the wizard asks for a name for the assistant, a model with your Anthropic or OpenAI key (tried once before it is kept), or a model server it found on the machine such as Ollama, and your name. You become the assistant's first player and admin and the server's owner, the browser is signed in, and the assistant runs at once. The wizard ends with a QR code for your phone and a recovery kit. `nudge setup` asks the same in a terminal instead (`nudge init` is the same command). Ten wrong codes close setup until the server restarts.
+
+The model key is kept encrypted on the server (`server/keys`), never shown again; a key in the environment, such as `ANTHROPIC_API_KEY`, still wins. Every database a server makes is encrypted under a key file of its own, and nightly backups are on, kept beside the data: copy them somewhere else too. The recovery kit is the backup key sealed with a passphrase; with it and a backup, `nudge restore <backup> --to <dir> --kit <kit>` brings the whole server back on another machine. `nudge kit` writes a new one.
+
+The server's owners create, change and delete assistants and set model keys, over `/v1/server` (see the protocol). `nudge owner add <player>` makes another player an owner, and `nudge owner token <player>` prints a server token for scripts.
+
+Nudge keeps its config, databases and keys in one data directory: `$NUDGE_HOME`, or else `~/.local/share/nudge` (`~/Library/Application Support/Nudge` on a Mac). A `nudge.json` in the directory you run `nudge` in is used instead, as in a checkout, and `-c <file>` picks any other. Without a config, commands other than `serve` and `setup` say so instead of starting a fresh assistant.
 
 [`nudge.example.json`](nudge.example.json) shows every option: two assistants, one on Anthropic with an extension and its settings, and one on a local llama-server.
 

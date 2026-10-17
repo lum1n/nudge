@@ -8,6 +8,7 @@ import {
   DEFAULT_MODEL,
   LastOwner,
   type NudgeConfig,
+  sealRecoveryKit,
   type ServerKeys,
   type ServerOwner,
   type ServerOwners,
@@ -19,6 +20,8 @@ import {
   type DeleteAssistantResponse,
   type ProviderKey,
   type ProviderKeysResponse,
+  RecoveryKitRequest,
+  type RecoveryKitResponse,
   type ServerAssistant,
   type ServerAssistantsResponse,
   type ServerInfoResponse,
@@ -29,9 +32,7 @@ import {
   UpdateAssistantRequest,
 } from "@nudge/protocol";
 import { type Context as HonoContext, Hono, type MiddlewareHandler } from "hono";
-import type { TSchema, Static } from "typebox";
-import { Value } from "typebox/value";
-import { HttpError, pairingLink, requestOrigin } from "./rest.ts";
+import { HttpError, pairingLink, readJson, requestOrigin } from "./rest.ts";
 
 const context = BACKGROUND_CONTEXT;
 
@@ -47,13 +48,15 @@ export type ServerControl = {
   backupBeforeDelete(config: NudgeConfig): Promise<string>;
   /** Sends one tiny request with the key, throwing with the provider's answer when it fails. */
   testKey(provider: string, key: string): Promise<void>;
+  /** The key the server's backups are encrypted with, for the recovery kit. */
+  backupKey(): Promise<Buffer>;
 };
 
 export type ServerRoutesOptions = {
   readonly control: ServerControl;
   readonly version: string;
-  readonly publicUrl?: string;
-  readonly trustProxy?: boolean;
+  readonly publicUrl: () => string | undefined;
+  readonly trustProxy: () => boolean;
 };
 
 type Env = { Variables: { owner: ServerOwner; clientId: string } };
@@ -68,7 +71,7 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
   const app = new Hono<Env>();
 
   app.post("/session", async (c) => {
-    const body = await readBody(c, ServerSessionRequest);
+    const body = await readJson(c, ServerSessionRequest);
     const nudge = control.assistants.running.get(body.assistant);
     const token = bearer(c);
     const credential =
@@ -110,14 +113,14 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
   );
 
   app.post("/assistants", async (c) => {
-    const { firstPlayer, ...draft } = await readBody(c, CreateAssistantRequest);
+    const { firstPlayer, ...draft } = await readJson(c, CreateAssistantRequest);
     const nudge = await guard(() => control.assistants.create(draft));
     let pairing: CreateAssistantResponse["pairing"];
     if (firstPlayer !== undefined) {
       // The first player is its admin for good.
       const player = await nudge.players.create(firstPlayer.displayName, context);
       const { code, expiresAt } = await nudge.players.pairingCode(player.id, context);
-      const server = options.publicUrl ?? requestOrigin(c.req.raw, options.trustProxy === true);
+      const server = options.publicUrl() ?? requestOrigin(c.req.raw, options.trustProxy());
       pairing = {
         code,
         link: pairingLink(server, draft.name, code),
@@ -137,7 +140,7 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
 
   app.patch("/assistants/:name", async (c) => {
     const name = c.req.param("name");
-    const change = await readBody(c, UpdateAssistantRequest);
+    const change = await readJson(c, UpdateAssistantRequest);
     await guard(() => control.assistants.update(name, change));
     return c.json((await listAssistants(control)).find((a) => a.name === name)!);
   });
@@ -162,7 +165,7 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
 
   app.put("/keys/:provider", async (c) => {
     const provider = c.req.param("provider");
-    const body = await readBody(c, SetProviderKeyRequest);
+    const body = await readJson(c, SetProviderKeyRequest);
     if (body.assistant !== undefined && !control.assistants.running.has(body.assistant))
       throw new HttpError(404, `No assistant "${body.assistant}"`);
     if (body.test !== false) {
@@ -182,12 +185,18 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
     return c.body(null, 204);
   });
 
+  app.post("/recovery-kit", async (c) => {
+    const { passphrase } = await readJson(c, RecoveryKitRequest);
+    const kit = sealRecoveryKit(await control.backupKey(), passphrase, options.publicUrl());
+    return c.json({ kit } satisfies RecoveryKitResponse);
+  });
+
   app.get("/owners", (c) =>
     c.json({ owners: control.owners.list() } satisfies ServerOwnersResponse),
   );
 
   app.post("/owners", async (c) => {
-    const body = await readBody(c, AddOwnerRequest);
+    const body = await readJson(c, AddOwnerRequest);
     const nudge = control.assistants.running.get(body.assistant);
     if (nudge === undefined) throw new HttpError(404, `No assistant "${body.assistant}"`);
     if ((await nudge.players.get(body.playerId, context)) === undefined)
@@ -253,19 +262,4 @@ async function guard<T>(work: () => Promise<T>): Promise<T> {
 
 function bearer(c: HonoContext): string | undefined {
   return /^Bearer\s+(\S+)$/i.exec(c.req.header("authorization") ?? "")?.[1];
-}
-
-async function readBody<S extends TSchema>(c: HonoContext, schema: S): Promise<Static<S>> {
-  let body: unknown;
-  try {
-    body = await c.req.json();
-  } catch {
-    throw new HttpError(400, "Expected a JSON body");
-  }
-  if (Value.Check(schema, body)) return body;
-  const [first] = Value.Errors(schema, body);
-  throw new HttpError(
-    400,
-    first === undefined ? "Bad body" : `${first.instancePath || "body"} ${first.message}`,
-  );
 }

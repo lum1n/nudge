@@ -5,6 +5,7 @@ import type {
   DeleteAssistantResponse,
   ProviderKey,
   ProviderKeysResponse,
+  RecoveryKitResponse,
   ServerAssistant,
   ServerAssistantsResponse,
   ServerInfoResponse,
@@ -12,9 +13,58 @@ import type {
   ServerOwnersResponse,
   ServerSessionResponse,
   SetProviderKeyRequest,
+  SetupInfoResponse,
+  SetupRequest,
+  SetupResponse,
   UpdateAssistantRequest,
 } from "@nudge/protocol";
 import { read, type TokenStore, trim } from "./api.ts";
+
+/**
+ * Setup mode (ADR 11): whether `server` waits to be set up, and what it offers. Needs no token;
+ * the one-time code it printed goes with every other step.
+ */
+export async function setupInfo(
+  server: string,
+  fetcher: typeof fetch = fetch,
+): Promise<SetupInfoResponse> {
+  return read(await fetcher(`${trim(server)}/v1/setup`));
+}
+
+/** Whether `code` is the setup code; a wrong one is a 401, and counts against a few tries. */
+export async function checkSetupCode(
+  server: string,
+  code: string,
+  fetcher: typeof fetch = fetch,
+): Promise<void> {
+  await read(await fetcher(`${trim(server)}/v1/setup/code`, post({ code })));
+}
+
+/** Tries a provider's key with one tiny request; a 400 has the provider's answer. */
+export async function checkSetupKey(
+  server: string,
+  body: { code: string; provider: string; key: string },
+  fetcher: typeof fetch = fetch,
+): Promise<void> {
+  await read(await fetcher(`${trim(server)}/v1/setup/key`, post(body)));
+}
+
+/** Sets the server up; the answer has the player's token and the owner's server token. */
+export async function setUp(
+  server: string,
+  body: SetupRequest,
+  fetcher: typeof fetch = fetch,
+): Promise<SetupResponse> {
+  return read(await fetcher(`${trim(server)}/v1/setup`, post(body)));
+}
+
+function post(body: unknown): RequestInit {
+  return {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  };
+}
 
 export type ServerApiOptions = {
   /** The server's address, such as `https://nudge.example`; `""` for the page's own origin. */
@@ -104,6 +154,11 @@ export class ServerApi {
   deleteKey(provider: string, assistant?: string): Promise<void> {
     const query = assistant === undefined ? "" : `?assistant=${encodeURIComponent(assistant)}`;
     return this.request("DELETE", `/keys/${encodeURIComponent(provider)}${query}`);
+  }
+
+  /** The backup key, sealed with `passphrase`, as a file to keep away from the server. */
+  recoveryKit(passphrase: string): Promise<RecoveryKitResponse> {
+    return this.request("POST", "/recovery-kit", { passphrase });
   }
 
   async owners(): Promise<ServerOwner[]> {

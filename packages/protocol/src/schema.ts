@@ -917,6 +917,82 @@ export const ServerInfoResponse = Type.Object({
 });
 export type ServerInfoResponse = Static<typeof ServerInfoResponse>;
 
+// Setting a server up, under `/v1/setup` (ADR 11): open only while it has no config.
+
+export const SetupProvider = Type.Object({
+  id: Type.String(),
+  name: Type.String(),
+  /** The models setup offers, best first; `recommended` is the one to preselect. */
+  models: Type.Array(Type.Object({ id: Type.String(), name: Type.String() })),
+  recommended: Type.String(),
+});
+export type SetupProvider = Static<typeof SetupProvider>;
+
+/** A model server found on the machine, such as Ollama, that needs no key. */
+export const SetupLocalServer = Type.Object({
+  id: Type.String(),
+  name: Type.String(),
+  baseUrl: Type.String(),
+  models: Type.Array(Type.String()),
+});
+export type SetupLocalServer = Static<typeof SetupLocalServer>;
+
+export const SetupInfoResponse = Type.Object({
+  /** False once the server is set up, or after too many wrong codes until it restarts. */
+  open: Type.Boolean(),
+  providers: Type.Array(SetupProvider),
+  local: Type.Array(SetupLocalServer),
+});
+export type SetupInfoResponse = Static<typeof SetupInfoResponse>;
+
+export const SetupCodeRequest = Type.Object({ code: Type.String() });
+export type SetupCodeRequest = Static<typeof SetupCodeRequest>;
+
+export const SetupKeyRequest = Type.Object({
+  code: Type.String(),
+  provider: Type.String(),
+  key: Type.String({ minLength: 1 }),
+});
+export type SetupKeyRequest = Static<typeof SetupKeyRequest>;
+
+export const SetupRequest = Type.Object({
+  code: Type.String(),
+  client: ClientInfo,
+  assistant: Type.Object({
+    name: Type.String({ pattern: "^[a-z0-9][a-z0-9-]*$", maxLength: 40 }),
+    displayName: Type.Optional(Type.String({ minLength: 1 })),
+  }),
+  model: ModelChoice,
+  /** The provider's key, tested again before it is kept. */
+  key: Type.Optional(Type.String({ minLength: 1 })),
+  /** The id of a found local server `model` is on, instead of a key. */
+  local: Type.Optional(Type.String()),
+  you: Type.Object({ displayName: Type.String({ minLength: 1 }) }),
+  /** The address the browser reached the server at, kept for pairing links and other assistants. */
+  publicUrl: Type.Optional(Type.String({ pattern: "^https?://" })),
+  /** Nightly backups beside the config; default true. */
+  backups: Type.Optional(Type.Boolean()),
+});
+export type SetupRequest = Static<typeof SetupRequest>;
+
+/** The tokens are shown only here: the player's for the assistant, the owner's for the server. */
+export const SetupResponse = Type.Object({
+  assistant: Type.String(),
+  player: Player,
+  token: Type.String(),
+  clientId: Type.String(),
+  serverToken: Type.String(),
+  owner: ServerOwner,
+});
+export type SetupResponse = Static<typeof SetupResponse>;
+
+export const RecoveryKitRequest = Type.Object({ passphrase: Type.String({ minLength: 8 }) });
+export type RecoveryKitRequest = Static<typeof RecoveryKitRequest>;
+
+/** The kit as a file to save: the backup key, sealed with the passphrase. */
+export const RecoveryKitResponse = Type.Object({ kit: Type.String() });
+export type RecoveryKitResponse = Static<typeof RecoveryKitResponse>;
+
 /** Every named schema, for `schema/v1.json`. */
 export const SCHEMAS = {
   Player,
@@ -1020,4 +1096,13 @@ export const SCHEMAS = {
   ServerSessionRequest,
   ServerSessionResponse,
   ServerInfoResponse,
+  SetupProvider,
+  SetupLocalServer,
+  SetupInfoResponse,
+  SetupCodeRequest,
+  SetupKeyRequest,
+  SetupRequest,
+  SetupResponse,
+  RecoveryKitRequest,
+  RecoveryKitResponse,
 };

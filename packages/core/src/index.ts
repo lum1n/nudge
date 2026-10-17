@@ -30,6 +30,7 @@ export {
   type ModelChoice,
   type NudgeConfig,
   parseConfig,
+  type ServerSettings,
 } from "./config.ts";
 export {
   AlreadyDecided,
@@ -58,7 +59,13 @@ export {
   type AssistantsOptions,
 } from "./server/assistants.ts";
 export { defaultConfigPath, serverHome } from "./server/home.ts";
-export { type KeySource, ServerKeys, serverKeysDir, testProviderKey } from "./server/keys.ts";
+export {
+  type KeySource,
+  readableError,
+  ServerKeys,
+  serverKeysDir,
+  testProviderKey,
+} from "./server/keys.ts";
 export {
   LastOwner,
   type OwnerToken,
@@ -66,6 +73,17 @@ export {
   ServerOwners,
   serverOwnersFile,
 } from "./server/owners.ts";
+export { openRecoveryKit, RecoveryKitError, sealRecoveryKit } from "./server/recovery.ts";
+export {
+  completeSetup,
+  detectLocalServers,
+  type LocalServer,
+  newSetupCode,
+  SetupCodes,
+  type SetupChoices,
+  type SetupResult,
+  type SetupTarget,
+} from "./server/setup.ts";
 export {
   BACKUP_SUFFIX,
   BackupError,

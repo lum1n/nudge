@@ -7,18 +7,25 @@ import {
   Assistants,
   backupKey,
   buildModels,
+  completeSetup,
+  ConfigMissing,
   createBackup,
+  detectLocalServers,
   loadConfig,
+  newSetupCode,
   openAssistant,
   ServerKeys,
   serverKeysDir,
   ServerOwners,
   serverOwnersFile,
+  SetupCodes,
   testProviderKey,
 } from "@nudge/core";
-import { type ServerControl, serveNudge } from "@nudge/server";
+import { type ServerControl, type SetupControl, serveNudge } from "@nudge/server";
+import { renderUnicodeCompact } from "uqr";
 import { UsageError } from "../errors.ts";
 import { keyPath, scheduleBackups } from "./backup.ts";
+import { offeredProviders } from "./setup-offer.ts";
 import { hostOptions, reloadOnHangup } from "../host.ts";
 
 export type ServeOptions = {
@@ -32,6 +39,52 @@ export type ServeOptions = {
   /** Behind a proxy that ends TLS, such as exe.dev's: believe its `X-Forwarded-*` headers. */
   readonly trustProxy?: boolean;
 };
+
+/**
+ * What a server in setup mode says: where the wizard is, with its one-time code in the link (the
+ * part after `#` never reaches a server or its logs), and as a QR code for a phone.
+ */
+export function setupLines(
+  url: string,
+  host: string,
+  code: string,
+  web: string | undefined,
+  interfaces = networkInterfaces(),
+): string[] {
+  const [first, ...others] = addressesOf(url, host, interfaces);
+  const link = `${first ?? url}/setup#code=${code}`;
+  const lines = [
+    "Nudge isn't set up yet. Open this to set it up:",
+    "",
+    `  ${link}`,
+    "",
+    renderUnicodeCompact(link, { border: 2 }),
+    `Or open /setup at ${[first, ...others].join(" or ")} and give the code ${code}.`,
+  ];
+  if (web === undefined)
+    lines.push("There is no web UI here (pnpm build): set it up with the Nudge app instead.");
+  if (host === "127.0.0.1" || host === "localhost" || host === "::1")
+    lines.push("Only this computer can reach it. For a phone: nudge serve --host 0.0.0.0");
+  return lines;
+}
+
+function addressesOf(url: string, host: string, interfaces: ReturnType<typeof networkInterfaces>) {
+  const port = new URL(url).port;
+  if (host !== "0.0.0.0" && host !== "::") return [url];
+  const found = Object.values(interfaces)
+    .flat()
+    .filter((info) => info !== undefined && info.family === "IPv4" && !info.internal)
+    .map((info) => `http://${info!.address}:${port}`);
+  return found.length > 0 ? found : [url];
+}
+
+/** When setup closes: `NUDGE_SETUP_MINUTES` from now, or never. */
+function setupDeadline(minutes: string | undefined): number {
+  const value = Number(minutes);
+  return minutes !== undefined && Number.isFinite(value) && value > 0
+    ? Date.now() + value * 60_000
+    : Number.POSITIVE_INFINITY;
+}
 
 /**
  * Where to reach the server: on this computer only, or at each of its network addresses when it
@@ -70,14 +123,23 @@ export function startupLines(
   return lines;
 }
 
-/** Runs every configured assistant behind one HTTP and WebSocket server until Ctrl-C. */
+/**
+ * Runs every configured assistant behind one HTTP and WebSocket server until Ctrl-C. Without a
+ * config it starts in setup mode (ADR 11): it prints a one-time code, and the wizard at `/setup`
+ * sets the server up with it, after which the new assistant runs here without a restart.
+ */
 export async function serve(options: ServeOptions): Promise<void> {
   const context = BACKGROUND_CONTEXT;
-  const config = await loadConfig(options.config);
-  const keys = new ServerKeys(serverKeysDir(options.config));
+  const configPath = resolve(options.config);
   const say = (line: string) => console.log(line);
+  let config = await loadConfig(configPath).catch((error: unknown) => {
+    if (error instanceof ConfigMissing) return undefined;
+    throw error;
+  });
+  const keys = new ServerKeys(serverKeysDir(configPath));
+  const owners = new ServerOwners(serverOwnersFile(configPath));
   const assistants = await Assistants.open({
-    configPath: options.config,
+    configPath,
     open: (config, assistant) =>
       openAssistant(config, assistant, context, {
         ...hostOptions(assistant),
@@ -85,43 +147,81 @@ export async function serve(options: ServeOptions): Promise<void> {
       }),
     context,
     say,
+    allowMissing: true,
   });
+  let stopBackups = config === undefined ? () => {} : scheduleBackups(configPath, config, say);
+  const testKey = (provider: string, key: string) =>
+    testProviderKey(provider, key, config?.providers ?? []);
+  const theBackupKey = () => backupKey(keyPath(configPath, config ?? { assistants: [] }), true);
   try {
     const web = await webRoot(options.web);
     const control: ServerControl = {
       assistants,
       keys,
-      owners: new ServerOwners(serverOwnersFile(options.config)),
+      owners,
       backupBeforeDelete: async (only) => {
-        const dir = join(dirname(resolve(options.config)), "server", "deleted");
+        const dir = join(dirname(configPath), "server", "deleted");
         const file = await createBackup({
-          configPath: options.config,
+          configPath,
           config: only,
           dir,
-          key: await backupKey(keyPath(options.config, config), true),
+          key: await theBackupKey(),
         });
         await pruneOlder(dir, DELETED_KEPT_MS);
         return basename(file);
       },
-      testKey: (provider, key) => testProviderKey(provider, key, config.providers),
+      testKey,
+      backupKey: theBackupKey,
     };
+    // A server made from the app gets its code, and how long it waits, in the environment.
+    const code = process.env.NUDGE_SETUP_CODE || newSetupCode();
+    const codes =
+      config === undefined
+        ? new SetupCodes(code, 10, setupDeadline(process.env.NUDGE_SETUP_MINUTES))
+        : undefined;
+    const setup: SetupControl | undefined =
+      codes === undefined
+        ? undefined
+        : {
+            codes,
+            offer: async () => ({
+              providers: offeredProviders(),
+              local: await detectLocalServers(),
+            }),
+            testKey,
+            complete: async (choices, client) => {
+              const result = await completeSetup(
+                { configPath, assistants, keys, owners },
+                choices,
+                client,
+                context,
+              );
+              config = await loadConfig(configPath);
+              stopBackups = scheduleBackups(configPath, config, say);
+              say(`Set up: ${result.assistant}, with ${result.player.displayName} as its owner.`);
+              return result;
+            },
+          };
     const server = await serveNudge({
       assistants: assistants.running,
       port: options.port,
       hostname: options.host,
       web,
-      publicUrl: options.publicUrl,
-      trustProxy: options.trustProxy,
+      publicUrl: () => options.publicUrl ?? config?.server?.publicUrl,
+      trustProxy: () => options.trustProxy === true || config?.server?.trustProxy === true,
       server: control,
+      ...(setup === undefined ? {} : { setup }),
       extensionSettings: {
         list: (assistant) => assistants.extensionSetups(assistant),
         save: (assistant, extensions) => assistants.saveExtensionSetups(assistant, extensions),
       },
     });
-    for (const line of startupLines(server.url, options.host, [...assistants.running.keys()], web))
-      console.log(line);
+    const lines =
+      codes === undefined
+        ? startupLines(server.url, options.host, [...assistants.running.keys()], web)
+        : setupLines(server.url, options.host, code, web);
+    for (const line of lines) console.log(line);
     const stopReloading = reloadOnHangup(assistants, say);
-    const stopBackups = scheduleBackups(options.config, config, say);
     await new Promise<void>((resolve) => {
       process.once("SIGINT", resolve);
       process.once("SIGTERM", resolve);

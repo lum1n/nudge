@@ -6547,6 +6547,361 @@
           }
         }
       }
+    },
+    "SetupProvider": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "models",
+        "recommended"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "name"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "recommended": {
+          "type": "string"
+        }
+      }
+    },
+    "SetupLocalServer": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "baseUrl",
+        "models"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "baseUrl": {
+          "type": "string"
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "SetupInfoResponse": {
+      "type": "object",
+      "required": [
+        "open",
+        "providers",
+        "local"
+      ],
+      "properties": {
+        "open": {
+          "type": "boolean"
+        },
+        "providers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "models",
+              "recommended"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "models": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "name"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "recommended": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "local": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "baseUrl",
+              "models"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "baseUrl": {
+                "type": "string"
+              },
+              "models": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "SetupCodeRequest": {
+      "type": "object",
+      "required": [
+        "code"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        }
+      }
+    },
+    "SetupKeyRequest": {
+      "type": "object",
+      "required": [
+        "code",
+        "provider",
+        "key"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "SetupRequest": {
+      "type": "object",
+      "required": [
+        "code",
+        "client",
+        "assistant",
+        "model",
+        "you"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "client": {
+          "type": "object",
+          "required": [
+            "name",
+            "platform"
+          ],
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "platform": {
+              "type": "string"
+            }
+          }
+        },
+        "assistant": {
+          "type": "object",
+          "required": [
+            "name"
+          ],
+          "properties": {
+            "name": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$",
+              "maxLength": 40
+            },
+            "displayName": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "model": {
+          "type": "object",
+          "required": [
+            "provider",
+            "modelId"
+          ],
+          "properties": {
+            "provider": {
+              "type": "string"
+            },
+            "modelId": {
+              "type": "string"
+            }
+          }
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "local": {
+          "type": "string"
+        },
+        "you": {
+          "type": "object",
+          "required": [
+            "displayName"
+          ],
+          "properties": {
+            "displayName": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "publicUrl": {
+          "type": "string",
+          "pattern": "^https?://"
+        },
+        "backups": {
+          "type": "boolean"
+        }
+      }
+    },
+    "SetupResponse": {
+      "type": "object",
+      "required": [
+        "assistant",
+        "player",
+        "token",
+        "clientId",
+        "serverToken",
+        "owner"
+      ],
+      "properties": {
+        "assistant": {
+          "type": "string"
+        },
+        "player": {
+          "type": "object",
+          "required": [
+            "id",
+            "displayName"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "displayName": {
+              "type": "string"
+            },
+            "address": {
+              "type": "string"
+            }
+          }
+        },
+        "token": {
+          "type": "string"
+        },
+        "clientId": {
+          "type": "string"
+        },
+        "serverToken": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "object",
+          "required": [
+            "id",
+            "assistant",
+            "playerId",
+            "addedAt"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "assistant": {
+              "type": "string"
+            },
+            "playerId": {
+              "type": "string"
+            },
+            "addedAt": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    "RecoveryKitRequest": {
+      "type": "object",
+      "required": [
+        "passphrase"
+      ],
+      "properties": {
+        "passphrase": {
+          "type": "string",
+          "minLength": 8
+        }
+      }
+    },
+    "RecoveryKitResponse": {
+      "type": "object",
+      "required": [
+        "kit"
+      ],
+      "properties": {
+        "kit": {
+          "type": "string"
+        }
+      }
     }
   }
 }

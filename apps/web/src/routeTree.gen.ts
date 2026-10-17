@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AssistantRouteRouteImport } from './routes/$assistant/route'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as SetupRouteImport } from './routes/setup'
 import { Route as AssistantIndexRouteImport } from './routes/$assistant/index'
 import { Route as AssistantRoomRouteImport } from './routes/$assistant/$room'
 import { Route as AssistantProfileRouteImport } from './routes/$assistant/profile'
@@ -35,6 +36,11 @@ const AssistantRouteRoute = AssistantRouteRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SetupRoute = SetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AssistantIndexRoute = AssistantIndexRouteImport.update({
@@ -87,6 +93,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$assistant': typeof AssistantRouteRouteWithChildren
   '/login': typeof LoginRoute
+  '/setup': typeof SetupRoute
   '/$assistant/$room': typeof AssistantRoomRoute
   '/$assistant/profile': typeof AssistantProfileRoute
   '/$assistant/settings': typeof AssistantSettingsRoute
@@ -100,6 +107,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/setup': typeof SetupRoute
   '/$assistant/$room': typeof AssistantRoomRoute
   '/$assistant/profile': typeof AssistantProfileRoute
   '/$assistant/settings': typeof AssistantSettingsRoute
@@ -115,6 +123,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/$assistant': typeof AssistantRouteRouteWithChildren
   '/login': typeof LoginRoute
+  '/setup': typeof SetupRoute
   '/$assistant/$room': typeof AssistantRoomRoute
   '/$assistant/profile': typeof AssistantProfileRoute
   '/$assistant/settings': typeof AssistantSettingsRoute
@@ -131,6 +140,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$assistant'
     | '/login'
+    | '/setup'
     | '/$assistant/$room'
     | '/$assistant/profile'
     | '/$assistant/settings'
@@ -144,6 +154,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
+    | '/setup'
     | '/$assistant/$room'
     | '/$assistant/profile'
     | '/$assistant/settings'
@@ -158,6 +169,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$assistant'
     | '/login'
+    | '/setup'
     | '/$assistant/$room'
     | '/$assistant/profile'
     | '/$assistant/settings'
@@ -173,6 +185,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AssistantRouteRoute: typeof AssistantRouteRouteWithChildren
   LoginRoute: typeof LoginRoute
+  SetupRoute: typeof SetupRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -196,6 +209,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/setup': {
+      id: '/setup'
+      path: '/setup'
+      fullPath: '/setup'
+      preLoaderRoute: typeof SetupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/$assistant/': {
@@ -296,6 +316,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AssistantRouteRoute: AssistantRouteRouteWithChildren,
   LoginRoute: LoginRoute,
+  SetupRoute: SetupRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

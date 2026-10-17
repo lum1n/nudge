@@ -1,16 +1,22 @@
 import {
   Api,
   ApiError,
+  checkSetupCode,
+  checkSetupKey,
   type RoomListStore,
   listAssistants,
   NudgeClient,
+  ServerApi,
+  setUp,
+  type SetupRequest,
+  setupInfo,
   type RoomState,
   type RoomStore,
   type TokenStore,
 } from "@nudge/client";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
-export { ApiError, listAssistants };
+export { ApiError, checkSetupCode, checkSetupKey, listAssistants, setupInfo };
 
 // One token per assistant, keyed by the assistant's URL name. They live for the browser tab only
 // (sessionStorage), unless "Remember this device" was ticked at sign-in (localStorage), so that a
@@ -193,4 +199,37 @@ async function firstAssistant(
 
 function fixedToken(token: string): TokenStore {
   return { get: () => token, set: () => {} };
+}
+
+// The owner's server token (ADR 11), kept on the device: whoever set the server up here owns it.
+const SERVER_TOKEN = "nudge.server";
+
+/** The server's own API, signed in as an owner when this device has their server token. */
+export function serverApi(): ServerApi {
+  return new ServerApi({
+    server: "",
+    tokens: {
+      get: () => localStorage.getItem(SERVER_TOKEN) ?? undefined,
+      set: (token) =>
+        token === undefined
+          ? localStorage.removeItem(SERVER_TOKEN)
+          : localStorage.setItem(SERVER_TOKEN, token),
+    },
+  });
+}
+
+/**
+ * Sets the server up from the wizard, and signs this device in: to the new assistant as its first
+ * player, remembered, and to the server as its owner. Returns the assistant's name and player id.
+ */
+export async function setUpServer(
+  choices: Omit<SetupRequest, "client">,
+): Promise<{ assistant: string; playerId: string }> {
+  const done = await setUp("", {
+    ...choices,
+    client: { name: CLIENT.name, platform: CLIENT.platform },
+  });
+  signedInWith(done.assistant, done.token, true);
+  localStorage.setItem(SERVER_TOKEN, done.serverToken);
+  return { assistant: done.assistant, playerId: done.player.id };
 }

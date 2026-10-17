@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { buildModels, ServerKeys } from "../src/index.ts";
+import { buildModels, readableError, ServerKeys } from "../src/index.ts";
 
 describe("ServerKeys", () => {
   let dir: string;
@@ -64,5 +64,18 @@ describe("ServerKeys", () => {
     expect(model).toBeDefined();
     const auth = await models.getAuth(model!);
     expect(auth?.auth.apiKey).toBe("sk-openai-test");
+  });
+});
+
+describe("readableError", () => {
+  it("takes the message out of a provider's JSON error", () => {
+    expect(
+      readableError(
+        '401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}',
+      ),
+    ).toBe("invalid x-api-key (401)");
+    expect(readableError('{"error":"no such model"}')).toBe("no such model");
+    expect(readableError("socket hang up")).toBe("socket hang up");
+    expect(readableError("500 {not json")).toBe("500 {not json");
   });
 });

@@ -134,5 +134,34 @@ export async function testProviderKey(
     { maxTokens: 16 },
   );
   if (answer.stopReason === "error" || answer.stopReason === "aborted")
-    throw new Error(answer.errorMessage ?? `${provider} refused the key`);
+    throw new Error(readableError(answer.errorMessage) ?? `${provider} refused the key`);
+}
+
+/**
+ * A provider's error as a person reads it: `401 {"error":{"message":"invalid x-api-key"}}`
+ * becomes `invalid x-api-key (401)`. Anything else is left as it is.
+ */
+export function readableError(text: string | undefined): string | undefined {
+  if (text === undefined) return undefined;
+  const status = /^(\d{3})\b/.exec(text)?.[1];
+  const json = text.indexOf("{");
+  if (json === -1) return text;
+  try {
+    const body = JSON.parse(text.slice(json)) as {
+      error?: { message?: unknown } | string;
+      message?: unknown;
+    };
+    const message =
+      typeof body.error === "string"
+        ? body.error
+        : typeof body.error?.message === "string"
+          ? body.error.message
+          : typeof body.message === "string"
+            ? body.message
+            : undefined;
+    if (message === undefined) return text;
+    return status === undefined ? message : `${message} (${status})`;
+  } catch {
+    return text;
+  }
 }
