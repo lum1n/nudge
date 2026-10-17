@@ -3,7 +3,8 @@ import SwiftUI
 
 /// A server's own Tailscale (ADR 11), so it reaches a home that is only in the person's tailnet:
 /// connecting opens Tailscale's page to approve it, and the section follows until it is in. A
-/// server too old for it says so, with a check for the release that has it.
+/// server too old for it says so, with a check for the release that has it, and one that can't run
+/// it says why.
 struct TailscaleSection: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openURL) private var openURL
@@ -18,32 +19,29 @@ struct TailscaleSection: View {
     @State private var unsupported: String?
 
     var body: some View {
-        Group {
+        // Always one section, so the task below runs: on a view with nothing in it, it wouldn't.
+        Section {
             if let unsupported {
-                Section {
-                    Text(unsupported).foregroundStyle(.secondary)
-                    Button(busy ? "Checking…" : "Check for updates", systemImage: "arrow.down.circle") {
-                        Task { await checkUpdates() }
-                    }
-                    .disabled(busy)
-                    if let problem {
-                        Text(problem).foregroundStyle(.red)
-                    }
-                } header: {
-                    Text("Tailscale")
+                Text(unsupported).foregroundStyle(.secondary)
+                Button(busy ? "Checking…" : "Check for updates", systemImage: "arrow.down.circle") {
+                    Task { await checkUpdates() }
                 }
+                .disabled(busy)
             } else if let state {
-                Section {
-                    row(state)
-                    if let problem {
-                        Text(problem).foregroundStyle(.red)
-                    }
-                } header: {
-                    Text("Tailscale")
-                } footer: {
-                    Text("In your tailnet, this server reaches assistants that are only there, such as a home at a Tailscale address.")
+                row(state)
+            } else if problem == nil {
+                HStack {
+                    ProgressView().controlSize(.small)
+                    Text("Checking Tailscale…").foregroundStyle(.secondary)
                 }
             }
+            if let problem {
+                Text(problem).foregroundStyle(unsupported == nil ? Color.red : Color.secondary)
+            }
+        } header: {
+            Text("Tailscale")
+        } footer: {
+            Text("In your tailnet, this server reaches assistants that are only there, such as a home at a Tailscale address.")
         }
         .task(id: waiting) {
             await read()

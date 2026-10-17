@@ -153,7 +153,7 @@ fun TailscaleCard(model: AppModel, server: String, changed: (TailscaleState) -> 
         }
         return
     }
-    val current = state ?: return
+    val current = state
     fun connect() = act {
         client.connectTailscale(null).also { next ->
             if (next.state == TailscaleStatus.NEEDS_LOGIN) next.authUrl?.let { open(it) }
@@ -163,7 +163,14 @@ fun TailscaleCard(model: AppModel, server: String, changed: (TailscaleState) -> 
         Section("Tailscale")
         Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.large) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                when (current.state) {
+                when (current?.state) {
+                    // Not read yet, or reading it failed: the problem below says why.
+                    null -> if (problem == null) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            LoadingIndicator()
+                            Text("Checking Tailscale…", Modifier.padding(start = 12.dp))
+                        }
+                    }
                     TailscaleStatus.OFF ->
                         Button(onClick = { connect() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                             Text("Connect to your tailnet")
