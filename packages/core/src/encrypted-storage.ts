@@ -74,11 +74,18 @@ export function keyFile(database: string): string {
 
 /**
  * Opens the assistant's storage, encrypted with SQLite3 Multiple Ciphers when the file is
- * encrypted or a key is set for a new one, and with Node's built-in SQLite otherwise.
+ * encrypted or a key is set for a new one, and with Node's built-in SQLite otherwise. With
+ * `encryptNew`, a database that doesn't exist yet and has no key gets one of its own in its key
+ * file, as `encryptDatabase` makes; one that exists unencrypted stays so.
  */
-export async function openDatabaseStorage(database: string): Promise<Storage> {
+export async function openDatabaseStorage(
+  database: string,
+  options: { readonly encryptNew?: boolean } = {},
+): Promise<Storage> {
   const state = await databaseEncryption(database);
-  const key = await databaseKey(database);
+  let key = await databaseKey(database);
+  if (state === "missing" && key === undefined && options.encryptNew === true)
+    key = await newKeyFile(database);
   if (state === "encrypted" && key === undefined)
     throw new DatabaseKeyError(
       `${database} is encrypted, but there is no key: set NUDGE_DB_KEY or restore ${keyFile(database)}`,
@@ -238,6 +245,14 @@ async function verify(database: string, key: DatabaseKey): Promise<void> {
     throw new DatabaseKeyError(`${database} is still unencrypted after rekeying`);
   const db = await openEncrypted(database, key);
   await db.close();
+}
+
+/** A new random key in the database's key file, readable only by its owner. */
+async function newKeyFile(database: string): Promise<DatabaseKey> {
+  const key = { key: randomBytes(32), source: keyFile(database) };
+  await mkdir(dirname(database), { recursive: true });
+  await writeFile(key.source, key.key.toString("base64"), { mode: 0o600, flag: "wx" });
+  return key;
 }
 
 function parseKey(text: string, source: string): Buffer {

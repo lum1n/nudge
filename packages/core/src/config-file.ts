@@ -1,20 +1,19 @@
 import { readFile, rename, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { ConfigError, DEFAULT_CONFIG, type ExtensionConfig } from "./config.ts";
+import { ConfigError, type ExtensionConfig } from "./config.ts";
 
 /** `nudge.json` as written, `$comment` keys and all, for changing it without losing them. */
 export type RawConfig = { assistants: RawAssistant[] } & Record<string, unknown>;
 export type RawAssistant = { name: string; extensions?: RawExtension[] } & Record<string, unknown>;
 export type RawExtension = ExtensionConfig & { $comment?: unknown };
 
-/** The config file as written; a missing one reads as the default config. */
+/** The config file as written; a missing one reads as a server with no assistants. */
 export async function readRawConfig(path: string): Promise<RawConfig> {
   let text: string;
   try {
     text = await readFile(path, "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT")
-      return structuredClone(DEFAULT_CONFIG) as RawConfig;
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { assistants: [] };
     throw error;
   }
   try {

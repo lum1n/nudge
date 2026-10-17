@@ -81,7 +81,8 @@ const BackupSchema = Type.Object({
 });
 
 export const NudgeConfigSchema = Type.Object({
-  assistants: Type.Array(AssistantSchema, { minItems: 1 }),
+  /** None on a server set up but not given one yet, or whose last assistant was deleted. */
+  assistants: Type.Array(AssistantSchema),
   providers: Type.Optional(Type.Array(LocalProviderSchema)),
   backup: Type.Optional(BackupSchema),
 });
@@ -98,6 +99,14 @@ export const DEFAULT_CONFIG: NudgeConfig = { assistants: [{ name: "nudge" }] };
 
 export class ConfigError extends Error {
   override name = "ConfigError";
+}
+
+/** There is no config file where one was looked for. */
+export class ConfigMissing extends ConfigError {
+  override name = "ConfigMissing";
+  constructor(readonly path: string) {
+    super(`There is no ${path}: run "nudge init" to make one`);
+  }
 }
 
 /** Parses and validates a config; relative database paths resolve against `baseDir`. */
@@ -174,14 +183,13 @@ export function resolveExtension(from: string, baseDir: string): string {
   }
 }
 
-/** Reads `nudge.json`; a missing file gives the default config next to it. */
+/** Reads `nudge.json`. A missing file is a `ConfigMissing`, so nothing starts in the wrong place. */
 export async function loadConfig(path: string): Promise<NudgeConfig> {
   let text: string;
   try {
     text = await readFile(path, "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT")
-      return parseConfig(DEFAULT_CONFIG, dirname(path));
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new ConfigMissing(path);
     throw error;
   }
   let value: unknown;

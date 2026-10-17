@@ -19,7 +19,7 @@ import {
 const context = BACKGROUND_CONTEXT;
 const SECRET = "Kari wants the Lillehammer cabin on the 3rd";
 
-function options(database: string): NudgeOptions {
+function options(database: string, extra: Partial<NudgeOptions> = {}): NudgeOptions {
   const faux = fauxProvider();
   const models = createModels();
   models.setProvider(faux.provider);
@@ -29,6 +29,7 @@ function options(database: string): NudgeOptions {
     models,
     model: { provider: faux.provider.id, modelId: faux.getModel().id },
     displayName: "Robin",
+    ...extra,
   };
 }
 
@@ -84,6 +85,21 @@ describe("encrypted storage", () => {
     await expect(createNudge(options(database), context)).rejects.toThrow(/is encrypted/);
     process.env.NUDGE_DB_KEY = Buffer.alloc(32, 8).toString("base64");
     await expect(createNudge(options(database), context)).rejects.toThrow(/Cannot open/);
+  });
+
+  it("gives a new database a key of its own with encryptNew, and leaves an old one as it is", async () => {
+    const nudge = await createNudge(options(database, { encryptNew: true }), context);
+    await nudge.close(context);
+    expect(await databaseEncryption(database)).toBe("encrypted");
+    expect(statSync(keyFile(database)).mode & 0o777).toBe(0o600);
+    await chat(database, SECRET);
+    expect(onDisk(dir)).not.toContain("Lillehammer");
+
+    const old = join(dir, "old.sqlite");
+    await createNudge(options(old), context).then((plain) => plain.close(context));
+    await createNudge(options(old, { encryptNew: true }), context).then((n) => n.close(context));
+    expect(await databaseEncryption(old)).toBe("plain");
+    expect(existsSync(keyFile(old))).toBe(false);
   });
 
   it("encrypts an existing database in place and decrypts it again", async () => {

@@ -1,4 +1,5 @@
 import { parseArgs } from "node:util";
+import { defaultConfigPath } from "@nudge/core";
 import {
   admin as markAdmin,
   invite,
@@ -24,7 +25,7 @@ import { UsageError } from "./errors.ts";
 const USAGE = `Usage: nudge <command> [options]
 
 Commands:
-  init               Write a nudge.json in this directory
+  init               Write a nudge.json in the data directory ($NUDGE_HOME)
   chat [room]        Chat in this terminal; room is a room id, or "me" for your own
                      (default: the lobby)
   serve              Run every assistant behind an HTTP and WebSocket server
@@ -63,7 +64,8 @@ $NUDGE_TOKEN; --url when it isn't on --host and --port). invite and pair then pr
 pairing code instead of a token.
 
 Options:
-  -c, --config <file>      Config file (default: nudge.json)
+  -c, --config <file>      Config file (default: ./nudge.json if there is one, else the data
+                           directory's: $NUDGE_HOME, or ~/.local/share/nudge)
   -a, --assistant <name>   Assistant to use (default: the first one)
   -n, --name <name>        Your display name in chat
   -p, --player <id>        Chat in this process as this player (default: owner)
@@ -86,7 +88,7 @@ async function main(argv: string[]): Promise<number> {
     args: argv,
     allowPositionals: true,
     options: {
-      config: { type: "string", short: "c", default: "nudge.json" },
+      config: { type: "string", short: "c" },
       assistant: { type: "string", short: "a" },
       name: { type: "string", short: "n" },
       player: { type: "string", short: "p" },
@@ -110,22 +112,23 @@ async function main(argv: string[]): Promise<number> {
     process.stdout.write(USAGE);
     return command === undefined && !values.help ? 1 : 0;
   }
-  const admin = { config: values.config, assistant: values.assistant };
+  const config = values.config ?? defaultConfigPath();
+  const admin = { config, assistant: values.assistant };
   const server = values.url ?? `http://${values.host}:${values.port}`;
   const access = { ...admin, server, token: values.token };
   switch (command) {
     case "init":
-      await init(values.config);
+      await init(config);
       return 0;
     case "chat":
-      await chat({ ...admin, ...values, room: argument });
+      await chat({ ...values, ...admin, room: argument });
       return 0;
     case "serve": {
       const port = Number(values.port);
       if (!Number.isInteger(port) || port < 0 || port > 65535)
         throw new UsageError(`--port ${values.port} is not a port`);
       await serve({
-        config: values.config,
+        config,
         port,
         host: values.host,
         web: values.web,
@@ -178,13 +181,13 @@ async function main(argv: string[]): Promise<number> {
       return 0;
     case "backup":
       await backup({
-        config: values.config,
+        config,
         ...(values.to === undefined ? {} : { to: values.to }),
       });
       return 0;
     case "restore":
       await restore({
-        config: values.config,
+        config,
         ...(argument === undefined ? {} : { file: argument }),
         ...(values.to === undefined ? {} : { to: values.to }),
         force: values.force,
@@ -216,16 +219,20 @@ async function main(argv: string[]): Promise<number> {
     case "reload":
       return (await reload(admin)) ? 0 : 1;
     case "doctor":
-      return (await doctor({ config: values.config, ping: values.ping, privacy: values.privacy }))
-        ? 0
-        : 1;
+      return (await doctor({ config, ping: values.ping, privacy: values.privacy })) ? 0 : 1;
     default:
       process.stderr.write(`Unknown command "${command}".\n\n${USAGE}`);
       return 1;
   }
 }
 
-const QUIET_ERRORS = new Set(["ConfigError", "UsageError", "DatabaseInUse", "DatabaseKeyError"]);
+const QUIET_ERRORS = new Set([
+  "ConfigError",
+  "ConfigMissing",
+  "UsageError",
+  "DatabaseInUse",
+  "DatabaseKeyError",
+]);
 
 export function run(argv: string[]): void {
   main(argv).then(

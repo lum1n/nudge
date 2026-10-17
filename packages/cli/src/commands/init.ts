@@ -1,4 +1,5 @@
-import { access, writeFile } from "node:fs/promises";
+import { access, mkdir, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import { DEFAULT_MODEL, type NudgeConfig } from "@nudge/core";
 
 export async function init(path: string): Promise<void> {
@@ -11,6 +12,7 @@ export async function init(path: string): Promise<void> {
       { name: "nudge", displayName: "Nudge", database: "data/nudge.sqlite", model: DEFAULT_MODEL },
     ],
   };
+  await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${JSON.stringify(config, null, 2)}\n`);
   console.log(`Wrote ${path}.`);
   console.log(

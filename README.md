@@ -29,10 +29,12 @@ An extendable, multiplayer personal assistant that keeps personal data away from
 
 ```bash
 pnpm install && pnpm build
-nudge init      # writes nudge.json
+nudge init      # writes nudge.json in the data directory
 nudge doctor    # checks Node, config, storage and credentials; --ping sends one request
 nudge chat      # chat in this terminal; the conversation survives restarts
 ```
+
+Nudge keeps its config, databases and keys in one data directory: `$NUDGE_HOME`, or else `~/.local/share/nudge` (`~/Library/Application Support/Nudge` on a Mac). A `nudge.json` in the directory you run `nudge` in is used instead, as in a checkout, and `-c <file>` picks any other. Without a config, commands say so instead of starting a fresh assistant.
 
 [`nudge.example.json`](nudge.example.json) shows every option: two assistants, one on Anthropic with an extension and its settings, and one on a local llama-server.
 
@@ -168,7 +170,7 @@ Display names of players are always protected. Images are passed through unchang
 
 Each assistant keeps its data in one SQLite file, by default `data/<name>.sqlite` next to the config.
 
-To encrypt that file, stop `nudge serve` and run `nudge db encrypt`. It encrypts the file in place (SQLite3 Multiple Ciphers) and writes a key to `<database>.key`, readable only by you, or uses `NUDGE_DB_KEY` (32 random bytes, base64: `openssl rand -base64 32`) when that is set. With `NUDGE_DB_KEY` set, a new database is created encrypted. `nudge db` shows each database's state and `nudge db decrypt` undoes it. Like the other keys, this protects copies of the database and backups, not a host where someone can also read the key. Losing the key loses the data, so keep a copy of the key somewhere other than the database's backups.
+A database Nudge makes is encrypted from the start, under a key of its own in `<database>.key`, readable only by you. One from before that is not; to encrypt it, stop `nudge serve` and run `nudge db encrypt`. It encrypts the file in place (SQLite3 Multiple Ciphers) and writes its key file, or uses `NUDGE_DB_KEY` (32 random bytes, base64: `openssl rand -base64 32`) when that is set. With `NUDGE_DB_KEY` set, a new database is created encrypted. `nudge db` shows each database's state and `nudge db decrypt` undoes it. Like the other keys, this protects copies of the database and backups, not a host where someone can also read the key. Losing the key loses the data, so keep a copy of the key somewhere other than the database's backups.
 
 ### Backups
 

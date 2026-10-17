@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { ConfigError, formatHour, parseConfig } from "../src/index.ts";
+import { ConfigError, ConfigMissing, formatHour, loadConfig, parseConfig } from "../src/index.ts";
 
 describe("parseConfig", () => {
   it("resolves database paths against the config directory", () => {
@@ -15,10 +15,17 @@ describe("parseConfig", () => {
     ]);
   });
 
-  it("rejects bad names, duplicates and empty configs", () => {
+  it("rejects bad names and duplicates", () => {
     expect(() => parseConfig({ assistants: [{ name: "Home Base" }] }, "/")).toThrow(ConfigError);
     expect(() => parseConfig({ assistants: [{ name: "a" }, { name: "a" }] }, "/")).toThrow(/twice/);
-    expect(() => parseConfig({ assistants: [] }, "/")).toThrow(ConfigError);
+  });
+
+  it("accepts a server with no assistants yet", () => {
+    expect(parseConfig({ assistants: [] }, "/").assistants).toEqual([]);
+  });
+
+  it("says where to start when there is no config", async () => {
+    await expect(loadConfig("/nowhere/nudge.json")).rejects.toBeInstanceOf(ConfigMissing);
   });
 
   it("accepts nudge.example.json", async () => {

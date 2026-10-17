@@ -68,6 +68,11 @@ export type PrivacyOptions = {
 export type NudgeOptions = {
   /** Where the assistant lives: a SQLite file path, or `":memory:"` for nothing persisted. */
   readonly database: string;
+  /**
+   * Whether a database made now is encrypted, under a key of its own in `<database>.key`, when no
+   * key is set. A server's are (ADR 11); an existing unencrypted one stays so.
+   */
+  readonly encryptNew?: boolean;
   /** Model catalog and credentials every request goes through. */
   readonly models: Models;
   /** Model the assistant runs with. */
@@ -289,7 +294,7 @@ export class Nudge {
     let harness: Harness;
     try {
       harness = await Harness.open(
-        await openStorage(options.database),
+        await openStorage(options.database, options.encryptNew),
         {
           models,
           registry,
@@ -1008,7 +1013,7 @@ async function followConfig(
   );
 }
 
-async function openStorage(database: string): Promise<Storage> {
+async function openStorage(database: string, encryptNew = false): Promise<Storage> {
   if (database === ":memory:") return new MemoryStorage();
-  return openDatabaseStorage(database);
+  return openDatabaseStorage(database, { encryptNew });
 }

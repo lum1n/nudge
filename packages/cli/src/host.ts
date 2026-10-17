@@ -10,9 +10,9 @@ import {
 } from "@nudge/core";
 
 /**
- * What every command that runs an assistant passes to it: errors to stderr, and with
- * NUDGE_DEBUG_REQUESTS=1 every request, exactly as the provider gets it, appended next to the
- * database.
+ * What every command that runs an assistant passes to it: new databases encrypted, errors to
+ * stderr, and with NUDGE_DEBUG_REQUESTS=1 every request, exactly as the provider gets it, appended
+ * next to the database.
  */
 export function hostOptions(assistant: AssistantConfig): Partial<NudgeOptions> {
   const dump = process.env.NUDGE_DEBUG_REQUESTS
@@ -20,6 +20,8 @@ export function hostOptions(assistant: AssistantConfig): Partial<NudgeOptions> {
     : undefined;
   if (dump !== undefined) console.log(`${assistant.name}: writing requests to ${dump}`);
   return {
+    // Every database the CLI makes is encrypted (ADR 11); backups carry its key file.
+    encryptNew: true,
     onReport: (error) => console.error(error),
     privacy: dump
       ? { onRequest: (request) => appendFileSync(dump, `${JSON.stringify(request)}\n`) }
@@ -37,7 +39,9 @@ export function reloadOnHangup(
   say: (line: string) => void = console.log,
 ): () => void {
   const onHangup = () => {
-    assistants.reload().catch((error: unknown) => say(`reload failed: ${(error as Error).message}`));
+    assistants
+      .reload()
+      .catch((error: unknown) => say(`reload failed: ${(error as Error).message}`));
   };
   process.on("SIGHUP", onHangup);
   return () => process.off("SIGHUP", onHangup);

@@ -20,6 +20,7 @@ import {
 export {
   type AssistantConfig,
   ConfigError,
+  ConfigMissing,
   DEFAULT_CONFIG,
   DEFAULT_MODEL,
   type ExtensionConfig,
@@ -55,6 +56,7 @@ export {
   Assistants,
   type AssistantsOptions,
 } from "./server/assistants.ts";
+export { defaultConfigPath, serverHome } from "./server/home.ts";
 export {
   BACKUP_SUFFIX,
   BackupError,
