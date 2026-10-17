@@ -34,7 +34,7 @@ pub use exe_login::{
 pub use nudge_protocol as protocol;
 pub use panel::{PanelListener, PanelSocket, PanelStatus, panel_url};
 pub use push::{DeviceKey, PushPayload, open_push};
-pub use server::{ServerApi, check_setup_code, check_setup_key, set_up, setup_info};
+pub use server::{Reach, ServerApi, check_setup_code, check_setup_key, reach, set_up, setup_info};
 pub use stores::{
     PageLoader, PendingMessage, PendingState, RoomListStore, RoomState, RoomStore, SyncStatus,
     ViewState, slide,

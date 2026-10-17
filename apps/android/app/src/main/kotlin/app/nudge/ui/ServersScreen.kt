@@ -34,6 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MediumFlexibleTopAppBar
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -58,6 +59,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.nudge.AppModel
+import app.nudge.exeVmName
 import app.nudge.explain
 import kotlinx.coroutines.launch
 import nudge.ffi.AssistantFor
@@ -67,8 +69,11 @@ import nudge.ffi.MadeAssistant
 import nudge.ffi.ModelChoice
 import nudge.ffi.NewAssistant
 import nudge.ffi.ProviderKey
+import nudge.ffi.Reach
 import nudge.ffi.ServerAssistant
 import nudge.ffi.ServerInfo
+import nudge.ffi.TailscaleState
+import nudge.ffi.TailscaleStatus
 
 /** The model a provider's new assistant starts with, until the owner picks another. */
 private val DEFAULT_MODELS = mapOf("anthropic" to "claude-sonnet-5", "openai" to "gpt-6.1-sol")
@@ -130,7 +135,10 @@ fun ServersScreen(model: AppModel, address: String?, exe: () -> Unit, close: () 
     }
 }
 
-/** One server: its updates, its assistants, the model keys set on it, and its recovery kit. */
+/**
+ * One server: its updates, its assistants, the model keys set on it, its Tailscale, and its
+ * recovery kit; removing it, for one made on exe.dev.
+ */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ServerScreen(model: AppModel, server: String, address: String?, close: () -> Unit) {
@@ -144,6 +152,10 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
     var creating by remember { mutableStateOf(false) }
     var settingKey by remember { mutableStateOf<String?>(null) }
     var kit by remember { mutableStateOf(false) }
+    var removing by remember { mutableStateOf(false) }
+    // Followed, so assistants show as joined once they are.
+    val places by model.places.collectAsStateWithLifecycle()
+    val home by model.session.collectAsStateWithLifecycle()
 
     suspend fun reload() {
         info = client.info()
@@ -165,6 +177,8 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
     editing?.let { assistant ->
         BackHandler { editing = null }
         AssistantScreen(
+            model,
+            server,
             assistant,
             save = { settings -> client.updateAssistant(assistant.name, settings); reload() },
             delete = { client.deleteAssistant(assistant.name); reload() },
@@ -175,7 +189,7 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
     if (creating) {
         BackHandler { creating = false }
         NewAssistantScreen(
-            keys, address,
+            model, server, keys, address,
             create = { new -> model.createAssistant(server, new).also { reload() } },
             close = { creating = false },
         )
@@ -259,6 +273,38 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
         )
     }
 
+    val vm = exeVmName(server)
+    if (removing && vm != null) {
+        var confirm by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { removing = false },
+            title = { Text("Remove ${java.net.URI(server).host}?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Everything on it goes for good, and nothing is kept: make a recovery kit and download a backup " +
+                            "first if you need one. Type $vm to remove it.",
+                    )
+                    OutlinedTextField(value = confirm, onValueChange = { confirm = it }, singleLine = true)
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = confirm.trim() == vm, onClick = {
+                    removing = false
+                    scope.launch {
+                        try {
+                            model.removeExeServer(server)
+                            close()
+                        } catch (error: Exception) {
+                            problem = explain(error)
+                        }
+                    }
+                }) { Text("Remove", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { removing = false }) { Text("Cancel") } },
+        )
+    }
+
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
         containerColor = groupedBackground(),
@@ -284,7 +330,14 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
                             shapes = shapes,
                             leadingContent = { Icon(Icons.Outlined.SmartToy, null) },
                             supportingContent = {
-                                Text(if (assistant.running) assistant.settings.model.modelId else "Not running: check the server's log")
+                                val joined = home == null || (listOfNotNull(home) + places).any { it.account.isAt(server, assistant.name) }
+                                Text(
+                                    when {
+                                        !assistant.running -> "Not running: check the server's log"
+                                        joined -> assistant.settings.model.modelId
+                                        else -> "${assistant.settings.model.modelId} · Not joined from home"
+                                    },
+                                )
                             },
                             trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) },
                         ) { Text(assistant.settings.displayName) }
@@ -297,6 +350,7 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
                     ) { Text("New assistant") }
                 },
             )
+            item(key = "tailscale") { TailscaleCard(model, server) }
             group(
                 "Model keys",
                 keys.map<ProviderKey, GroupRow> { key ->
@@ -352,6 +406,17 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
                             supportingContent = { Text("This device stops managing it. Nothing on the server changes.") },
                         ) { Text("Sign out as owner") }
                     }
+                    if (vm != null && model.servers.exeToken != null) {
+                        add { shapes ->
+                            SegmentedListItem(
+                                onClick = { removing = true },
+                                shapes = shapes,
+                                supportingContent = {
+                                    Text("Deletes $vm from your exe.dev account, with its assistants, their history and the backups on it.")
+                                },
+                            ) { Text("Remove this server", color = MaterialTheme.colorScheme.error) }
+                        }
+                    }
                 },
             )
         }
@@ -362,6 +427,8 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NewAssistantScreen(
+    model: AppModel,
+    server: String,
     keys: List<ProviderKey>,
     address: String?,
     create: suspend (NewAssistant) -> MadeAssistant,
@@ -378,6 +445,13 @@ private fun NewAssistantScreen(
     var busy by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
     var made by remember { mutableStateOf<MadeAssistant?>(null) }
+    var tailscale by remember { mutableStateOf<TailscaleState?>(null) }
+    val home by model.session.collectAsStateWithLifecycle()
+    val memberships by model.memberships.collectAsStateWithLifecycle()
+    val missing = homeProblem(model)
+    // Its home joins it now: it has federation, and when it is only in a tailnet, so is this server.
+    val tailnetHome = missing == null && model.homeReach() == Reach.TAILNET
+    val homeCanJoin = missing == null && (!tailnetHome || tailscale?.state == TailscaleStatus.CONNECTED)
 
     Scaffold(
         topBar = {
@@ -436,7 +510,7 @@ private fun NewAssistantScreen(
                 }
                 OutlinedTextField(value = modelId, onValueChange = { modelId = it }, label = { Text("Model id") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 Text("Who is it for?", style = MaterialTheme.typography.labelLarge)
-                if (address != null) {
+                if (home != null) {
                     Row(Modifier.fillMaxWidth().selectable(selected = forMe, onClick = { forMe = true }), verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(selected = forMe, onClick = null)
                         Text("Me: I join it from my home, and keep one sign-in", Modifier.padding(start = 12.dp))
@@ -448,10 +522,18 @@ private fun NewAssistantScreen(
                 }
                 if (!forMe) {
                     OutlinedTextField(value = person, onValueChange = { person = it }, label = { Text("Their name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                } else {
+                    HomeFederationCard(model)
+                    if (tailnetHome) {
+                        if (tailscale?.state != TailscaleStatus.CONNECTED) {
+                            Text("Your home is only in your tailnet, so this server joins it first.")
+                        }
+                        TailscaleCard(model, server) { tailscale = it }
+                    }
                 }
                 problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 Button(
-                    enabled = !busy && slugOf(name).isNotEmpty() && modelId.isNotBlank() && (forMe || person.isNotBlank()),
+                    enabled = !busy && slugOf(name).isNotEmpty() && modelId.isNotBlank() && (if (forMe) homeCanJoin else person.isNotBlank()),
                     onClick = {
                         busy = true
                         scope.launch {
@@ -460,7 +542,11 @@ private fun NewAssistantScreen(
                                     NewAssistant(
                                         name = slugOf(name),
                                         settings = AssistantSettings(name.trim(), ModelChoice(provider, modelId.trim()), null, null, null),
-                                        madeFor = if (forMe) AssistantFor.Me(address!!) else AssistantFor.SomeonesHome(person.trim()),
+                                        madeFor = if (forMe) {
+                                            AssistantFor.Me(memberships?.address ?: address ?: error("Your home has no address yet."))
+                                        } else {
+                                            AssistantFor.SomeonesHome(person.trim())
+                                        },
                                     ),
                                 )
                             } catch (error: Exception) {
@@ -477,10 +563,12 @@ private fun NewAssistantScreen(
     }
 }
 
-/** An assistant's settings, and deleting it. */
+/** An assistant's settings, joining it from home, and deleting it. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AssistantScreen(
+    model: AppModel,
+    server: String,
     assistant: ServerAssistant,
     save: suspend (AssistantSettings) -> Unit,
     delete: suspend () -> Unit,
@@ -493,6 +581,11 @@ private fun AssistantScreen(
     var confirm by remember { mutableStateOf("") }
     var deleting by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
+    var joining by remember { mutableStateOf(false) }
+    val home by model.session.collectAsStateWithLifecycle()
+    val places by model.places.collectAsStateWithLifecycle()
+    val joined = (listOfNotNull(home) + places).any { it.account.isAt(server, assistant.name) }
+    val missing = homeProblem(model)
 
     fun act(action: suspend () -> Unit) = scope.launch {
         try {
@@ -545,6 +638,31 @@ private fun AssistantScreen(
                 minLines = 3, modifier = Modifier.fillMaxWidth(),
             )
             problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            if (home != null && !joined) {
+                HomeFederationCard(model)
+                OutlinedButton(
+                    enabled = !joining && missing == null,
+                    onClick = {
+                        joining = true
+                        scope.launch {
+                            try {
+                                model.joinFromHome(server, assistant.name)
+                                problem = null
+                            } catch (error: Exception) {
+                                problem = explain(error)
+                            } finally {
+                                joining = false
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(if (joining) "Joining…" else "Join it from home") }
+                Text(
+                    "Its rooms show beside your home's, and you are its admin and an owner of this server.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Button(
                 enabled = displayName.isNotBlank() && modelId.isNotBlank(),
                 onClick = {

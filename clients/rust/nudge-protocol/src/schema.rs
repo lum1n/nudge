@@ -1212,6 +1212,19 @@ pub struct CreateAssistantResponse {
     pub join_link: Option<String>,
 }
 
+/// Someone to invite to an assistant by their address, as an owner.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct InviteToAssistantRequest {
+    pub address: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InviteToAssistantResponse {
+    /// `nudge://join?server=…&assistant=…`, which their app joins with from home.
+    pub join_link: String,
+}
+
 /// Each field: `None` leaves it, `Some(None)` goes back to the default, `Some(Some(_))` sets it.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -1290,6 +1303,9 @@ pub struct ServerOwnersResponse {
 pub struct AddOwnerRequest {
     pub assistant: String,
     pub player_id: String,
+    /// Makes them an admin of `assistant` too.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub admin: Option<bool>,
 }
 
 /// Sent with the player's token of `assistant`.
@@ -1328,6 +1344,44 @@ pub struct UpdateState {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SetUpdatesRequest {
     pub automatic: bool,
+}
+
+/// How far the server's own Tailscale is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TailscaleStatus {
+    Off,
+    Starting,
+    /// Someone approves it at `auth_url`.
+    NeedsLogin,
+    /// A tailnet admin approves the machine.
+    NeedsApproval,
+    Connected,
+    Error,
+}
+
+/// The server's own Tailscale, so it can reach assistants only in its owner's tailnet.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TailscaleState {
+    pub state: TailscaleStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auth_url: Option<String>,
+    /// Its MagicDNS name, such as `nudge-robin.tail1234.ts.net`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub addresses: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+/// Without `auth_key`, the state answers with a login URL to approve.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TailscaleConnectRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auth_key: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

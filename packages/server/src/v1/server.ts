@@ -8,17 +8,21 @@ import {
   DEFAULT_MODEL,
   defaultExtensions,
   LastOwner,
+  type Nudge,
   type NudgeConfig,
   sealRecoveryKit,
   type ServerKeys,
   type ServerOwner,
   type ServerOwners,
+  type TailscaleState,
 } from "@nudge/core";
 import {
   AddOwnerRequest,
   type CreateAssistantResponse,
   CreateAssistantRequest,
   type DeleteAssistantResponse,
+  InviteToAssistantRequest,
+  type InviteToAssistantResponse,
   type ProviderKey,
   type ProviderKeysResponse,
   RecoveryKitRequest,
@@ -31,6 +35,7 @@ import {
   type ServerSessionResponse,
   SetProviderKeyRequest,
   SetUpdatesRequest,
+  TailscaleConnectRequest,
   type UpdateState,
   UpdateAssistantRequest,
 } from "@nudge/protocol";
@@ -55,6 +60,16 @@ export type ServerControl = {
   backupKey(): Promise<Buffer>;
   /** Self-update, for a server `nudge-server` runs; absent otherwise. */
   readonly updates?: UpdateControl;
+  /** The server's own Tailscale, on Linux; absent elsewhere. */
+  readonly tailscale?: TailscaleControl;
+};
+
+/** What owners see of and do with the server's Tailscale. */
+export type TailscaleControl = {
+  state(): Promise<TailscaleState>;
+  /** Joins the tailnet, with a login URL in the state when no key was given. */
+  connect(authKey?: string): Promise<TailscaleState>;
+  disconnect(): Promise<TailscaleState>;
 };
 
 /** What owners see of and do with updates. */
@@ -133,6 +148,21 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
     return c.json(await updates().setAutomatic(automatic));
   });
 
+  const tailscale = () => {
+    if (control.tailscale === undefined)
+      throw new HttpError(404, "This server can't run Tailscale: it only runs on Linux");
+    return control.tailscale;
+  };
+
+  app.get("/tailscale", async (c) => c.json(await tailscale().state()));
+
+  app.post("/tailscale", async (c) => {
+    const { authKey } = await readJson(c, TailscaleConnectRequest);
+    return c.json(await tailscale().connect(authKey));
+  });
+
+  app.delete("/tailscale", async (c) => c.json(await tailscale().disconnect()));
+
   app.delete("/session", (c) => {
     control.owners.revoke(c.var.clientId);
     return c.body(null, 204);
@@ -153,22 +183,14 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
     const nudge = await guard(() => control.assistants.create({ ...draft, extensions }));
     let joinLink: string | undefined;
     if (invite !== undefined) {
-      const found = nudge.extensionRoute("federation", "POST", "/invites");
-      const answer = await found?.route.handle(
-        new Request("http://server/invites", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ address: invite }),
-        }),
-        { admin: true, params: {}, context },
-      );
-      const body = (await answer?.json()) as { link?: string; error?: string } | undefined;
-      if (answer?.ok !== true || body?.link === undefined)
+      try {
+        joinLink = await inviteTo(nudge, invite);
+      } catch (error) {
         throw new HttpError(
           400,
-          `Made ${draft.name}, but couldn't invite ${invite}: ${body?.error}`,
+          `Made ${draft.name}, but couldn't invite ${invite}: ${(error as Error).message}`,
         );
-      joinLink = body.link;
+      }
     }
     let pairing: CreateAssistantResponse["pairing"];
     if (firstPlayer !== undefined) {
@@ -192,6 +214,22 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
       } satisfies CreateAssistantResponse,
       201,
     );
+  });
+
+  app.post("/assistants/:name/invites", async (c) => {
+    const name = c.req.param("name");
+    const { address } = await readJson(c, InviteToAssistantRequest);
+    const nudge = control.assistants.running.get(name);
+    if (nudge === undefined) throw new HttpError(404, `No assistant "${name}"`);
+    if (nudge.extensionRoute("federation", "POST", "/invites") === undefined)
+      throw new HttpError(400, `${name} has no federation, so no one can join it from home`);
+    let joinLink: string;
+    try {
+      joinLink = await inviteTo(nudge, address);
+    } catch (error) {
+      throw new HttpError(400, `Couldn't invite ${address}: ${(error as Error).message}`);
+    }
+    return c.json({ joinLink } satisfies InviteToAssistantResponse, 201);
   });
 
   app.patch("/assistants/:name", async (c) => {
@@ -257,6 +295,7 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
     if (nudge === undefined) throw new HttpError(404, `No assistant "${body.assistant}"`);
     if ((await nudge.players.get(body.playerId, context)) === undefined)
       throw new HttpError(404, `No player "${body.playerId}" in ${body.assistant}`);
+    if (body.admin === true) await nudge.players.setAdmin(body.playerId, true, context);
     return c.json(control.owners.add(body.assistant, body.playerId), 201);
   });
 
@@ -273,6 +312,23 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
   });
 
   return app;
+}
+
+/** Invites `address` to the assistant through its federation, as an admin would: the join link. */
+async function inviteTo(nudge: Nudge, address: string): Promise<string> {
+  const found = nudge.extensionRoute("federation", "POST", "/invites");
+  if (found === undefined) throw new Error("it has no federation");
+  const answer = await found.route.handle(
+    new Request("http://server/invites", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ address }),
+    }),
+    { admin: true, params: {}, context },
+  );
+  const body = (await answer.json()) as { link?: string; error?: string };
+  if (!answer.ok || body.link === undefined) throw new Error(body.error ?? `${answer.status}`);
+  return body.link;
 }
 
 async function listAssistants(control: ServerControl): Promise<ServerAssistant[]> {

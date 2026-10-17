@@ -15,13 +15,18 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import nudge.client.JoinLink
 import nudge.client.Observed
 import nudge.client.PairingLink
 import nudge.client.PreferencesTokens
 import nudge.client.observeConnectionState
 import nudge.client.observeRoomListState
+import nudge.client.saved
+import nudge.client.settings
 import nudge.ffi.Assistant
+import nudge.ffi.AssistantFor
 import nudge.ffi.ClientConfig
 import nudge.ffi.ConnectionStatus
 import nudge.ffi.DeviceKey
@@ -35,11 +40,13 @@ import nudge.ffi.NudgeClient
 import nudge.ffi.NudgeException
 import nudge.ffi.PushPayload
 import nudge.ffi.PushPlatforms
+import nudge.ffi.Reach
 import nudge.ffi.RoomListUpdate
 import nudge.ffi.SetupChoices
-import nudge.ffi.SetupResult
+import nudge.ffi.TailscaleStatus
 import nudge.ffi.listAssistants
 import nudge.ffi.newDeviceKey
+import nudge.ffi.reach
 import nudge.ffi.registerWithRelay
 
 /** An assistant the app is signed in to. */
@@ -92,6 +99,10 @@ class AppModel(private val context: Context) {
     private val mutableMemberships = MutableStateFlow<Memberships?>(null)
     /** Where the player joined, as their home says; null until it did, or without federation there. */
     val memberships: StateFlow<Memberships?> = mutableMemberships.asStateFlow()
+
+    private val mutableHomeFederation = MutableStateFlow<Boolean?>(null)
+    /** Whether the home has federation: false once it said it hasn't, null until it said. */
+    val homeFederation: StateFlow<Boolean?> = mutableHomeFederation.asStateFlow()
 
     /** The room on screen; pushes for it aren't shown while the app is. */
     val selectedRoom = MutableStateFlow<RoomRef?>(null)
@@ -174,14 +185,28 @@ class AppModel(private val context: Context) {
     }
 
     /**
-     * Sets a server up with what the wizard asked (ADR 11), and signs in: to its new assistant as
-     * the person's home, and to the server as its owner.
+     * Sets a server up with what the wizard asked (ADR 11), and signs in as its owner. Signed out,
+     * its new assistant becomes the person's home. Signed in at home, it is joined from there
+     * instead, so they keep one home: at once, or once the server is in the home's tailnet when
+     * the home is only there, which the answer says ([SetUpServer.NeedsTailscale]).
      */
-    suspend fun setUp(server: String, choices: SetupChoices) {
+    suspend fun setUp(server: String, choices: SetupChoices): SetUpServer {
+        if (mutableSession.value != null) homeProblem()?.let { throw ServerProblem(it) }
         val done = nudge.ffi.setUp(server, choices, "nudge-android", "android")
         servers.remember(server, done.serverToken)
-        val home = mutableSession.value
-        if (home != null) return joinFromHome(home, server, done)
+        if (mutableSession.value != null) {
+            // The owner API invites and joins from here on; the setup player's token isn't needed.
+            val setupAccount = Account(server, done.assistant, done.assistant)
+            val setupTokens = PreferencesTokens(preferences, "setup:${setupAccount.key}")
+            setupTokens.set(done.token)
+            val setup = NudgeClient(config(setupAccount).copy(cachePath = null), setupTokens)
+            runCatching { setup.signOut() }
+            setupTokens.set(null)
+            setup.close()
+            if (homeReach() == Reach.TAILNET) return SetUpServer.NeedsTailscale(done.assistant)
+            joinFromHome(server, done.assistant)
+            return SetUpServer.Joined
+        }
         val account = Account(server, done.assistant, choices.displayName ?: done.assistant)
         tokens(account).set(done.token)
         preferences.edit()
@@ -191,33 +216,84 @@ class AppModel(private val context: Context) {
             .apply()
         signedOutBecause.value = null
         start(account)
+        return SetUpServer.Home
     }
 
     /**
-     * A server set up while signed in at home: its first assistant is joined from home rather
-     * than made a second home. Setup made a player there for the person, the first and so the
-     * admin; with its token the app invites the home's address, joins, makes that guest an admin
-     * and an owner of the server, and signs the setup player's token out.
+     * Who can reach the home as other servers do: at its federation address once it has one,
+     * else where this device reaches it. Null while signed out.
      */
-    private suspend fun joinFromHome(home: Session, server: String, done: SetupResult) {
+    fun homeReach(): Reach? {
+        val home = mutableSession.value ?: return null
         val address = mutableMemberships.value?.address
-            ?: throw IllegalStateException("Your home has no federation, so it can't join the new assistant.")
-        val setupAccount = Account(server, done.assistant, done.assistant)
-        val setupTokens = PreferencesTokens(preferences, "setup:${setupAccount.key}")
-        setupTokens.set(done.token)
-        val setup = NudgeClient(config(setupAccount).copy(cachePath = null), setupTokens)
-        try {
-            setup.invite(address)
-            join(JoinLink(server, done.assistant))
-            val place = mutablePlaces.value.first { it.account.isAt(server, done.assistant) }
-            val guest = place.client.me().player.id
-            setup.setAdmin(guest, true)
-            servers.client(server).addOwner(done.assistant, guest)
-            runCatching { setup.signOut() }
-        } finally {
-            setupTokens.set(null)
-            setup.close()
+        val at = address?.indexOf('@') ?: -1
+        val slash = address?.lastIndexOf('/') ?: -1
+        if (address != null && at in 0 until slash) {
+            val server = address.substring(at + 1, slash)
+            return reach(if ("://" in server) server else "https://$server")
         }
+        return reach(home.account.server)
+    }
+
+    /**
+     * Why the home can't join assistants on other servers yet, if it can't. A home only in a
+     * tailnet can, once the other server is in that tailnet too, which is up to each server.
+     */
+    fun homeProblem(): ServerProblem.Kind? {
+        if (mutableSession.value == null) return null
+        if (homeReach() == Reach.PRIVATE) return ServerProblem.Kind.PRIVATE_HOME
+        if (mutableHomeFederation.value == false) return ServerProblem.Kind.NO_FEDERATION
+        return null
+    }
+
+    /**
+     * Turns federation on at home, at the address this device reaches it, so the person can join
+     * assistants elsewhere. Needs them to be an admin there.
+     */
+    suspend fun turnOnFederation() {
+        val home = mutableSession.value ?: return
+        val setups = home.client.extensionSetups()
+        val federation = setups.firstOrNull { it.from.endsWith("federation") }
+            ?: throw ServerProblem(ServerProblem.Kind.NO_FEDERATION_EXTENSION)
+        val server = home.account.server.trimEnd('/')
+        home.client.saveExtensionSetups(
+            setups
+                .filter { it.configured || it.from == federation.from }
+                .map { setup ->
+                    if (setup.from == federation.from) {
+                        setup.saved(true, JsonObject(setup.settings + ("server" to JsonPrimitive(server))), setup.rooms)
+                    } else {
+                        setup.saved(setup.enabled, setup.settings, setup.rooms)
+                    }
+                },
+        )
+        mutableMemberships.value = home.client.memberships()
+        mutableHomeFederation.value = true
+    }
+
+    /** Whether this device is signed in to that assistant, as home or joined from it. */
+    fun isSignedIn(server: String, assistant: String) = sessions().any { it.account.isAt(server, assistant) }
+
+    /**
+     * Joins an assistant on a server this device owns from home, as its owner: invites the home's
+     * address, joins, and makes that guest an admin there and an owner of the server. A home only
+     * in a tailnet needs the server's own Tailscale connected first.
+     */
+    suspend fun joinFromHome(server: String, assistant: String) {
+        if (mutableSession.value == null) return
+        homeProblem()?.let { throw ServerProblem(it) }
+        val address = mutableMemberships.value?.address ?: throw ServerProblem(ServerProblem.Kind.NO_FEDERATION)
+        val owner = servers.client(server)
+        if (homeReach() == Reach.TAILNET && runCatching { owner.tailscale() }.getOrNull()?.state != TailscaleStatus.CONNECTED) {
+            throw ServerProblem(ServerProblem.Kind.NEEDS_TAILSCALE)
+        }
+        // At the address this device knows the server by, which the link may write otherwise.
+        owner.invite(assistant, address)
+        join(JoinLink(server, assistant))
+        val place = mutablePlaces.value.firstOrNull { it.account.isAt(server, assistant) }
+            ?: throw ServerProblem(ServerProblem.Kind.NOT_JOINED)
+        val guest = place.client.me().player.id
+        owner.addOwner(assistant, guest, true)
     }
 
     /**
@@ -225,9 +301,31 @@ class AppModel(private val context: Context) {
      * at once, so its rooms show beside the home's and the person is its first admin.
      */
     suspend fun createAssistant(server: String, new: NewAssistant): MadeAssistant {
+        if (new.madeFor is AssistantFor.Me) {
+            homeProblem()?.let { throw ServerProblem(it) }
+            if (homeReach() == Reach.TAILNET &&
+                runCatching { servers.client(server).tailscale() }.getOrNull()?.state != TailscaleStatus.CONNECTED
+            ) {
+                throw ServerProblem(ServerProblem.Kind.NEEDS_TAILSCALE)
+            }
+        }
         val made = servers.client(server).createAssistant(new)
         made.joinLink?.let { JoinLink.parse(it) }?.let { join(it) }
         return made
+    }
+
+    /**
+     * Removes a server made on exe.dev, with everything on it: leaves its assistants joined from
+     * home, deletes the VM, and forgets it here.
+     */
+    suspend fun removeExeServer(server: String) {
+        val exe = servers.exe() ?: throw ServerProblem(ServerProblem.Kind.NOT_ON_EXE)
+        val vm = exeVmName(server) ?: throw ServerProblem(ServerProblem.Kind.NOT_ON_EXE)
+        for (membership in mutableMemberships.value?.memberships.orEmpty()) {
+            if (membership.server.trimEnd('/') == server.trimEnd('/')) runCatching { leave(membership) }
+        }
+        exe.delete(vm)
+        servers.forget(server)
     }
 
     /** Signs in to the home's server as its owner, when the player is one; quietly not otherwise. */
@@ -255,6 +353,7 @@ class AppModel(private val context: Context) {
         val places = mutablePlaces.value
         mutablePlaces.value = emptyList()
         mutableMemberships.value = null
+        mutableHomeFederation.value = null
         selectedRoom.value = null
         requestedRoom.value = null
         signedOutBecause.value = because
@@ -383,12 +482,16 @@ class AppModel(private val context: Context) {
             home.client.memberships()
         } catch (error: NudgeException.Status) {
             // No federation at home: nobody joined anything from there.
-            if (error.status.toInt() == 404) mutableMemberships.value = null
+            if (error.status.toInt() == 404) {
+                mutableMemberships.value = null
+                mutableHomeFederation.value = false
+            }
             return
         } catch (_: NudgeException) {
             return
         }
         mutableMemberships.value = memberships
+        mutableHomeFederation.value = true
         syncing.withLock {
             if (mutableSession.value !== home) return
             val (kept, gone) = mutablePlaces.value.partition { place ->
@@ -481,6 +584,39 @@ class AppModel(private val context: Context) {
     private companion object {
         const val PLACES = "places"
     }
+}
+
+/** How setting a server up ended for this device. */
+sealed interface SetUpServer {
+    /** Its assistant is the person's home now. */
+    data object Home : SetUpServer
+    /** Joined from home. */
+    data object Joined : SetUpServer
+    /** The home is only in a tailnet: the server joins it before the home can join the assistant. */
+    data class NeedsTailscale(val assistant: String) : SetUpServer
+}
+
+/** Why the home can't join an assistant on a server this device owns, or more on servers. */
+class ServerProblem(val kind: Kind) : Exception(kind.text) {
+    enum class Kind(val text: String) {
+        NO_FEDERATION("Your home has no federation yet, so it can't join assistants on other servers."),
+        NO_FEDERATION_EXTENSION("Your home's server has no federation extension to turn on. Update it first."),
+        PRIVATE_HOME(
+            "This device reaches your home at a local address, which other servers can't reach. " +
+                "Sign in to your home at its Tailscale or public address.",
+        ),
+        NEEDS_TAILSCALE("Your home is only in your tailnet, so this server has to join it first, under Tailscale."),
+        NOT_JOINED("Joining the assistant from home didn't work."),
+        NOT_ON_EXE("This server isn't one this device made on exe.dev."),
+    }
+}
+
+/** The exe.dev VM a server runs on, from its address: `robin` for `https://robin.exe.xyz`. */
+fun exeVmName(server: String): String? {
+    val host = runCatching { java.net.URI(server).host }.getOrNull() ?: return null
+    if (!host.endsWith(".exe.xyz")) return null
+    val name = host.removeSuffix(".exe.xyz")
+    return if (name.isEmpty() || '.' in name) null else name
 }
 
 /** What to tell the user. */

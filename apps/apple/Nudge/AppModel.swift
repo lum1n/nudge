@@ -65,6 +65,8 @@ final class AppModel {
     private(set) var places: [Session] = []
     /// Where the player joined, as their home says; nil until it did, or without federation there.
     private(set) var memberships: Memberships?
+    /// Whether the home has federation: false once it said it hasn't, nil until it said.
+    private(set) var homeFederation: Bool?
     /// The room on screen, also chosen by tapping a notification.
     var selectedRoom: RoomRef?
     /// A pairing link opened while signed out, or for another server.
@@ -128,48 +130,127 @@ final class AppModel {
         Push.requestPermission()
     }
 
-    /// Sets a server up with what the wizard asked (ADR 11), and signs in: to its new assistant as
-    /// the person's home, and to the server as its owner.
-    func setUpServer(_ server: String, choices: SetupChoices) async throws {
+    /// Sets a server up with what the wizard asked (ADR 11), and signs in as its owner. Signed out,
+    /// its new assistant becomes the person's home. Signed in at home, it is joined from there
+    /// instead, so they keep one home: at once, or once the server is in the home's tailnet when
+    /// the home is only there, which the answer says (`.needsTailscale`).
+    func setUpServer(_ server: String, choices: SetupChoices) async throws -> SetUpServer {
+        if session != nil, let problem = homeProblem { throw problem }
         let done = try await setUp(server: server, choices: choices, clientName: "nudge-apple", platform: Push.platformName)
         servers.remember(server, token: done.serverToken)
-        if let home = session { return try await joinFromHome(home, server: server, done: done) }
+        if session != nil {
+            // The owner API invites and joins from here on; the setup player's token isn't needed.
+            var setupConfig = config(for: Account(server: server, assistant: done.assistant, assistantName: done.assistant))
+            setupConfig.cachePath = nil
+            try? await NudgeClient(config: setupConfig, tokens: MemoryTokens(done.token)).signOut()
+            if homeReach == .tailnet { return .needsTailscale(assistant: done.assistant) }
+            try await joinFromHome(server: server, assistant: done.assistant)
+            return .joined
+        }
         let account = Account(server: server, assistant: done.assistant, assistantName: choices.displayName ?? done.assistant)
         KeychainTokens(account: account.keychainAccount).set(token: done.token)
         defaults.set(try JSONEncoder().encode(account), forKey: Self.accountKey)
         signedOutBecause = nil
         start(account)
         Push.requestPermission()
+        return .home
     }
 
-    /// A server set up while signed in at home: its first assistant is joined from home rather
-    /// than made a second home. Setup made a player there for the person, the first and so the
-    /// admin; with its token the app invites the home's address, joins, makes that guest an admin
-    /// and an owner of the server, and signs the setup player's token out.
-    private func joinFromHome(_ home: Session, server: String, done: SetupResult) async throws {
+    /// Who can reach the home as other servers do: at its federation address once it has one,
+    /// else where this device reaches it. Nil while signed out.
+    var homeReach: Reach? {
+        guard let home = session else { return nil }
+        if let address = memberships?.address, let at = address.firstIndex(of: "@"),
+            let slash = address.lastIndex(of: "/"), at < slash
+        {
+            let server = String(address[address.index(after: at)..<slash])
+            return reach(server: server.contains("://") ? server : "https://\(server)")
+        }
+        return reach(server: home.account.server)
+    }
+
+    /// Why the home can't join assistants on other servers yet, if it can't. A home only in a
+    /// tailnet can, once the other server is in that tailnet too, which is up to each server.
+    var homeProblem: ServerProblem? {
+        guard session != nil else { return nil }
+        if homeReach == .private { return .privateHome }
+        if homeFederation == false { return .noFederation }
+        return nil
+    }
+
+    /// Turns federation on at home, at the address this device reaches it, so the person can join
+    /// assistants elsewhere. Needs them to be an admin there.
+    func turnOnFederation() async throws {
+        guard let home = session else { return }
+        let setups = try await home.client.extensionSetups()
+        guard let federation = setups.first(where: { $0.from.hasSuffix("federation") }) else {
+            throw ServerProblem.noFederationExtension
+        }
+        let server = home.account.server.trimmingCharacters(in: ["/"])
+        _ = try await home.client.saveExtensionSetups(
+            extensions: setups
+                .filter { $0.configured || $0.from == federation.from }
+                .map { setup in
+                    setup.from == federation.from
+                        ? setup.saved(enabled: true, settings: setup.settings.merging(["server": .string(server)]) { _, new in new }, rooms: setup.rooms)
+                        : setup.saved(enabled: setup.enabled, settings: setup.settings, rooms: setup.rooms)
+                })
+        memberships = try await home.client.memberships()
+        homeFederation = true
+    }
+
+    /// Whether this device is signed in to that assistant, as home or joined from it.
+    func isSignedIn(server: String, assistant: String) -> Bool {
+        sessions.contains { $0.account.isAt(server: server, assistant: assistant) }
+    }
+
+    /// Joins an assistant on a server this device owns from home, as its owner: invites the home's
+    /// address, joins, and makes that guest an admin there and an owner of the server. A home
+    /// only in a tailnet needs the server's own Tailscale connected first.
+    func joinFromHome(server: String, assistant: String) async throws {
+        guard session != nil else { return }
+        if let homeProblem { throw homeProblem }
         guard let address = memberships?.address else { throw ServerProblem.noFederation }
-        var setupConfig = config(for: Account(server: server, assistant: done.assistant, assistantName: done.assistant))
-        setupConfig.cachePath = nil
-        let setup = try NudgeClient(config: setupConfig, tokens: MemoryTokens(done.token))
-        _ = try await setup.invite(address: address)
-        try await join(JoinLink(server: server, assistant: done.assistant))
-        guard let place = places.first(where: { $0.account.isAt(server: server, assistant: done.assistant) }) else {
+        let owner = try servers.client(server)
+        if homeReach == .tailnet, (try? await owner.tailscale())?.state != .connected {
+            throw ServerProblem.needsTailscale
+        }
+        // At the address this device knows the server by, which the link may write otherwise.
+        _ = try await owner.invite(assistant: assistant, address: address)
+        try await join(JoinLink(server: server, assistant: assistant))
+        guard let place = places.first(where: { $0.account.isAt(server: server, assistant: assistant) }) else {
             throw ServerProblem.notJoined
         }
         let guest = try await place.client.me().player.id
-        _ = try await setup.setAdmin(playerId: guest, admin: true)
-        _ = try await servers.client(server).addOwner(assistant: done.assistant, playerId: guest)
-        try? await setup.signOut()
+        _ = try await owner.addOwner(assistant: assistant, playerId: guest, admin: true)
     }
 
     /// Makes an assistant on a server this device owns. One that is "for me" is joined from home
     /// at once, so its rooms show beside the home's and the person is its first admin.
     func createAssistant(on server: String, _ new: NewAssistant) async throws -> MadeAssistant {
+        if case .me = new.madeFor {
+            if let homeProblem { throw homeProblem }
+            if homeReach == .tailnet, (try? await servers.client(server).tailscale())?.state != .connected {
+                throw ServerProblem.needsTailscale
+            }
+        }
         let made = try await servers.client(server).createAssistant(new: new)
         if let link = made.joinLink.flatMap(URL.init(string:)).flatMap(JoinLink.init) {
             try await join(link)
         }
         return made
+    }
+
+    /// Removes a server made on exe.dev, with everything on it: leaves its assistants joined from
+    /// home, deletes the VM, and forgets it here.
+    func removeExeServer(_ server: String) async throws {
+        guard let token = servers.exeToken, let vm = exeVmName(server) else { throw ServerProblem.notOnExe }
+        for membership in memberships?.memberships ?? []
+        where membership.server.trimmingCharacters(in: ["/"]) == server.trimmingCharacters(in: ["/"]) {
+            try? await leave(membership)
+        }
+        try await ExeClient(token: token).delete(name: vm)
+        await servers.forget(server)
     }
 
     /// Signs in to the home's server as its owner, when the player is one; quietly not otherwise.
@@ -196,6 +277,7 @@ final class AppModel {
         self.session = nil
         self.places = []
         memberships = nil
+        homeFederation = nil
         selectedRoom = nil
         signedOutBecause = reason
         defaults.removeObject(forKey: Self.accountKey)
@@ -328,12 +410,14 @@ final class AppModel {
         } catch NudgeError.Status(404, _) {
             // No federation at home: nobody joined anything from there.
             memberships = nil
+            homeFederation = false
             return
         } catch {
             return
         }
         guard session === home else { return }
         memberships = found
+        homeFederation = true
         let kept = places.filter { place in
             found.memberships.contains { place.account.isAt(server: $0.server, assistant: $0.assistant) }
         }
@@ -428,16 +512,41 @@ enum JoinProblem: LocalizedError {
     var errorDescription: String? { "That is your home." }
 }
 
+/// How setting a server up ended for this device.
+enum SetUpServer: Equatable {
+    /// Its assistant is the person's home now.
+    case home
+    /// Joined from home.
+    case joined
+    /// The home is only in a tailnet: the server joins it before the home can join the assistant.
+    case needsTailscale(assistant: String)
+}
+
 enum ServerProblem: LocalizedError {
     case noFederation
+    case noFederationExtension
+    case privateHome
+    case needsTailscale
     case notJoined
+    case notOnExe
 
     var errorDescription: String? {
         switch self {
-        case .noFederation: "Your home has no federation, so it can't join the new assistant."
-        case .notJoined: "Joining the new assistant from home didn't work."
+        case .noFederation: "Your home has no federation yet, so it can't join assistants on other servers."
+        case .noFederationExtension: "Your home's server has no federation extension to turn on. Update it first."
+        case .privateHome: "This device reaches your home at a local address, which other servers can't reach. Sign in to your home at its Tailscale or public address."
+        case .needsTailscale: "Your home is only in your tailnet, so this server has to join it first, under Tailscale."
+        case .notJoined: "Joining the assistant from home didn't work."
+        case .notOnExe: "This server isn't one this device made on exe.dev."
         }
     }
+}
+
+/// The exe.dev VM a server runs on, from its address: `robin` for `https://robin.exe.xyz`.
+func exeVmName(_ server: String) -> String? {
+    guard let host = URL(string: server)?.host(), host.hasSuffix(".exe.xyz") else { return nil }
+    let name = host.dropLast(".exe.xyz".count)
+    return name.isEmpty || name.contains(".") ? nil : String(name)
 }
 
 extension NudgeError {

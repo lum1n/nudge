@@ -6,7 +6,13 @@ import { fileURLToPath } from "node:url";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { fauxProvider } from "@earendil-works/pi-ai/providers/faux";
-import { Assistants, openAssistant, ServerKeys, ServerOwners } from "@nudge/core";
+import {
+  Assistants,
+  openAssistant,
+  ServerKeys,
+  ServerOwners,
+  type TailscaleState,
+} from "@nudge/core";
 import type { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp, type ServerControl } from "../src/index.ts";
@@ -171,6 +177,30 @@ describe("the server API", () => {
     expect(config.assistants[1].extensions).toEqual([
       { from: expect.stringMatching(/federation$/), settings: { server: "https://robin.example" } },
     ]);
+
+    // An assistant made before can invite its owner from home later, as setup's first one.
+    const again = await call("POST", "/server/assistants/work/invites", {
+      token,
+      body: { address: "ann@home.example/robin" },
+    });
+    expect(again.status).toBe(201);
+    expect(again.json.joinLink).toBe(created.json.joinLink);
+    expect(
+      (
+        await call("POST", "/server/assistants/robin/invites", {
+          token,
+          body: { address: "ann@home.example/robin" },
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await call("POST", "/server/assistants/nobody/invites", {
+          token,
+          body: { address: "ann@home.example/robin" },
+        })
+      ).status,
+    ).toBe(404);
   });
 
   it("changes an assistant's settings while it runs", async () => {
@@ -197,6 +227,38 @@ describe("the server API", () => {
     expect(backedUp).toEqual(["pocket"]);
     expect(assistants.running.has("pocket")).toBe(false);
     expect((await call("GET", "/a/pocket/me", { token: ann })).status).toBe(404);
+  });
+
+  it("connects the server's Tailscale for its owners, where it can run", async () => {
+    const token = await signIn();
+    expect((await call("GET", "/server/tailscale", { token })).status).toBe(404);
+    const keys: (string | undefined)[] = [];
+    let state: TailscaleState = { state: "off" };
+    app = createApp({
+      assistants: assistants.running,
+      server: {
+        ...control,
+        tailscale: {
+          state: async () => state,
+          connect: async (authKey) => {
+            keys.push(authKey);
+            return (state = { state: "needs-login", authUrl: "https://login.tailscale.com/a/x" });
+          },
+          disconnect: async () => (state = { state: "off" }),
+        },
+      },
+    });
+    expect((await call("GET", "/server/tailscale")).status).toBe(401);
+    expect((await call("POST", "/server/tailscale", { token: ann, body: {} })).status).toBe(401);
+    expect((await call("GET", "/server/tailscale", { token })).json).toEqual({ state: "off" });
+    const connected = await call("POST", "/server/tailscale", { token, body: {} });
+    expect(connected.json).toEqual({
+      state: "needs-login",
+      authUrl: "https://login.tailscale.com/a/x",
+    });
+    await call("POST", "/server/tailscale", { token, body: { authKey: "tskey-auth-x" } });
+    expect(keys).toEqual([undefined, "tskey-auth-x"]);
+    expect((await call("DELETE", "/server/tailscale", { token })).json).toEqual({ state: "off" });
   });
 
   it("keeps model keys it tested, and never shows them", async () => {
@@ -239,5 +301,13 @@ describe("the server API", () => {
     expect((await call("DELETE", `/server/owners/${added.json.id}`, { token })).status).toBe(204);
     const last = owners.find((o) => o.id !== added.json.id)!;
     expect((await call("DELETE", `/server/owners/${last.id}`, { token })).status).toBe(409);
+
+    // As for someone who joined from home: an owner, and an admin of the assistant too.
+    expect((await call("GET", "/a/robin/admin/players", { token: bo })).status).toBe(403);
+    await call("POST", "/server/owners", {
+      token,
+      body: { assistant: "robin", playerId: "bo", admin: true },
+    });
+    expect((await call("GET", "/a/robin/admin/players", { token: bo })).status).toBe(200);
   });
 });

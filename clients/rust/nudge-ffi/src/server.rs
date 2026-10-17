@@ -130,6 +130,30 @@ pub struct UpdateState {
     pub error: Option<String>,
 }
 
+/// How far the server's own Tailscale is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum TailscaleStatus {
+    Off,
+    Starting,
+    /// Someone approves it at `auth_url`.
+    NeedsLogin,
+    /// A tailnet admin approves the machine.
+    NeedsApproval,
+    Connected,
+    Error,
+}
+
+/// The server's own Tailscale, so it can reach assistants only in its owner's tailnet.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct TailscaleState {
+    pub state: TailscaleStatus,
+    pub auth_url: Option<String>,
+    /// Its MagicDNS name, such as `nudge-robin.tail1234.ts.net`.
+    pub name: Option<String>,
+    pub addresses: Vec<String>,
+    pub error: Option<String>,
+}
+
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
 pub struct ServerInfo {
     pub version: String,
@@ -291,6 +315,25 @@ impl From<p::UpdateState> for UpdateState {
             available: u.available,
             checked_at: u.checked_at,
             error: u.error,
+        }
+    }
+}
+
+impl From<p::TailscaleState> for TailscaleState {
+    fn from(t: p::TailscaleState) -> Self {
+        TailscaleState {
+            state: match t.state {
+                p::TailscaleStatus::Off => TailscaleStatus::Off,
+                p::TailscaleStatus::Starting => TailscaleStatus::Starting,
+                p::TailscaleStatus::NeedsLogin => TailscaleStatus::NeedsLogin,
+                p::TailscaleStatus::NeedsApproval => TailscaleStatus::NeedsApproval,
+                p::TailscaleStatus::Connected => TailscaleStatus::Connected,
+                p::TailscaleStatus::Error => TailscaleStatus::Error,
+            },
+            auth_url: t.auth_url,
+            name: t.name,
+            addresses: t.addresses.unwrap_or_default(),
+            error: t.error,
         }
     }
 }
@@ -475,17 +518,26 @@ impl ServerClient {
         Ok(owners.into_iter().map(Into::into).collect())
     }
 
+    /// With `admin`, they are an admin of `assistant` too.
     pub async fn add_owner(
         &self,
         assistant: String,
         player_id: String,
+        admin: bool,
     ) -> Result<ServerOwner, NudgeError> {
         let api = self.api.clone();
         Ok(
-            run(async move { api.add_owner(&assistant, &player_id).await })
+            run(async move { api.add_owner(&assistant, &player_id, admin).await })
                 .await?
                 .into(),
         )
+    }
+
+    /// Invites `address` to an assistant here through its federation: the join link, for an
+    /// owner joining it from home.
+    pub async fn invite(&self, assistant: String, address: String) -> Result<String, NudgeError> {
+        let api = self.api.clone();
+        Ok(run(async move { api.invite(&assistant, &address).await }).await?)
     }
 
     pub async fn remove_owner(&self, id: String) -> Result<(), NudgeError> {
@@ -505,6 +557,33 @@ impl ServerClient {
             .into())
     }
 
+    /// The server's own Tailscale; fails with 404 where it can't run.
+    pub async fn tailscale(&self) -> Result<TailscaleState, NudgeError> {
+        let api = self.api.clone();
+        Ok(run(async move { api.tailscale().await }).await?.into())
+    }
+
+    /// Joins the server to a tailnet: at once with `auth_key`, else open the state's `auth_url`
+    /// and ask `tailscale()` until it is connected.
+    pub async fn connect_tailscale(
+        &self,
+        auth_key: Option<String>,
+    ) -> Result<TailscaleState, NudgeError> {
+        let api = self.api.clone();
+        Ok(
+            run(async move { api.connect_tailscale(auth_key.as_deref()).await })
+                .await?
+                .into(),
+        )
+    }
+
+    pub async fn disconnect_tailscale(&self) -> Result<TailscaleState, NudgeError> {
+        let api = self.api.clone();
+        Ok(run(async move { api.disconnect_tailscale().await })
+            .await?
+            .into())
+    }
+
     /// The recovery kit as the text of a file to save away from the server.
     pub async fn recovery_kit(&self, passphrase: String) -> Result<String, NudgeError> {
         let api = self.api.clone();
@@ -513,6 +592,27 @@ impl ServerClient {
 }
 
 /// Whether `server` waits to be set up, and what it offers; needs no token.
+/// Who can reach a server at its address, as another server would.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum Reach {
+    /// Anyone.
+    Public,
+    /// Only the same tailnet: another server needs its own Tailscale connected.
+    Tailnet,
+    /// Only the same network, such as a LAN address: no other server.
+    Private,
+}
+
+/// Who can reach `server` at that address.
+#[uniffi::export]
+pub fn reach(server: String) -> Reach {
+    match nudge_client::reach(&server) {
+        nudge_client::Reach::Public => Reach::Public,
+        nudge_client::Reach::Tailnet => Reach::Tailnet,
+        nudge_client::Reach::Private => Reach::Private,
+    }
+}
+
 #[uniffi::export]
 pub async fn setup_info(server: String) -> Result<SetupInfo, NudgeError> {
     let info = run(async move { nudge_client::setup_info(&server).await }).await?;

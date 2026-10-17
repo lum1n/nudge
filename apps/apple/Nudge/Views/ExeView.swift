@@ -31,6 +31,8 @@ struct ExeView: View {
                 Text("Nudge makes a small server in your exe.dev account, billed to it, with an HTTPS address of its own.")
                     .foregroundStyle(.secondary)
             }
+            // Before anything is made: its first assistant is joined from home.
+            HomeFederationSection()
             Section {
                 if signedIn {
                     Label("Signed in to exe.dev", systemImage: "checkmark.circle.fill")
@@ -89,7 +91,7 @@ struct ExeView: View {
             }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Make the server") { Task { await launch() } }
-                    .disabled(busy || token.trimmed.isEmpty || slugOf(name).isEmpty)
+                    .disabled(busy || token.trimmed.isEmpty || slugOf(name).isEmpty || model.homeProblem != nil)
             }
         }
         .navigationDestination(item: $launched) { start in

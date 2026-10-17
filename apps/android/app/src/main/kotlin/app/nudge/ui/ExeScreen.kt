@@ -71,6 +71,7 @@ fun ExeScreen(model: AppModel, close: () -> Unit, ready: (SetupStart) -> Unit) {
     var signedIn by remember { mutableStateOf(model.servers.exeToken != null) }
     var signingIn by remember { mutableStateOf(false) }
     var pasting by remember { mutableStateOf(false) }
+    val missing = homeProblem(model)
 
     fun launch() = scope.launch {
         busy = true
@@ -122,6 +123,8 @@ fun ExeScreen(model: AppModel, close: () -> Unit, ready: (SetupStart) -> Unit) {
                     "Nudge makes a small server in your exe.dev account, billed to it, with an HTTPS address of its own.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // Before anything is made: its first assistant is joined from home.
+                HomeFederationCard(model)
                 Text("1. Sign in to exe.dev", style = MaterialTheme.typography.titleMedium)
                 if (signedIn) {
                     Text("Signed in to exe.dev", color = MaterialTheme.colorScheme.primary)
@@ -169,7 +172,7 @@ fun ExeScreen(model: AppModel, close: () -> Unit, ready: (SetupStart) -> Unit) {
                 } else {
                     Button(
                         onClick = { launch() },
-                        enabled = token.isNotBlank() && slugOf(name).isNotEmpty(),
+                        enabled = token.isNotBlank() && slugOf(name).isNotEmpty() && missing == null,
                         shapes = ButtonDefaults.shapes(),
                         modifier = Modifier.fillMaxWidth().heightIn(min = ButtonDefaults.MediumContainerHeight),
                     ) { Text("Make the server") }

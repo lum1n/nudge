@@ -90,6 +90,15 @@ export {
   type UpdateState,
 } from "./server/updates.ts";
 export {
+  isTailnetHost,
+  routeTailnet,
+  stateOfStatus,
+  Tailscale,
+  TailscaleError,
+  type TailscaleOptions,
+  type TailscaleState,
+} from "./server/tailscale.ts";
+export {
   completeSetup,
   detectLocalServers,
   type LocalServer,

@@ -847,6 +847,16 @@ export const CreateAssistantResponse = Type.Object({
 });
 export type CreateAssistantResponse = Static<typeof CreateAssistantResponse>;
 
+/** Someone to invite to an assistant by their address, as an owner. */
+export const InviteToAssistantRequest = Type.Object({ address: Type.String() });
+export type InviteToAssistantRequest = Static<typeof InviteToAssistantRequest>;
+
+export const InviteToAssistantResponse = Type.Object({
+  /** `nudge://join?server=…&assistant=…`, which their app joins with from home. */
+  joinLink: Type.String(),
+});
+export type InviteToAssistantResponse = Static<typeof InviteToAssistantResponse>;
+
 /** A value sets the setting, `null` goes back to the default; absent leaves it. */
 export const UpdateAssistantRequest = Type.Object({
   displayName: Type.Optional(Type.Union([Type.String({ minLength: 1 }), Type.Null()])),
@@ -902,7 +912,12 @@ export type ServerOwner = Static<typeof ServerOwner>;
 export const ServerOwnersResponse = Type.Object({ owners: Type.Array(ServerOwner) });
 export type ServerOwnersResponse = Static<typeof ServerOwnersResponse>;
 
-export const AddOwnerRequest = Type.Object({ assistant: Type.String(), playerId: Type.String() });
+export const AddOwnerRequest = Type.Object({
+  assistant: Type.String(),
+  playerId: Type.String(),
+  /** Makes them an admin of `assistant` too. */
+  admin: Type.Optional(Type.Boolean()),
+});
 export type AddOwnerRequest = Static<typeof AddOwnerRequest>;
 
 /** Sent with the player's token of `assistant`: an owner's server token for this client. */
@@ -932,6 +947,32 @@ export type UpdateState = Static<typeof UpdateState>;
 
 export const SetUpdatesRequest = Type.Object({ automatic: Type.Boolean() });
 export type SetUpdatesRequest = Static<typeof SetUpdatesRequest>;
+
+/** The server's own Tailscale, so it can reach assistants only in its owner's tailnet. */
+export const TailscaleState = Type.Object({
+  /**
+   * `needs-login`: someone approves it at `authUrl`; `needs-approval`: a tailnet admin approves
+   * the machine; `connected`: in the tailnet as `name`.
+   */
+  state: Type.Union([
+    Type.Literal("off"),
+    Type.Literal("starting"),
+    Type.Literal("needs-login"),
+    Type.Literal("needs-approval"),
+    Type.Literal("connected"),
+    Type.Literal("error"),
+  ]),
+  authUrl: Type.Optional(Type.String()),
+  /** Its MagicDNS name, such as `nudge-robin.tail1234.ts.net`. */
+  name: Type.Optional(Type.String()),
+  addresses: Type.Optional(Type.Array(Type.String())),
+  error: Type.Optional(Type.String()),
+});
+export type TailscaleState = Static<typeof TailscaleState>;
+
+/** Without `authKey`, the state answers with a login URL to approve. */
+export const TailscaleConnectRequest = Type.Object({ authKey: Type.Optional(Type.String()) });
+export type TailscaleConnectRequest = Static<typeof TailscaleConnectRequest>;
 
 export const ServerInfoResponse = Type.Object({
   version: Type.String(),
@@ -1111,6 +1152,8 @@ export const SCHEMAS = {
   ServerAssistantsResponse,
   CreateAssistantRequest,
   CreateAssistantResponse,
+  InviteToAssistantRequest,
+  InviteToAssistantResponse,
   UpdateAssistantRequest,
   DeleteAssistantResponse,
   ProviderKey,
@@ -1123,6 +1166,8 @@ export const SCHEMAS = {
   ServerSessionResponse,
   UpdateState,
   SetUpdatesRequest,
+  TailscaleState,
+  TailscaleConnectRequest,
   ServerInfoResponse,
   SetupProvider,
   SetupLocalServer,

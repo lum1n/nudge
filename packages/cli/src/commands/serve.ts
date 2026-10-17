@@ -21,6 +21,8 @@ import {
   ServerOwners,
   serverOwnersFile,
   SetupCodes,
+  Tailscale,
+  routeTailnet,
   testProviderKey,
   Updates,
   writeRawConfig,
@@ -179,6 +181,8 @@ export async function serve(options: ServeOptions): Promise<number> {
     },
     say,
   );
+  const publicUrl = () => options.publicUrl ?? config?.server?.publicUrl;
+  const tailscale = serverTailscale(configPath, publicUrl, say);
   try {
     const web = await webRoot(options.web);
     const control: ServerControl = {
@@ -199,6 +203,7 @@ export async function serve(options: ServeOptions): Promise<number> {
       testKey,
       backupKey: theBackupKey,
       ...(updates === undefined ? {} : { updates: updates.control }),
+      ...(tailscale === undefined ? {} : { tailscale }),
     };
     // A server made from the app gets its code, and how long it waits, in the environment.
     const code = process.env.NUDGE_SETUP_CODE || newSetupCode();
@@ -235,7 +240,7 @@ export async function serve(options: ServeOptions): Promise<number> {
       port: options.port,
       hostname: options.host,
       web,
-      publicUrl: () => options.publicUrl ?? config?.server?.publicUrl,
+      publicUrl,
       trustProxy: () => options.trustProxy === true || config?.server?.trustProxy === true,
       server: control,
       ...(setup === undefined ? {} : { setup }),
@@ -259,12 +264,37 @@ export async function serve(options: ServeOptions): Promise<number> {
     stopReloading();
     stopUpdates();
     stopBackups();
+    tailscale?.stop();
     console.log(restarting ? "Restarting into the new release…" : "Stopping…");
     await server.close();
   } finally {
     await assistants.close();
   }
   return restarting ? RESTART_EXIT_CODE : 0;
+}
+
+/**
+ * The server's own Tailscale, on Linux, where Tailscale's static builds run: started again if an
+ * owner connected it before, and carrying this process's requests to tailnet addresses. It is
+ * named for the server's address, such as `nudge-robin` for `https://robin.exe.xyz`.
+ */
+function serverTailscale(
+  configPath: string,
+  publicUrl: () => string | undefined,
+  say: (line: string) => void,
+): Tailscale | undefined {
+  if (process.platform !== "linux") return undefined;
+  const tailscale = new Tailscale({
+    dir: join(dirname(configPath), "server", "tailscale"),
+    hostname: () => {
+      const label = /^https?:\/\/([a-z0-9-]+)/i.exec(publicUrl() ?? "")?.[1];
+      return label === undefined ? "nudge" : `nudge-${label.toLowerCase()}`;
+    },
+    say,
+  });
+  routeTailnet(() => tailscale.proxy);
+  void tailscale.resume();
+  return tailscale;
 }
 
 /**

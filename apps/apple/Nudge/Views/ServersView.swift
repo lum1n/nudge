@@ -45,7 +45,8 @@ struct ServersView: View {
     }
 }
 
-/// One server: its updates, its assistants, the model keys set on it, and its recovery kit.
+/// One server: its updates, its assistants, the model keys set on it, its Tailscale, and its
+/// recovery kit; removing it, for one made on exe.dev.
 private struct ServerView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -59,6 +60,8 @@ private struct ServerView: View {
     @State private var askingPassphrase = false
     @State private var passphrase = ""
     @State private var kit: String?
+    @State private var removing = false
+    @State private var confirm = ""
 
     var body: some View {
         Form {
@@ -73,7 +76,7 @@ private struct ServerView: View {
                         } label: {
                             VStack(alignment: .leading) {
                                 Text(assistant.settings.displayName)
-                                Text(assistant.running ? assistant.settings.model.modelId : "Not running: check the server's log")
+                                Text(assistant.running ? assistantNote(assistant) : "Not running: check the server's log")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -85,6 +88,7 @@ private struct ServerView: View {
                         Label("New assistant", systemImage: "plus")
                     }
                 }
+                TailscaleSection(server: server)
                 Section("Model keys") {
                     ForEach(keys, id: \.provider) { key in
                         Button {
@@ -134,6 +138,13 @@ private struct ServerView: View {
                 } footer: {
                     Text("This device stops managing it. Nothing on the server changes.")
                 }
+                if let vm = exeVmName(server), model.servers.exeToken != nil {
+                    Section {
+                        Button("Remove this server", role: .destructive) { removing = true }
+                    } footer: {
+                        Text("Deletes \(vm) from your exe.dev account, with its assistants, their history and the backups on it.")
+                    }
+                }
             } else if problem == nil {
                 ProgressView()
             }
@@ -169,6 +180,31 @@ private struct ServerView: View {
         } message: {
             Text("With it and a backup, everything on this server can be brought back. Keep it away from the server, and the passphrase in your password manager.")
         }
+        .alert("Remove \(host(server))?", isPresented: $removing) {
+            TextField(exeVmName(server) ?? "", text: $confirm)
+                .autocorrectionDisabled()
+            Button("Remove", role: .destructive) {
+                confirm = ""
+                Task {
+                    do {
+                        try await model.removeExeServer(server)
+                        dismiss()
+                    } catch {
+                        problem = explain(error)
+                    }
+                }
+            }
+            .disabled(confirm.trimmed != exeVmName(server))
+            Button("Cancel", role: .cancel) { confirm = "" }
+        } message: {
+            Text("Everything on it goes for good, and nothing is kept: make a recovery kit and download a backup first if you need one. Type \(exeVmName(server) ?? "") to remove it.")
+        }
+    }
+
+    /// Its model, and whether this device is in it.
+    private func assistantNote(_ assistant: ServerAssistant) -> String {
+        let joined = model.session == nil || model.isSignedIn(server: server, assistant: assistant.name)
+        return assistant.settings.model.modelId + (joined ? "" : " · Not joined from home")
     }
 
     private func keySource(_ key: ProviderKey) -> String {
@@ -214,6 +250,7 @@ private struct NewAssistantView: View {
     @State private var busy = false
     @State private var problem: String?
     @State private var made: MadeAssistant?
+    @State private var tailscale: TailscaleState?
 
     init(server: String, keys: [ProviderKey], address: String?, changed: @escaping () async throws -> Void) {
         self.server = server
@@ -227,6 +264,12 @@ private struct NewAssistantView: View {
     }
 
     private var ready: [String] { keys.filter { $0.source != .none }.map(\.provider) }
+
+    /// Whether the home can join it now: it has federation, and when it is only in a tailnet,
+    /// this server is in it too.
+    private var homeCanJoin: Bool {
+        model.homeProblem == nil && (model.homeReach != .tailnet || tailscale?.state == .connected)
+    }
 
     var body: some View {
         Form {
@@ -274,7 +317,7 @@ private struct NewAssistantView: View {
                 }
                 Section("Who is it for?") {
                     Picker("Who is it for?", selection: $forMe) {
-                        if address != nil {
+                        if model.session != nil {
                             Text("Me: I join it from my home, and keep one sign-in").tag(true)
                         }
                         Text("Someone else: it is their home, and they are its admin").tag(false)
@@ -283,6 +326,17 @@ private struct NewAssistantView: View {
                     .labelsHidden()
                     if !forMe {
                         TextField("Their name", text: $person)
+                    }
+                }
+                if forMe {
+                    HomeFederationSection()
+                    if model.homeProblem == nil, model.homeReach == .tailnet {
+                        if tailscale?.state != .connected {
+                            Section {
+                                Text("Your home is only in your tailnet, so this server joins it first.")
+                            }
+                        }
+                        TailscaleSection(server: server) { tailscale = $0 }
                     }
                 }
                 if let problem {
@@ -301,7 +355,7 @@ private struct NewAssistantView: View {
                     ProgressView().controlSize(.small)
                 } else {
                     Button("Make it") { Task { await create() } }
-                        .disabled(slugOf(name).isEmpty || modelId.trimmed.isEmpty || (!forMe && person.trimmed.isEmpty))
+                        .disabled(slugOf(name).isEmpty || modelId.trimmed.isEmpty || (forMe ? !homeCanJoin : person.trimmed.isEmpty))
                 }
             }
         }
@@ -311,7 +365,11 @@ private struct NewAssistantView: View {
         busy = true
         defer { busy = false }
         do {
-            let madeFor: AssistantFor = if forMe, let address { .me(address: address) } else { .someonesHome(displayName: person.trimmed) }
+            let madeFor: AssistantFor = if forMe, let address = model.memberships?.address ?? address {
+                .me(address: address)
+            } else {
+                .someonesHome(displayName: person.trimmed)
+            }
             made = try await model.createAssistant(
                 on: server,
                 NewAssistant(
@@ -341,6 +399,7 @@ private struct AssistantView: View {
     @State private var deleting = false
     @State private var confirm = ""
     @State private var problem: String?
+    @State private var joining = false
 
     init(server: String, assistant: ServerAssistant, changed: @escaping () async throws -> Void) {
         self.server = server
@@ -374,6 +433,17 @@ private struct AssistantView: View {
             if let problem {
                 Section { Text(problem).foregroundStyle(.red) }
             }
+            if model.session != nil, !model.isSignedIn(server: server, assistant: assistant.name) {
+                HomeFederationSection()
+                Section {
+                    Button(joining ? "Joining…" : "Join it from home", systemImage: "person.badge.plus") {
+                        Task { await join() }
+                    }
+                    .disabled(joining || model.homeProblem != nil)
+                } footer: {
+                    Text("Its rooms show beside your home's, and you are its admin and an owner of this server.")
+                }
+            }
             Section {
                 Button("Delete this assistant", role: .destructive) { deleting = true }
             }
@@ -396,6 +466,18 @@ private struct AssistantView: View {
             Button("Cancel", role: .cancel) { confirm = "" }
         } message: {
             Text("Its rooms, history and memory go. The server keeps a backup for 30 days. Type \(assistant.name) to delete it.")
+        }
+    }
+
+    private func join() async {
+        joining = true
+        defer { joining = false }
+        do {
+            try await model.joinFromHome(server: server, assistant: assistant.name)
+            problem = nil
+            try? await changed()
+        } catch {
+            problem = explain(error)
         }
     }
 

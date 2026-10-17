@@ -888,6 +888,19 @@ fn server_and_setup_bodies_match_the_schema() {
         &AddOwnerRequest {
             assistant: "robin".into(),
             player_id: "bo".into(),
+            admin: Some(true),
+        },
+    );
+    check(
+        "InviteToAssistantRequest",
+        &InviteToAssistantRequest {
+            address: "ann@home.example/robin".into(),
+        },
+    );
+    check(
+        "InviteToAssistantResponse",
+        &InviteToAssistantResponse {
+            join_link: "nudge://join?server=x&assistant=work".into(),
         },
     );
     check(
@@ -914,6 +927,22 @@ fn server_and_setup_bodies_match_the_schema() {
     };
     check("UpdateState", &updates);
     check("SetUpdatesRequest", &SetUpdatesRequest { automatic: false });
+    check(
+        "TailscaleState",
+        &TailscaleState {
+            state: TailscaleStatus::NeedsLogin,
+            auth_url: Some("https://login.tailscale.com/a/x".into()),
+            name: Some("nudge-robin.tail1.ts.net".into()),
+            addresses: Some(vec!["100.64.0.9".into()]),
+            error: Some("x".into()),
+        },
+    );
+    check(
+        "TailscaleConnectRequest",
+        &TailscaleConnectRequest {
+            auth_key: Some("tskey-auth-x".into()),
+        },
+    );
     check(
         "ServerInfoResponse",
         &ServerInfoResponse {

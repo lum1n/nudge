@@ -6119,6 +6119,28 @@
         }
       }
     },
+    "InviteToAssistantRequest": {
+      "type": "object",
+      "required": [
+        "address"
+      ],
+      "properties": {
+        "address": {
+          "type": "string"
+        }
+      }
+    },
+    "InviteToAssistantResponse": {
+      "type": "object",
+      "required": [
+        "joinLink"
+      ],
+      "properties": {
+        "joinLink": {
+          "type": "string"
+        }
+      }
+    },
     "UpdateAssistantRequest": {
       "type": "object",
       "properties": {
@@ -6387,6 +6409,9 @@
         },
         "playerId": {
           "type": "string"
+        },
+        "admin": {
+          "type": "boolean"
         }
       }
     },
@@ -6488,6 +6513,65 @@
       "properties": {
         "automatic": {
           "type": "boolean"
+        }
+      }
+    },
+    "TailscaleState": {
+      "type": "object",
+      "required": [
+        "state"
+      ],
+      "properties": {
+        "state": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "off"
+            },
+            {
+              "type": "string",
+              "const": "starting"
+            },
+            {
+              "type": "string",
+              "const": "needs-login"
+            },
+            {
+              "type": "string",
+              "const": "needs-approval"
+            },
+            {
+              "type": "string",
+              "const": "connected"
+            },
+            {
+              "type": "string",
+              "const": "error"
+            }
+          ]
+        },
+        "authUrl": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "addresses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "error": {
+          "type": "string"
+        }
+      }
+    },
+    "TailscaleConnectRequest": {
+      "type": "object",
+      "properties": {
+        "authKey": {
+          "type": "string"
         }
       }
     },
