@@ -1,7 +1,7 @@
 import type { MessageResponse, WhenBusy } from "@nudge/protocol";
 import { Api, type TokenStore } from "./api.ts";
 import { Connection, type ConnectionOptions, connectUrl } from "./connection.ts";
-import { HomeStore, RoomStore } from "./stores.ts";
+import { RoomListStore, RoomStore } from "./stores.ts";
 
 export type NudgeClientOptions = {
   /** The server's address, such as `https://nudge.example`; `""` for the page's own origin. */
@@ -26,7 +26,7 @@ export class NudgeClient {
   readonly connection: Connection;
   private readonly held = new Map<
     string,
-    { store: RoomStore | HomeStore; leases: number; unwatch: () => void }
+    { store: RoomStore | RoomListStore; leases: number; unwatch: () => void }
   >();
 
   constructor(options: NudgeClientOptions) {
@@ -48,9 +48,9 @@ export class NudgeClient {
     });
   }
 
-  /** The player's home view. */
-  home(): Lease<HomeStore> {
-    return this.hold("home", () => new HomeStore()) as Lease<HomeStore>;
+  /** The player's room list. */
+  roomList(): Lease<RoomListStore> {
+    return this.hold("rooms", () => new RoomListStore()) as Lease<RoomListStore>;
   }
 
   /** A room's view, with its earlier items and this client's pending messages. */
@@ -116,7 +116,7 @@ export class NudgeClient {
     return this.held.get(`room:${room}`)?.store as RoomStore | undefined;
   }
 
-  private hold(target: "home" | `room:${string}`, make: () => RoomStore | HomeStore) {
+  private hold(target: "rooms" | `room:${string}`, make: () => RoomStore | RoomListStore) {
     let entry = this.held.get(target);
     if (entry === undefined) {
       const store = make();

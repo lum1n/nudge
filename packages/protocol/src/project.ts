@@ -21,9 +21,9 @@ import { addressOf } from "@nudge/core";
 import type {
   Approval,
   Fact,
-  HomeNudge,
-  HomeRoom,
-  HomeView,
+  RoomListNudge,
+  RoomListEntry,
+  RoomListView,
   Part,
   Player,
   QueuedMessage,
@@ -561,21 +561,21 @@ export function toRoomNudge(nudge: ScheduledNudge): RoomNudge {
   };
 }
 
-export function toHomeNudge(nudge: ScheduledNudge): HomeNudge {
+export function toRoomListNudge(nudge: ScheduledNudge): RoomListNudge {
   return { ...toRoomNudge(nudge), roomId: nudge.roomId };
 }
 
-export type HomeSources = {
+export type RoomListSources = {
   readonly player: Player;
-  readonly rooms: readonly HomeRoom[];
+  readonly rooms: readonly RoomListEntry[];
   readonly nudges: readonly ScheduledNudge[];
 };
 
-export function projectHome(sources: HomeSources): HomeView {
+export function projectRoomList(sources: RoomListSources): RoomListView {
   return {
     player: sources.player,
     rooms: [...sources.rooms],
-    nudges: [...sources.nudges].sort((a, b) => a.fireAt - b.fireAt).map(toHomeNudge),
+    nudges: [...sources.nudges].sort((a, b) => a.fireAt - b.fireAt).map(toRoomListNudge),
   };
 }
 

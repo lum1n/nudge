@@ -222,16 +222,16 @@ fn room_view() -> RoomView {
     }
 }
 
-fn home_view() -> HomeView {
-    HomeView {
+fn room_list_view() -> RoomListView {
+    RoomListView {
         player: ann(),
-        rooms: vec![HomeRoom {
+        rooms: vec![RoomListEntry {
             room: room(),
             running: false,
             pending_approvals: 1,
             last_item_at: Some(4.0),
         }],
-        nudges: vec![HomeNudge {
+        nudges: vec![RoomListNudge {
             id: "n1".into(),
             room_id: "trip".into(),
             message: "Water".into(),
@@ -267,7 +267,7 @@ fn views_match_the_schema() {
         check("ApprovalStatus", &status);
     }
     check("RoomView", &room_view());
-    check("HomeView", &home_view());
+    check("RoomListView", &room_list_view());
 }
 
 #[test]
@@ -284,7 +284,7 @@ fn frames_match_the_schema() {
             client: description,
         },
         ClientFrame::Subscribe {
-            target: Target::Home,
+            target: Target::RoomList,
         },
         ClientFrame::Unsubscribe {
             target: Target::Room("trip".into()),
@@ -311,12 +311,12 @@ fn frames_match_the_schema() {
             view: serde_json::to_value(room_view()).unwrap(),
         },
         ServerFrame::Snapshot {
-            target: Target::Home,
+            target: Target::RoomList,
             seq: 0,
-            view: serde_json::to_value(home_view()).unwrap(),
+            view: serde_json::to_value(room_list_view()).unwrap(),
         },
         ServerFrame::Patch {
-            target: Target::Home,
+            target: Target::RoomList,
             seq: 1,
             ops: vec![
                 Op::Set {
@@ -337,11 +337,11 @@ fn frames_match_the_schema() {
             ],
         },
         ServerFrame::Unsubscribed {
-            target: Target::Home,
+            target: Target::RoomList,
             reason: UnsubscribedReason::NotFound,
         },
         ServerFrame::Unsubscribed {
-            target: Target::Home,
+            target: Target::RoomList,
             reason: UnsubscribedReason::Removed,
         },
         ServerFrame::Pong,
@@ -789,7 +789,7 @@ fn reads_what_it_does_not_know() {
         }
     );
     assert_eq!(Target::parse("room:"), None);
-    assert_eq!(Target::parse("rooms"), None);
+    assert_eq!(Target::parse("home"), None);
     assert_eq!(Target::parse("room:a:b"), Some(Target::Room("a:b".into())));
 }
 

@@ -115,10 +115,10 @@ describe("Connection", () => {
     expect(sockets[0]!.sent.at(-1)).toEqual({ type: "subscribe", target: "room:trip" });
     expect(room.getState().status).toBe("syncing");
 
-    const unwatchHome = conn.watch("home", new RoomStore("x"));
-    expect(sockets[0]!.sent.at(-1)).toEqual({ type: "subscribe", target: "home" });
-    unwatchHome();
-    expect(sockets[0]!.sent.at(-1)).toEqual({ type: "unsubscribe", target: "home" });
+    const unwatchRoomList = conn.watch("rooms", new RoomStore("x"));
+    expect(sockets[0]!.sent.at(-1)).toEqual({ type: "subscribe", target: "rooms" });
+    unwatchRoomList();
+    expect(sockets[0]!.sent.at(-1)).toEqual({ type: "unsubscribe", target: "rooms" });
   });
 
   it("reconnects with growing delays and subscribes again", () => {

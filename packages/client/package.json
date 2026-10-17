@@ -2,7 +2,7 @@
   "name": "@nudge/client",
   "version": "0.0.0",
   "private": true,
-  "description": "A TypeScript client for Nudge's protocol v1: the socket with reconnects, room and home stores, and the HTTP commands",
+  "description": "A TypeScript client for Nudge's protocol v1: the socket with reconnects, room and room list stores, and the HTTP commands",
   "files": [
     "dist"
   ],

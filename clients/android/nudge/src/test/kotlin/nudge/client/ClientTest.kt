@@ -134,8 +134,8 @@ class ClientTest {
         room.awaitState { it.memory.isEmpty() }
         room.close()
 
-        val home = admin.observeHomeState().awaitState { it.view != null }
-        assertTrue(home.view!!.rooms.any { it.room.id == "trip" })
+        val roomList = admin.observeRoomListState().awaitState { it.view != null }
+        assertTrue(roomList.view!!.rooms.any { it.room.id == "trip" })
     }
 
     @Test
@@ -161,12 +161,12 @@ class ClientTest {
             assertEquals(409.toUShort(), e.status)
         }
 
-        // The model's `schedule_nudge` shows in the room and on the home view.
+        // The model's `schedule_nudge` shows in the room and in the room list.
         admin.send("trip", "Remind me to water the plants", null)
         val scheduled = room.awaitState { it.nudges.size == 1 }.nudges[0]
         assertEquals("Water the plants", scheduled.message)
-        val home = admin.observeHomeState().awaitState { it.view?.nudges?.size == 1 }
-        assertEquals("trip", home.view!!.nudges[0].roomId)
+        val roomList = admin.observeRoomListState().awaitState { it.view?.nudges?.size == 1 }
+        assertEquals("trip", roomList.view!!.nudges[0].roomId)
         member.cancelNudge(scheduled.id)
         room.awaitState { it.nudges.isEmpty() }
         try {

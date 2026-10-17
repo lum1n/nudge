@@ -83,7 +83,7 @@ fn welcome(heartbeat_ms: u64) -> Value {
     })
 }
 
-fn home_view() -> Value {
+fn room_list_view() -> Value {
     json!({ "player": { "id": "ann", "displayName": "Ann" }, "rooms": [], "nudges": [] })
 }
 
@@ -118,11 +118,11 @@ async fn until<T: Clone>(states: &mut watch::Receiver<T>, check: impl Fn(&T) -> 
 async fn signs_in_subscribes_and_subscribes_again_after_a_gap() {
     let mut server = FakeServer::start().await;
     let connection = connection(&server.url, Some("secret"));
-    let store = Arc::new(HomeStore::new(Arc::new(Cache::in_memory())));
-    let _watch = connection.watch(Target::Home, store.clone()).unwrap();
+    let store = Arc::new(RoomListStore::new(Arc::new(Cache::in_memory())));
+    let _watch = connection.watch(Target::RoomList, store.clone()).unwrap();
     assert_eq!(
-        connection.watch(Target::Home, store.clone()).err(),
-        Some(AlreadyWatched(Target::Home))
+        connection.watch(Target::RoomList, store.clone()).err(),
+        Some(AlreadyWatched(Target::RoomList))
     );
     connection.open();
 
@@ -138,7 +138,7 @@ async fn signs_in_subscribes_and_subscribes_again_after_a_gap() {
     write(&mut socket, welcome(25_000)).await;
     assert_eq!(
         read(&mut socket).await,
-        json!({ "type": "subscribe", "target": "home" })
+        json!({ "type": "subscribe", "target": "rooms" })
     );
     let mut statuses = connection.statuses();
     until(
@@ -149,7 +149,7 @@ async fn signs_in_subscribes_and_subscribes_again_after_a_gap() {
 
     write(
         &mut socket,
-        json!({ "type": "snapshot", "target": "home", "seq": 0, "view": home_view() }),
+        json!({ "type": "snapshot", "target": "rooms", "seq": 0, "view": room_list_view() }),
     )
     .await;
     let mut states = store.states();
@@ -158,12 +158,12 @@ async fn signs_in_subscribes_and_subscribes_again_after_a_gap() {
     let ops = json!([{ "op": "set", "path": ["nudges"], "value": [] }]);
     write(
         &mut socket,
-        json!({ "type": "patch", "target": "home", "seq": 2, "ops": ops }),
+        json!({ "type": "patch", "target": "rooms", "seq": 2, "ops": ops }),
     )
     .await;
     assert_eq!(
         read(&mut socket).await,
-        json!({ "type": "subscribe", "target": "home" })
+        json!({ "type": "subscribe", "target": "rooms" })
     );
     assert_eq!(store.state().status, SyncStatus::Syncing);
 
@@ -185,8 +185,8 @@ async fn signs_in_subscribes_and_subscribes_again_after_a_gap() {
 async fn reconnects_with_backoff_and_gives_up_on_an_unknown_token() {
     let mut server = FakeServer::start().await;
     let connection = connection(&server.url, Some("secret"));
-    let store = Arc::new(HomeStore::new(Arc::new(Cache::in_memory())));
-    let _watch = connection.watch(Target::Home, store.clone()).unwrap();
+    let store = Arc::new(RoomListStore::new(Arc::new(Cache::in_memory())));
+    let _watch = connection.watch(Target::RoomList, store.clone()).unwrap();
     let mut statuses = connection.statuses();
     connection.open();
 
@@ -196,7 +196,7 @@ async fn reconnects_with_backoff_and_gives_up_on_an_unknown_token() {
     read(&mut socket).await;
     write(
         &mut socket,
-        json!({ "type": "snapshot", "target": "home", "seq": 0, "view": home_view() }),
+        json!({ "type": "snapshot", "target": "rooms", "seq": 0, "view": room_list_view() }),
     )
     .await;
     let mut states = store.states();
@@ -229,7 +229,7 @@ async fn reconnects_with_backoff_and_gives_up_on_an_unknown_token() {
     // Subscribed again after the welcome.
     assert_eq!(
         read(&mut socket).await,
-        json!({ "type": "subscribe", "target": "home" })
+        json!({ "type": "subscribe", "target": "rooms" })
     );
     until(&mut statuses, |s| {
         matches!(s, ConnectionStatus::Open { .. })

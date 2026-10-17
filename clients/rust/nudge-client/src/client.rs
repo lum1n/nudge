@@ -12,7 +12,7 @@ use crate::connection::{
     Backoff, Connection, ConnectionOptions, ConnectionStatus, OnError, Watch, connect_url,
 };
 use crate::panel::{PanelListener, PanelSocket, panel_url};
-use crate::stores::{HomeStore, PageLoader, PendingMessage, PendingState, RoomStore};
+use crate::stores::{PageLoader, PendingMessage, PendingState, RoomListStore, RoomStore};
 
 pub struct ClientConfig {
     /// The server's address, such as `https://nudge.example`.
@@ -103,7 +103,7 @@ struct Held {
 
 #[derive(Clone)]
 enum Store {
-    Home(Arc<HomeStore>),
+    RoomList(Arc<RoomListStore>),
     Room(Arc<RoomStore>),
 }
 
@@ -210,15 +210,15 @@ impl NudgeClient {
         ))
     }
 
-    /// The player's home view.
-    pub fn home(&self) -> Lease<HomeStore> {
-        let store = self.hold(Target::Home, || {
-            Store::Home(Arc::new(HomeStore::new(self.inner.cache.clone())))
+    /// The player's room list.
+    pub fn room_list(&self) -> Lease<RoomListStore> {
+        let store = self.hold(Target::RoomList, || {
+            Store::RoomList(Arc::new(RoomListStore::new(self.inner.cache.clone())))
         });
-        let Store::Home(store) = store else {
-            unreachable!("home holds a home store")
+        let Store::RoomList(store) = store else {
+            unreachable!("the room list holds a room list store")
         };
-        self.lease(Target::Home, store)
+        self.lease(Target::RoomList, store)
     }
 
     /// A room's view, with its earlier items and this client's pending messages.
@@ -335,7 +335,7 @@ impl NudgeClient {
         }
         let store = make();
         let subscriber: Arc<dyn crate::connection::Subscriber> = match &store {
-            Store::Home(store) => store.clone(),
+            Store::RoomList(store) => store.clone(),
             Store::Room(store) => store.clone(),
         };
         let watch = self
@@ -374,7 +374,7 @@ impl Inner {
             .clone()
         {
             Store::Room(store) => Some(store),
-            Store::Home(_) => None,
+            Store::RoomList(_) => None,
         }
     }
 

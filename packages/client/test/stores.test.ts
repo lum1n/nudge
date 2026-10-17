@@ -1,9 +1,9 @@
 import { readFile } from "node:fs/promises";
 import type { RoomView, ServerFrame, TimelineItem, TimelineResponse } from "@nudge/protocol";
 import { describe, expect, it } from "vitest";
-import { HomeStore, RoomStore, slide, type TargetFrame, type ViewStore } from "../src/index.ts";
+import { RoomListStore, RoomStore, slide, type TargetFrame, type ViewStore } from "../src/index.ts";
 
-/** Ann's socket in a recorded run of room "trip" and her home; see the protocol's stream test. */
+/** Ann's socket in a recorded run of room "trip" and her room list; see the protocol's stream test. */
 async function recording(): Promise<{ frame: ServerFrame; view?: unknown }[]> {
   const url = new URL("../../protocol/test/fixtures/room-stream.jsonl", import.meta.url);
   return (await readFile(url, "utf8"))
@@ -40,7 +40,7 @@ const snapshot = (view: RoomView, seq = 0): TargetFrame => ({
 describe("view stores", () => {
   it("rebuild every recorded view from the recorded frames", async () => {
     const stores = new Map<string, ViewStore<unknown>>([
-      ["home", new HomeStore()],
+      ["rooms", new RoomListStore()],
       ["room:trip", new RoomStore("trip")],
     ]);
     let checked = 0;

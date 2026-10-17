@@ -10,13 +10,13 @@ import nudge.ffi.ConnectionListener
 import nudge.ffi.ConnectionStatus
 import nudge.ffi.Fact
 import nudge.ffi.GoneReason
-import nudge.ffi.HomeListener
-import nudge.ffi.HomeUpdate
 import nudge.ffi.Live
 import nudge.ffi.NudgeClient
 import nudge.ffi.PendingMessage
 import nudge.ffi.QueuedMessage
 import nudge.ffi.Room
+import nudge.ffi.RoomListListener
+import nudge.ffi.RoomListUpdate
 import nudge.ffi.RoomListener
 import nudge.ffi.RoomNudge
 import nudge.ffi.RoomSubscription
@@ -99,15 +99,15 @@ fun NudgeClient.observeConnectionState(): Observed<ConnectionStatus> {
     return observed
 }
 
-/** The player's home view: their rooms and nudges. */
-fun NudgeClient.observeHomeState(): Observed<HomeUpdate> {
-    val observed = Observed<HomeUpdate>()
-    val listener = object : HomeListener {
-        override fun onUpdate(update: HomeUpdate) {
+/** The player's room list: their rooms and nudges. */
+fun NudgeClient.observeRoomListState(): Observed<RoomListUpdate> {
+    val observed = Observed<RoomListUpdate>()
+    val listener = object : RoomListListener {
+        override fun onUpdate(update: RoomListUpdate) {
             observed.mutableState.value = update
         }
     }
-    observed.subscription = closing(observeHome(listener))
+    observed.subscription = closing(observeRoomList(listener))
     return observed
 }
 

@@ -257,7 +257,7 @@ pub struct RoomNudge {
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
-pub struct HomeRoom {
+pub struct RoomListEntry {
     pub room: Room,
     pub running: bool,
     pub pending_approvals: u32,
@@ -265,7 +265,7 @@ pub struct HomeRoom {
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
-pub struct HomeNudge {
+pub struct RoomListNudge {
     pub id: String,
     pub room_id: String,
     pub message: String,
@@ -276,10 +276,10 @@ pub struct HomeNudge {
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
-pub struct HomeView {
+pub struct RoomListView {
     pub player: Player,
-    pub rooms: Vec<HomeRoom>,
-    pub nudges: Vec<HomeNudge>,
+    pub rooms: Vec<RoomListEntry>,
+    pub nudges: Vec<RoomListNudge>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, uniffi::Enum)]
@@ -617,24 +617,24 @@ impl From<p::RoomNudge> for RoomNudge {
     }
 }
 
-impl From<p::HomeView> for HomeView {
-    fn from(home: p::HomeView) -> Self {
-        HomeView {
-            player: home.player.into(),
-            rooms: home
+impl From<p::RoomListView> for RoomListView {
+    fn from(list: p::RoomListView) -> Self {
+        RoomListView {
+            player: list.player.into(),
+            rooms: list
                 .rooms
                 .into_iter()
-                .map(|row| HomeRoom {
+                .map(|row| RoomListEntry {
                     room: row.room.into(),
                     running: row.running,
                     pending_approvals: row.pending_approvals,
                     last_item_at: row.last_item_at,
                 })
                 .collect(),
-            nudges: home
+            nudges: list
                 .nudges
                 .into_iter()
-                .map(|nudge| HomeNudge {
+                .map(|nudge| RoomListNudge {
                     id: nudge.id,
                     room_id: nudge.room_id,
                     message: nudge.message,

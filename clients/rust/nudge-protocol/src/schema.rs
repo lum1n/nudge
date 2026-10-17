@@ -326,11 +326,11 @@ pub struct RoomView {
     pub nudges: Vec<RoomNudge>,
 }
 
-// The home view: the player's rooms and nudges.
+// The room list: the player's rooms and nudges.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct HomeRoom {
+pub struct RoomListEntry {
     pub room: Room,
     pub running: bool,
     pub pending_approvals: u32,
@@ -340,7 +340,7 @@ pub struct HomeRoom {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct HomeNudge {
+pub struct RoomListNudge {
     pub id: String,
     pub room_id: String,
     pub message: String,
@@ -353,11 +353,11 @@ pub struct HomeNudge {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct HomeView {
+pub struct RoomListView {
     pub player: Player,
-    pub rooms: Vec<HomeRoom>,
+    pub rooms: Vec<RoomListEntry>,
     /// Soonest first.
-    pub nudges: Vec<HomeNudge>,
+    pub nudges: Vec<RoomListNudge>,
 }
 
 // Patches.
@@ -393,10 +393,10 @@ pub enum Op {
 
 // The socket.
 
-/// What a subscription follows: `"home"` or `"room:<id>"` on the wire.
+/// What a subscription follows: `"rooms"` or `"room:<id>"` on the wire.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Target {
-    Home,
+    RoomList,
     Room(String),
 }
 
@@ -404,7 +404,7 @@ impl Target {
     /// The target `text` names, or `None` when it names none.
     pub fn parse(text: &str) -> Option<Target> {
         match text {
-            "home" => Some(Target::Home),
+            "rooms" => Some(Target::RoomList),
             _ => match text.strip_prefix("room:") {
                 Some(id) if !id.is_empty() => Some(Target::Room(id.to_owned())),
                 _ => None,
@@ -416,7 +416,7 @@ impl Target {
 impl std::fmt::Display for Target {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Target::Home => f.write_str("home"),
+            Target::RoomList => f.write_str("rooms"),
             Target::Room(id) => write!(f, "room:{id}"),
         }
     }
@@ -492,7 +492,7 @@ pub enum UnsubscribedReason {
 pub enum ServerFrame {
     Welcome(Welcome),
     /// The whole view, first after `subscribe`, with `seq` 0. `view` is a `RoomView` or a
-    /// `HomeView`, after the target; it stays JSON so that patches can apply to it.
+    /// `RoomListView`, after the target; it stays JSON so that patches can apply to it.
     Snapshot {
         target: Target,
         seq: u64,

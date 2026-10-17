@@ -30,7 +30,7 @@ struct RoomsView: View {
                         .listRowSeparator(.hidden)
                 }
                 RoomRows(session: session) { renaming = (session, $0) }
-                if session.home.value?.status == .live && model.sessions.allSatisfy({ rooms(of: $0).isEmpty }) {
+                if session.roomList.value?.status == .live && model.sessions.allSatisfy({ rooms(of: $0).isEmpty }) {
                     Text("No rooms yet.").foregroundStyle(.secondary)
                 }
                 ForEach(model.places, id: \.account.keychainAccount) { place in
@@ -86,8 +86,8 @@ struct RoomsView: View {
         }
     }
 
-    private func rooms(of session: Session) -> [HomeRoom] {
-        session.home.value?.view?.rooms ?? []
+    private func rooms(of session: Session) -> [RoomListEntry] {
+        session.roomList.value?.view?.rooms ?? []
     }
 
     private func connectionBanner(_ status: ConnectionStatus?) -> String? {
@@ -127,13 +127,13 @@ private struct RoomRows: View {
         }
     }
 
-    private var rooms: [HomeRoom] {
-        (session.home.value?.view?.rooms ?? []).sorted { ($0.lastItemAt ?? 0) > ($1.lastItemAt ?? 0) }
+    private var rooms: [RoomListEntry] {
+        (session.roomList.value?.view?.rooms ?? []).sorted { ($0.lastItemAt ?? 0) > ($1.lastItemAt ?? 0) }
     }
 }
 
 struct RoomRow: View {
-    let room: HomeRoom
+    let room: RoomListEntry
     let me: String?
 
     var body: some View {
@@ -214,7 +214,7 @@ struct NewRoomView: View {
     }
 }
 
-/// The room keeps its id; the list shows the new name once the home view has it.
+/// The room keeps its id; the list shows the new name once the room list has it.
 struct RenameRoomView: View {
     @Environment(\.dismiss) private var dismiss
     let client: NudgeClient

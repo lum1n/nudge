@@ -1,7 +1,7 @@
 import type { RoomKind } from "@nudge/client";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
-import { clientFor, useHome } from "../../api.ts";
+import { clientFor, useRoomList } from "../../api.ts";
 import { type PushState, usePush } from "../../push.ts";
 
 export const Route = createFileRoute("/$assistant/")({ component: Rooms });
@@ -14,7 +14,7 @@ const KIND_LABEL: Record<RoomKind, string> = {
 
 function Rooms() {
   const { assistant } = Route.useParams();
-  const home = useHome(assistant);
+  const roomList = useRoomList(assistant);
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [members, setMembers] = useState("");
@@ -56,7 +56,7 @@ function Rooms() {
     }
   }
 
-  const view = home?.view;
+  const view = roomList?.view;
   if (view === undefined) return <p className="p-4 text-stone-500">Loading…</p>;
   return (
     <section className="mx-auto flex max-w-2xl flex-col gap-4 p-3 sm:p-4">

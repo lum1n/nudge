@@ -20,17 +20,17 @@ describe("schema", () => {
     expect(Value.Check(ClientFrame, hello)).toBe(true);
     expect(Value.Check(ClientFrame, { ...hello, protocol: 2 })).toBe(false);
     expect(Value.Check(ClientFrame, { type: "subscribe", target: "room:trip" })).toBe(true);
-    expect(Value.Check(ClientFrame, { type: "subscribe", target: "rooms" })).toBe(false);
+    expect(Value.Check(ClientFrame, { type: "subscribe", target: "home" })).toBe(false);
     expect(
       Value.Check(ServerFrame, {
         type: "patch",
-        target: "home",
+        target: "rooms",
         seq: 3,
         ops: [{ op: "append", path: ["timeline", 0, "parts", 1, "text"], text: "lo" }],
       }),
     ).toBe(true);
     expect(
-      Value.Check(ServerFrame, { type: "patch", target: "home", seq: 3, ops: [{ op: "move" }] }),
+      Value.Check(ServerFrame, { type: "patch", target: "rooms", seq: 3, ops: [{ op: "move" }] }),
     ).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 import {
   apply,
-  type HomeView,
+  type RoomListView,
   type RoomView,
   type ServerFrame,
   type TimelineItem,
@@ -105,7 +105,7 @@ export class ViewStore<V> implements Subscriber {
   }
 }
 
-export class HomeStore extends ViewStore<HomeView> {}
+export class RoomListStore extends ViewStore<RoomListView> {}
 
 /** A message this client sent that the room's view doesn't show yet. */
 export type PendingMessage = {

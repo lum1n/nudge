@@ -187,36 +187,36 @@ impl<V: Serialize> Core<V> {
     }
 }
 
-/// The player's home view. `state` is a new value on every change, and `states` hears of each.
-pub struct HomeStore {
-    core: Mutex<Core<HomeView>>,
-    sender: watch::Sender<Arc<ViewState<HomeView>>>,
+/// The player's room list. `state` is a new value on every change, and `states` hears of each.
+pub struct RoomListStore {
+    core: Mutex<Core<RoomListView>>,
+    sender: watch::Sender<Arc<ViewState<RoomListView>>>,
 }
 
-impl HomeStore {
+impl RoomListStore {
     pub fn new(cache: Arc<Cache>) -> Self {
-        let core = Core::new(Target::Home, cache);
+        let core = Core::new(Target::RoomList, cache);
         let sender = watch::Sender::new(Arc::new(core.state.clone()));
-        HomeStore {
+        RoomListStore {
             core: Mutex::new(core),
             sender,
         }
     }
 
-    pub fn state(&self) -> Arc<ViewState<HomeView>> {
+    pub fn state(&self) -> Arc<ViewState<RoomListView>> {
         self.sender.borrow().clone()
     }
 
-    pub fn states(&self) -> watch::Receiver<Arc<ViewState<HomeView>>> {
+    pub fn states(&self) -> watch::Receiver<Arc<ViewState<RoomListView>>> {
         self.sender.subscribe()
     }
 
-    fn publish(&self, core: &Core<HomeView>) {
+    fn publish(&self, core: &Core<RoomListView>) {
         self.sender.send_replace(Arc::new(core.state.clone()));
     }
 }
 
-impl Subscriber for HomeStore {
+impl Subscriber for RoomListStore {
     fn receive(&self, frame: TargetFrame) -> bool {
         let mut core = self.core.lock().unwrap();
         let (follows, changed) = core.receive(frame);
@@ -721,7 +721,7 @@ mod tests {
             "/../../../packages/protocol/test/fixtures/room-stream.jsonl"
         );
         let cache = Arc::new(Cache::in_memory());
-        let home = HomeStore::new(cache.clone());
+        let room_list = RoomListStore::new(cache.clone());
         let room = RoomStore::new("trip", cache.clone(), None);
         let mut checked = 0;
         for line in std::fs::read_to_string(path)
@@ -741,11 +741,12 @@ mod tests {
                 _ => continue,
             };
             match frame {
-                (Target::Home, frame) => {
-                    assert!(home.receive(frame));
-                    let state = home.state();
+                (Target::RoomList, frame) => {
+                    assert!(room_list.receive(frame));
+                    let state = room_list.state();
                     assert_eq!(state.status, SyncStatus::Live);
-                    let expected: HomeView = serde_json::from_value(line["view"].clone()).unwrap();
+                    let expected: RoomListView =
+                        serde_json::from_value(line["view"].clone()).unwrap();
                     assert_eq!(state.view.as_deref(), Some(&expected));
                 }
                 (Target::Room(_), frame) => {
@@ -761,9 +762,13 @@ mod tests {
         }
         assert!(checked > 4);
         // The cache has the latest views for the next run, once the stores are gone.
-        let (home_view, room_view) = (home.state().view.clone(), room.state().view.clone());
-        drop((home, room));
-        assert_eq!(HomeStore::new(cache.clone()).state().view, home_view);
+        let (room_list_view, room_view) =
+            (room_list.state().view.clone(), room.state().view.clone());
+        drop((room_list, room));
+        assert_eq!(
+            RoomListStore::new(cache.clone()).state().view,
+            room_list_view
+        );
         assert_eq!(RoomStore::new("trip", cache, None).state().view, room_view);
     }
 

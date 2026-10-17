@@ -312,8 +312,8 @@ final class ClientTests: XCTestCase {
         _ = try await within { try await room.first { $0.memory.isEmpty } }
         room.close()
 
-        let home = admin.observeHomeState()
-        let view = try await within { try await home.first { $0.view != nil } }
+        let roomList = admin.observeRoomListState()
+        let view = try await within { try await roomList.first { $0.view != nil } }
         XCTAssertTrue(view.view!.rooms.contains { $0.room.id == "trip" })
     }
 
@@ -339,12 +339,12 @@ final class ClientTests: XCTestCase {
             XCTAssertEqual(status, 409)
         }
 
-        // The model's `schedule_nudge` shows in the room and on the home view.
+        // The model's `schedule_nudge` shows in the room and in the room list.
         _ = try await admin.send(room: "trip", text: "Remind me to water the plants", whenBusy: nil)
         let scheduled = try await within { try await room.first { $0.nudges.count == 1 } }.nudges[0]
         XCTAssertEqual(scheduled.message, "Water the plants")
-        let home = admin.observeHomeState()
-        let view = try await within { try await home.first { $0.view?.nudges.count == 1 } }
+        let roomList = admin.observeRoomListState()
+        let view = try await within { try await roomList.first { $0.view?.nudges.count == 1 } }
         XCTAssertEqual(view.view!.nudges[0].roomId, "trip")
         try await member.cancelNudge(nudgeId: scheduled.id)
         _ = try await within { try await room.first { $0.nudges.isEmpty } }

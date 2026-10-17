@@ -132,7 +132,7 @@ fn rand_suffix() -> String {
 }
 
 #[tokio::test]
-async fn pairs_follows_home_and_a_room_and_swaps_a_pending_message_for_the_real_one() {
+async fn pairs_follows_the_room_list_and_a_room_and_swaps_a_pending_message_for_the_real_one() {
     let Some(server) = faux_server().await else {
         return;
     };
@@ -167,16 +167,16 @@ async fn pairs_follows_home_and_a_room_and_swaps_a_pending_message_for_the_real_
         (paired.client_id.as_str(), false)
     );
 
-    let home = client.home();
+    let room_list = client.room_list();
     let room = client.room("trip");
     // A second lease shares the store and the subscription.
     let again = client.room("trip");
     assert!(Arc::ptr_eq(again.store(), room.store()));
     drop(again);
     client.open();
-    let mut home_states = home.states();
-    let home_state = until(&mut home_states, |s| s.status == SyncStatus::Live).await;
-    let rooms: Vec<String> = home_state
+    let mut room_list_states = room_list.states();
+    let room_list_state = until(&mut room_list_states, |s| s.status == SyncStatus::Live).await;
+    let rooms: Vec<String> = room_list_state
         .view
         .as_ref()
         .unwrap()

@@ -9,7 +9,7 @@ import {
 import { createNudge, type Nudge } from "@nudge/core";
 import {
   apply,
-  type HomeView,
+  type RoomListView,
   ModelViewResponse,
   PrivateValuesResponse,
   type RoomView,
@@ -138,8 +138,8 @@ describe("per-person visibility", () => {
   });
 
   it("shows a private message, its answer and what it made only to its author", async () => {
-    const ann = open("Ann", ["room:trip", "home"]);
-    const bo = open("Bo", ["room:trip", "home"]);
+    const ann = open("Ann", ["room:trip", "rooms"]);
+    const bo = open("Bo", ["room:trip", "rooms"]);
     await eventually(
       () => ann.view("room:trip") !== undefined && bo.view("room:trip") !== undefined,
     );
@@ -190,8 +190,8 @@ describe("per-person visibility", () => {
     expect(boView.memory).toEqual([]);
     expect(boView.nudges).toEqual([]);
     expect(textOf(boView)).not.toContain(EMAIL);
-    expect(textOf(bo.view<HomeView>("home"))).not.toContain(EMAIL);
-    expect(bo.view<HomeView>("home")!.nudges).toEqual([]);
+    expect(textOf(bo.view<RoomListView>("rooms"))).not.toContain(EMAIL);
+    expect(bo.view<RoomListView>("rooms")!.nudges).toEqual([]);
 
     // Bo can't cancel the private nudge, or forget the private fact.
     const nudgeId = annView.nudges[0]!.id;

@@ -1,8 +1,8 @@
 import type {
   Approval,
   Fact,
-  HomeNudge,
-  HomeView,
+  RoomListNudge,
+  RoomListView,
   Player,
   QueuedMessage,
   RoomNudge,
@@ -50,7 +50,7 @@ export class Viewer {
     }));
   }
 
-  home(view: HomeView): HomeView {
+  roomList(view: RoomListView): RoomListView {
     this.check();
     return this.kept(view, () => ({
       player: view.player,
@@ -122,7 +122,7 @@ export class Viewer {
   }
 
   /** Only what is the player's or nobody's. */
-  private mine<T extends Approval | Fact | RoomNudge | HomeNudge>(list: readonly T[]): T[] {
+  private mine<T extends Approval | Fact | RoomNudge | RoomListNudge>(list: readonly T[]): T[] {
     return list.filter((entry) => this.sees(entry.privateTo));
   }
 

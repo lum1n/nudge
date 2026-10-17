@@ -143,10 +143,10 @@ private final class ConnectionRelay: ConnectionListener {
     func onStatus(status: ConnectionStatus) { relay.deliver(status) }
 }
 
-private final class HomeRelay: HomeListener {
-    let relay: Relay<HomeUpdate>
-    init(_ relay: Relay<HomeUpdate>) { self.relay = relay }
-    func onUpdate(update: HomeUpdate) { relay.deliver(update) }
+private final class RoomListRelay: RoomListListener {
+    let relay: Relay<RoomListUpdate>
+    init(_ relay: Relay<RoomListUpdate>) { self.relay = relay }
+    func onUpdate(update: RoomListUpdate) { relay.deliver(update) }
 }
 
 private final class RoomRelay: RoomListener, @unchecked Sendable {
@@ -171,11 +171,11 @@ extension NudgeClient {
         return observed
     }
 
-    /// The player's home view: their rooms and nudges.
+    /// The player's room list: their rooms and nudges.
     @MainActor
-    public func observeHomeState() -> Observed<HomeUpdate> {
-        let observed = Observed<HomeUpdate>()
-        let subscription = observeHome(listener: HomeRelay(Relay(observed)))
+    public func observeRoomListState() -> Observed<RoomListUpdate> {
+        let observed = Observed<RoomListUpdate>()
+        let subscription = observeRoomList(listener: RoomListRelay(Relay(observed)))
         observed.stop = { subscription.cancel() }
         return observed
     }

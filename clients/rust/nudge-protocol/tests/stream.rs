@@ -1,4 +1,4 @@
-//! Replays what Ann's socket received in a recorded run of room "trip" and her home
+//! Replays what Ann's socket received in a recorded run of room "trip" and her room list
 //! (`packages/protocol/test/fixtures/room-stream.jsonl`, recorded by the server's
 //! `v1-stream.test.ts`): every frame reads as a `ServerFrame` and validates against the schema,
 //! and applying the patches rebuilds every recorded view, which reads as a typed view.
@@ -72,8 +72,8 @@ fn patches_rebuild_every_recorded_view() {
         assert_eq!(view, &line["view"], "line {number}: view");
         // The typed view writes back as the same JSON, so no field is lost on the way.
         let typed = match target {
-            Target::Home => {
-                serde_json::to_value(serde_json::from_value::<HomeView>(view.clone()).unwrap())
+            Target::RoomList => {
+                serde_json::to_value(serde_json::from_value::<RoomListView>(view.clone()).unwrap())
             }
             Target::Room(_) => {
                 serde_json::to_value(serde_json::from_value::<RoomView>(view.clone()).unwrap())
@@ -87,7 +87,7 @@ fn patches_rebuild_every_recorded_view() {
     }
     assert_eq!(
         seqs.keys().map(ToString::to_string).collect::<Vec<_>>(),
-        ["home", "room:trip"]
+        ["rooms", "room:trip"]
     );
     assert!(patches > 3, "the recording has patches");
 }

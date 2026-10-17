@@ -20,13 +20,12 @@ import nudge.client.Observed
 import nudge.client.PairingLink
 import nudge.client.PreferencesTokens
 import nudge.client.observeConnectionState
-import nudge.client.observeHomeState
+import nudge.client.observeRoomListState
 import nudge.ffi.Assistant
 import nudge.ffi.ClientConfig
 import nudge.ffi.ConnectionStatus
 import nudge.ffi.DeviceKey
 import nudge.ffi.DevicePlatform
-import nudge.ffi.HomeUpdate
 import nudge.ffi.MeInfo
 import nudge.ffi.Membership
 import nudge.ffi.Memberships
@@ -34,6 +33,7 @@ import nudge.ffi.NudgeClient
 import nudge.ffi.NudgeException
 import nudge.ffi.PushPayload
 import nudge.ffi.PushPlatforms
+import nudge.ffi.RoomListUpdate
 import nudge.ffi.listAssistants
 import nudge.ffi.newDeviceKey
 import nudge.ffi.registerWithRelay
@@ -54,7 +54,7 @@ class Session(
     val account: Account,
     val client: NudgeClient,
     val connection: Observed<ConnectionStatus>,
-    val home: Observed<HomeUpdate>,
+    val roomList: Observed<RoomListUpdate>,
 ) {
     /** Who the player is there, once the server said. */
     val me = MutableStateFlow<MeInfo?>(null)
@@ -66,7 +66,7 @@ class Session(
 
     internal fun close() {
         connection.close()
-        home.close()
+        roomList.close()
         client.disconnect()
         client.close()
     }
@@ -283,7 +283,7 @@ class AppModel(private val context: Context) {
     private fun open(account: Account, made: NudgeClient? = null): Session? {
         val client = made ?: runCatching { NudgeClient(config(account), tokens(account)) }.getOrNull() ?: return null
         client.connect()
-        val session = Session(account, client, client.observeConnectionState(), client.observeHomeState())
+        val session = Session(account, client, client.observeConnectionState(), client.observeRoomListState())
         scope.launch {
             session.me.value = runCatching { client.me() }.getOrNull()
             session.pushPlatforms.value = runCatching { client.pushPlatforms() }.getOrNull()

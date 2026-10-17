@@ -8,7 +8,7 @@ import {
   APPROVAL_ENTRY,
   FIRE_ENTRY,
   MESSAGE_ENTRY,
-  projectHome,
+  projectRoomList,
   projectTimeline,
   RoomProjector,
   type RoomSources,
@@ -425,9 +425,9 @@ describe("TimelinePager", () => {
   });
 });
 
-describe("projectHome", () => {
+describe("projectRoomList", () => {
   it("lists the player's rooms and nudges soonest first", () => {
-    const home = projectHome({
+    const roomList = projectRoomList({
       player: { id: "ann", displayName: "Ann" },
       rooms: [{ room, running: true, pendingApprovals: 1, lastItemAt: 5 }],
       nudges: [
@@ -435,7 +435,7 @@ describe("projectHome", () => {
         { id: "1", roomId: "trip", conversationId: 1, message: "a", fireAt: 10, createdAt: 0 },
       ],
     });
-    expect(home.nudges).toEqual([
+    expect(roomList.nudges).toEqual([
       { id: "1", roomId: "trip", message: "a", fireAt: 10 },
       { id: "2", roomId: "trip", message: "b", fireAt: 20 },
     ]);

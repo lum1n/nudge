@@ -12,7 +12,7 @@ import { createNudge, type Nudge, requestApproval } from "@nudge/core";
 import {
   apply,
   CLOSE,
-  type HomeView,
+  type RoomListView,
   type Op,
   type RoomView,
   ServerFrame,
@@ -194,7 +194,9 @@ describe("v1 stream", () => {
     const closeOf = async (url: string, hello: object | undefined) =>
       (await connect(url, hello).closed).code;
     expect(await closeOf(connectUrl, helloFor("nudge_wrong"))).toBe(CLOSE.unauthorized);
-    expect(await closeOf(connectUrl, { type: "subscribe", target: "home" })).toBe(CLOSE.badRequest);
+    expect(await closeOf(connectUrl, { type: "subscribe", target: "rooms" })).toBe(
+      CLOSE.badRequest,
+    );
     expect(await closeOf(connectUrl, { ...helloFor(tokens.Ann!), protocol: 2 })).toBe(
       CLOSE.badRequest,
     );
@@ -208,7 +210,7 @@ describe("v1 stream", () => {
     await cy.welcome;
     cy.send({ type: "subscribe", target: "room:trip" });
     cy.send({ type: "subscribe", target: "room:lobby" });
-    cy.send({ type: "subscribe", target: "home" });
+    cy.send({ type: "subscribe", target: "rooms" });
     await eventually(() => cy.frames.length >= 4);
     expect(cy.frames[1]).toEqual({
       type: "unsubscribed",
@@ -216,17 +218,17 @@ describe("v1 stream", () => {
       reason: "not-found",
     });
     expect(cy.view<RoomView>("room:lobby")?.room).toMatchObject({ id: "lobby", kind: "lobby" });
-    expect(cy.view<HomeView>("home")?.rooms.map((row) => row.room.id)).toEqual(["lobby"]);
+    expect(cy.view<RoomListView>("rooms")?.rooms.map((row) => row.room.id)).toEqual(["lobby"]);
     cy.close();
   });
 
-  it("streams a room and home to every member, as patches that rebuild the view", async () => {
+  it("streams a room and the room list to every member, as patches that rebuild the view", async () => {
     const ann = open("Ann");
     const bo = open("Bo");
     await Promise.all([ann.welcome, bo.welcome]);
     for (const client of [ann, bo]) {
       client.send({ type: "subscribe", target: "room:trip" });
-      client.send({ type: "subscribe", target: "home" });
+      client.send({ type: "subscribe", target: "rooms" });
     }
     await eventually(() => [ann, bo].every((client) => client.views.size === 2));
     expect(ann.view<RoomView>("room:trip")).toMatchObject({
@@ -247,7 +249,7 @@ describe("v1 stream", () => {
       memory: [],
       nudges: [],
     });
-    expect(ann.view<HomeView>("home")).toMatchObject({
+    expect(ann.view<RoomListView>("rooms")).toMatchObject({
       player: { id: "ann", displayName: "Ann" },
       rooms: [{ room: { id: "lobby" } }, { room: { id: "trip" }, running: false }],
     });
@@ -269,7 +271,7 @@ describe("v1 stream", () => {
     await nudge.nudges.schedule("trip", { message: "Kettle", fireAt: Date.now() + 300 }, context);
     // It may fire before the check looks, so any view since counts.
     await eventually(() =>
-      (ann.views.get("home") as HomeView[]).some((home) => home.nudges.length === 1),
+      (ann.views.get("rooms") as RoomListView[]).some((roomList) => roomList.nudges.length === 1),
     );
     await eventually(() =>
       (ann.view<RoomView>("room:trip")?.timeline ?? []).some((item) => item.type === "nudge"),
@@ -280,14 +282,14 @@ describe("v1 stream", () => {
     const cy = open("Ann");
     await cy.welcome;
     cy.send({ type: "subscribe", target: "room:trip" });
-    cy.send({ type: "subscribe", target: "home" });
+    cy.send({ type: "subscribe", target: "rooms" });
     await eventually(() => cy.views.size === 2);
     const settled = cy.view<RoomView>("room:trip")!;
     await eventually(
       () =>
         JSON.stringify(ann.view("room:trip")) === JSON.stringify(settled) &&
         JSON.stringify(bo.view("room:trip")) === JSON.stringify(settled) &&
-        JSON.stringify(ann.view("home")) === JSON.stringify(cy.view("home")),
+        JSON.stringify(ann.view("rooms")) === JSON.stringify(cy.view("rooms")),
     );
     cy.close();
 
@@ -326,7 +328,9 @@ describe("v1 stream", () => {
     const ops = opsOf(ann, "room:trip");
     expect(ops.some((op) => op.op === "append")).toBe(true);
     expect(ops.some((op) => op.op === "set" && op.path.length <= 1)).toBe(false);
-    expect((ann.views.get("home") as HomeView[]).some((home) => home.rooms[1]?.running)).toBe(true);
+    expect(
+      (ann.views.get("rooms") as RoomListView[]).some((roomList) => roomList.rooms[1]?.running),
+    ).toBe(true);
 
     if (process.env.NUDGE_RECORD === "1") {
       const latest = new Map<Target, unknown>();
@@ -347,7 +351,7 @@ describe("v1 stream", () => {
     const ann = open("Ann");
     await ann.welcome;
     ann.send({ type: "subscribe", target: "room:trip" });
-    ann.send({ type: "subscribe", target: "home" });
+    ann.send({ type: "subscribe", target: "rooms" });
     await eventually(() => ann.views.size === 2);
 
     await post("/rooms/trip/memory", tokens.Bo!, { text: "The car is blue" });
@@ -366,7 +370,7 @@ describe("v1 stream", () => {
     // A tool's request lands with its turn's entries; outside a turn, say it changed.
     nudge.changes.emit({ kind: "approvals", roomId: "trip" });
     await eventually(() => ann.view<RoomView>("room:trip")?.approvals[0]?.status === "pending");
-    await eventually(() => ann.view<HomeView>("home")?.rooms[1]?.pendingApprovals === 1);
+    await eventually(() => ann.view<RoomListView>("rooms")?.rooms[1]?.pendingApprovals === 1);
     expect(ann.view<RoomView>("room:trip")?.approvals[0]).toEqual({
       id: "a1",
       summary: "Send the packing list",
@@ -380,12 +384,12 @@ describe("v1 stream", () => {
       id: "bo",
       displayName: "Bo",
     });
-    await eventually(() => ann.view<HomeView>("home")?.rooms[1]?.pendingApprovals === 0);
+    await eventually(() => ann.view<RoomListView>("rooms")?.rooms[1]?.pendingApprovals === 0);
 
-    // A new room shows up at home.
+    // A new room shows up in the room list.
     await post("/rooms", tokens.Bo!, { name: "Dinner", members: ["ann"] });
     await eventually(() =>
-      (ann.view<HomeView>("home")?.rooms ?? []).some((row) => row.room.name === "Dinner"),
+      (ann.view<RoomListView>("rooms")?.rooms ?? []).some((row) => row.room.name === "Dinner"),
     );
     ann.close();
   });

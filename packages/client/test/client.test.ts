@@ -92,7 +92,7 @@ describe("NudgeClient against a server", () => {
     expect(problems.splice(0)).toEqual([]);
   });
 
-  it("pairs, follows home and a room, and swaps a pending message for the real one", async () => {
+  it("pairs, follows the room list and a room, and swaps a pending message for the real one", async () => {
     expect(await listAssistants(server.url)).toEqual({
       assistants: [{ name: "robin", displayName: expect.any(String) }],
     });
@@ -112,7 +112,7 @@ describe("NudgeClient against a server", () => {
     );
     expect(await client.api.me()).toMatchObject({ clientId: paired.clientId, admin: false });
 
-    const home = client.home();
+    const roomList = client.roomList();
     const room = client.room("trip");
     // A second lease shares the store and the subscription.
     const again = client.room("trip");
@@ -120,13 +120,16 @@ describe("NudgeClient against a server", () => {
     again.release();
     client.open();
     await eventually(
-      () => home.store.getState().status === "live" && room.store.getState().status === "live",
+      () => roomList.store.getState().status === "live" && room.store.getState().status === "live",
     );
     expect(client.connection.getStatus()).toMatchObject({
       kind: "open",
       welcome: { player: { id: "bo" }, clientId: paired.clientId },
     });
-    expect(home.store.getState().view?.rooms.map((row) => row.room.id)).toEqual(["lobby", "trip"]);
+    expect(roomList.store.getState().view?.rooms.map((row) => row.room.id)).toEqual([
+      "lobby",
+      "trip",
+    ]);
 
     // Streaming text arrives as appends: the answer's text grows through several states.
     const texts = new Set<string>();
@@ -170,7 +173,7 @@ describe("NudgeClient against a server", () => {
     await eventually(() => room.store.getState().view?.memory.length === 1);
 
     room.release();
-    home.release();
+    roomList.release();
   });
 
   it("loads earlier items back to the start, joining the room view", async () => {

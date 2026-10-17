@@ -118,8 +118,8 @@ def test_pairing_and_a_streamed_answer(server, tmp_path: Path) -> None:
                 await ann.forget("trip", fact.id)
                 await room.wait_for(lambda s: not s.memory, TIMEOUT)
 
-            home = await ann.home().wait_for(lambda u: u.view is not None, TIMEOUT)
-            assert "trip" in [r.room.id for r in home.view.rooms]
+            room_list = await ann.room_list().wait_for(lambda u: u.view is not None, TIMEOUT)
+            assert "trip" in [r.room.id for r in room_list.view.rooms]
 
     run(test())
 
@@ -150,15 +150,15 @@ def test_approvals_and_nudges(server) -> None:
                     await ann.decide("trip", approval.id, False)
                 assert refused.value.status == 409
 
-                # The model's `schedule_nudge` shows in the room and on the home view.
+                # The model's `schedule_nudge` shows in the room and in the room list.
                 await ann.send("trip", "Remind me to water the plants")
                 state = await room.wait_for(lambda s: len(s.nudges) == 1, TIMEOUT)
                 scheduled = state.nudges[0]
                 assert scheduled.message == "Water the plants"
-                home = await ann.home().wait_for(
+                room_list = await ann.room_list().wait_for(
                     lambda u: u.view is not None and len(u.view.nudges) == 1, TIMEOUT
                 )
-                assert home.view.nudges[0].room_id == "trip"
+                assert room_list.view.nudges[0].room_id == "trip"
                 await bo.cancel_nudge(scheduled.id)
                 await room.wait_for(lambda s: not s.nudges, TIMEOUT)
                 with pytest.raises(NudgeError.Status) as refused:
@@ -227,7 +227,7 @@ def test_renames_a_room(server) -> None:
         async with Client(server.url, server.assistant, MemoryTokens(server.bo)) as bo:
             renamed = await bo.rename_room("trip", "Trip to Bergen")
             assert (renamed.id, renamed.name) == ("trip", "Trip to Bergen")
-            await bo.home().wait_for(
+            await bo.room_list().wait_for(
                 lambda u: (
                     u.view is not None
                     and any(r.room.name == "Trip to Bergen" for r in u.view.rooms)

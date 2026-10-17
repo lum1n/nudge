@@ -180,10 +180,10 @@ pub enum TimelineChange {
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
-pub struct HomeUpdate {
+pub struct RoomListUpdate {
     pub status: SyncStatus,
     /// The latest view; also while syncing, and the cached one before the first snapshot.
-    pub view: Option<HomeView>,
+    pub view: Option<RoomListView>,
     pub reason: Option<GoneReason>,
     pub error: Option<String>,
 }
@@ -215,8 +215,8 @@ pub trait ConnectionListener: Send + Sync {
 }
 
 #[uniffi::export(with_foreign)]
-pub trait HomeListener: Send + Sync {
-    fn on_update(&self, update: HomeUpdate);
+pub trait RoomListListener: Send + Sync {
+    fn on_update(&self, update: RoomListUpdate);
 }
 
 #[uniffi::export(with_foreign)]
@@ -466,15 +466,15 @@ impl NudgeClient {
         })
     }
 
-    /// Follows the player's home view until the subscription is dropped.
-    pub fn observe_home(&self, listener: Arc<dyn HomeListener>) -> Arc<Subscription> {
+    /// Follows the player's room list until the subscription is dropped.
+    pub fn observe_room_list(&self, listener: Arc<dyn RoomListListener>) -> Arc<Subscription> {
         let _runtime = RUNTIME.enter();
-        let lease = self.client.home();
+        let lease = self.client.room_list();
         let task = RUNTIME.spawn(async move {
             let mut states = lease.states();
             loop {
                 let state = states.borrow_and_update().clone();
-                listener.on_update(HomeUpdate {
+                listener.on_update(RoomListUpdate {
                     status: state.status.into(),
                     view: state.view.as_deref().cloned().map(Into::into),
                     reason: state.reason.map(Into::into),

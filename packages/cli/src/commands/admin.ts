@@ -11,7 +11,7 @@ import {
 import type {
   AdminPlayer,
   ErrorResponse,
-  HomeNudge,
+  RoomListNudge,
   InviteResponse,
   NudgesResponse,
   PairingCodeResponse,
@@ -24,7 +24,7 @@ import type {
   TokensResponse,
   UsageResponse,
 } from "@nudge/protocol";
-import { toHomeNudge, toRoom } from "@nudge/protocol/project";
+import { toRoomListNudge, toRoom } from "@nudge/protocol/project";
 import { pairingLink } from "@nudge/server";
 import { renderUnicodeCompact } from "uqr";
 import { UsageError } from "../errors.ts";
@@ -328,7 +328,7 @@ export async function renameRoom(
 
 /** Lists every pending nudge, with its room. */
 export async function nudges(options: AdminOptions & ServerAccess): Promise<void> {
-  const print = (pending: readonly HomeNudge[]) => {
+  const print = (pending: readonly RoomListNudge[]) => {
     if (pending.length === 0) console.log("No nudges scheduled.");
     for (const scheduled of pending)
       console.log(`${scheduled.roomId}\t${describeNudge(scheduled)}`);
@@ -339,7 +339,7 @@ export async function nudges(options: AdminOptions & ServerAccess): Promise<void
     async (nudge) =>
       print(
         (await nudge.nudges.list(context)).map((scheduled) => {
-          const shown = toHomeNudge(scheduled);
+          const shown = toRoomListNudge(scheduled);
           return shown.privateTo === undefined
             ? { ...shown, message: nudge.showTo(undefined, shown.message) }
             : { ...shown, message: "" };

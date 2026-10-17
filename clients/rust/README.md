@@ -3,7 +3,7 @@
 A client of [protocol v1](../../docs/protocol/v1.md), for Rust and, through [UniFFI](https://mozilla.github.io/uniffi-rs/), for Swift, Kotlin and Python.
 
 - `nudge-protocol`: the protocol's types and `apply` for patches. No IO.
-- `nudge-client`: `Api` (HTTP), `Connection` (the socket), `HomeStore` and `RoomStore` (views), and `NudgeClient`, with a SQLite cache of views and an outbox that sends what didn't get through once the socket is open.
+- `nudge-client`: `Api` (HTTP), `Connection` (the socket), `RoomListStore` and `RoomStore` (views), and `NudgeClient`, with a SQLite cache of views and an outbox that sends what didn't get through once the socket is open.
 - `nudge-ffi`: the UniFFI bindings of `nudge-client`.
 
 ```bash

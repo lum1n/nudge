@@ -1,7 +1,7 @@
 import {
   Api,
   ApiError,
-  type HomeStore,
+  type RoomListStore,
   listAssistants,
   NudgeClient,
   type RoomState,
@@ -111,9 +111,9 @@ export function useConnection(assistant: string) {
   return useSyncExternalStore(connection.subscribe, connection.getStatus);
 }
 
-/** Holds the player's home view while mounted; undefined until the lease is taken. */
-export function useHome(assistant: string): HomeState | undefined {
-  return useStoreState(useLease(assistant, "home", (client) => client.home()));
+/** Holds the player's room list while mounted; undefined until the lease is taken. */
+export function useRoomList(assistant: string): RoomListState | undefined {
+  return useStoreState(useLease(assistant, "rooms", (client) => client.roomList()));
 }
 
 /** Holds a room's view while mounted; undefined until the lease is taken. */
@@ -126,7 +126,7 @@ export function useRoom(
   return store === undefined || state === undefined ? undefined : { store, state };
 }
 
-type HomeState = ReturnType<HomeStore["getState"]>;
+type RoomListState = ReturnType<RoomListStore["getState"]>;
 
 function useLease<S>(
   assistant: string,

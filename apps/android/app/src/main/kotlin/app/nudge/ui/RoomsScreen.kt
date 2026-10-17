@@ -60,16 +60,16 @@ import app.nudge.Session
 import app.nudge.explain
 import kotlinx.coroutines.launch
 import nudge.ffi.ConnectionStatus
-import nudge.ffi.HomeRoom
-import nudge.ffi.HomeUpdate
 import nudge.ffi.MeInfo
 import nudge.ffi.Room
 import nudge.ffi.RoomKind
+import nudge.ffi.RoomListEntry
+import nudge.ffi.RoomListUpdate
 import nudge.ffi.SyncStatus
 
 /** One signed-in assistant's rooms, newest news first, as the list shows them. */
-private class Section(val session: Session, val home: HomeUpdate?, val me: MeInfo?, val connection: ConnectionStatus?) {
-    val rooms = home?.view?.rooms.orEmpty().sortedByDescending { it.lastItemAt ?: 0.0 }
+private class Section(val session: Session, val roomList: RoomListUpdate?, val me: MeInfo?, val connection: ConnectionStatus?) {
+    val rooms = roomList?.view?.rooms.orEmpty().sortedByDescending { it.lastItemAt ?: 0.0 }
 }
 
 /**
@@ -90,7 +90,7 @@ fun RoomsScreen(
         key(at.account.key) {
             Section(
                 at,
-                at.home.state.collectAsStateWithLifecycle().value,
+                at.roomList.state.collectAsStateWithLifecycle().value,
                 at.me.collectAsStateWithLifecycle().value,
                 at.connection.state.collectAsStateWithLifecycle().value,
             )
@@ -158,10 +158,10 @@ fun RoomsScreen(
         },
     ) { padding ->
         when {
-            home.home?.view == null -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+            home.roomList?.view == null -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 LoadingIndicator()
             }
-            home.home.status == SyncStatus.LIVE && sections.all { it.rooms.isEmpty() } -> Box(
+            home.roomList.status == SyncStatus.LIVE && sections.all { it.rooms.isEmpty() } -> Box(
                 Modifier.fillMaxSize().padding(padding),
                 contentAlignment = Alignment.Center,
             ) {
@@ -258,7 +258,7 @@ private fun connectionText(status: ConnectionStatus?): (@Composable () -> Unit)?
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun RoomRow(
-    room: HomeRoom,
+    room: RoomListEntry,
     me: String?,
     selected: Boolean,
     index: Int,
@@ -349,7 +349,7 @@ private fun NewRoomDialog(session: Session, close: () -> Unit, created: (String)
     )
 }
 
-/** The room keeps its id; the list shows the new name once the home view has it. */
+/** The room keeps its id; the list shows the new name once the room list has it. */
 @Composable
 private fun RenameRoomDialog(session: Session, room: Room, close: () -> Unit) {
     val scope = rememberCoroutineScope()

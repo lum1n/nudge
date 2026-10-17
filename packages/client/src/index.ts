@@ -17,7 +17,7 @@ export {
   type Welcome,
 } from "./connection.ts";
 export {
-  HomeStore,
+  RoomListStore,
   type PageLoader,
   type PendingMessage,
   RoomStore,

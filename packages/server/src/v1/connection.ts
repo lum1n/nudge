@@ -36,9 +36,10 @@ export type ConnectionOptions = {
 };
 
 /**
- * One client socket of protocol v1: a `hello`, then subscriptions to `home` and rooms. Each
- * subscription keeps the view it last sent and sends the diff to the hub's view now, at most
- * every `flushMs`, so a busy room costs a slow client fewer, larger patches rather than a backlog.
+ * One client socket of protocol v1: a `hello`, then subscriptions to the room list (`rooms`) and
+ * to rooms. Each subscription keeps the view it last sent and sends the diff to the hub's view now,
+ * at most every `flushMs`, so a busy room costs a slow client fewer, larger patches rather than a
+ * backlog.
  */
 export class Connection {
   private credential: Credential | undefined;
@@ -142,12 +143,12 @@ export class Connection {
 
     let lease: Lease<Hub<unknown>> | undefined;
     let allowed: () => boolean = () => true;
-    // A home hub is the player's own already; a room hub's view is everyone's.
+    // A room list hub is the player's own already; a room hub's view is everyone's.
     let see: (view: unknown) => unknown = (view) => view;
-    if (target === "home") {
-      const home = await this.options.hubs.home(player.id);
-      await home.hub.ready();
-      lease = home;
+    if (target === "rooms") {
+      const roomList = await this.options.hubs.roomList(player.id);
+      await roomList.hub.ready();
+      lease = roomList;
     } else {
       const room = await this.options.hubs.room(target.slice("room:".length));
       if (room !== undefined && !room.hub.allows(player.id)) room.release();

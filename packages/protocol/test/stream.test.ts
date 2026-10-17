@@ -1,10 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { Value } from "typebox/value";
 import { describe, expect, it } from "vitest";
-import { apply, HomeView, RoomView, ServerFrame } from "../src/index.ts";
+import { apply, RoomListView, RoomView, ServerFrame } from "../src/index.ts";
 
 /**
- * What Ann's socket received in a recorded run of room "trip" and her home, one `{ frame, view }`
+ * What Ann's socket received in a recorded run of room "trip" and her room list, one `{ frame, view }`
  * per line. The server's `v1-stream.test.ts` records it again with `NUDGE_RECORD=1`.
  */
 async function recording(): Promise<{ frame: ServerFrame; view?: unknown }[]> {
@@ -33,8 +33,8 @@ describe("recorded stream", () => {
         views.set(frame.target, apply(views.get(frame.target), frame.ops));
       } else continue;
       expect(views.get(frame.target)).toEqual(view);
-      expect(Value.Check(frame.target === "home" ? HomeView : RoomView, view)).toBe(true);
+      expect(Value.Check(frame.target === "rooms" ? RoomListView : RoomView, view)).toBe(true);
     }
-    expect([...seqs.keys()].sort()).toEqual(["home", "room:trip"]);
+    expect([...seqs.keys()].sort()).toEqual(["room:trip", "rooms"]);
   });
 });

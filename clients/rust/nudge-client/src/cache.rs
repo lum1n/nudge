@@ -217,7 +217,7 @@ mod tests {
         {
             let cache = Cache::open(&path).unwrap();
             cache.claim("ann");
-            cache.save_view(&Target::Home, "{\"home\":1}");
+            cache.save_view(&Target::RoomList, "{\"rooms\":1}");
             cache.add_outgoing(&message("b", "trip", 2));
             cache.add_outgoing(&message("a", "trip", 1));
             cache.add_outgoing(&message("c", "lobby", 3));
@@ -225,7 +225,10 @@ mod tests {
         }
         let cache = Cache::open(&path).unwrap();
         assert_eq!(cache.player().as_deref(), Some("ann"));
-        assert_eq!(cache.view(&Target::Home).as_deref(), Some("{\"home\":1}"));
+        assert_eq!(
+            cache.view(&Target::RoomList).as_deref(),
+            Some("{\"rooms\":1}")
+        );
         assert_eq!(cache.view(&Target::Room("trip".into())), None);
         let ids: Vec<String> = cache
             .outbox(Some("trip"))
@@ -241,7 +244,7 @@ mod tests {
         assert_eq!(cache.outbox(None).len(), 2);
         // Another player's client starts afresh.
         cache.claim("bo");
-        assert_eq!(cache.view(&Target::Home), None);
+        assert_eq!(cache.view(&Target::RoomList), None);
         assert!(cache.outbox(None).is_empty());
         std::fs::remove_dir_all(dir).unwrap();
     }

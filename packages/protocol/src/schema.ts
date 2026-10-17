@@ -213,17 +213,17 @@ export const RoomView = Type.Object({
 });
 export type RoomView = Static<typeof RoomView>;
 
-// The home view: the player's rooms and nudges.
+// The room list: the player's rooms and nudges.
 
-export const HomeRoom = Type.Object({
+export const RoomListEntry = Type.Object({
   room: Room,
   running: Type.Boolean(),
   pendingApprovals: Type.Integer(),
   lastItemAt: Type.Optional(Type.Number()),
 });
-export type HomeRoom = Static<typeof HomeRoom>;
+export type RoomListEntry = Static<typeof RoomListEntry>;
 
-export const HomeNudge = Type.Object({
+export const RoomListNudge = Type.Object({
   id: Type.String(),
   roomId: Type.String(),
   message: Type.String(),
@@ -231,15 +231,15 @@ export const HomeNudge = Type.Object({
   every: Type.Optional(Type.Number()),
   privateTo: Type.Optional(Player),
 });
-export type HomeNudge = Static<typeof HomeNudge>;
+export type RoomListNudge = Static<typeof RoomListNudge>;
 
-export const HomeView = Type.Object({
+export const RoomListView = Type.Object({
   player: Player,
-  rooms: Type.Array(HomeRoom),
+  rooms: Type.Array(RoomListEntry),
   /** Soonest first. */
-  nudges: Type.Array(HomeNudge),
+  nudges: Type.Array(RoomListNudge),
 });
-export type HomeView = Static<typeof HomeView>;
+export type RoomListView = Static<typeof RoomListView>;
 
 // Patches.
 
@@ -267,8 +267,8 @@ export type Op = Static<typeof Op>;
 
 // The socket.
 
-/** `"home"` or `"room:<id>"`. */
-export const Target = Type.String({ pattern: "^(home|room:.+)$" });
+/** `"rooms"` or `"room:<id>"`. */
+export const Target = Type.String({ pattern: "^(rooms|room:.+)$" });
 export type Target = Static<typeof Target>;
 
 export const ClientFrame = Type.Union([
@@ -301,7 +301,7 @@ export const ServerFrame = Type.Union([
     type: Type.Literal("snapshot"),
     target: Target,
     seq: Type.Integer({ minimum: 0 }),
-    view: Type.Union([RoomView, HomeView]),
+    view: Type.Union([RoomView, RoomListView]),
   }),
   /** Changes since the previous frame for `target`; `seq` goes up by one. */
   Type.Object({
@@ -777,7 +777,7 @@ export const AdminCreateRoomRequest = Type.Object({
 export type AdminCreateRoomRequest = Static<typeof AdminCreateRoomRequest>;
 
 /** Every room's pending nudges, soonest first. */
-export const NudgesResponse = Type.Object({ nudges: Type.Array(HomeNudge) });
+export const NudgesResponse = Type.Object({ nudges: Type.Array(RoomListNudge) });
 export type NudgesResponse = Static<typeof NudgesResponse>;
 
 /** Socket close codes, after HTTP status codes. */
@@ -804,9 +804,9 @@ export const SCHEMAS = {
   Fact,
   RoomNudge,
   RoomView,
-  HomeRoom,
-  HomeNudge,
-  HomeView,
+  RoomListEntry,
+  RoomListNudge,
+  RoomListView,
   Path,
   Op,
   Target,

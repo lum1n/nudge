@@ -16,8 +16,8 @@ import {
   type Room as CoreRoom,
   type ScheduledNudge,
 } from "@nudge/core";
-import type { HomeRoom, HomeView, Player, Room, RoomView } from "@nudge/protocol";
-import { projectHome, RoomProjector, toPlayer, toRoom, Viewer } from "@nudge/protocol/project";
+import type { RoomListEntry, RoomListView, Player, Room, RoomView } from "@nudge/protocol";
+import { projectRoomList, RoomProjector, toPlayer, toRoom, Viewer } from "@nudge/protocol/project";
 
 const context: Context = BACKGROUND_CONTEXT;
 
@@ -39,11 +39,12 @@ export type Lease<H> = { readonly hub: H; release(): void };
 
 /**
  * The live views of one assistant, shared by every connection: one `RoomHub` per room someone
- * watches, one `HomeHub` per player. Hubs open on first use and close when their last lease goes.
+ * watches, one `RoomListHub` per player. Hubs open on first use and close when their last lease
+ * goes.
  */
 export class Hubs {
   private readonly rooms = new Shared<RoomHub>();
-  private readonly homes = new Shared<HomeHub>();
+  private readonly roomLists = new Shared<RoomListHub>();
   private directory: Promise<Directory> | undefined;
   private readonly viewers = new Map<string, Viewer>();
 
@@ -102,10 +103,10 @@ export class Hubs {
     };
   }
 
-  async home(playerId: string): Promise<Lease<HomeHub>> {
+  async roomList(playerId: string): Promise<Lease<RoomListHub>> {
     const directory = await this.openDirectory();
-    return this.homes.lease(playerId, () =>
-      Promise.resolve(new HomeHub(playerId, directory, this, this.report)),
+    return this.roomLists.lease(playerId, () =>
+      Promise.resolve(new RoomListHub(playerId, directory, this, this.report)),
     );
   }
 
@@ -376,15 +377,15 @@ export class RoomHub implements Hub<RoomView> {
 }
 
 /**
- * One player's `HomeView`: the rooms they may use, each through its `RoomHub`, so home and room
- * subscriptions share one watch per room. The player's nudges are their rooms' nudges.
+ * One player's `RoomListView`: the rooms they may use, each through its `RoomHub`, so room list
+ * and room subscriptions share one watch per room. The player's nudges are their rooms' nudges.
  */
-export class HomeHub implements Hub<HomeView> {
+export class RoomListHub implements Hub<RoomListView> {
   private readonly listeners = new Listeners();
   private readonly leases = new Map<string, Lease<RoomHub> | Promise<void>>();
   private readonly unlisten = new Map<string, () => void>();
-  private readonly rows = new Map<string, { view: RoomView; row: HomeRoom }>();
-  private projected: HomeView | undefined;
+  private readonly rows = new Map<string, { view: RoomView; row: RoomListEntry }>();
+  private projected: RoomListView | undefined;
   private player: Player;
   private stopped = false;
   private readonly stopDirectory: () => void;
@@ -400,9 +401,9 @@ export class HomeHub implements Hub<HomeView> {
     this.sync();
   }
 
-  view(): HomeView {
+  view(): RoomListView {
     if (this.projected !== undefined) return this.projected;
-    const rooms: HomeRoom[] = [];
+    const rooms: RoomListEntry[] = [];
     const nudges: ScheduledNudge[] = [];
     for (const room of this.usableRooms()) {
       const lease = this.leases.get(room.id);
@@ -412,7 +413,7 @@ export class HomeHub implements Hub<HomeView> {
     }
     this.projected = this.hubs
       .viewer(this.playerId)
-      .home(projectHome({ player: this.player, rooms, nudges }));
+      .roomList(projectRoomList({ player: this.player, rooms, nudges }));
     return this.projected;
   }
 
@@ -476,7 +477,7 @@ export class HomeHub implements Hub<HomeView> {
     this.update();
   }
 
-  private row(hub: RoomHub): HomeRoom {
+  private row(hub: RoomHub): RoomListEntry {
     // Counted as the player sees the room, so others' private approvals and messages don't show.
     const view = this.hubs.viewer(this.playerId).room(hub.view());
     const kept = this.rows.get(hub.roomId);
@@ -486,7 +487,7 @@ export class HomeHub implements Hub<HomeView> {
         item.type === "user" ? item.sentAt : item.type === "nudge" ? item.firedAt : undefined;
       return at === undefined || (last !== undefined && last >= at) ? last : at;
     }, undefined);
-    const row: HomeRoom = {
+    const row: RoomListEntry = {
       room: view.room,
       running: view.live.running,
       pendingApprovals: view.approvals.filter((approval) => approval.status === "pending").length,

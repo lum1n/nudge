@@ -33,7 +33,7 @@ final class Session {
     let account: Account
     let client: NudgeClient
     let connection: Observed<ConnectionStatus>
-    let home: Observed<HomeUpdate>
+    let roomList: Observed<RoomListUpdate>
     /// Who the player is there, once the server said.
     var me: MeInfo?
     /// Which native pushes the server sends; nil until asked, or when it sends none.
@@ -47,12 +47,12 @@ final class Session {
         self.client = client
         client.connect()
         connection = client.observeConnectionState()
-        home = client.observeHomeState()
+        roomList = client.observeRoomListState()
     }
 
     func close() {
         connection.close()
-        home.close()
+        roomList.close()
         client.disconnect()
     }
 }

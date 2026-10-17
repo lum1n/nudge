@@ -66,7 +66,7 @@ import {
   TimelinePager,
   toApproval,
   toFact,
-  toHomeNudge,
+  toRoomListNudge,
   toPlayer,
   toRoom,
   windowStart,
@@ -665,7 +665,7 @@ export function restRoutes(options: RestOptions): Hono {
     const viewer = viewerOf(c);
     return c.json({
       nudges: pending.map((nudge) => {
-        const shown = viewer.strings(toHomeNudge(nudge));
+        const shown = viewer.strings(toRoomListNudge(nudge));
         return viewer.sees(shown.privateTo) ? shown : { ...shown, message: "" };
       }),
     } satisfies NudgesResponse);

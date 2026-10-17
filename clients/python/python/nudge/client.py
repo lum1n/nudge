@@ -22,7 +22,6 @@ from nudge._ffi import (
     ExtensionSetup,
     Fact,
     GoneReason,
-    HomeUpdate,
     Invite,
     InviteLink,
     Live,
@@ -45,6 +44,7 @@ from nudge._ffi import (
     QueuedMessage,
     Room,
     RoomExtension,
+    RoomListUpdate,
     RoomNudge,
     RoomUpdate,
     SavedExtensionSetup,
@@ -243,11 +243,11 @@ class _ConnectionListener(_ffi.ConnectionListener):
             watch._deliver(status)
 
 
-class _HomeListener(_ffi.HomeListener):
-    def __init__(self, watch: Watch[HomeUpdate]):
+class _RoomListListener(_ffi.RoomListListener):
+    def __init__(self, watch: Watch[RoomListUpdate]):
         self._watch = weakref.ref(watch)
 
-    def on_update(self, update: HomeUpdate) -> None:
+    def on_update(self, update: RoomListUpdate) -> None:
         if watch := self._watch():
             watch._deliver(update)
 
@@ -424,10 +424,10 @@ class Client:
         self._watches.add(watch)
         return watch
 
-    def home(self) -> Watch[HomeUpdate]:
-        """The player's home view: their rooms and nudges."""
-        watch: Watch[HomeUpdate] = Watch(asyncio.get_running_loop(), lambda _, u: u)
-        watch._subscription = self.ffi.observe_home(_HomeListener(watch))
+    def room_list(self) -> Watch[RoomListUpdate]:
+        """The player's room list: their rooms and nudges."""
+        watch: Watch[RoomListUpdate] = Watch(asyncio.get_running_loop(), lambda _, u: u)
+        watch._subscription = self.ffi.observe_room_list(_RoomListListener(watch))
         self._watches.add(watch)
         return watch
 

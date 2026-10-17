@@ -1,5 +1,5 @@
 //! A client of Nudge's protocol v1, after `@nudge/client`: `Api` wraps the HTTP commands,
-//! `Connection` keeps the socket, `HomeStore` and `RoomStore` follow views, and `NudgeClient`
+//! `Connection` keeps the socket, `RoomListStore` and `RoomStore` follow views, and `NudgeClient`
 //! puts them together with leases on views and an outbox that survives restarts.
 
 mod api;
@@ -25,6 +25,6 @@ pub use nudge_protocol as protocol;
 pub use panel::{PanelListener, PanelSocket, PanelStatus, panel_url};
 pub use push::{DeviceKey, PushPayload, open_push};
 pub use stores::{
-    HomeStore, PageLoader, PendingMessage, PendingState, RoomState, RoomStore, SyncStatus,
+    PageLoader, PendingMessage, PendingState, RoomListStore, RoomState, RoomStore, SyncStatus,
     ViewState, slide,
 };

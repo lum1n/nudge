@@ -1751,7 +1751,7 @@
         }
       }
     },
-    "HomeRoom": {
+    "RoomListEntry": {
       "type": "object",
       "required": [
         "room",
@@ -1824,7 +1824,7 @@
         }
       }
     },
-    "HomeNudge": {
+    "RoomListNudge": {
       "type": "object",
       "required": [
         "id",
@@ -1868,7 +1868,7 @@
         }
       }
     },
-    "HomeView": {
+    "RoomListView": {
       "type": "object",
       "required": [
         "player",
@@ -2168,7 +2168,7 @@
     },
     "Target": {
       "type": "string",
-      "pattern": "^(home|room:.+)$"
+      "pattern": "^(rooms|room:.+)$"
     },
     "ClientFrame": {
       "anyOf": [
@@ -2226,7 +2226,7 @@
             },
             "target": {
               "type": "string",
-              "pattern": "^(home|room:.+)$"
+              "pattern": "^(rooms|room:.+)$"
             }
           }
         },
@@ -2243,7 +2243,7 @@
             },
             "target": {
               "type": "string",
-              "pattern": "^(home|room:.+)$"
+              "pattern": "^(rooms|room:.+)$"
             }
           }
         },
@@ -2337,7 +2337,7 @@
             },
             "target": {
               "type": "string",
-              "pattern": "^(home|room:.+)$"
+              "pattern": "^(rooms|room:.+)$"
             },
             "seq": {
               "type": "integer",
@@ -3307,7 +3307,7 @@
             },
             "target": {
               "type": "string",
-              "pattern": "^(home|room:.+)$"
+              "pattern": "^(rooms|room:.+)$"
             },
             "seq": {
               "type": "integer",
@@ -3465,7 +3465,7 @@
             },
             "target": {
               "type": "string",
-              "pattern": "^(home|room:.+)$"
+              "pattern": "^(rooms|room:.+)$"
             },
             "reason": {
               "anyOf": [
