@@ -204,6 +204,13 @@ pub struct ExeVm {
     pub url: String,
 }
 
+/// The app's own SSH key for exe.dev, in OpenSSH's formats. Keep `private_key` in the keychain.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct ExeKey {
+    pub private_key: String,
+    pub public_key: String,
+}
+
 /// A server made on exe.dev, waiting to be set up with `code`.
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
 pub struct LaunchedServer {
@@ -664,4 +671,96 @@ impl ExeClient {
 #[uniffi::export]
 pub fn exe_token_command() -> String {
     "ssh exe.dev ssh-key generate-api-key --exp=365d --cmds=whoami,ls,new,rm,share".to_owned()
+}
+
+/// Makes the app's SSH key for exe.dev, once; signing in adds it to the person's account.
+#[uniffi::export]
+pub fn exe_new_key() -> Result<ExeKey, NudgeError> {
+    let key = nudge_client::new_exe_key()?;
+    Ok(ExeKey {
+        private_key: key.private_key,
+        public_key: key.public_key,
+    })
+}
+
+/// An exe.dev token signed with the app's key, for `ExeClient`, good for `days`. It works once
+/// the key is on the person's account, as `ExeLogin` puts it there.
+#[uniffi::export]
+pub fn exe_mint_token(private_key: String, days: u32) -> Result<String, NudgeError> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    Ok(nudge_client::mint_exe_token(
+        &private_key,
+        Some(now + u64::from(days) * 86_400),
+    )?)
+}
+
+/// Hears an exe.dev sign-in, on one of the library's threads.
+#[uniffi::export(with_foreign)]
+pub trait ExeLoginListener: Send + Sync {
+    /// The terminal's screen as text, a line per row.
+    fn on_screen(&self, text: String);
+    /// exe.dev ended the session, or it failed with `problem`.
+    fn on_closed(&self, problem: Option<String>);
+}
+
+struct ForeignExeScreen(Arc<dyn ExeLoginListener>);
+
+impl nudge_client::ExeScreen for ForeignExeScreen {
+    fn screen(&self, text: String) {
+        self.0.on_screen(text);
+    }
+
+    fn closed(&self, problem: Option<String>) {
+        self.0.on_closed(problem);
+    }
+}
+
+/// `ssh exe.dev` with the app's key, for the person to sign up or sign in: exe.dev asks for their
+/// email and sends a link, which adds the key to their account. Show its screen, send what they
+/// type. Ending it, or dropping it, ends the session.
+#[derive(uniffi::Object)]
+pub struct ExeLogin {
+    login: std::sync::Mutex<Option<nudge_client::ExeLogin>>,
+}
+
+#[uniffi::export]
+impl ExeLogin {
+    /// Connects to exe.dev, checking its host key, with a terminal of `cols` × `rows`.
+    #[uniffi::constructor]
+    pub async fn start(
+        private_key: String,
+        cols: u16,
+        rows: u16,
+        listener: Arc<dyn ExeLoginListener>,
+    ) -> Result<Arc<Self>, NudgeError> {
+        let screen = Arc::new(ForeignExeScreen(listener));
+        let login = run(async move {
+            nudge_client::ExeLogin::start(&private_key, cols, rows, screen).await
+        })
+        .await?;
+        Ok(Arc::new(ExeLogin {
+            login: std::sync::Mutex::new(Some(login)),
+        }))
+    }
+
+    /// Types `text`, as is; a line ends with `\r`.
+    pub fn send(&self, text: String) {
+        if let Some(login) = self.login.lock().unwrap().as_ref() {
+            login.send(&text);
+        }
+    }
+
+    pub fn resize(&self, cols: u16, rows: u16) {
+        if let Some(login) = self.login.lock().unwrap().as_ref() {
+            login.resize(cols, rows);
+        }
+    }
+
+    /// Ends the session; named so, as Kotlin's objects have a `close()` of their own.
+    pub fn end(&self) {
+        self.login.lock().unwrap().take();
+    }
 }

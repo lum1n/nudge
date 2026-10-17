@@ -25,6 +25,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -51,9 +52,9 @@ import nudge.ffi.ExeClient
 import nudge.ffi.exeTokenCommand
 
 /**
- * A new server on exe.dev (ADR 11): the person runs one command to mint a token for the app, which
- * keeps it on this device, names the server, and the app makes it and waits until it can be set
- * up. Then `ready` gets its address and setup code, for the setup wizard.
+ * A new server on exe.dev (ADR 11): the person signs in to exe.dev here (or pastes a token they
+ * minted on a computer), names the server, and the app makes it and waits until it can be set up.
+ * Then `ready` gets its address and setup code, for the setup wizard.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -66,6 +67,10 @@ fun ExeScreen(model: AppModel, close: () -> Unit, ready: (SetupStart) -> Unit) {
     var progress by remember { mutableStateOf<String?>(null) }
     var problem by remember { mutableStateOf<String?>(null) }
     val command = remember { exeTokenCommand() }
+    // Whether the token came from signing in here, or one kept from before.
+    var signedIn by remember { mutableStateOf(model.servers.exeToken != null) }
+    var signingIn by remember { mutableStateOf(false) }
+    var pasting by remember { mutableStateOf(false) }
 
     fun launch() = scope.launch {
         busy = true
@@ -86,6 +91,19 @@ fun ExeScreen(model: AppModel, close: () -> Unit, ready: (SetupStart) -> Unit) {
         }
     }
 
+    if (signingIn) {
+        ExeLoginScreen(
+            model,
+            close = { signingIn = false },
+            signedIn = { minted ->
+                token = minted
+                signedIn = true
+                signingIn = false
+            },
+        )
+        return
+    }
+
     BackHandler(enabled = !busy) { close() }
     Scaffold(
         topBar = {
@@ -104,23 +122,36 @@ fun ExeScreen(model: AppModel, close: () -> Unit, ready: (SetupStart) -> Unit) {
                     "Nudge makes a small server in your exe.dev account, billed to it, with an HTTPS address of its own.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Text("1. Give the app a token", style = MaterialTheme.typography.titleMedium)
-                Text("Run this once on a computer with your exe.dev key, and paste what it prints:")
-                Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = MaterialTheme.shapes.medium) {
-                    Text(command, Modifier.padding(12.dp), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+                Text("1. Sign in to exe.dev", style = MaterialTheme.typography.titleMedium)
+                if (signedIn) {
+                    Text("Signed in to exe.dev", color = MaterialTheme.colorScheme.primary)
                 }
-                TextButton(onClick = { copy(context, command) }) { Text("Copy the command") }
-                OutlinedTextField(
-                    value = token,
-                    onValueChange = { token = it },
-                    label = { Text("exe.dev token") },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
-                    supportingText = { Text("It stays on this device. It can make and remove servers, nothing else.") },
-                    shape = MaterialTheme.shapes.large,
-                    modifier = Modifier.fillMaxWidth(),
+                OutlinedButton(onClick = { signingIn = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (signedIn) "Sign in again" else "Sign in to exe.dev")
+                }
+                Text(
+                    "New to exe.dev? Signing in makes your account: it asks for your email and sends a link. The app keeps its key and token on this device; they can make and remove servers, nothing else.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                TextButton(onClick = { pasting = !pasting }) { Text("Or paste a token") }
+                if (pasting) {
+                    Text("Run this once on a computer with your exe.dev key, and paste what it prints:")
+                    Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = MaterialTheme.shapes.medium) {
+                        Text(command, Modifier.padding(12.dp), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+                    }
+                    TextButton(onClick = { copy(context, command) }) { Text("Copy the command") }
+                    OutlinedTextField(
+                        value = token,
+                        onValueChange = { token = it },
+                        label = { Text("exe.dev token") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
+                        shape = MaterialTheme.shapes.large,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
                 Text("2. Name the server", style = MaterialTheme.typography.titleMedium)
                 OutlinedTextField(
                     value = name,

@@ -45,6 +45,16 @@ final class Servers {
         set { KeychainTokens(service: "nudge-exe", account: "exe.dev").set(token: newValue) }
     }
 
+    /// The app's SSH key for exe.dev, made the first time. Signing in adds it to the person's
+    /// account, and the exe.dev token is signed with it.
+    func exeKey() throws -> String {
+        let store = KeychainTokens(service: "nudge-exe", account: "key")
+        if let key = store.get() { return key }
+        let key = try exeNewKey().privateKey
+        store.set(token: key)
+        return key
+    }
+
     private func tokens(_ server: String) -> KeychainTokens {
         KeychainTokens(service: "nudge-server", account: server.trimmingCharacters(in: ["/"]))
     }

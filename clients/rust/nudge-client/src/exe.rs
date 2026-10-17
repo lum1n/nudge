@@ -1,6 +1,7 @@
 //! Making a Nudge server on exe.dev from the app (ADR 11). exe.dev's HTTPS API takes its CLI's
-//! commands at `POST https://exe.dev/exec`, with a bearer token the person minted once
-//! (`ssh exe.dev ssh-key generate-api-key`) and pasted into the app; the token stays on the device.
+//! commands at `POST https://exe.dev/exec`, with a bearer token the app mints from its own key once
+//! the person signed in (`exe_login`), or one they minted on a computer and pasted; the token stays
+//! on the device.
 //!
 //! What a command answers is read leniently: the shapes of `new` and `ls` aren't documented, so a
 //! VM's address falls back to `https://<name>.exe.xyz`.

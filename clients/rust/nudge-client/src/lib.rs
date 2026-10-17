@@ -7,6 +7,7 @@ mod cache;
 mod client;
 mod connection;
 mod exe;
+mod exe_login;
 mod panel;
 mod push;
 mod server;
@@ -26,6 +27,9 @@ pub use connection::{
 pub use exe::{
     ExeDev, ExeError, ExeVm, LaunchedServer, NUDGE_IMAGE, NUDGE_PORT, new_setup_code,
     wait_for_setup,
+};
+pub use exe_login::{
+    EXE_HOST_KEY, EXE_TOKEN_COMMANDS, ExeKey, ExeLogin, ExeScreen, mint_exe_token, new_exe_key,
 };
 pub use nudge_protocol as protocol;
 pub use panel::{PanelListener, PanelSocket, PanelStatus, panel_url};

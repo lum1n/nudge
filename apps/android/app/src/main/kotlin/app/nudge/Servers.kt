@@ -1,5 +1,5 @@
-// The servers this device owns (ADR 11), with a server token each, and the exe.dev token servers
-// are made with. Kept in the app's private preferences, like the player tokens; never sent to a
+// The servers this device owns (ADR 11), with a server token each, and the exe.dev key and token
+// servers are made with. Kept in the app's private preferences, like the player tokens; never sent to a
 // server but the one each belongs to.
 package app.nudge
 
@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import nudge.client.PreferencesTokens
 import nudge.ffi.ExeClient
 import nudge.ffi.ServerClient
+import nudge.ffi.exeNewKey
 
 class Servers(private val preferences: SharedPreferences) {
     private val mutableOwned = MutableStateFlow(saved())
@@ -46,6 +47,14 @@ class Servers(private val preferences: SharedPreferences) {
 
     fun exe(): ExeClient? = exeToken?.let { ExeClient(it) }
 
+    /**
+     * The app's SSH key for exe.dev, made the first time. Signing in adds it to the person's
+     * account, and the exe.dev token is signed with it.
+     */
+    fun exeKey(): String =
+        preferences.getString(EXE_KEY, null)
+            ?: exeNewKey().privateKey.also { preferences.edit().putString(EXE_KEY, it).apply() }
+
     private fun tokens(server: String) = PreferencesTokens(preferences, "serverToken:${server.trimEnd('/')}")
 
     private fun saved(): List<String> = preferences.getStringSet(OWNED, emptySet()).orEmpty().sorted()
@@ -55,5 +64,6 @@ class Servers(private val preferences: SharedPreferences) {
     private companion object {
         const val OWNED = "servers"
         const val EXE_TOKEN = "exe.token"
+        const val EXE_KEY = "exe.key"
     }
 }
