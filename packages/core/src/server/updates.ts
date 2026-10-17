@@ -18,10 +18,13 @@ import { promisify } from "node:util";
 
 /**
  * The project's release signing keys (Ed25519, SPKI DER, base64), newest first. A server installs
- * only a release whose manifest one of these signed. Empty until the project has made its key
- * (packages/release/scripts/keygen.mjs), and then servers don't update themselves.
+ * only a release whose manifest one of these signed; the private half is the repository's
+ * NUDGE_RELEASE_KEY secret. A new key goes in front of the old, in a release the old one signed, so
+ * servers out there follow it.
  */
-export const RELEASE_KEYS: readonly string[] = [];
+export const RELEASE_KEYS: readonly string[] = [
+  "MCowBQYDK2VwAyEAsWcxim6fEOyK/m9EArbjNyQdJQFDHapuHwak1BHsOtk=",
+];
 
 /** Where a server finds the newest release of its channel. */
 export const RELEASE_MANIFEST_URL =
