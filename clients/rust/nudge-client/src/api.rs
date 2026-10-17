@@ -634,7 +634,7 @@ impl Api {
 
 const NO_BODY: Option<&()> = None;
 
-fn parse_server(server: &str) -> Result<Url, ApiError> {
+pub(crate) fn parse_server(server: &str) -> Result<Url, ApiError> {
     let url = Url::parse(server).map_err(|_| ApiError::Address(server.to_owned()))?;
     match url.scheme() {
         "http" | "https" => Ok(url),
@@ -652,7 +652,7 @@ pub(crate) fn endpoint(base: &Url, segments: &[&str]) -> Url {
     url
 }
 
-async fn checked(
+pub(crate) async fn checked(
     response: reqwest::Result<reqwest::Response>,
 ) -> Result<reqwest::Response, ApiError> {
     let response = response.map_err(|error| ApiError::Network(error.to_string()))?;
@@ -673,7 +673,7 @@ async fn checked(
     })
 }
 
-async fn read<T: DeserializeOwned>(
+pub(crate) async fn read<T: DeserializeOwned>(
     response: reqwest::Result<reqwest::Response>,
 ) -> Result<T, ApiError> {
     let response = checked(response).await?;

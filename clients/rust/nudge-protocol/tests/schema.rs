@@ -767,6 +767,232 @@ fn http_bodies_match_the_schema() {
 }
 
 #[test]
+fn server_and_setup_bodies_match_the_schema() {
+    let client = ClientInfo {
+        name: "android".into(),
+        platform: "android".into(),
+    };
+    let model = ModelChoice {
+        provider: "anthropic".into(),
+        model_id: "claude-sonnet-5".into(),
+    };
+    let budget = AssistantBudget {
+        monthly_usd: Some(20.0),
+        per_player_usd: Some(5.0),
+        warn_at: Some(0.8),
+    };
+    let assistant = ServerAssistant {
+        name: "robin".into(),
+        display_name: "Robin".into(),
+        model: model.clone(),
+        time_zone: Some("Europe/Oslo".into()),
+        instructions: Some("Be brief.".into()),
+        budget: Some(budget.clone()),
+        running: true,
+    };
+    let owner = ServerOwner {
+        id: "o1".into(),
+        assistant: "robin".into(),
+        player_id: "ann".into(),
+        added_at: 1.0,
+    };
+    check("ModelChoice", &model);
+    check("AssistantBudget", &budget);
+    check("ServerAssistant", &assistant);
+    check(
+        "ServerAssistantsResponse",
+        &ServerAssistantsResponse {
+            assistants: vec![assistant.clone()],
+        },
+    );
+    check(
+        "CreateAssistantRequest",
+        &CreateAssistantRequest {
+            name: "kari".into(),
+            display_name: Some("Kari".into()),
+            model: Some(model.clone()),
+            time_zone: Some("Europe/Oslo".into()),
+            instructions: Some("x".into()),
+            budget: Some(budget.clone()),
+            first_player: Some(FirstPlayer {
+                display_name: "Kari".into(),
+            }),
+            invite: Some("ann@home.example/robin".into()),
+        },
+    );
+    check(
+        "CreateAssistantResponse",
+        &CreateAssistantResponse {
+            assistant: assistant.clone(),
+            pairing: Some(FirstPlayerPairing {
+                code: "7K3Q-M9XD".into(),
+                link: "nudge://pair".into(),
+                expires_at: 1.0,
+                player_id: "kari".into(),
+            }),
+            join_link: Some("nudge://join".into()),
+        },
+    );
+    check(
+        "UpdateAssistantRequest",
+        &UpdateAssistantRequest {
+            display_name: Some(Some("Robin".into())),
+            model: Some(Some(model.clone())),
+            time_zone: Some(None),
+            instructions: Some(Some("x".into())),
+            budget: Some(Some(budget.clone())),
+        },
+    );
+    check(
+        "DeleteAssistantResponse",
+        &DeleteAssistantResponse {
+            backup: "nudge-1.nudgebackup".into(),
+        },
+    );
+    let key = ProviderKey {
+        provider: "anthropic".into(),
+        source: KeySource::Env,
+        variables: Some(vec!["ANTHROPIC_API_KEY".into()]),
+    };
+    check("ProviderKey", &key);
+    check(
+        "ProviderKeysResponse",
+        &ProviderKeysResponse { keys: vec![key] },
+    );
+    check(
+        "SetProviderKeyRequest",
+        &SetProviderKeyRequest {
+            key: "sk".into(),
+            assistant: Some("robin".into()),
+            test: Some(false),
+        },
+    );
+    check("ServerOwner", &owner);
+    check(
+        "ServerOwnersResponse",
+        &ServerOwnersResponse {
+            owners: vec![owner.clone()],
+        },
+    );
+    check(
+        "AddOwnerRequest",
+        &AddOwnerRequest {
+            assistant: "robin".into(),
+            player_id: "bo".into(),
+        },
+    );
+    check(
+        "ServerSessionRequest",
+        &ServerSessionRequest {
+            assistant: "robin".into(),
+            client: client.clone(),
+        },
+    );
+    check(
+        "ServerSessionResponse",
+        &ServerSessionResponse {
+            token: "nudge_server_x".into(),
+            client_id: "c".into(),
+            owner: owner.clone(),
+        },
+    );
+    let updates = UpdateState {
+        current: "0.1.0".into(),
+        automatic: true,
+        available: Some("0.2.0".into()),
+        checked_at: Some(1.0),
+        error: Some("x".into()),
+    };
+    check("UpdateState", &updates);
+    check("SetUpdatesRequest", &SetUpdatesRequest { automatic: false });
+    check(
+        "ServerInfoResponse",
+        &ServerInfoResponse {
+            version: "0.1.0".into(),
+            owner: owner.clone(),
+            assistants: vec![assistant],
+            updates: Some(updates),
+        },
+    );
+    check(
+        "RecoveryKitRequest",
+        &RecoveryKitRequest {
+            passphrase: "correct horse".into(),
+        },
+    );
+    check(
+        "RecoveryKitResponse",
+        &RecoveryKitResponse { kit: "{}".into() },
+    );
+
+    check(
+        "SetupInfoResponse",
+        &SetupInfoResponse {
+            open: true,
+            providers: vec![SetupProvider {
+                id: "anthropic".into(),
+                name: "Anthropic".into(),
+                models: vec![SetupModel {
+                    id: "claude-sonnet-5".into(),
+                    name: "Claude Sonnet 5".into(),
+                }],
+                recommended: "claude-sonnet-5".into(),
+            }],
+            local: vec![SetupLocalServer {
+                id: "ollama".into(),
+                name: "Ollama".into(),
+                base_url: "http://127.0.0.1:11434/v1".into(),
+                models: vec!["qwen3".into()],
+            }],
+        },
+    );
+    check(
+        "SetupCodeRequest",
+        &SetupCodeRequest {
+            code: "ABCD-EFGH-JKMN".into(),
+        },
+    );
+    check(
+        "SetupKeyRequest",
+        &SetupKeyRequest {
+            code: "ABCD-EFGH-JKMN".into(),
+            provider: "anthropic".into(),
+            key: "sk".into(),
+        },
+    );
+    check(
+        "SetupRequest",
+        &SetupRequest {
+            code: "ABCD-EFGH-JKMN".into(),
+            client,
+            assistant: SetupAssistant {
+                name: "robin".into(),
+                display_name: Some("Robin".into()),
+            },
+            model,
+            key: Some("sk".into()),
+            local: Some("ollama".into()),
+            you: SetupPerson {
+                display_name: "Ann".into(),
+            },
+            public_url: Some("https://robin.exe.xyz".into()),
+            backups: Some(true),
+        },
+    );
+    check(
+        "SetupResponse",
+        &SetupResponse {
+            assistant: "robin".into(),
+            player: ann(),
+            token: "nudge_x".into(),
+            client_id: "c".into(),
+            server_token: "nudge_server_x".into(),
+            owner,
+        },
+    );
+}
+
+#[test]
 fn reads_what_it_does_not_know() {
     // New keys are ignored; new kinds of part, item, status and frame read as `Unknown`.
     let item: TimelineItem =

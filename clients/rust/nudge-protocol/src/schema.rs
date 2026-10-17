@@ -1100,3 +1100,336 @@ pub struct InviteResponse {
 pub struct InvitesResponse {
     pub invites: Vec<Invite>,
 }
+
+// The server's own API, under `/v1/server` (ADR 11): for its owners, not an assistant's admins.
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelChoice {
+    pub provider: String,
+    pub model_id: String,
+}
+
+/// Monthly limits on model spend, in US dollars.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssistantBudget {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub monthly_usd: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub per_player_usd: Option<f64>,
+    /// The share of a limit at which people hear about it, between 0 and 1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub warn_at: Option<f64>,
+}
+
+/// One of the server's assistants, with its settings.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerAssistant {
+    /// In its URLs and its people's addresses; it never changes.
+    pub name: String,
+    pub display_name: String,
+    pub model: ModelChoice,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub time_zone: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instructions: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub budget: Option<AssistantBudget>,
+    /// False when it is in the config but failed to open.
+    pub running: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ServerAssistantsResponse {
+    pub assistants: Vec<ServerAssistant>,
+}
+
+/// The person an assistant is made for, when it is to be their home.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FirstPlayer {
+    pub display_name: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateAssistantRequest {
+    /// Lower-case letters, digits and dashes.
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<ModelChoice>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub time_zone: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instructions: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub budget: Option<AssistantBudget>,
+    /// Someone whose home it is to be: its first player, so its admin, with a pairing code.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub first_player: Option<FirstPlayer>,
+    /// An address to invite, such as the owner's own: their app joins it from home.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub invite: Option<String>,
+}
+
+/// The pairing code of an assistant's first player.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FirstPlayerPairing {
+    pub code: String,
+    /// `nudge://pair?server=…&assistant=…&code=…`, for a link or a QR code.
+    pub link: String,
+    pub expires_at: f64,
+    pub player_id: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateAssistantResponse {
+    pub assistant: ServerAssistant,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pairing: Option<FirstPlayerPairing>,
+    /// For `invite`: `nudge://join?server=…&assistant=…`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub join_link: Option<String>,
+}
+
+/// Each field: `None` leaves it, `Some(None)` goes back to the default, `Some(Some(_))` sets it.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateAssistantRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "nullable")]
+    pub display_name: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "nullable")]
+    pub model: Option<Option<ModelChoice>>,
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "nullable")]
+    pub time_zone: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "nullable")]
+    pub instructions: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "nullable")]
+    pub budget: Option<Option<AssistantBudget>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct DeleteAssistantResponse {
+    /// The backup made before it went, kept a while in the server's `server/deleted`.
+    pub backup: String,
+}
+
+/// Where an assistant's key for a model provider comes from; the key itself is never shown.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum KeySource {
+    /// The server's environment, which wins.
+    Env,
+    Server,
+    Assistant,
+    None,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ProviderKey {
+    pub provider: String,
+    pub source: KeySource,
+    /// For `Env`: which variables.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub variables: Option<Vec<String>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ProviderKeysResponse {
+    pub keys: Vec<ProviderKey>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SetProviderKeyRequest {
+    pub key: String,
+    /// For one assistant only; default every assistant on the server.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assistant: Option<String>,
+    /// Send one tiny request with it first, and refuse it if that fails; default true.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub test: Option<bool>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerOwner {
+    pub id: String,
+    /// The assistant they are a player of, and their id there.
+    pub assistant: String,
+    pub player_id: String,
+    pub added_at: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ServerOwnersResponse {
+    pub owners: Vec<ServerOwner>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddOwnerRequest {
+    pub assistant: String,
+    pub player_id: String,
+}
+
+/// Sent with the player's token of `assistant`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ServerSessionRequest {
+    pub assistant: String,
+    pub client: ClientInfo,
+}
+
+/// `token` is shown only here; keep it like a password.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerSessionResponse {
+    pub token: String,
+    pub client_id: String,
+    pub owner: ServerOwner,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateState {
+    /// The version running.
+    pub current: String,
+    /// Whether the server installs new releases itself.
+    pub automatic: bool,
+    /// A newer release the project signed, not installed yet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub available: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checked_at: Option<f64>,
+    /// Why the last check failed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SetUpdatesRequest {
+    pub automatic: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ServerInfoResponse {
+    pub version: String,
+    /// The owner whose token asked.
+    pub owner: ServerOwner,
+    pub assistants: Vec<ServerAssistant>,
+    /// Absent for a server that can't update itself.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updates: Option<UpdateState>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RecoveryKitRequest {
+    pub passphrase: String,
+}
+
+/// The backup key sealed with the passphrase, as a file to keep away from the server.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RecoveryKitResponse {
+    pub kit: String,
+}
+
+// Setting a server up, under `/v1/setup` (ADR 11): open only while it has no config.
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SetupModel {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SetupProvider {
+    pub id: String,
+    pub name: String,
+    /// Best first.
+    pub models: Vec<SetupModel>,
+    /// The one to preselect.
+    pub recommended: String,
+}
+
+/// A model server found on the machine, such as Ollama, that needs no key.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetupLocalServer {
+    pub id: String,
+    pub name: String,
+    pub base_url: String,
+    pub models: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SetupInfoResponse {
+    /// False once the server is set up, or after too many wrong codes until it restarts.
+    pub open: bool,
+    pub providers: Vec<SetupProvider>,
+    pub local: Vec<SetupLocalServer>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SetupCodeRequest {
+    pub code: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SetupKeyRequest {
+    pub code: String,
+    pub provider: String,
+    pub key: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetupAssistant {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetupPerson {
+    pub display_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetupRequest {
+    pub code: String,
+    pub client: ClientInfo,
+    pub assistant: SetupAssistant,
+    pub model: ModelChoice,
+    /// The provider's key, tried again before it is kept.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+    /// The id of a found local server `model` is on, instead of a key.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local: Option<String>,
+    pub you: SetupPerson,
+    /// The address the client reached the server at, kept for links and other assistants.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub public_url: Option<String>,
+    /// Nightly backups beside the config; default true.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backups: Option<bool>,
+}
+
+/// The tokens are shown only here: the player's for the assistant, the owner's for the server.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetupResponse {
+    pub assistant: String,
+    pub player: Player,
+    pub token: String,
+    pub client_id: String,
+    pub server_token: String,
+    pub owner: ServerOwner,
+}

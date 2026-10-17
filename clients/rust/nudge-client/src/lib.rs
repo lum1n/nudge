@@ -6,8 +6,10 @@ mod api;
 mod cache;
 mod client;
 mod connection;
+mod exe;
 mod panel;
 mod push;
+mod server;
 mod stores;
 
 pub use api::{
@@ -21,9 +23,14 @@ pub use connection::{
     AlreadyWatched, Backoff, Connection, ConnectionOptions, ConnectionStatus, OnError, QUIET,
     Subscriber, TargetFrame, Watch, connect_url,
 };
+pub use exe::{
+    ExeDev, ExeError, ExeVm, LaunchedServer, NUDGE_IMAGE, NUDGE_PORT, new_setup_code,
+    wait_for_setup,
+};
 pub use nudge_protocol as protocol;
 pub use panel::{PanelListener, PanelSocket, PanelStatus, panel_url};
 pub use push::{DeviceKey, PushPayload, open_push};
+pub use server::{ServerApi, check_setup_code, check_setup_key, set_up, setup_info};
 pub use stores::{
     PageLoader, PendingMessage, PendingState, RoomListStore, RoomState, RoomStore, SyncStatus,
     ViewState, slide,
