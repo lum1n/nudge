@@ -605,7 +605,7 @@ class ServerProblem(val kind: Kind) : Exception(kind.text) {
             "This device reaches your home at a local address, which other servers can't reach. " +
                 "Sign in to your home at its Tailscale or public address.",
         ),
-        NEEDS_TAILSCALE("Your home is only in your tailnet, so this server has to join it first, under Tailscale."),
+        NEEDS_TAILSCALE("Your home is only in your tailnet, so this server has to join it first: under Settings → Servers, open the server and connect it under Tailscale."),
         NOT_JOINED("Joining the assistant from home didn't work."),
         NOT_ON_EXE("This server isn't one this device made on exe.dev."),
     }

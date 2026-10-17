@@ -39,9 +39,9 @@ import nudge.ffi.TailscaleStatus
 
 /**
  * A server's own Tailscale (ADR 11), so it reaches a home that is only in the person's tailnet:
- * connecting opens Tailscale's page to approve it, and the card follows until it is in. Shows
- * nothing for a server that can't run it. `changed` hears each state read, as the joining screens
- * wait for it to be connected.
+ * connecting opens Tailscale's page to approve it, and the card follows until it is in. A server
+ * too old for it says so, with a check for the release that has it. `changed` hears each state
+ * read, as the joining screens wait for it to be connected.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -53,11 +53,14 @@ fun TailscaleCard(model: AppModel, server: String, changed: (TailscaleState) -> 
     var busy by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
     var disconnecting by remember { mutableStateOf(false) }
+    // Why the server can't run Tailscale, when it answered that it can't.
+    var unsupported by remember(server) { mutableStateOf<String?>(null) }
     val waiting = state?.state.let {
         it == TailscaleStatus.STARTING || it == TailscaleStatus.NEEDS_LOGIN || it == TailscaleStatus.NEEDS_APPROVAL
     }
 
     fun show(next: TailscaleState) {
+        unsupported = null
         state = next
         problem = null
         changed(next)
@@ -81,7 +84,16 @@ fun TailscaleCard(model: AppModel, server: String, changed: (TailscaleState) -> 
             try {
                 show(client.tailscale())
             } catch (error: NudgeException.Status) {
-                if (error.status.toInt() == 404) state = null else problem = explain(error)
+                if (error.status.toInt() == 404) {
+                    state = null
+                    unsupported = if ("Linux" in error.detail) {
+                        error.detail
+                    } else {
+                        "This server's Nudge is older than Tailscale support. It installs new releases itself; check for one now."
+                    }
+                } else {
+                    problem = explain(error)
+                }
             } catch (error: Exception) {
                 problem = explain(error)
             }
@@ -109,6 +121,38 @@ fun TailscaleCard(model: AppModel, server: String, changed: (TailscaleState) -> 
         )
     }
 
+    unsupported?.let { why ->
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Section("Tailscale")
+            Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.large) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(why, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Button(
+                        enabled = !busy,
+                        onClick = {
+                            // A newer release is installed and restarted into when updates are automatic.
+                            busy = true
+                            scope.launch {
+                                try {
+                                    val updates = client.checkUpdates()
+                                    problem = updates.error
+                                        ?: updates.available?.let { "Installing $it. The server restarts in a minute; come back then." }
+                                        ?: "No newer release yet."
+                                } catch (error: Exception) {
+                                    problem = explain(error)
+                                } finally {
+                                    busy = false
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text(if (busy) "Checking…" else "Check for updates") }
+                    problem?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                }
+            }
+        }
+        return
+    }
     val current = state ?: return
     fun connect() = act {
         client.connectTailscale(null).also { next ->

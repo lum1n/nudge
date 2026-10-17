@@ -535,7 +535,7 @@ enum ServerProblem: LocalizedError {
         case .noFederation: "Your home has no federation yet, so it can't join assistants on other servers."
         case .noFederationExtension: "Your home's server has no federation extension to turn on. Update it first."
         case .privateHome: "This device reaches your home at a local address, which other servers can't reach. Sign in to your home at its Tailscale or public address."
-        case .needsTailscale: "Your home is only in your tailnet, so this server has to join it first, under Tailscale."
+        case .needsTailscale: "Your home is only in your tailnet, so this server has to join it first: under Settings → Servers, open the server and connect it under Tailscale."
         case .notJoined: "Joining the assistant from home didn't work."
         case .notOnExe: "This server isn't one this device made on exe.dev."
         }

@@ -2,8 +2,8 @@ import Nudge
 import SwiftUI
 
 /// A server's own Tailscale (ADR 11), so it reaches a home that is only in the person's tailnet:
-/// connecting opens Tailscale's page to approve it, and the section follows until it is in.
-/// Shows nothing for a server that can't run it.
+/// connecting opens Tailscale's page to approve it, and the section follows until it is in. A
+/// server too old for it says so, with a check for the release that has it.
 struct TailscaleSection: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openURL) private var openURL
@@ -14,10 +14,25 @@ struct TailscaleSection: View {
     @State private var busy = false
     @State private var problem: String?
     @State private var disconnecting = false
+    /// Why the server can't run Tailscale, when it answered that it can't.
+    @State private var unsupported: String?
 
     var body: some View {
         Group {
-            if let state {
+            if let unsupported {
+                Section {
+                    Text(unsupported).foregroundStyle(.secondary)
+                    Button(busy ? "Checking…" : "Check for updates", systemImage: "arrow.down.circle") {
+                        Task { await checkUpdates() }
+                    }
+                    .disabled(busy)
+                    if let problem {
+                        Text(problem).foregroundStyle(.red)
+                    }
+                } header: {
+                    Text("Tailscale")
+                }
+            } else if let state {
                 Section {
                     row(state)
                     if let problem {
@@ -97,8 +112,26 @@ struct TailscaleSection: View {
     private func read() async {
         do {
             show(try await model.servers.client(server).tailscale())
-        } catch NudgeError.Status(404, _) {
+        } catch NudgeError.Status(404, let detail) {
             state = nil
+            unsupported = detail.contains("Linux")
+                ? detail
+                : "This server's Nudge is older than Tailscale support. It installs new releases itself; check for one now."
+        } catch {
+            problem = explain(error)
+        }
+    }
+
+    /// Asks the server for a newer release, which it installs and restarts into when updates are
+    /// automatic; then Tailscale is read again.
+    private func checkUpdates() async {
+        busy = true
+        defer { busy = false }
+        do {
+            let updates = try await model.servers.client(server).checkUpdates()
+            problem = updates.error
+                ?? updates.available.map { "Installing \($0). The server restarts in a minute; come back then." }
+                ?? "No newer release yet."
         } catch {
             problem = explain(error)
         }
@@ -115,6 +148,7 @@ struct TailscaleSection: View {
     }
 
     private func show(_ next: TailscaleState) {
+        unsupported = nil
         state = next
         problem = nil
         changed(next)
