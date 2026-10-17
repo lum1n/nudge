@@ -74,7 +74,7 @@ private class Section(val session: Session, val roomList: RoomListUpdate?, val m
 
 /**
  * The player's rooms at home, then those of each assistant they joined, a FAB menu for new rooms
- * at home, and a long press to rename one.
+ * at home or at one of those, and a long press to rename one.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -98,7 +98,8 @@ fun RoomsScreen(
     }
     val home = sections.first()
     var menu by rememberSaveable { mutableStateOf(false) }
-    var creating by remember { mutableStateOf(false) }
+    /** Where a new shared room is being made. */
+    var creating by remember { mutableStateOf<Session?>(null) }
     var renaming by remember { mutableStateOf<Pair<Session, Room>?>(null) }
     var problem by remember { mutableStateOf<String?>(null) }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -132,28 +133,32 @@ fun RoomsScreen(
                     }
                 },
             ) {
-                FloatingActionButtonMenuItem(
-                    onClick = {
-                        menu = false
-                        scope.launch {
-                            try {
-                                open(RoomRef(session.account.key, session.client.personalRoom().id))
-                            } catch (error: Exception) {
-                                problem = explain(error)
+                // At home, then at each assistant joined from there, named where there are others.
+                for (at in listOf(session) + places) {
+                    val where = if (places.isEmpty()) "" else " at ${at.account.assistantName}"
+                    FloatingActionButtonMenuItem(
+                        onClick = {
+                            menu = false
+                            scope.launch {
+                                try {
+                                    open(RoomRef(at.account.key, at.client.personalRoom().id))
+                                } catch (error: Exception) {
+                                    problem = explain(error)
+                                }
                             }
-                        }
-                    },
-                    text = { Text("My room") },
-                    icon = { Icon(Icons.Outlined.Person, null) },
-                )
-                FloatingActionButtonMenuItem(
-                    onClick = {
-                        menu = false
-                        creating = true
-                    },
-                    text = { Text("New shared room") },
-                    icon = { Icon(Icons.Outlined.Group, null) },
-                )
+                        },
+                        text = { Text("My room$where") },
+                        icon = { Icon(Icons.Outlined.Person, null) },
+                    )
+                    FloatingActionButtonMenuItem(
+                        onClick = {
+                            menu = false
+                            creating = at
+                        },
+                        text = { Text("New shared room$where") },
+                        icon = { Icon(Icons.Outlined.Group, null) },
+                    )
+                }
             }
         },
     ) { padding ->
@@ -205,8 +210,8 @@ fun RoomsScreen(
         }
     }
 
-    if (creating) {
-        NewRoomDialog(session, close = { creating = false }, created = { open(RoomRef(session.account.key, it)) })
+    creating?.let { at ->
+        NewRoomDialog(at, close = { creating = null }, created = { open(RoomRef(at.account.key, it)) })
     }
     renaming?.let { (at, room) -> RenameRoomDialog(at, room, close = { renaming = null }) }
     problem?.let { message ->
@@ -229,7 +234,12 @@ private fun PlaceHeading(name: String, host: String?, connection: ConnectionStat
             androidx.compose.material3.LocalContentColor provides MaterialTheme.colorScheme.onSurfaceVariant,
             androidx.compose.material3.LocalTextStyle provides MaterialTheme.typography.bodySmall,
         ) {
-            if (status != null) status() else if (host != null) Text(host)
+            val signedOut = connection is ConnectionStatus.Closed && connection.code.toInt() == 4401
+            when {
+                signedOut -> Text("Signed out here. Joining again from home…")
+                status != null -> status()
+                host != null -> Text(host)
+            }
         }
     }
 }

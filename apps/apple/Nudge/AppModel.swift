@@ -50,12 +50,21 @@ final class Session {
         roomList = client.observeRoomListState()
     }
 
+    /// The server no longer takes this device's token here (4401).
+    var signedOut: Bool {
+        if case .closed(code: 4401, _) = connection.value { return true }
+        return false
+    }
+
     func close() {
         connection.close()
         roomList.close()
         client.disconnect()
     }
 }
+
+/// By the object, as sheets about one session need.
+extension Session: Identifiable {}
 
 @MainActor @Observable
 final class AppModel {
@@ -90,6 +99,7 @@ final class AppModel {
 
     @ObservationIgnored private var deviceToken: String?
     @ObservationIgnored private var syncing = false
+    @ObservationIgnored private var rejoining: Set<String> = []
     @ObservationIgnored private let defaults = UserDefaults.standard
     private static let accountKey = "account"
     private static let placesKey = "places"
@@ -223,6 +233,8 @@ final class AppModel {
         }
         let guest = try await place.client.me().player.id
         _ = try await owner.addOwner(assistant: assistant, playerId: guest, admin: true)
+        // An admin now: Settings shows its extensions and invites.
+        place.me = (try? await place.client.me()) ?? place.me
     }
 
     /// Makes an assistant on a server this device owns. One that is "for me" is joined from home
@@ -342,8 +354,13 @@ final class AppModel {
         }
         if !places.contains(where: { $0.account.isAt(server: link.server, assistant: link.assistant) }) {
             let joined = try await join(from: home, server: link.server, assistant: link.assistant)
-            places.append(joined)
-            savePlaces()
+            // A sync may have joined it meanwhile; both tokens work, and the keychain has the newer.
+            if places.contains(where: { $0.account.isAt(server: link.server, assistant: link.assistant) }) {
+                joined.close()
+            } else {
+                places.append(joined)
+                savePlaces()
+            }
         }
         memberships = try? await home.client.memberships()
     }
@@ -404,6 +421,8 @@ final class AppModel {
         guard let home = session, !syncing else { return }
         syncing = true
         defer { syncing = false }
+        // Only these may have been left elsewhere: one joined while home answers isn't in its answer.
+        let before = places
         let found: Memberships
         do {
             found = try await home.client.memberships()
@@ -418,20 +437,43 @@ final class AppModel {
         guard session === home else { return }
         memberships = found
         homeFederation = true
-        let kept = places.filter { place in
-            found.memberships.contains { place.account.isAt(server: $0.server, assistant: $0.assistant) }
+        let gone = before.filter { place in
+            places.contains { $0 === place }
+                && !found.memberships.contains { place.account.isAt(server: $0.server, assistant: $0.assistant) }
         }
-        let gone = places.filter { place in !kept.contains { $0 === place } }
-        var added: [Session] = []
+        places.removeAll { place in gone.contains { $0 === place } }
         for membership in found.memberships
-        where !kept.contains(where: { $0.account.isAt(server: membership.server, assistant: membership.assistant) }) {
-            if let joined = try? await join(from: home, server: membership.server, assistant: membership.assistant) {
-                added.append(joined)
+        where !places.contains(where: { $0.account.isAt(server: membership.server, assistant: membership.assistant) }) {
+            guard let joined = try? await join(from: home, server: membership.server, assistant: membership.assistant)
+            else { continue }
+            // Joined meanwhile too: both tokens work, and the keychain has the newer.
+            if places.contains(where: { $0.account.isAt(server: membership.server, assistant: membership.assistant) }) {
+                joined.close()
+            } else {
+                places.append(joined)
             }
         }
-        places = kept + added
         savePlaces()
         for place in gone { await forget(place) }
+        await rejoinSignedOut()
+    }
+
+    /// Joins again, with a fresh assertion from home, the assistants whose token stopped working
+    /// there: home still has their memberships, so they need no invite. One left elsewhere stays
+    /// signed out.
+    func rejoinSignedOut() async {
+        guard let home = session else { return }
+        for place in places where place.signedOut && !rejoining.contains(place.account.keychainAccount) {
+            let key = place.account.keychainAccount
+            rejoining.insert(key)
+            defer { rejoining.remove(key) }
+            guard let fresh = try? await join(from: home, server: place.account.server, assistant: place.account.assistant),
+                session === home, let at = places.firstIndex(where: { $0 === place })
+            else { continue }
+            places[at] = fresh
+            // Its token is gone already, so there is nothing to sign out.
+            place.close()
+        }
     }
 
     /// Signs in to an assistant with the home's assertion.

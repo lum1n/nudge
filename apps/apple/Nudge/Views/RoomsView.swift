@@ -7,7 +7,8 @@ import SwiftUI
 struct RoomsView: View {
     @Environment(AppModel.self) private var model
     let session: Session
-    @State private var creating = false
+    /// Where a new shared room is being made.
+    @State private var creating: Session?
     @State private var renaming: (session: Session, room: Room)?
     @State private var settings = false
     @State private var problem: String?
@@ -39,7 +40,9 @@ struct RoomsView: View {
                     } header: {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(place.account.assistantName)
-                            Text(connectionBanner(place.connection.value) ?? URL(string: place.account.server)?.host() ?? "")
+                            Text(place.signedOut
+                                ? "Signed out here. Joining again from home…"
+                                : connectionBanner(place.connection.value) ?? URL(string: place.account.server)?.host() ?? "")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -47,11 +50,22 @@ struct RoomsView: View {
                 }
             }
             .navigationTitle(account.assistantName)
+            // A token that stopped working at a joined assistant: join it again from home.
+            .onChange(of: model.places.map(\.signedOut)) { _, signedOut in
+                if signedOut.contains(true) { Task { await model.rejoinSignedOut() } }
+            }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
-                        Button("My room", systemImage: "person") { Task { await openPersonalRoom() } }
-                        Button("New shared room…", systemImage: "person.2") { creating = true }
+                        // At home, then at each assistant joined from there.
+                        ForEach(model.sessions, id: \.account.keychainAccount) { at in
+                            Section {
+                                Button("My room", systemImage: "person") { Task { await openPersonalRoom(at) } }
+                                Button("New shared room…", systemImage: "person.2") { creating = at }
+                            } header: {
+                                if !model.places.isEmpty { Text(at.account.assistantName) }
+                            }
+                        }
                     } label: {
                         Label("New room", systemImage: "square.and.pencil")
                     }
@@ -75,8 +89,8 @@ struct RoomsView: View {
                 ContentUnavailableView("Pick a room", systemImage: "bubble.left.and.bubble.right")
             }
         }
-        .sheet(isPresented: $creating) {
-            NewRoomView(client: client) { model.selectedRoom = RoomRef(account: account.keychainAccount, room: $0) }
+        .sheet(item: $creating) { at in
+            NewRoomView(client: at.client) { model.selectedRoom = RoomRef(account: at.account.keychainAccount, room: $0) }
         }
         .sheet(isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             if let renaming { RenameRoomView(client: renaming.session.client, room: renaming.room) }
@@ -100,9 +114,9 @@ struct RoomsView: View {
         }
     }
 
-    private func openPersonalRoom() async {
+    private func openPersonalRoom(_ at: Session) async {
         do {
-            model.selectedRoom = RoomRef(account: account.keychainAccount, room: try await client.personalRoom().id)
+            model.selectedRoom = RoomRef(account: at.account.keychainAccount, room: try await at.client.personalRoom().id)
         } catch {
             problem = explain(error)
         }

@@ -75,6 +75,10 @@ class Session(
     /** What the server knows the device by: the FCM token, or the relay's handle for it. */
     internal var registeredDevice: String? = null
 
+    /** The server no longer takes this device's token here (4401). */
+    val signedOut: Boolean
+        get() = (connection.state.value as? ConnectionStatus.Closed)?.code?.toInt() == 4401
+
     internal fun close() {
         connection.close()
         roomList.close()
@@ -294,6 +298,8 @@ class AppModel(private val context: Context) {
             ?: throw ServerProblem(ServerProblem.Kind.NOT_JOINED)
         val guest = place.client.me().player.id
         owner.addOwner(assistant, guest, true)
+        // An admin now: Settings shows its extensions and invites.
+        place.me.value = runCatching { place.client.me() }.getOrNull() ?: place.me.value
     }
 
     /**
@@ -449,7 +455,7 @@ class AppModel(private val context: Context) {
         mutableSession.value = session
         // The assistants joined, as this device last knew them, until home says.
         mutablePlaces.value = savedPlaces().mapNotNull { place ->
-            if (tokens(place).get() == null) null else open(place)
+            if (tokens(place).get() == null) null else open(place)?.also { watch(it) }
         }
         if (BuildConfig.FIREBASE) {
             // The token arrives in PushService.onRegistered.
@@ -478,6 +484,8 @@ class AppModel(private val context: Context) {
      */
     private suspend fun syncPlaces() {
         val home = mutableSession.value ?: return
+        // Only these may have been left elsewhere: one joined while home answers isn't in its answer.
+        val before = mutablePlaces.value
         val memberships = try {
             home.client.memberships()
         } catch (error: NudgeException.Status) {
@@ -494,8 +502,9 @@ class AppModel(private val context: Context) {
         mutableHomeFederation.value = true
         syncing.withLock {
             if (mutableSession.value !== home) return
-            val (kept, gone) = mutablePlaces.value.partition { place ->
-                memberships.memberships.any { place.account.isAt(it.server, it.assistant) }
+            val (gone, kept) = mutablePlaces.value.partition { place ->
+                before.any { it === place } &&
+                    memberships.memberships.none { place.account.isAt(it.server, it.assistant) }
             }
             val added = memberships.memberships
                 .filter { membership -> kept.none { it.account.isAt(membership.server, membership.assistant) } }
@@ -503,6 +512,28 @@ class AppModel(private val context: Context) {
             mutablePlaces.value = kept + added
             savePlaces()
             gone.forEach { forget(it) }
+        }
+        rejoinSignedOut()
+    }
+
+    /**
+     * Joins again, with a fresh assertion from home, the assistants whose token stopped working
+     * there: home still has their memberships, so they need no invite. One left elsewhere stays
+     * signed out.
+     */
+    suspend fun rejoinSignedOut() {
+        val home = mutableSession.value ?: return
+        syncing.withLock {
+            for (place in mutablePlaces.value.filter { it.signedOut }) {
+                val fresh = runCatching { joined(home, place.account.server, place.account.assistant) }.getOrNull() ?: continue
+                if (mutableSession.value !== home || mutablePlaces.value.none { it === place }) {
+                    fresh.close()
+                    continue
+                }
+                mutablePlaces.value = mutablePlaces.value.map { if (it === place) fresh else it }
+                // Its token is gone already, so there is nothing to sign out.
+                place.close()
+            }
         }
     }
 
@@ -518,7 +549,16 @@ class AppModel(private val context: Context) {
             client.close()
             throw error
         }
-        return open(account, client)!!
+        return open(account, client)!!.also { watch(it) }
+    }
+
+    /** A joined assistant whose token stops working is joined again from home. */
+    private fun watch(place: Session) {
+        scope.launch {
+            place.connection.state.collect { status ->
+                if (status is ConnectionStatus.Closed && status.code.toInt() == 4401) rejoinSignedOut()
+            }
+        }
     }
 
     /** Signs a session out on its server, as far as it can be reached, and drops what is kept of it. */
