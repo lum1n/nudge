@@ -760,7 +760,11 @@ async fn edits_the_profile_and_joins_another_assistant_from_home() {
     // The invite is used up.
     assert!(dee.invites().await.unwrap().is_empty());
 
-    let memberships = home.memberships().await.unwrap();
+    let MembershipsResponse {
+        address: mine,
+        memberships,
+    } = home.memberships().await.unwrap();
+    assert_eq!(mine, address);
     assert_eq!(memberships.len(), 1);
     assert_eq!(
         (
@@ -771,6 +775,6 @@ async fn edits_the_profile_and_joins_another_assistant_from_home() {
     );
     assert!(home.carry_memory(&place, true).await.unwrap().carry_memory);
     home.leave(&place).await.unwrap();
-    assert!(home.memberships().await.unwrap().is_empty());
+    assert!(home.memberships().await.unwrap().memberships.is_empty());
     assert_eq!(home.leave(&place).await.unwrap_err().status(), Some(404));
 }

@@ -459,11 +459,13 @@ def test_profile_and_joining_another_assistant(server) -> None:
                     assert (await there.me()).player.display_name == "Ann"
                 assert await dee.invites() == []
 
-            [membership] = await home.memberships()
+            mine = await home.memberships()
+            assert mine.address == address
+            [membership] = mine.memberships
             assert (membership.assistant, membership.carry_memory) == ("team", False)
             carried = await home.carry_memory(server.url, "team", True)
             assert carried.carry_memory
             await home.leave(server.url, "team")
-            assert await home.memberships() == []
+            assert (await home.memberships()).memberships == []
 
     run(test())

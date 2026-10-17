@@ -238,10 +238,9 @@ export class Api {
     return joined;
   }
 
-  /** The assistants the caller joined from here, their home. */
-  async memberships(): Promise<Membership[]> {
-    return (await this.request<MembershipsResponse>("GET", "/ext/federation/memberships"))
-      .memberships;
+  /** The assistants the caller joined from here, their home, and the caller's address. */
+  memberships(): Promise<MembershipsResponse> {
+    return this.request("GET", "/ext/federation/memberships");
   }
 
   /** Starts or stops carrying the caller's own memory to an assistant they joined. */

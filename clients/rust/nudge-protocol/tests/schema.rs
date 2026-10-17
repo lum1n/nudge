@@ -669,6 +669,7 @@ fn http_bodies_match_the_schema() {
     check(
         "MembershipsResponse",
         &MembershipsResponse {
+            address: "vegard@home.example/robin".into(),
             memberships: vec![membership],
         },
     );

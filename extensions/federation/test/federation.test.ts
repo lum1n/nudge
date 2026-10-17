@@ -169,6 +169,7 @@ describe("federation", () => {
     expect(
       (await call(HOME, "GET", "/ext/federation/memberships", { token: vegard })).json,
     ).toEqual({
+      address: "vegard@home.example/robin",
       memberships: [
         { server: AWAY, assistant: "team", since: expect.any(Number), carryMemory: false },
       ],

@@ -1,8 +1,9 @@
-import type { PlayerSettingsSchema, Profile } from "@nudge/client";
+import type { Membership, PlayerSettingsSchema, Profile } from "@nudge/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { type FormEvent, useEffect, useState } from "react";
-import { clientFor } from "../../api.ts";
+import { ApiError, clientFor } from "../../api.ts";
+import { meQuery } from "../../queries.ts";
 import { ObjectFields, type Schema, withoutDefaults } from "../../schema-form.tsx";
 
 export const Route = createFileRoute("/$assistant/profile")({ component: ProfilePage });
@@ -63,6 +64,7 @@ function ProfilePage() {
     queryKey: [assistant, "player-settings"],
     queryFn: () => clientFor(assistant).api.playerSettings(),
   });
+  const me = useQuery(meQuery(assistant));
   const [draft, setDraft] = useState<Draft>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -74,6 +76,18 @@ function ProfilePage() {
 
   if (profile.error) return <Page>{profile.error.message}</Page>;
   if (draft === undefined) return <Page>Loading…</Page>;
+  // A guest's profile comes from their home, which sends it again whenever it changes there.
+  const home = me.data?.player.address;
+  if (home !== undefined)
+    return (
+      <Page>
+        <p className="rounded border border-stone-200 bg-white p-3 text-sm text-stone-600">
+          You joined from your home assistant, as <span className="font-mono">{home}</span>. Your
+          name, picture, time zone, language and settings come from there: change them in your
+          home's app.
+        </p>
+      </Page>
+    );
   const change = (part: Partial<Draft>) => {
     setSaved(false);
     setDraft({ ...draft, ...part });
@@ -225,7 +239,107 @@ function ProfilePage() {
           {error !== undefined && <span className="text-sm text-red-700">{error}</span>}
         </div>
       </form>
+      <Memberships assistant={assistant} />
     </Page>
+  );
+}
+
+/**
+ * Where the player joined from here, through the federation extension: whether their own memory
+ * goes along, and leaving. Not shown on an assistant without the extension.
+ */
+function Memberships({ assistant }: { assistant: string }) {
+  const queryClient = useQueryClient();
+  const key = [assistant, "memberships"];
+  const memberships = useQuery({
+    queryKey: key,
+    queryFn: () => clientFor(assistant).api.memberships(),
+    retry: (count, error) => !(error instanceof ApiError && error.status === 404) && count < 3,
+  });
+  const [busy, setBusy] = useState<string>();
+  const [error, setError] = useState<string>();
+
+  if (memberships.error instanceof ApiError && memberships.error.status === 404) return null;
+  if (memberships.error) return <p className="text-sm text-red-700">{memberships.error.message}</p>;
+  if (memberships.data === undefined) return null;
+  const { address } = memberships.data;
+
+  async function change(membership: Membership, work: () => Promise<unknown>) {
+    const id = `${membership.server}|${membership.assistant}`;
+    setBusy(id);
+    setError(undefined);
+    try {
+      await work();
+      await queryClient.invalidateQueries({ queryKey: key });
+    } catch (caught) {
+      setError((caught as Error).message);
+    } finally {
+      setBusy(undefined);
+    }
+  }
+
+  const api = clientFor(assistant).api;
+  return (
+    <div className="flex flex-col gap-3 rounded border border-stone-200 bg-white p-3">
+      <div>
+        <h3 className="text-sm font-medium">Other assistants</h3>
+        <p className="text-xs text-stone-500">
+          Your address is <span className="font-mono">{address}</span>. An admin of another
+          assistant can invite you by it, and you join from the Nudge app.
+        </p>
+      </div>
+      {memberships.data.memberships.length === 0 ? (
+        <p className="text-sm text-stone-600">You haven't joined any yet.</p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {memberships.data.memberships.map((membership) => {
+            const id = `${membership.server}|${membership.assistant}`;
+            return (
+              <li key={id} className="flex flex-col gap-1 border-t border-stone-100 pt-2 text-sm">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span>
+                    <span className="font-medium">{membership.assistant}</span>{" "}
+                    <span className="text-stone-500">
+                      at {new URL(membership.server).host}, since{" "}
+                      {new Date(membership.since).toLocaleDateString()}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    disabled={busy === id}
+                    onClick={() => {
+                      if (
+                        confirm(
+                          `Stop sending your profile and memory to ${membership.assistant}? You stay a member there.`,
+                        )
+                      )
+                        void change(membership, () => api.leave(membership));
+                    }}
+                    className="text-stone-600 underline disabled:opacity-50"
+                  >
+                    Leave
+                  </button>
+                </div>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={membership.carryMemory}
+                    disabled={busy === id}
+                    onChange={(event) =>
+                      void change(membership, () =>
+                        api.carryMemory(membership, event.target.checked),
+                      )
+                    }
+                  />
+                  Take my own memory there (not what I made private)
+                </label>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
+    </div>
   );
 }
 

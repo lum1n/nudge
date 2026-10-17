@@ -568,7 +568,11 @@ export const Membership = Type.Object({
 });
 export type Membership = Static<typeof Membership>;
 
-export const MembershipsResponse = Type.Object({ memberships: Type.Array(Membership) });
+/** `address` is the caller's, such as `vegard@nudge.example.com/robin`, for admins elsewhere. */
+export const MembershipsResponse = Type.Object({
+  address: Type.String(),
+  memberships: Type.Array(Membership),
+});
 export type MembershipsResponse = Static<typeof MembershipsResponse>;
 
 export const CarryMemoryRequest = Type.Object({

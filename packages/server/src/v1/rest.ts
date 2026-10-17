@@ -1,6 +1,7 @@
 import type { Cursor, EntryId } from "@earendil-works/pi-durable";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
+  addressOf,
   AlreadyDecided,
   ApprovalNotFound,
   BudgetReached,
@@ -303,6 +304,10 @@ export function restRoutes(options: RestOptions): Hono {
   );
 
   api.patch("/me/profile", async (c) => {
+    // Their home sends it, and would undo a change made here with the next.
+    const { home } = c.var.credential.player;
+    if (home !== undefined)
+      throw new HttpError(403, `Your profile comes from your home, ${addressOf(home)}`);
     const body = await readBody(c, UpdateProfileRequest);
     try {
       const profile = await c.var.nudge.profiles.update(

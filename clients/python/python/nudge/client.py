@@ -28,6 +28,7 @@ from nudge._ffi import (
     Live,
     MeInfo,
     Membership,
+    Memberships,
     ModelMessage,
     Paired,
     PairingCode,
@@ -594,8 +595,9 @@ class Client:
         """Joins this assistant with an assertion from `vouch_for`, and stores the token."""
         return await self.ffi.join(assertion)
 
-    async def memberships(self) -> list[Membership]:
-        """The assistants the player joined from here, their home."""
+    async def memberships(self) -> Memberships:
+        """The assistants the player joined from here, their home, and the player's address to
+        give to admins elsewhere."""
         return await self.ffi.memberships()
 
     async def carry_memory(self, server: str, assistant: str, carry: bool) -> Membership:

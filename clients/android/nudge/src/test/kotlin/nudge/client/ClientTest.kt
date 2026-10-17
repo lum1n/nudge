@@ -427,10 +427,12 @@ class ClientTest {
         assertNotNull(tokens.get())
         assertEquals("Ann", there.me().player.displayName)
 
-        val membership = home.memberships().single()
+        val mine = home.memberships()
+        assertEquals(address, mine.address)
+        val membership = mine.memberships.single()
         assertEquals("team" to false, membership.assistant to membership.carryMemory)
         assertTrue(home.carryMemory(url, "team", true).carryMemory)
         home.leave(url, "team")
-        assertTrue(home.memberships().isEmpty())
+        assertTrue(home.memberships().memberships.isEmpty())
     }
 }

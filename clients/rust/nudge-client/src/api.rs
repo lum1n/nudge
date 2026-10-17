@@ -418,17 +418,15 @@ impl Api {
         Ok(joined)
     }
 
-    /// The assistants the caller joined from here, their home.
-    pub async fn memberships(&self) -> Result<Vec<Membership>, ApiError> {
-        let response: MembershipsResponse = self
-            .request(
-                Method::GET,
-                &["ext", "federation", "memberships"],
-                &[],
-                NO_BODY,
-            )
-            .await?;
-        Ok(response.memberships)
+    /// The assistants the caller joined from here, their home, and the caller's address.
+    pub async fn memberships(&self) -> Result<MembershipsResponse, ApiError> {
+        self.request(
+            Method::GET,
+            &["ext", "federation", "memberships"],
+            &[],
+            NO_BODY,
+        )
+        .await
     }
 
     /// Starts or stops carrying the caller's own memory to an assistant they joined.

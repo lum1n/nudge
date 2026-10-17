@@ -859,14 +859,10 @@ impl NudgeClient {
         })
     }
 
-    /// The assistants the player joined from here, their home.
-    pub async fn memberships(&self) -> Result<Vec<Membership>, NudgeError> {
+    /// The assistants the player joined from here, their home, and the player's address.
+    pub async fn memberships(&self) -> Result<Memberships, NudgeError> {
         let api = self.client.api().clone();
-        Ok(run(async move { api.memberships().await })
-            .await?
-            .into_iter()
-            .map(Into::into)
-            .collect())
+        Ok(run(async move { api.memberships().await }).await?.into())
     }
 
     /// Starts or stops carrying the player's own memory to an assistant they joined.

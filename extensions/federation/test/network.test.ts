@@ -87,12 +87,15 @@ describe("federation over the network", () => {
     expect((await there.me()).player.address).toBe(address);
     expect(await ann.invites()).toEqual([]);
 
-    expect(await vegard.memberships()).toEqual([
-      { ...place, since: expect.any(Number), carryMemory: false },
-    ]);
+    expect(await vegard.memberships()).toEqual({
+      address,
+      memberships: [{ ...place, since: expect.any(Number), carryMemory: false }],
+    });
     expect(await vegard.carryMemory(place, true)).toMatchObject({ ...place, carryMemory: true });
     await vegard.leave(place);
-    expect(await vegard.memberships()).toEqual([]);
+    expect((await vegard.memberships()).memberships).toEqual([]);
+    // A guest's address is their home's.
+    expect((await there.memberships()).address).toBe(address);
     await expect(vegard.leave(place)).rejects.toEqual(new ApiError(404, "No such membership"));
   });
 });

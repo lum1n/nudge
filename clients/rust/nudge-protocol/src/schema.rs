@@ -1029,8 +1029,10 @@ pub struct Membership {
     pub carry_memory: bool,
 }
 
+/// `address` is the caller's, such as `vegard@nudge.example.com/robin`, for admins elsewhere.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MembershipsResponse {
+    pub address: String,
     pub memberships: Vec<Membership>,
 }
 

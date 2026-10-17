@@ -212,6 +212,7 @@ class Federation {
         handle: async (_request, { player, context }) => {
           const state = await this.state(context);
           return Response.json({
+            address: addressOf(player!.home ?? { ...this.self, playerId: player!.id }),
             memberships: (state.memberships[player!.id] ?? []).map(shown),
           } satisfies MembershipsResponse);
         },

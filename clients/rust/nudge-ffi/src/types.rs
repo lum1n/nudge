@@ -945,6 +945,23 @@ impl From<p::Membership> for Membership {
     }
 }
 
+/// Where the player joined from here, their home, and their address to give to admins elsewhere.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct Memberships {
+    /// Such as `vegard@nudge.example.com/robin`.
+    pub address: String,
+    pub memberships: Vec<Membership>,
+}
+
+impl From<p::MembershipsResponse> for Memberships {
+    fn from(response: p::MembershipsResponse) -> Self {
+        Memberships {
+            address: response.address,
+            memberships: response.memberships.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
 /// Someone an admin asked to join, by their address; good for a week.
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
 pub struct Invite {

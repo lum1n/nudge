@@ -241,6 +241,18 @@ describe("v1 HTTP", () => {
       },
     });
     expect((await call("GET", "/me/profile")).status).toBe(401);
+    // Someone from another assistant changes theirs at home.
+    const guest = await nudge.players.addRoaming(
+      { server: "https://home.example", assistant: "robin", playerId: "cy" },
+      "Cy",
+      context,
+    );
+    expect(
+      await call("PATCH", "/me/profile", { token: guest.token, body: { timeZone: "Europe/Oslo" } }),
+    ).toMatchObject({
+      status: 403,
+      json: { error: "Your profile comes from your home, cy@home.example/robin" },
+    });
   });
 
   it("serves extensions' own routes, checking tokens, admins and body sizes", async () => {

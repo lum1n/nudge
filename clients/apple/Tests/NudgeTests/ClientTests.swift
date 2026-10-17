@@ -243,14 +243,15 @@ final class ClientTests: XCTestCase {
         let me = try await there.me()
         XCTAssertEqual(me.player.displayName, "Ann")
 
-        let memberships = try await home.memberships()
-        XCTAssertEqual(memberships.map(\.assistant), ["team"])
-        XCTAssertFalse(memberships[0].carryMemory)
+        let mine = try await home.memberships()
+        XCTAssertEqual(mine.address, address)
+        XCTAssertEqual(mine.memberships.map(\.assistant), ["team"])
+        XCTAssertFalse(mine.memberships[0].carryMemory)
         let carried = try await home.carryMemory(server: server.url, assistant: "team", carry: true)
         XCTAssertTrue(carried.carryMemory)
         try await home.leave(server: server.url, assistant: "team")
         let left = try await home.memberships()
-        XCTAssertTrue(left.isEmpty)
+        XCTAssertTrue(left.memberships.isEmpty)
     }
 
     func testApplyingChanges() {
