@@ -242,6 +242,7 @@ const removeData = () => {
 const nudge = await createNudge(
   {
     name: "robin",
+    displayName: "Robin",
     database: join(dataDir, "robin.sqlite"),
     models,
     model: { provider: faux.provider.id, modelId: faux.getModel().id },
@@ -299,6 +300,7 @@ const extensionSettings: ExtensionSettings = {
 const team = await createNudge(
   {
     name: "team",
+    displayName: "Team",
     database: join(dataDir, "team.sqlite"),
     models,
     model: { provider: faux.provider.id, modelId: faux.getModel().id },

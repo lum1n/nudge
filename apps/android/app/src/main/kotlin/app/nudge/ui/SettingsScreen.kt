@@ -16,6 +16,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.AccountCircle
+import androidx.compose.material.icons.outlined.AlternateEmail
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Extension
@@ -64,6 +65,7 @@ import app.nudge.explain
 import java.text.NumberFormat
 import java.util.Currency
 import kotlinx.coroutines.launch
+import nudge.ffi.Membership
 import nudge.ffi.PlayerMemory
 import nudge.ffi.PrivateValue
 import nudge.ffi.Usage
@@ -76,8 +78,11 @@ import nudge.ffi.Usage
 @Composable
 fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
     val scope = rememberCoroutineScope()
-    val me by model.me.collectAsStateWithLifecycle()
-    val platforms by model.pushPlatforms.collectAsStateWithLifecycle()
+    val me by session.me.collectAsStateWithLifecycle()
+    val platforms by session.pushPlatforms.collectAsStateWithLifecycle()
+    val memberships by model.memberships.collectAsStateWithLifecycle()
+    var leaving by remember { mutableStateOf<Membership?>(null) }
+    var profile by rememberSaveable { mutableStateOf(false) }
     val client = session.client
     var memory by remember { mutableStateOf<PlayerMemory?>(null) }
     var hidden by remember { mutableStateOf<List<PrivateValue>?>(null) }
@@ -116,6 +121,11 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
         ExtensionsScreen(client, close = { extensions = false })
         return
     }
+    if (profile) {
+        BackHandler { profile = false }
+        ProfileScreen(session, close = { profile = false })
+        return
+    }
 
     Scaffold(
         containerColor = groupedBackground(),
@@ -143,9 +153,12 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                 listOf(
                     { shapes ->
                         SegmentedListItem(
+                            onClick = { profile = true },
                             shapes = shapes,
                             leadingContent = { Icon(Icons.Outlined.AccountCircle, null) },
                             overlineContent = { Text("Signed in as") },
+                            supportingContent = { Text("Your name, picture, time zone and language") },
+                            trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) },
                         ) { Text(me?.player?.displayName ?: "…") }
                     },
                     { shapes ->
@@ -164,6 +177,45 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                     },
                 ),
             )
+
+            memberships?.let { joined ->
+                group(
+                    "Other assistants",
+                    buildList<GroupRow> {
+                        add { shapes ->
+                            SegmentedListItem(
+                                shapes = shapes,
+                                leadingContent = { Icon(Icons.Outlined.AlternateEmail, null) },
+                                overlineContent = { Text("Your address") },
+                                supportingContent = { Text("An admin of another assistant invites you by it; the invite opens here.") },
+                            ) { Text(joined.address) }
+                        }
+                        joined.memberships.forEach { membership ->
+                            add { shapes ->
+                                SegmentedListItem(
+                                    checked = membership.carryMemory,
+                                    onCheckedChange = { carry ->
+                                        scope.launch {
+                                            try {
+                                                model.carryMemory(membership, carry)
+                                            } catch (error: Exception) {
+                                                problem = explain(error)
+                                            }
+                                        }
+                                    },
+                                    onLongClick = { leaving = membership },
+                                    onLongClickLabel = "Leave",
+                                    shapes = shapes,
+                                    leadingContent = { Icon(Icons.Outlined.SmartToy, null) },
+                                    overlineContent = { Text(java.net.URI(membership.server).host ?: membership.server) },
+                                    supportingContent = { Text("Take my own memory there, but not what only I see. Long press to leave.") },
+                                    trailingContent = { Switch(checked = membership.carryMemory, onCheckedChange = null) },
+                                ) { Text(membership.assistant) }
+                            }
+                        }
+                    },
+                )
+            }
 
             if (me?.admin == true) {
                 group(
@@ -349,12 +401,35 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
         }
     }
 
+    leaving?.let { membership ->
+        AlertDialog(
+            onDismissRequest = { leaving = null },
+            title = { Text("Leave ${membership.assistant}?") },
+            text = {
+                Text("Your home stops sending it your profile and memory, and this device signs out of it. You stay a member there.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    leaving = null
+                    scope.launch {
+                        try {
+                            model.leave(membership)
+                        } catch (error: Exception) {
+                            problem = explain(error)
+                        }
+                    }
+                }) { Text("Leave") }
+            },
+            dismissButton = { TextButton(onClick = { leaving = null }) { Text("Cancel") } },
+        )
+    }
+
     if (confirmSignOut) {
         AlertDialog(
             onDismissRequest = { confirmSignOut = false },
             icon = { Icon(Icons.AutoMirrored.Outlined.Logout, null) },
             title = { Text("Sign out of ${session.account.assistantName}?") },
-            text = { Text("You'll need a new pairing code to sign in again.") },
+            text = { Text("This device signs out of the assistants you joined from there too. You'll need a new pairing code to sign in again.") },
             confirmButton = {
                 TextButton(onClick = {
                     confirmSignOut = false

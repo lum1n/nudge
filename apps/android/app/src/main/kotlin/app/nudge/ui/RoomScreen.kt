@@ -54,7 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.nudge.AppModel
+import app.nudge.Session
 import app.nudge.explain
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -73,15 +73,15 @@ import nudge.ffi.SyncStatus
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun RoomScreen(
-    client: NudgeClient,
+    session: Session,
     roomId: String,
-    model: AppModel,
     back: (() -> Unit)?,
     lists: () -> Unit,
     info: () -> Unit,
     browser: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    val client = session.client
     val observed = remember(client, roomId) { MutableStateFlow<ObservedRoom?>(null) }
     DisposableEffect(client, roomId) {
         val room = client.observeRoomState(roomId)
@@ -90,7 +90,7 @@ fun RoomScreen(
     }
     val room by observed.collectAsStateWithLifecycle()
     val state = room?.state?.collectAsStateWithLifecycle()?.value
-    val me by model.me.collectAsStateWithLifecycle()
+    val me by session.me.collectAsStateWithLifecycle()
     var draft by remember(roomId) { mutableStateOf("") }
     var secret by remember(roomId) { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }

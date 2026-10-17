@@ -10,6 +10,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import app.nudge.ui.NudgeApp
 import app.nudge.ui.NudgeTheme
+import nudge.client.JoinLink
 import nudge.client.PairingLink
 
 class MainActivity : ComponentActivity() {
@@ -34,10 +35,13 @@ class MainActivity : ComponentActivity() {
         handle(intent)
     }
 
-    /** A `nudge://pair` link, or a tapped notification. */
+    /** A `nudge://pair` or `nudge://join` link, or a tapped notification. */
     private fun handle(intent: Intent?) {
         intent ?: return
-        intent.data?.let { uri -> PairingLink.parse(uri.toString())?.let { model.pendingLink.value = it } }
+        intent.data?.let { uri ->
+            PairingLink.parse(uri.toString())?.let { model.pendingLink.value = it }
+            JoinLink.parse(uri.toString())?.let { model.pendingJoin.value = it }
+        }
         intent.getStringExtra(EXTRA_ROOM)?.let { room ->
             model.open(intent.getStringExtra(EXTRA_ASSISTANT), room)
         }

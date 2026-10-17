@@ -43,6 +43,7 @@ import androidx.compose.material3.ToggleFloatingActionButtonDefaults.animateIcon
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -54,35 +55,52 @@ import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.nudge.AppModel
+import app.nudge.RoomRef
 import app.nudge.Session
 import app.nudge.explain
 import kotlinx.coroutines.launch
 import nudge.ffi.ConnectionStatus
 import nudge.ffi.HomeRoom
+import nudge.ffi.HomeUpdate
+import nudge.ffi.MeInfo
 import nudge.ffi.Room
 import nudge.ffi.RoomKind
 import nudge.ffi.SyncStatus
 
-/** The player's rooms, newest news first, a FAB menu for new ones, and a long press to rename one. */
+/** One signed-in assistant's rooms, newest news first, as the list shows them. */
+private class Section(val session: Session, val home: HomeUpdate?, val me: MeInfo?, val connection: ConnectionStatus?) {
+    val rooms = home?.view?.rooms.orEmpty().sortedByDescending { it.lastItemAt ?: 0.0 }
+}
+
+/**
+ * The player's rooms at home, then those of each assistant they joined, a FAB menu for new rooms
+ * at home, and a long press to rename one.
+ */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun RoomsScreen(
-    model: AppModel,
     session: Session,
-    selected: String?,
-    open: (String) -> Unit,
+    places: List<Session>,
+    selected: RoomRef?,
+    open: (RoomRef) -> Unit,
     settings: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
-    val home by session.home.state.collectAsStateWithLifecycle()
-    val connection by session.connection.state.collectAsStateWithLifecycle()
-    val me by model.me.collectAsStateWithLifecycle()
+    val sections = (listOf(session) + places).map { at ->
+        key(at.account.key) {
+            Section(
+                at,
+                at.home.state.collectAsStateWithLifecycle().value,
+                at.me.collectAsStateWithLifecycle().value,
+                at.connection.state.collectAsStateWithLifecycle().value,
+            )
+        }
+    }
+    val home = sections.first()
     var menu by rememberSaveable { mutableStateOf(false) }
     var creating by remember { mutableStateOf(false) }
-    var renaming by remember { mutableStateOf<Room?>(null) }
+    var renaming by remember { mutableStateOf<Pair<Session, Room>?>(null) }
     var problem by remember { mutableStateOf<String?>(null) }
-    val rooms = home?.view?.rooms.orEmpty().sortedByDescending { it.lastItemAt ?: 0.0 }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
     BackHandler(menu) { menu = false }
@@ -93,7 +111,7 @@ fun RoomsScreen(
             LargeFlexibleTopAppBar(
                 colors = groupedTopBarColors(),
                 title = { Text(session.account.assistantName) },
-                subtitle = connectionText(connection) ?: me?.player?.displayName?.let { name -> { Text(name) } },
+                subtitle = connectionText(home.connection) ?: home.me?.player?.displayName?.let { name -> { Text(name) } },
                 actions = {
                     IconButton(onClick = settings) { Icon(Icons.Outlined.Settings, "Settings") }
                 },
@@ -119,7 +137,7 @@ fun RoomsScreen(
                         menu = false
                         scope.launch {
                             try {
-                                open(session.client.personalRoom().id)
+                                open(RoomRef(session.account.key, session.client.personalRoom().id))
                             } catch (error: Exception) {
                                 problem = explain(error)
                             }
@@ -140,10 +158,10 @@ fun RoomsScreen(
         },
     ) { padding ->
         when {
-            home?.view == null -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+            home.home?.view == null -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 LoadingIndicator()
             }
-            home?.status == SyncStatus.LIVE && rooms.isEmpty() -> Box(
+            home.home.status == SyncStatus.LIVE && sections.all { it.rooms.isEmpty() } -> Box(
                 Modifier.fillMaxSize().padding(padding),
                 contentAlignment = Alignment.Center,
             ) {
@@ -158,23 +176,39 @@ fun RoomsScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
             ) {
-                itemsIndexed(rooms, key = { _, room -> room.room.id }) { index, room ->
-                    RoomRow(
-                        room, me?.player?.id,
-                        selected = room.room.id == selected,
-                        index = index,
-                        count = rooms.size,
-                        onClick = { open(room.room.id) },
-                        // Only admins rename the lobby.
-                        rename = if (room.room.kind != RoomKind.LOBBY || me?.admin == true) ({ renaming = room.room }) else null,
-                    )
+                sections.forEachIndexed { at, section ->
+                    val account = section.session.account
+                    // The home's rooms come first, without a heading: the title names it.
+                    if (at > 0) {
+                        item(key = account.key) {
+                            PlaceHeading(account.assistantName, java.net.URI(account.server).host, section.connection)
+                        }
+                    }
+                    itemsIndexed(section.rooms, key = { _, room -> "${account.key}\u0000${room.room.id}" }) { index, room ->
+                        val ref = RoomRef(account.key, room.room.id)
+                        RoomRow(
+                            room, section.me?.player?.id,
+                            selected = ref == selected,
+                            index = index,
+                            count = section.rooms.size,
+                            onClick = { open(ref) },
+                            // Only admins rename the lobby.
+                            rename = if (room.room.kind != RoomKind.LOBBY || section.me?.admin == true) {
+                                { renaming = section.session to room.room }
+                            } else {
+                                null
+                            },
+                        )
+                    }
                 }
             }
         }
     }
 
-    if (creating) NewRoomDialog(session, close = { creating = false }, created = open)
-    renaming?.let { room -> RenameRoomDialog(session, room, close = { renaming = null }) }
+    if (creating) {
+        NewRoomDialog(session, close = { creating = false }, created = { open(RoomRef(session.account.key, it)) })
+    }
+    renaming?.let { (at, room) -> RenameRoomDialog(at, room, close = { renaming = null }) }
     problem?.let { message ->
         AlertDialog(
             onDismissRequest = { problem = null },
@@ -182,6 +216,21 @@ fun RoomsScreen(
             text = { Text(message) },
             confirmButton = { TextButton(onClick = { problem = null }) { Text("OK") } },
         )
+    }
+}
+
+/** Above the rooms of an assistant the player joined: its name, its server, and whether it is offline. */
+@Composable
+private fun PlaceHeading(name: String, host: String?, connection: ConnectionStatus?) {
+    androidx.compose.foundation.layout.Column(Modifier.padding(start = 4.dp, top = 20.dp, bottom = 6.dp)) {
+        Text(name, style = MaterialTheme.typography.titleMedium)
+        val status = connectionText(connection)
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.material3.LocalContentColor provides MaterialTheme.colorScheme.onSurfaceVariant,
+            androidx.compose.material3.LocalTextStyle provides MaterialTheme.typography.bodySmall,
+        ) {
+            if (status != null) status() else if (host != null) Text(host)
+        }
     }
 }
 

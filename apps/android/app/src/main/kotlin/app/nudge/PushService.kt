@@ -33,7 +33,7 @@ class PushService : FirebaseMessagingService() {
         } ?: message.data
         val room = data["roomId"] ?: return
         // The room is on screen: the timeline shows it already.
-        if (model.foreground && model.selectedRoom.value == room) return
+        if (model.foreground && model.showing(data["assistant"], room)) return
         val open = Intent(this, MainActivity::class.java)
             .setAction(Intent.ACTION_VIEW)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)

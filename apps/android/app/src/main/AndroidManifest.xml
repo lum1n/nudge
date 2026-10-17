@@ -28,6 +28,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="nudge" android:host="pair" />
+                <data android:scheme="nudge" android:host="join" />
             </intent-filter>
         </activity>
 
