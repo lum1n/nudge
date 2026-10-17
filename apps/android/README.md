@@ -5,6 +5,7 @@ The Nudge app for Android 8 and later, in Jetpack Compose with Material 3 Expres
 - The current Android design: Material 3 Expressive (`material3` 1.5, expressive motion, dynamic colour), the adaptive list-detail scaffold (rooms and the open room side by side on tablets and foldables, a room's lists and details in a third pane on wide screens, predictive back), flexible app bars, segmented lists as in Android's own Settings, the FAB menu for new rooms, and the shape-morphing loading indicator and buttons.
 - Sign in with a pairing code (`nudge pair <player>` on the server) or by opening a `nudge://pair?…` link. The token stays in the app's private storage, out of backups.
 - Rooms: a list on phones, beside the open room on tablets and wide screens. Each row shows when the assistant is answering and how many actions wait for approval.
+- Signed in at home, the app joins other assistants too: a `nudge://join` link from an admin there asks first, and the assistants joined from home on another device follow on their own. Their rooms are listed under each one's name. Settings shows your address, where you joined (take your own memory there or not, long press to leave) and your profile: picture, name, time zone, language, notifications and extensions' settings.
 - A room: the timeline as it streams (text, thinking, tool calls), actions waiting for approval with Approve and Deny, fired nudges, messages on their way (with Retry and Dismiss when one fails), Stop, and earlier messages on demand. Views and unsent messages are cached, so the app opens offline and sends what waited once it's back.
 - Privacy in shared rooms: the lock by the message field sends a message only you see, with its answer; others see that you sent one. Values someone else keeps to themselves show as *hidden*. Under Settings, "Only you see" hides an address, a name or a number in every room, and forgets one for good. A running tool shows what it is doing, such as the browser's `Clicking "Search"…`.
 - Lists, documents (upload, download, delete, find by name) and connectors (API keys, typed and never shown again, the local network, read paths), over the extensions' panels, and the room's members, memory, nudges, extensions and what the model saw.
@@ -26,6 +27,8 @@ To try it without a real model: `pnpm build` in the repository, then `NUDGE_FAUX
 ```bash
 adb shell am start -a android.intent.action.VIEW -d '"nudge://pair?server=http%3A%2F%2F10.0.2.2%3A8799&assistant=robin&code=<code>"' app.nudge.dev
 ```
+
+The faux server also has a second assistant, "team", that invited Ann from robin. Its addresses say `127.0.0.1`, so for joining, forward the port (`adb reverse tcp:8799 tcp:8799`), sign in as Ann at `http://127.0.0.1:8799`, and open the `team.link` it prints the same way.
 
 ## Push
 
