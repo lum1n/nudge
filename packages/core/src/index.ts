@@ -48,6 +48,14 @@ export {
 } from "./approvals/approvals.ts";
 export { type Change, type ChangeListener, Changes } from "./changes.ts";
 export {
+  type AssistantChange,
+  type AssistantDraft,
+  AssistantExists,
+  AssistantNotFound,
+  Assistants,
+  type AssistantsOptions,
+} from "./server/assistants.ts";
+export {
   BACKUP_SUFFIX,
   BackupError,
   backupKey,

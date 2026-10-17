@@ -16,7 +16,7 @@ import { toApproval, toFact } from "@nudge/protocol/project";
 import { Hubs } from "@nudge/server";
 import { UsageError } from "./errors.ts";
 import { ExtensionChannel } from "./extension-channel.ts";
-import { hostOptions, reloadOnHangup } from "./host.ts";
+import { hostOptions, reloadExtensionsOnHangup } from "./host.ts";
 
 /**
  * One client in one room, in this process or over the network. Both give the room's protocol v1
@@ -92,9 +92,10 @@ export async function openLocal(target: LocalTarget): Promise<ChatSession> {
         : known;
     const room = await resolveLocalRoom(nudge, player.id, target.room);
     // `nudge reload` signals whoever holds the database: here, this process.
-    const stopReloading = reloadOnHangup(
+    const stopReloading = reloadExtensionsOnHangup(
       target.config,
-      new Map([[assistant.name, nudge]]),
+      assistant.name,
+      nudge,
       target.onProblem,
     );
     return new LocalSession(

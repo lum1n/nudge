@@ -29,7 +29,7 @@ export function v1Routes(options: V1Options): Hono {
   const app = new Hono();
   // A new epoch per app, so clients that reconnect after a restart know to subscribe again.
   const epoch = randomBytes(8).toString("base64url");
-  const hubs = new Map<Nudge, Hubs>();
+  const hubs = new WeakMap<Nudge, Hubs>();
   const hubsOf = (nudge: Nudge) => {
     let found = hubs.get(nudge);
     if (found === undefined) hubs.set(nudge, (found = new Hubs(nudge, options.report)));

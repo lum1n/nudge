@@ -1,6 +1,8 @@
 import { appendFileSync } from "node:fs";
 import {
   type AssistantConfig,
+  type Assistants,
+  findAssistant,
   loadConfig,
   loadExtensions,
   type Nudge,
@@ -26,30 +28,39 @@ export function hostOptions(assistant: AssistantConfig): Partial<NudgeOptions> {
 }
 
 /**
- * On SIGHUP (`nudge reload`), reads the config again and reinstalls each running assistant's
- * extensions. Only extensions change; a new model or a new assistant needs a restart. Returns the
- * function that stops listening.
+ * On SIGHUP (`nudge reload`), reads the config again: new assistants open, removed ones close,
+ * changed ones reopen, and the rest reinstall their extensions. Returns the function that stops
+ * listening.
  */
 export function reloadOnHangup(
+  assistants: Assistants,
+  say: (line: string) => void = console.log,
+): () => void {
+  const onHangup = () => {
+    assistants.reload().catch((error: unknown) => say(`reload failed: ${(error as Error).message}`));
+  };
+  process.on("SIGHUP", onHangup);
+  return () => process.off("SIGHUP", onHangup);
+}
+
+/**
+ * On SIGHUP, reinstalls the extensions of one assistant this process holds open, such as for
+ * `nudge chat`: the session keeps its assistant, so only extensions change.
+ */
+export function reloadExtensionsOnHangup(
   configPath: string,
-  assistants: ReadonlyMap<string, Nudge>,
+  name: string,
+  nudge: Nudge,
   say: (line: string) => void = console.log,
 ): () => void {
   let running = Promise.resolve();
   const reload = async () => {
-    const config = await loadConfig(configPath);
-    for (const [name, nudge] of assistants) {
-      const assistant = config.assistants.find((a) => a.name === name);
-      if (assistant === undefined) {
-        say(`${name}: no longer in ${configPath}; restart to drop it`);
-        continue;
-      }
-      const installed = await nudge.reloadExtensions(
-        await loadExtensions(assistant.extensions ?? [], { fresh: true }),
-      );
-      const names = installed.map((e) => `${e.name}${e.version ? ` ${e.version}` : ""}`);
-      say(`${name}: extensions reloaded: ${names.join(", ") || "none"}`);
-    }
+    const assistant = findAssistant(await loadConfig(configPath), name);
+    const installed = await nudge.reloadExtensions(
+      await loadExtensions(assistant.extensions ?? [], { fresh: true }),
+    );
+    const names = installed.map((e) => `${e.name}${e.version ? ` ${e.version}` : ""}`);
+    say(`${assistant.name}: extensions reloaded: ${names.join(", ") || "none"}`);
   };
   const onHangup = () => {
     running = running

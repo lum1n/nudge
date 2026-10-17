@@ -1,13 +1,7 @@
-import { readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import {
-  ConfigError,
-  DEFAULT_CONFIG,
-  type ExtensionConfig,
-  type NudgeConfig,
-  parseConfig,
-  resolveExtension,
-} from "../config.ts";
+import { ConfigError, type NudgeConfig, parseConfig, resolveExtension } from "../config.ts";
+import { rawAssistant, readRawConfig, writeRawConfig } from "../config-file.ts";
 import type { RoomKind } from "../identity/directory.ts";
 import { isNudgeExtension } from "./define.ts";
 import { importExtension } from "./loader.ts";
@@ -43,10 +37,6 @@ export type ExtensionChoice = {
   readonly rooms?: readonly RoomKind[];
 };
 
-type RawConfig = { assistants: RawAssistant[] } & Record<string, unknown>;
-type RawAssistant = { name: string; extensions?: RawExtension[] } & Record<string, unknown>;
-type RawExtension = ExtensionConfig & { $comment?: unknown };
-
 const COMMENT = "$comment";
 const VARIABLE = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g;
 
@@ -60,7 +50,7 @@ export async function listExtensionSetups(
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): Promise<ExtensionSetup[]> {
   const baseDir = dirname(resolve(configPath));
-  const entries = assistantOf(await readRaw(configPath), assistant).extensions ?? [];
+  const entries = rawAssistant(await readRawConfig(configPath), assistant).extensions ?? [];
   const setups: ExtensionSetup[] = [];
   const seen = new Set<string>();
   for (const entry of entries) {
@@ -102,8 +92,8 @@ export async function saveExtensionSetups(
 ): Promise<void> {
   const path = resolve(configPath);
   const baseDir = dirname(path);
-  const raw = await readRaw(path);
-  const target = assistantOf(raw, assistant);
+  const raw = await readRawConfig(path);
+  const target = rawAssistant(raw, assistant);
   const before = target.extensions ?? [];
   const allowed = new Set([...before.map((entry) => entry.from), ...(await foundBeside(baseDir))]);
   const names = new Set<string>();
@@ -128,9 +118,7 @@ export async function saveExtensionSetups(
   });
   if (target.extensions.length === 0) delete target.extensions;
   await apply(parseConfig(raw, baseDir));
-  const temporary = `${path}.${process.pid}.tmp`;
-  await writeFile(temporary, `${JSON.stringify(raw, null, 2)}\n`);
-  await rename(temporary, path);
+  await writeRawConfig(path, raw);
 }
 
 async function describe(
@@ -178,30 +166,6 @@ function resolvedOrSelf(from: string, baseDir: string): string {
   } catch {
     return from;
   }
-}
-
-async function readRaw(path: string): Promise<RawConfig> {
-  let text: string;
-  try {
-    text = await readFile(path, "utf8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT")
-      return structuredClone(DEFAULT_CONFIG) as RawConfig;
-    throw error;
-  }
-  try {
-    return JSON.parse(text) as RawConfig;
-  } catch (error) {
-    throw new ConfigError(`${path} is not valid JSON: ${(error as Error).message}`);
-  }
-}
-
-function assistantOf(raw: RawConfig, name: string): RawAssistant {
-  const found = Array.isArray(raw.assistants)
-    ? raw.assistants.find((assistant) => assistant.name === name)
-    : undefined;
-  if (found === undefined) throw new ConfigError(`No assistant "${name}" in the config`);
-  return found;
 }
 
 function withoutComment(settings: Readonly<Record<string, unknown>>): Record<string, unknown> {
