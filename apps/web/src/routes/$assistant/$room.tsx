@@ -99,7 +99,18 @@ function Room() {
             <div className="min-w-0">
               <RoomName view={view} />
               <p className="text-sm text-stone-600">
-                {view.room.members.map((member) => member.displayName).join(", ")}
+                {view.room.members.map((member, index) => (
+                  <span key={member.id} title={member.address}>
+                    {index > 0 && ", "}
+                    {member.displayName}
+                    {member.address !== undefined && (
+                      <span className="text-stone-400">
+                        {" "}
+                        (from {member.address.slice(member.address.indexOf("@") + 1)})
+                      </span>
+                    )}
+                  </span>
+                ))}
               </p>
             </div>
             <button

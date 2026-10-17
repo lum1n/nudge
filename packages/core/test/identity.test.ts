@@ -12,6 +12,8 @@ import {
   LOBBY,
   type NudgeOptions,
   PAIRING_TTL_MS,
+  addressOf,
+  parseAddress,
 } from "../src/index.ts";
 
 const context = BACKGROUND_CONTEXT;
@@ -273,6 +275,42 @@ describe("players and rooms", () => {
         "Answer each person in their language.",
     );
     expect(request).not.toContain("Anna");
+  });
+
+  it("reads and writes addresses", () => {
+    const home = { server: "https://nudge.example.com", assistant: "robin", playerId: "vegard" };
+    expect(addressOf(home)).toBe("vegard@nudge.example.com/robin");
+    expect(parseAddress("vegard@nudge.example.com/robin")).toEqual(home);
+    expect(parseAddress(" vegard@https://nudge.example.com/robin ")).toEqual(home);
+    expect(parseAddress("ann@example.com/nudge/robin")).toEqual({
+      server: "https://example.com/nudge",
+      assistant: "robin",
+      playerId: "ann",
+    });
+    expect(parseAddress("ann@localhost:8787/robin")?.server).toBe("http://localhost:8787");
+    expect(addressOf(parseAddress("ann@localhost:8787/robin")!)).toBe(
+      "ann@http://localhost:8787/robin",
+    );
+    for (const bad of ["vegard", "vegard@host", "Vegard@host/robin", "a@host/robin?x=1", "a@/r"])
+      expect(parseAddress(bad)).toBeUndefined();
+  });
+
+  it("lets someone from another home join, once per home", async () => {
+    const { options } = setup(":memory:");
+    const nudge = await createNudge(options, context);
+    await nudge.players.invite("Vegard", context);
+    const home = { server: "https://other.example", assistant: "robin", playerId: "vegard" };
+    const first = await nudge.players.addRoaming(home, "Vegard", context);
+    expect(first.player).toMatchObject({ id: "vegard-2", displayName: "Vegard", home });
+    expect(await nudge.players.isAdmin(first.player.id, context)).toBe(false);
+    expect((await nudge.players.authenticate(first.token, context))?.player.id).toBe("vegard-2");
+    // A second device of the same person gets a token for the same player.
+    const again = await nudge.players.addRoaming(home, "Vegard S", context);
+    expect(again.player.id).toBe("vegard-2");
+    expect(again.token).not.toBe(first.token);
+    expect((await nudge.players.byHome(home, context))?.id).toBe("vegard-2");
+    expect(await nudge.players.byHome({ ...home, playerId: "ann" }, context)).toBeUndefined();
+    await nudge.close(context);
   });
 
   it("moves every room to a new model from the config", async () => {

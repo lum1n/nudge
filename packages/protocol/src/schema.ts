@@ -8,7 +8,12 @@ import { type Static, Type } from "typebox";
 
 export const PROTOCOL_VERSION = 1;
 
-export const Player = Type.Object({ id: Type.String(), displayName: Type.String() });
+export const Player = Type.Object({
+  id: Type.String(),
+  displayName: Type.String(),
+  /** Where someone from another assistant lives, such as `vegard@nudge.example.com/robin`. */
+  address: Type.Optional(Type.String()),
+});
 export type Player = Static<typeof Player>;
 
 export const RoomKind = Type.Union([

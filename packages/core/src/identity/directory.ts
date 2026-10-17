@@ -10,7 +10,56 @@ export type Player = {
   createdAt: number;
   /** May use the admin API. The first player may too, flag or not. */
   admin?: boolean;
+  /** Set for someone whose home is another assistant, which vouches for them (ADR 10). */
+  home?: PlayerHome;
 };
+
+/** Where a roaming player's home is: the server, the assistant on it, and their id there. */
+export type PlayerHome = {
+  /** Origin and any path before `/v1`, such as `https://nudge.example.com`. */
+  server: string;
+  assistant: string;
+  playerId: string;
+};
+
+const ID = /^[a-z0-9][a-z0-9-]*$/;
+const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
+
+/**
+ * How people write where someone lives: `vegard@nudge.example.com/robin`, their id at home, then
+ * the home's server without `https://` and the assistant's name.
+ */
+export function addressOf(home: PlayerHome): string {
+  const server = home.server.replace(/^https:\/\//, "").replace(/\/+$/, "");
+  return `${home.playerId}@${server}/${home.assistant}`;
+}
+
+/**
+ * The home an address names; undefined when it isn't one. The server is HTTPS, except on this
+ * computer, and `http://` or `https://` may be written out.
+ */
+export function parseAddress(address: string): PlayerHome | undefined {
+  const match = /^([^@\s]+)@(\S+)\/([^/\s]+)$/.exec(address.trim());
+  if (match === null) return undefined;
+  const [, playerId, where, assistant] = match as unknown as [string, string, string, string];
+  if (!ID.test(playerId) || !ID.test(assistant)) return undefined;
+  const scheme = /^https?:\/\//.exec(where)?.[0];
+  const rest = scheme === undefined ? where : where.slice(scheme.length);
+  const host = rest.split("/")[0]!;
+  let url: URL;
+  try {
+    url = new URL(`${scheme ?? (LOCAL.test(host) ? "http://" : "https://")}${rest}`);
+  } catch {
+    return undefined;
+  }
+  if (url.search !== "" || url.hash !== "" || url.username !== "") return undefined;
+  return { server: `${url.origin}${url.pathname.replace(/\/+$/, "")}`, assistant, playerId };
+}
+
+/** Whether two homes are the same person's. */
+export function sameHome(a: PlayerHome, b: PlayerHome): boolean {
+  return a.server === b.server && a.assistant === b.assistant && a.playerId === b.playerId;
+}
 
 /** A credential for one client of one player. Only its hash is stored. */
 export type TokenRecord = {

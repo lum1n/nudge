@@ -17,6 +17,7 @@ import type {
   Room as CoreRoom,
   ScheduledNudge,
 } from "@nudge/core";
+import { addressOf } from "@nudge/core";
 import type {
   Approval,
   Fact,
@@ -493,8 +494,12 @@ function approvals(list: readonly CoreApproval[]): Approval[] {
 
 // Core's records as protocol shapes, for hosts building views.
 
-export function toPlayer(player: Pick<CorePlayer, "id" | "displayName">): Player {
-  return { id: player.id, displayName: player.displayName };
+export function toPlayer(player: Pick<CorePlayer, "id" | "displayName" | "home">): Player {
+  return {
+    id: player.id,
+    displayName: player.displayName,
+    ...(player.home === undefined ? {} : { address: addressOf(player.home) }),
+  };
 }
 
 /** `players` looks up members by id; members it can't find are left out. */

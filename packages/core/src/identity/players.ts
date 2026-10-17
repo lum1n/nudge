@@ -11,6 +11,8 @@ import {
   newToken,
   normalizePairingCode,
   type Player,
+  type PlayerHome,
+  sameHome,
   slug,
   type TokenRecord,
 } from "./directory.ts";
@@ -59,6 +61,44 @@ export class Players {
     return { player, clientId, token };
   }
 
+  /**
+   * A token for someone whose home is another assistant, which has vouched for them: the player
+   * already here for that home, or a new one with a fresh id taken from the name. Checking the
+   * home's word is the caller's job.
+   */
+  async addRoaming(home: PlayerHome, displayName: string, context: Context): Promise<Invitation> {
+    const name = displayName.trim();
+    if (name === "") throw new Error("A player needs a name");
+    await this.protectName(name);
+    const token = newToken();
+    const clientId = `client-${randomUUID()}`;
+    const player = await this.harness.commit(async (tx) => {
+      const directory = await tx.doc(DirectoryDoc);
+      let player = Object.values(directory.players).find(
+        (player) => player.home !== undefined && sameHome(player.home, home),
+      );
+      if (player === undefined) {
+        const id = freeId(slug(name, "player"), (id) => id in directory.players);
+        player = { id, displayName: name, createdAt: this.now(), home: { ...home } };
+        directory.players[id] = player;
+      }
+      directory.tokens[hashToken(token)] = {
+        playerId: player.id,
+        clientId,
+        createdAt: this.now(),
+      };
+      return copyOf(player);
+    }, context);
+    return { player, clientId, token };
+  }
+
+  /** The player here whose home is `home`, if they joined. */
+  async byHome(home: PlayerHome, context: Context): Promise<Player | undefined> {
+    return (await this.list(context)).find(
+      (player) => player.home !== undefined && sameHome(player.home, home),
+    );
+  }
+
   /** Adds a player with a fresh id taken from the name and no token; pair a client for one. */
   async create(displayName: string, context: Context): Promise<Player> {
     return this.add(displayName, undefined, context);
@@ -97,7 +137,7 @@ export class Players {
       const existing = directory.players[id];
       if (existing !== undefined) {
         if (existing.displayName !== name) existing.displayName = name;
-        return { ...existing };
+        return copyOf(existing);
       }
       const player: Player = { id, displayName: name, createdAt: this.now() };
       directory.players[id] = { ...player };
@@ -114,7 +154,7 @@ export class Players {
       const player = (await tx.doc(DirectoryDoc)).players[id];
       if (player === undefined) throw new Error(`No player "${id}"`);
       player.displayName = name;
-      return { ...player };
+      return copyOf(player);
     }, context);
   }
 
@@ -127,7 +167,7 @@ export class Players {
       const player = directory.players[playerId];
       if (player === undefined) throw new Error(`No player "${playerId}"`);
       directory.tokens[hashToken(token)] = { playerId, clientId, createdAt: this.now() };
-      return { ...player };
+      return copyOf(player);
     }, context);
     return { player, clientId, token };
   }
@@ -146,7 +186,7 @@ export class Players {
       const pairing = directory.pairing;
       dropExpired(pairing, now);
       pairing[hashToken(normalizePairingCode(code))] = { playerId, createdAt: now, expiresAt };
-      return { ...player };
+      return copyOf(player);
     }, context);
     return { code, player, expiresAt };
   }
@@ -175,7 +215,7 @@ export class Players {
         createdAt: now,
         client: { name: client.name, platform: client.platform },
       };
-      return { ...player };
+      return copyOf(player);
     }, context);
     return player === undefined ? undefined : { player, clientId, token };
   }
@@ -194,7 +234,7 @@ export class Players {
       if (player === undefined) throw new Error(`No player "${playerId}"`);
       if (admin) player.admin = true;
       else delete player.admin;
-      return { ...player };
+      return copyOf(player);
     }, context);
   }
 
@@ -245,4 +285,9 @@ export function isAdmin(directory: Readonly<DirectoryState>, playerId: string): 
 function dropExpired(pairing: NonNullable<DirectoryState["pairing"]>, now: number): void {
   for (const [hash, record] of Object.entries(pairing))
     if (record.expiresAt <= now) delete pairing[hash];
+}
+
+/** A player out of a commit, as plain data: nested objects are the document's until copied. */
+function copyOf(player: Player): Player {
+  return { ...player, ...(player.home === undefined ? {} : { home: { ...player.home } }) };
 }
