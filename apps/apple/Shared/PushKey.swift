@@ -20,6 +20,8 @@ enum PushKey {
         let title: String
         let body: String
         let tag: String
+        /// The app's name for the sign-in the push is for; nil from servers that send none.
+        let account: String?
     }
 
     /// The push's fields, if it was sealed for `privateKey` (32 bytes, base64url); nil otherwise.
@@ -52,7 +54,8 @@ enum PushKey {
             let tag = fields["tag"] as? String
         else { return nil }
         return Opened(
-            assistant: assistant, roomId: roomId, kind: kind, url: url, title: title, body: body, tag: tag)
+            assistant: assistant, roomId: roomId, kind: kind, url: url, title: title, body: body, tag: tag,
+            account: fields["account"] as? String)
     }
 
     /// A new key pair, each half 32 bytes in base64url.
