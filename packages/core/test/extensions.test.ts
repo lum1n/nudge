@@ -629,8 +629,12 @@ describe("memory", () => {
       plain,
       plain,
     ]);
+    const changes: unknown[] = [];
+    nudge.changes.subscribe((change) => changes.push(change));
     await send(annsRoom.id, "Remember everywhere that I'm vegetarian");
     await send("trip", "Remember everywhere that I like trains");
+    // The tool says so too, since a player's own memory reaches past the room.
+    expect(changes).toContainEqual({ kind: "player-memory", playerId: "ann" });
     expect(outputs).toEqual([
       "Remembered p1.",
       "Only in someone's personal conversation; here, facts belong to this conversation.",

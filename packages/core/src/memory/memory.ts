@@ -252,6 +252,7 @@ export class Memory {
 
   /** Every room the player is in may show their facts. */
   private async playerChanged(playerId: string, context: Context): Promise<void> {
+    this.changed({ kind: "player-memory", playerId });
     for (const room of await this.rooms.list(context, playerId))
       this.changed({ kind: "memory", roomId: room.id });
   }
@@ -329,7 +330,11 @@ function visibleIn(fact: Fact, owner: string | undefined): boolean {
 }
 
 /** `remember` and `forget`, about the room the model talks in. */
-export function createMemoryTools(now: () => number): ToolRegistration[] {
+export function createMemoryTools(
+  now: () => number,
+  /** Told when a tool changed a player's own memory. */
+  changed: (change: Change) => void = () => {},
+): ToolRegistration[] {
   const text = (value: string, isError = false) => ({
     output: [{ type: "text" as const, text: value }],
     ...(isError ? { isError } : {}),
@@ -365,6 +370,8 @@ export function createMemoryTools(now: () => number): ToolRegistration[] {
               : addFact(tx, room.id, args.fact, now()),
           context,
         );
+        if (args.everywhere === true)
+          changed({ kind: "player-memory", playerId: room.members[0]! });
         return text(`Remembered ${fact.id}.`);
       } catch (error) {
         return text((error as Error).message, true);
@@ -398,6 +405,8 @@ export function createMemoryTools(now: () => number): ToolRegistration[] {
             : dropFact(tx, room.id, args.id),
         context,
       );
+      if (dropped && args.id.startsWith("p"))
+        changed({ kind: "player-memory", playerId: room.members[0]! });
       return dropped
         ? text(`Forgot ${args.id}.`)
         : text(`No fact ${args.id} in this conversation.`, true);

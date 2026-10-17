@@ -50,7 +50,7 @@ import { builtinDetectors, type PiiDetector } from "./privacy/detectors.ts";
 import { mapStrings } from "./privacy/redact.ts";
 import { type ToolValues, withToolValues } from "./privacy/tool-values.ts";
 import { type Owner, turnOf } from "./privacy/turn.ts";
-import { Vault } from "./privacy/vault.ts";
+import { PLACEHOLDER, Vault, type VaultEntry } from "./privacy/vault.ts";
 import { VaultDoc } from "./privacy/vault-doc.ts";
 import { openDatabaseStorage } from "./encrypted-storage.ts";
 import { lockDatabase } from "./storage-lock.ts";
@@ -247,6 +247,7 @@ export class Nudge {
           timeZone,
           now,
           nudges: () => whenOpen().nudges,
+          changed: (change) => whenOpen().changes.emit(change),
           turn,
         }),
         values,
@@ -697,6 +698,23 @@ export class Nudge {
     await this.models.flush();
     this.changes.emit({ kind: "vault" });
     return true;
+  }
+
+  /**
+   * What the vault holds for each placeholder in `text`, once each, forgotten and private values
+   * included; placeholders it doesn't know are left out.
+   */
+  valuesIn(text: string): VaultEntry[] {
+    const vault = this.models.vault;
+    const seen = new Set<string>();
+    const entries: VaultEntry[] = [];
+    for (const [placeholder] of text.matchAll(PLACEHOLDER)) {
+      if (seen.has(placeholder)) continue;
+      seen.add(placeholder);
+      const entry = vault.get(placeholder);
+      if (entry !== undefined) entries.push({ ...entry });
+    }
+    return entries;
   }
 
   /** The values only `playerId` may see, in the order they were made private. */

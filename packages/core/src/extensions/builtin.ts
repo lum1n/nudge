@@ -1,3 +1,4 @@
+import type { Change } from "../changes.ts";
 import type { Context } from "@earendil-works/chord";
 import {
   type ConversationId,
@@ -20,6 +21,8 @@ export type BuiltinOptions = {
   readonly now: () => number;
   /** Resolved at call time: the extension is installed before the assistant opens. */
   readonly nudges: () => Nudges;
+  /** Told about what the tools change beyond the room, such as a player's own memory. */
+  readonly changed?: (change: Change) => void;
   /** The turn a conversation is in, for what shows only in private turns. */
   readonly turn: (conversationId: ConversationId, context: Context) => Promise<Turn>;
 };
@@ -32,7 +35,7 @@ export function createBuiltinExtension(options: BuiltinOptions): Extension {
   return defineExtension({
     name: BUILTIN_NAME,
     tasks: [NudgeTimer],
-    tools: [...createNudgeTools(options), ...createMemoryTools(options.now)],
+    tools: [...createNudgeTools(options), ...createMemoryTools(options.now, options.changed)],
     sections: [
       section(
         "identity",
