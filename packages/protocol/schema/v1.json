@@ -2966,6 +2966,15 @@
         }
       }
     },
+    "RenameRoomRequest": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      }
+    },
     "WhenBusy": {
       "anyOf": [
         {
@@ -3411,6 +3420,131 @@
       "properties": {
         "shared": {
           "type": "boolean"
+        }
+      }
+    },
+    "NotificationPrefs": {
+      "type": "object",
+      "properties": {
+        "answers": {
+          "type": "boolean"
+        },
+        "approvals": {
+          "type": "boolean"
+        }
+      }
+    },
+    "Profile": {
+      "type": "object",
+      "required": ["displayName"],
+      "properties": {
+        "displayName": {
+          "type": "string"
+        },
+        "avatar": {
+          "type": "string"
+        },
+        "timeZone": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string"
+        },
+        "notifications": {
+          "type": "object",
+          "properties": {
+            "answers": {
+              "type": "boolean"
+            },
+            "approvals": {
+              "type": "boolean"
+            }
+          }
+        },
+        "extensions": {
+          "type": "object",
+          "patternProperties": {
+            "^.*$": {
+              "type": "object",
+              "patternProperties": {
+                "^.*$": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "UpdateProfileRequest": {
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "type": "string"
+        },
+        "avatar": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "timeZone": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "language": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "notifications": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "answers": {
+                  "type": "boolean"
+                },
+                "approvals": {
+                  "type": "boolean"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "extensions": {
+          "anyOf": [
+            {
+              "type": "object",
+              "patternProperties": {
+                "^.*$": {
+                  "type": "object",
+                  "patternProperties": {
+                    "^.*$": {}
+                  }
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       }
     },

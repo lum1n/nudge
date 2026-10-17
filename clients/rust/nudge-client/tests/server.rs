@@ -462,6 +462,37 @@ async fn keeps_a_players_own_memory_and_the_rooms_extensions() {
     assert_eq!(unknown.status(), Some(404));
 }
 
+#[tokio::test]
+async fn renames_a_room_keeping_its_id() {
+    let Some(server) = faux_server().await else {
+        return;
+    };
+    let bo = Api::new(&server.url, "robin", tokens(Some(&server.bo))).unwrap();
+    let renamed = bo.rename_room("trip", "Trip to Bergen").await.unwrap();
+    assert_eq!(
+        (renamed.id.as_str(), renamed.name.as_str()),
+        ("trip", "Trip to Bergen")
+    );
+    assert_eq!(
+        bo.rename_room("trip", " ").await.unwrap_err().status(),
+        Some(400)
+    );
+    assert_eq!(
+        bo.rename_room("nowhere", "Nowhere")
+            .await
+            .unwrap_err()
+            .status(),
+        Some(404)
+    );
+    // Only admins rename the lobby.
+    assert_eq!(
+        bo.rename_room("lobby", "Hall").await.unwrap_err().status(),
+        Some(403)
+    );
+    let ann = Api::new(&server.url, "robin", tokens(Some(&server.ann))).unwrap();
+    assert_eq!(ann.rename_room("lobby", "Hall").await.unwrap().name, "Hall");
+}
+
 /// Hears a panel socket, for the test.
 struct Panel(tokio::sync::mpsc::UnboundedSender<Result<Value, PanelStatus>>);
 

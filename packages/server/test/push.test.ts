@@ -222,6 +222,38 @@ describe("web push", () => {
       } satisfies PushMessage);
     });
 
+    it("leaves out players who turned a kind of push off in their profile", async () => {
+      const ann = browser("https://push.example/ann");
+      const bo = browser("https://push.example/bo");
+      await call("POST", "/push", tokens.Ann!, ann.subscription);
+      await call("POST", "/push", tokens.Bo!, bo.subscription);
+      const off = await call("PATCH", "/me/profile", tokens.Bo!, {
+        notifications: { answers: false },
+      });
+      expect(off.json).toMatchObject({ displayName: "Bo", notifications: { answers: false } });
+
+      faux.setResponses([fauxAssistantMessage("Done.")]);
+      await call("POST", "/rooms/trip/messages", tokens.Ann!, { text: "Hi", requestId: "r1" });
+      await until(() => received.length === 1);
+      await nudge.harness.commit(
+        (tx) =>
+          requestApproval(
+            tx,
+            "trip",
+            { extension: "x", kind: "y", summary: "Book the hotel", payload: null },
+            Date.now(),
+          ),
+        context,
+      );
+      await until(() => received.length === 3);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(received.map((r) => r.endpoint).sort()).toEqual([
+        "https://push.example/ann",
+        "https://push.example/ann",
+        "https://push.example/bo",
+      ]);
+    });
+
     it("swaps a subscription the browser replaced, given the old one's auth secret", async () => {
       const old = browser("https://push.example/old");
       await call("POST", "/push", tokens.Ann!, old.subscription);

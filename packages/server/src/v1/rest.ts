@@ -8,9 +8,11 @@ import {
   ConfigError,
   type Credential,
   ExtensionNotFound,
+  InvalidProfile,
   NotAllowed,
   type Nudge,
   type Player as CorePlayer,
+  type ProfileUpdate,
   type Room as CoreRoom,
   type TokenRecord,
 } from "@nudge/core";
@@ -42,11 +44,13 @@ import {
   type PlayersResponse,
   ProtectRequest,
   type PrivateValuesResponse,
+  type Profile,
   type ProtectResponse,
   type PushKeyResponse,
   PushRenewRequest,
   PushSubscribeRequest,
   RememberRequest,
+  RenameRoomRequest,
   SaveExtensionSetupsRequest,
   type Room,
   type RoomExtensionsResponse,
@@ -57,6 +61,7 @@ import {
   type TimelineResponse,
   type TokenInfo,
   type TokensResponse,
+  UpdateProfileRequest,
   type UsageResponse,
 } from "@nudge/protocol";
 import {
@@ -268,6 +273,27 @@ export function restRoutes(options: RestOptions): Hono {
     );
   });
 
+  api.get("/me/profile", async (c) => {
+    const profile = await c.var.nudge.profiles.get(c.var.credential.player.id, context);
+    if (profile === undefined) throw new HttpError(404, "No such player");
+    return c.json(profile satisfies Profile);
+  });
+
+  api.patch("/me/profile", async (c) => {
+    const body = await readBody(c, UpdateProfileRequest);
+    try {
+      const profile = await c.var.nudge.profiles.update(
+        c.var.credential.player.id,
+        body as ProfileUpdate,
+        context,
+      );
+      return c.json(profile satisfies Profile);
+    } catch (error) {
+      if (error instanceof InvalidProfile) throw new HttpError(400, error.message);
+      throw error;
+    }
+  });
+
   api.get("/usage", async (c) => {
     const { spending } = c.var.nudge;
     const { month, spend, budget } = spending.thisMonth();
@@ -354,6 +380,27 @@ export function restRoutes(options: RestOptions): Hono {
   api.post("/rooms/personal", async (c) => {
     const room = await c.var.nudge.rooms.ensurePersonal(c.var.credential.player.id, context);
     return c.json(await roomOf(c.var.nudge, room));
+  });
+
+  // Members rename their rooms; admins any room, the lobby too.
+  api.patch("/rooms/:room", async (c) => {
+    const id = c.req.param("room");
+    const me = c.var.credential.player.id;
+    const found = await c.var.nudge.rooms.get(id, context);
+    if (
+      found === undefined ||
+      (!canUse(found, me) && !(await c.var.nudge.players.isAdmin(me, context)))
+    )
+      throw new HttpError(404, `No room "${id}"`);
+    const body = await readBody(c, RenameRoomRequest);
+    if (body.name.trim() === "") throw new HttpError(400, "A room needs a name");
+    try {
+      const room = await c.var.nudge.renameRoom(id, body.name, context, { playerId: me });
+      return c.json(await roomOf(c.var.nudge, room));
+    } catch (error) {
+      if (error instanceof NotAllowed) throw new HttpError(403, error.message);
+      throw error;
+    }
   });
 
   api.post("/rooms/:room/messages", async (c) => {

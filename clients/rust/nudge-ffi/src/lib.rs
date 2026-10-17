@@ -508,6 +508,14 @@ impl NudgeClient {
             .into())
     }
 
+    /// The room keeps its id. Its owner or members may rename it, admins any room, the lobby too.
+    pub async fn rename_room(&self, room: String, name: String) -> Result<Room, NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.rename_room(&room, &name).await })
+            .await?
+            .into())
+    }
+
     /// The caller's personal room, made on first use.
     pub async fn personal_room(&self) -> Result<Room, NudgeError> {
         let api = self.client.api().clone();

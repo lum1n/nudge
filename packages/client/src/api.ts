@@ -18,9 +18,11 @@ import type {
   PlayerResponse,
   PrivateValue,
   PrivateValuesResponse,
+  Profile,
   ProtectResponse,
   PushKeyResponse,
   PushSubscribeRequest,
+  RenameRoomRequest,
   Room,
   RoomExtension,
   RoomExtensionsResponse,
@@ -29,6 +31,7 @@ import type {
   TimelineResponse,
   TokenInfo,
   TokensResponse,
+  UpdateProfileRequest,
   UsageResponse,
 } from "@nudge/protocol";
 
@@ -111,6 +114,11 @@ export class Api {
     return this.request("POST", "/rooms", body);
   }
 
+  /** Gives the room a new name; its id stays. */
+  renameRoom(room: string, name: string): Promise<Room> {
+    return this.request("PATCH", roomPath(room), { name } satisfies RenameRoomRequest);
+  }
+
   /** The caller's personal room, made on first use. */
   personalRoom(): Promise<Room> {
     return this.request("POST", "/rooms/personal");
@@ -162,6 +170,16 @@ export class Api {
   /** With `shared`, everyone in the caller's rooms, and the model there, sees their own facts. */
   shareMyMemory(shared: boolean): Promise<PlayerMemoryResponse> {
     return this.request("PUT", "/me/memory/sharing", { shared });
+  }
+
+  /** The caller's profile: name, avatar, time zone, language and preferences. */
+  profile(): Promise<Profile> {
+    return this.request("GET", "/me/profile");
+  }
+
+  /** Changes the fields given; `null` clears one. */
+  updateProfile(update: UpdateProfileRequest): Promise<Profile> {
+    return this.request("PATCH", "/me/profile", update);
   }
 
   /** What the model sees of the room: its next request's messages, personal values as placeholders. */

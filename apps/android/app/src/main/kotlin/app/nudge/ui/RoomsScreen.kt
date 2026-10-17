@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.CloudOff
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.MeetingRoom
@@ -20,6 +21,8 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingActionButtonMenu
@@ -57,10 +60,11 @@ import app.nudge.explain
 import kotlinx.coroutines.launch
 import nudge.ffi.ConnectionStatus
 import nudge.ffi.HomeRoom
+import nudge.ffi.Room
 import nudge.ffi.RoomKind
 import nudge.ffi.SyncStatus
 
-/** The player's rooms, newest news first, and a FAB menu for new ones. */
+/** The player's rooms, newest news first, a FAB menu for new ones, and a long press to rename one. */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun RoomsScreen(
@@ -76,6 +80,7 @@ fun RoomsScreen(
     val me by model.me.collectAsStateWithLifecycle()
     var menu by rememberSaveable { mutableStateOf(false) }
     var creating by remember { mutableStateOf(false) }
+    var renaming by remember { mutableStateOf<Room?>(null) }
     var problem by remember { mutableStateOf<String?>(null) }
     val rooms = home?.view?.rooms.orEmpty().sortedByDescending { it.lastItemAt ?: 0.0 }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -160,6 +165,8 @@ fun RoomsScreen(
                         index = index,
                         count = rooms.size,
                         onClick = { open(room.room.id) },
+                        // Only admins rename the lobby.
+                        rename = if (room.room.kind != RoomKind.LOBBY || me?.admin == true) ({ renaming = room.room }) else null,
                     )
                 }
             }
@@ -167,6 +174,7 @@ fun RoomsScreen(
     }
 
     if (creating) NewRoomDialog(session, close = { creating = false }, created = open)
+    renaming?.let { room -> RenameRoomDialog(session, room, close = { renaming = null }) }
     problem?.let { message ->
         AlertDialog(
             onDismissRequest = { problem = null },
@@ -200,33 +208,58 @@ private fun connectionText(status: ConnectionStatus?): (@Composable () -> Unit)?
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun RoomRow(room: HomeRoom, me: String?, selected: Boolean, index: Int, count: Int, onClick: () -> Unit) {
+private fun RoomRow(
+    room: HomeRoom,
+    me: String?,
+    selected: Boolean,
+    index: Int,
+    count: Int,
+    onClick: () -> Unit,
+    rename: (() -> Unit)?,
+) {
     val others = room.room.members.filter { it.id != me }.joinToString { it.displayName }
-    SegmentedListItem(
-        selected = selected,
-        onClick = onClick,
-        shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
-        leadingContent = {
-            Icon(
-                when (room.room.kind) {
-                    RoomKind.PERSONAL -> Icons.Outlined.Person
-                    RoomKind.SHARED -> Icons.Outlined.Group
-                    RoomKind.LOBBY -> Icons.Outlined.MeetingRoom
-                },
-                null,
-            )
-        },
-        supportingContent = if (others.isEmpty()) null else ({ Text(others, maxLines = 1) }),
-        trailingContent = {
-            when {
-                room.pendingApprovals > 0u -> Badge(containerColor = MaterialTheme.colorScheme.tertiary) {
-                    Text("${room.pendingApprovals}")
+    var menu by remember { mutableStateOf(false) }
+    Box {
+        SegmentedListItem(
+            selected = selected,
+            onClick = onClick,
+            onLongClick = rename?.let { { menu = true } },
+            onLongClickLabel = rename?.let { "Room actions" },
+            shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
+            leadingContent = {
+                Icon(
+                    when (room.room.kind) {
+                        RoomKind.PERSONAL -> Icons.Outlined.Person
+                        RoomKind.SHARED -> Icons.Outlined.Group
+                        RoomKind.LOBBY -> Icons.Outlined.MeetingRoom
+                    },
+                    null,
+                )
+            },
+            supportingContent = if (others.isEmpty()) null else ({ Text(others, maxLines = 1) }),
+            trailingContent = {
+                when {
+                    room.pendingApprovals > 0u -> Badge(containerColor = MaterialTheme.colorScheme.tertiary) {
+                        Text("${room.pendingApprovals}")
+                    }
+                    room.running -> LoadingIndicator(Modifier.size(28.dp))
                 }
-                room.running -> LoadingIndicator(Modifier.size(28.dp))
+            },
+        ) {
+            Text(room.room.name, maxLines = 1)
+        }
+        if (rename != null) {
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(
+                    text = { Text("Rename") },
+                    leadingIcon = { Icon(Icons.Outlined.Edit, null) },
+                    onClick = {
+                        menu = false
+                        rename()
+                    },
+                )
             }
-        },
-    ) {
-        Text(room.room.name, maxLines = 1)
+        }
     }
 }
 
@@ -262,6 +295,44 @@ private fun NewRoomDialog(session: Session, close: () -> Unit, created: (String)
                     }
                 },
             ) { Text("Create") }
+        },
+        dismissButton = { TextButton(onClick = close) { Text("Cancel") } },
+    )
+}
+
+/** The room keeps its id; the list shows the new name once the home view has it. */
+@Composable
+private fun RenameRoomDialog(session: Session, room: Room, close: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var name by remember(room.id) { mutableStateOf(room.name) }
+    var problem by remember { mutableStateOf<String?>(null) }
+    AlertDialog(
+        onDismissRequest = close,
+        title = { Text("Rename room") },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("Name") },
+                singleLine = true,
+                isError = problem != null,
+                supportingText = problem?.let { { Text(it) } },
+            )
+        },
+        confirmButton = {
+            TextButton(
+                enabled = name.isNotBlank() && name.trim() != room.name,
+                onClick = {
+                    scope.launch {
+                        try {
+                            session.client.renameRoom(room.id, name.trim())
+                            close()
+                        } catch (error: Exception) {
+                            problem = explain(error)
+                        }
+                    }
+                },
+            ) { Text("Rename") }
         },
         dismissButton = { TextButton(onClick = close) { Text("Cancel") } },
     )

@@ -1,6 +1,8 @@
 import { Type } from "@earendil-works/pi-ai";
-import { defineTool, type ToolRegistration } from "@earendil-works/pi-durable";
+import type { Context } from "@earendil-works/chord";
+import { type DocumentReader, defineTool, type ToolRegistration } from "@earendil-works/pi-durable";
 import { roomOf } from "../identity/directory.ts";
+import { profileOf } from "../identity/profiles.ts";
 import { keepsPlaceholders } from "../privacy/tool-values.ts";
 import { currentTurn } from "../privacy/turn.ts";
 import type { Nudges } from "./nudges.ts";
@@ -9,6 +11,7 @@ import { formatTime, parseTime, type ScheduledNudge } from "./schedule.ts";
 export type NudgeToolOptions = {
   /** Resolved at call time: the tools are registered before the assistant opens. */
   readonly nudges: () => Nudges;
+  /** The assistant's; a player's own from their profile wins for what they ask. */
   readonly timeZone: string;
   readonly now: () => number;
 };
@@ -17,9 +20,15 @@ const MINUTE = 60_000;
 
 /** `schedule_nudge`, `list_nudges` and `cancel_nudge`, each about the room the model talks in. */
 export function createNudgeTools(options: NudgeToolOptions): ToolRegistration[] {
-  const { timeZone } = options;
-  const describe = (nudge: ScheduledNudge) =>
+  /** The time zone of whoever the turn answers. */
+  const zoneOf = async (read: DocumentReader, context: Context) => {
+    const by = currentTurn().by;
+    const profile = by === undefined ? undefined : await profileOf(read, by.playerId, context);
+    return profile?.timeZone ?? options.timeZone;
+  };
+  const describe = (nudge: ScheduledNudge, timeZone: string) =>
     `${nudge.id}: ${formatTime(nudge.fireAt, timeZone)}` +
+    (timeZone === options.timeZone ? "" : ` ${timeZone}`) +
     (nudge.every === undefined ? "" : `, then every ${minutes(nudge.every)}`) +
     (nudge.privateTo === undefined ? "" : ` (private to ${nudge.privateTo.displayName})`) +
     ` — ${nudge.message}`;
@@ -40,7 +49,9 @@ export function createNudgeTools(options: NudgeToolOptions): ToolRegistration[] 
       message: Type.String({ description: "What to say or remind about when it fires." }),
       at: Type.Optional(
         Type.String({
-          description: `Local time in ${timeZone}, like 2026-10-13T14:30.`,
+          description:
+            "Local time, like 2026-10-13T14:30, in the time zone of whoever asked: theirs if " +
+            `the members section names one, else ${options.timeZone}.`,
         }),
       ),
       in_minutes: Type.Optional(Type.Number({ description: "Minutes from now." })),
@@ -52,6 +63,7 @@ export function createNudgeTools(options: NudgeToolOptions): ToolRegistration[] 
       if ((args.at === undefined) === (args.in_minutes === undefined))
         return text("Give exactly one of `at` and `in_minutes`.", true);
       const now = options.now();
+      const timeZone = await zoneOf(api, context);
       const fireAt =
         args.at === undefined ? now + args.in_minutes! * MINUTE : parseTime(args.at, timeZone);
       if (fireAt === undefined)
@@ -69,7 +81,7 @@ export function createNudgeTools(options: NudgeToolOptions): ToolRegistration[] 
         },
         context,
       );
-      return text(`Scheduled nudge ${describe(nudge)}`);
+      return text(`Scheduled nudge ${describe(nudge, timeZone)}`);
     },
   });
 
@@ -81,7 +93,12 @@ export function createNudgeTools(options: NudgeToolOptions): ToolRegistration[] 
     execute: async (_args, api, context) => {
       const room = await roomOf(api, api.conversationId, context);
       const nudges = (await options.nudges().list(context, [room.id])).filter(visible);
-      return text(nudges.length === 0 ? "No nudges scheduled." : nudges.map(describe).join("\n"));
+      const timeZone = await zoneOf(api, context);
+      return text(
+        nudges.length === 0
+          ? "No nudges scheduled."
+          : nudges.map((nudge) => describe(nudge, timeZone)).join("\n"),
+      );
     },
   });
 
@@ -98,7 +115,7 @@ export function createNudgeTools(options: NudgeToolOptions): ToolRegistration[] 
       if (nudge === undefined || nudge.roomId !== room.id || !visible(nudge))
         return text(`No nudge ${args.id} in this conversation.`, true);
       await nudges.cancel(args.id, context);
-      return text(`Cancelled nudge ${describe(nudge)}`);
+      return text(`Cancelled nudge ${describe(nudge, await zoneOf(api, context))}`);
     },
   });
 

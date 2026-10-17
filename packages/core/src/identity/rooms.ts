@@ -78,6 +78,24 @@ export class Rooms {
     );
   }
 
+  /** Gives the room a new name; its id, and so links to it, stay. */
+  async rename(id: string, name: string, context: Context): Promise<Room> {
+    const trimmed = name.trim();
+    if (trimmed === "") throw new Error("A room needs a name");
+    const room = await this.harness.commit(async (tx) => {
+      const room = (await tx.doc(DirectoryDoc)).rooms[id];
+      if (room === undefined) throw new Error(`No room "${id}"`);
+      room.name = trimmed;
+      return {
+        ...room,
+        members: [...room.members],
+        ...(room.extensions === undefined ? {} : { extensions: { ...room.extensions } }),
+      };
+    }, context);
+    this.changed({ kind: "rooms" });
+    return room;
+  }
+
   /** Records the lobby, the root conversation, in the directory. */
   async adoptLobby(conversationId: ConversationId, context: Context): Promise<void> {
     if ((await this.get(LOBBY, context)) !== undefined) return;

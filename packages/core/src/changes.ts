@@ -1,16 +1,17 @@
 /**
- * What changed: the room list, one room's memory, nudges or approvals, or who may see which
- * values (a value made private or forgotten), which changes what every view shows.
+ * What changed: the room list, one room's memory, nudges or approvals, who may see which values (a
+ * value made private or forgotten), which changes what every view shows, or a player's profile.
  */
 export type Change =
   | { readonly kind: "rooms" | "vault" }
-  | { readonly kind: "memory" | "nudges" | "approvals"; readonly roomId: string };
+  | { readonly kind: "memory" | "nudges" | "approvals"; readonly roomId: string }
+  | { readonly kind: "profile"; readonly playerId: string };
 
 export type ChangeListener = (change: Change) => void;
 
 /**
  * Tells hosts that something outside a conversation's entries changed, so they can read it again.
- * Fired after the commit by the host-facing methods (`Memory`, `Nudges`, `Approvals`, `Rooms`).
+ * Fired after the commit by the host-facing methods (`Memory`, `Nudges`, `Approvals`, `Rooms`, `Profiles`).
  * What tools change inside a turn is not reported here; it lands with the turn's entries.
  */
 export class Changes {

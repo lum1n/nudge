@@ -229,6 +229,8 @@ export class Pushes {
         // Each member's preview shows only what they may see.
         const message = await this.message(event, player.id);
         if (message === undefined) return;
+        const { notifications } = (await this.nudge.profiles.get(player.id, context)) ?? {};
+        if (notifications?.[message.kind === "answer" ? "answers" : "approvals"] === false) return;
         const doc = await this.nudge.harness.snapshot(PushDoc, player.id, context);
         const gone: string[] = [];
         await Promise.all(

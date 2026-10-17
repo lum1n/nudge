@@ -262,6 +262,24 @@ export async function room(
   );
 }
 
+/** Gives a room a new name; its id stays. */
+export async function renameRoom(
+  options: AdminOptions & ServerAccess & { readonly room: string; readonly name: string },
+): Promise<void> {
+  const print = (room: Pick<Room, "id" | "name">) =>
+    console.log(`Room "${room.id}" is now called ${room.name}.`);
+  await withAssistantOrServer(
+    options,
+    async (nudge) => print(await nudge.renameRoom(options.room, options.name, context)),
+    async (server) =>
+      print(
+        await server.call<Room>("PATCH", `/rooms/${encodeURIComponent(options.room)}`, {
+          name: options.name,
+        }),
+      ),
+  );
+}
+
 /** Lists every pending nudge, with its room. */
 export async function nudges(options: AdminOptions & ServerAccess): Promise<void> {
   const print = (pending: readonly HomeNudge[]) => {

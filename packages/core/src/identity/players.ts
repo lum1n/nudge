@@ -105,6 +105,19 @@ export class Players {
     }, context);
   }
 
+  /** Gives a player a new display name; their id stays. */
+  async rename(id: string, displayName: string, context: Context): Promise<Player> {
+    const name = displayName.trim();
+    if (name === "") throw new Error("A player needs a name");
+    await this.protectName(name);
+    return this.harness.commit(async (tx) => {
+      const player = (await tx.doc(DirectoryDoc)).players[id];
+      if (player === undefined) throw new Error(`No player "${id}"`);
+      player.displayName = name;
+      return { ...player };
+    }, context);
+  }
+
   /** Another token for an existing player, such as for a second device. */
   async issueToken(playerId: string, context: Context): Promise<Invitation> {
     const token = newToken();

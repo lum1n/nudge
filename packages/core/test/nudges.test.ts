@@ -234,4 +234,32 @@ describe("nudges", () => {
     expect(await nudge.nudges.list(context)).toEqual([]);
     await nudge.close(context);
   });
+
+  it("reads the times a player asks for in the time zone of their profile", async () => {
+    const { faux, options } = setup(":memory:", () => Date.parse("2026-10-13T08:00:00Z"));
+    const nudge = await createNudge(options, context);
+    const ann = await nudge.players.ensure("ann", "Ann", context);
+    await nudge.profiles.update(ann.id, { timeZone: "America/New_York" }, context);
+    const annsRoom = await nudge.rooms.ensurePersonal(ann.id, context);
+    const outputs: string[] = [];
+    faux.setResponses([
+      () =>
+        fauxAssistantMessage(
+          [fauxToolCall("schedule_nudge", { message: "Call Bo", at: "2026-10-13T14:30" })],
+          { stopReason: "toolUse" },
+        ),
+      (request) => {
+        const message = request.messages.at(-1) as { content: { text?: string }[] };
+        outputs.push(message.content[0]?.text ?? "");
+        return fauxAssistantMessage([fauxText("Done.")]);
+      },
+    ]);
+    const author = { playerId: ann.id, displayName: ann.displayName };
+    await (await nudge.submit(annsRoom.id, { text: "Remind me", author }, context)).wait(context);
+    const [scheduled] = await nudge.nudges.list(context);
+    // 14:30 in New York is 18:30 UTC, not 12:30 as in the assistant's Oslo.
+    expect(scheduled?.fireAt).toBe(Date.parse("2026-10-13T18:30:00Z"));
+    expect(outputs[0]).toContain("14:30 America/New_York");
+    await nudge.close(context);
+  });
 });

@@ -37,6 +37,7 @@ import {
 import { attach, MESSAGE_ENTRY, type MessageDraft, submitMessage } from "./host-api.ts";
 import { DirectoryDoc, type Room } from "./identity/directory.ts";
 import { Players } from "./identity/players.ts";
+import { Profiles } from "./identity/profiles.ts";
 import { Rooms } from "./identity/rooms.ts";
 import { Memory } from "./memory/memory.ts";
 import { Nudges } from "./nudges/nudges.ts";
@@ -125,6 +126,8 @@ export class Nudge {
   /** What the assistant calls itself. */
   readonly displayName: string;
   readonly players: Players;
+  /** What each player says about themselves: time zone, language, preferences. */
+  readonly profiles: Profiles;
   readonly rooms: Rooms;
   readonly nudges: Nudges;
   readonly memory: Memory;
@@ -175,6 +178,9 @@ export class Nudge {
     this.events.subscribe((event) => this.deliver(event));
     this.players = new Players(harness, (name) => this.protect(name, "NAME").then(() => {}), now);
     const changed = (change: Change) => this.changes.emit(change);
+    this.profiles = new Profiles(harness, this.players, (playerId) =>
+      changed({ kind: "profile", playerId }),
+    );
     this.rooms = new Rooms(
       harness,
       (room) => ({ ...agent, extensions: this.selection(room) }),
@@ -428,6 +434,25 @@ export class Nudge {
     return (await this.roomExtensions(roomId, context)).find(
       (extension) => extension.name === name,
     )!;
+  }
+
+  /**
+   * Renames a room, keeping its id. A personal room's owner and a shared room's members may, and an
+   * admin any room, the lobby only them; without `by`, the host renames it.
+   */
+  async renameRoom(
+    roomId: string,
+    name: string,
+    context: Context,
+    by?: { readonly playerId: string },
+  ): Promise<Room> {
+    const room = await this.room(roomId, context);
+    if (by !== undefined && !(await this.players.isAdmin(by.playerId, context))) {
+      if (room.kind === "lobby") throw new NotAllowed("Only an admin may rename the lobby");
+      if (!room.members.includes(by.playerId))
+        throw new NotAllowed(`Only the room's members may rename "${roomId}"`);
+    }
+    return this.rooms.rename(roomId, name, context);
   }
 
   /** Whether the room's conversation uses `name`; the built-in extension always. */

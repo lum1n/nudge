@@ -398,6 +398,12 @@ fn http_bodies_match_the_schema() {
             members: Some(vec!["bo".into()]),
         },
     );
+    check(
+        "RenameRoomRequest",
+        &RenameRoomRequest {
+            name: "Trip".into(),
+        },
+    );
     for when_busy in [WhenBusy::FollowUp, WhenBusy::Steer, WhenBusy::Reject] {
         check(
             "MessageRequest",

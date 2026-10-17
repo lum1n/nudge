@@ -14,6 +14,7 @@ import { Route as AssistantRouteRouteImport } from './routes/$assistant/route'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AssistantIndexRouteImport } from './routes/$assistant/index'
 import { Route as AssistantRoomRouteImport } from './routes/$assistant/$room'
+import { Route as AssistantProfileRouteImport } from './routes/$assistant/profile'
 import { Route as AssistantSettingsRouteImport } from './routes/$assistant/settings'
 import { Route as AssistantRoomBrowserRouteImport } from './routes/$assistant/$room_.browser'
 import { Route as AssistantRoomConnectorsRouteImport } from './routes/$assistant/$room_.connectors'
@@ -44,6 +45,11 @@ const AssistantIndexRoute = AssistantIndexRouteImport.update({
 const AssistantRoomRoute = AssistantRoomRouteImport.update({
   id: '/$room',
   path: '/$room',
+  getParentRoute: () => AssistantRouteRoute,
+} as any)
+const AssistantProfileRoute = AssistantProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
   getParentRoute: () => AssistantRouteRoute,
 } as any)
 const AssistantSettingsRoute = AssistantSettingsRouteImport.update({
@@ -82,6 +88,7 @@ export interface FileRoutesByFullPath {
   '/$assistant': typeof AssistantRouteRouteWithChildren
   '/login': typeof LoginRoute
   '/$assistant/$room': typeof AssistantRoomRoute
+  '/$assistant/profile': typeof AssistantProfileRoute
   '/$assistant/settings': typeof AssistantSettingsRoute
   '/$assistant/': typeof AssistantIndexRoute
   '/$assistant/$room/browser': typeof AssistantRoomBrowserRoute
@@ -94,6 +101,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/$assistant/$room': typeof AssistantRoomRoute
+  '/$assistant/profile': typeof AssistantProfileRoute
   '/$assistant/settings': typeof AssistantSettingsRoute
   '/$assistant': typeof AssistantIndexRoute
   '/$assistant/$room/browser': typeof AssistantRoomBrowserRoute
@@ -108,6 +116,7 @@ export interface FileRoutesById {
   '/$assistant': typeof AssistantRouteRouteWithChildren
   '/login': typeof LoginRoute
   '/$assistant/$room': typeof AssistantRoomRoute
+  '/$assistant/profile': typeof AssistantProfileRoute
   '/$assistant/settings': typeof AssistantSettingsRoute
   '/$assistant/': typeof AssistantIndexRoute
   '/$assistant/$room_/browser': typeof AssistantRoomBrowserRoute
@@ -123,6 +132,7 @@ export interface FileRouteTypes {
     | '/$assistant'
     | '/login'
     | '/$assistant/$room'
+    | '/$assistant/profile'
     | '/$assistant/settings'
     | '/$assistant/'
     | '/$assistant/$room/browser'
@@ -135,6 +145,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/$assistant/$room'
+    | '/$assistant/profile'
     | '/$assistant/settings'
     | '/$assistant'
     | '/$assistant/$room/browser'
@@ -148,6 +159,7 @@ export interface FileRouteTypes {
     | '/$assistant'
     | '/login'
     | '/$assistant/$room'
+    | '/$assistant/profile'
     | '/$assistant/settings'
     | '/$assistant/'
     | '/$assistant/$room_/browser'
@@ -200,6 +212,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AssistantRoomRouteImport
       parentRoute: typeof AssistantRouteRoute
     }
+    '/$assistant/profile': {
+      id: '/$assistant/profile'
+      path: '/profile'
+      fullPath: '/$assistant/profile'
+      preLoaderRoute: typeof AssistantProfileRouteImport
+      parentRoute: typeof AssistantRouteRoute
+    }
     '/$assistant/settings': {
       id: '/$assistant/settings'
       path: '/settings'
@@ -247,6 +266,7 @@ declare module '@tanstack/react-router' {
 
 interface AssistantRouteRouteChildren {
   AssistantRoomRoute: typeof AssistantRoomRoute
+  AssistantProfileRoute: typeof AssistantProfileRoute
   AssistantSettingsRoute: typeof AssistantSettingsRoute
   AssistantIndexRoute: typeof AssistantIndexRoute
   AssistantRoomBrowserRoute: typeof AssistantRoomBrowserRoute
@@ -258,6 +278,7 @@ interface AssistantRouteRouteChildren {
 
 const AssistantRouteRouteChildren: AssistantRouteRouteChildren = {
   AssistantRoomRoute: AssistantRoomRoute,
+  AssistantProfileRoute: AssistantProfileRoute,
   AssistantSettingsRoute: AssistantSettingsRoute,
   AssistantIndexRoute: AssistantIndexRoute,
   AssistantRoomBrowserRoute: AssistantRoomBrowserRoute,

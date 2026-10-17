@@ -12,6 +12,7 @@ import {
   PairResponse,
   PlayerMemoryResponse,
   PlayersResponse,
+  Profile,
   Room,
   RoomsResponse,
   type RoomView,
@@ -124,6 +125,50 @@ describe("v1 HTTP", () => {
     ).toMatchObject({ status: 400, json: { error: 'No player "zed"' } });
     const personal = await call("POST", "/rooms/personal", { token: tokens.Bo, schema: Room });
     expect(personal.json).toMatchObject({ id: "personal-bo", kind: "personal" });
+  });
+
+  it("renames rooms for members, the lobby for admins only", async () => {
+    const rename = (token: string | undefined, room: string, body: unknown) =>
+      call("PATCH", `/rooms/${room}`, { token, body, schema: Room });
+    expect(await rename(tokens.Bo, "trip", { name: "Rome" })).toMatchObject({
+      status: 200,
+      json: { id: "trip", name: "Rome", kind: "shared" },
+    });
+    expect((await rename(tokens.Cy, "trip", { name: "Mine" })).status).toBe(404);
+    expect((await rename(tokens.Bo, "lobby", { name: "Hall" })).status).toBe(403);
+    expect((await rename(tokens.Bo, "trip", { name: " " })).status).toBe(400);
+    expect((await rename(tokens.Bo, "trip", {})).status).toBe(400);
+    expect((await rename(tokens.Ann, "lobby", { name: "Hall" })).json.name).toBe("Hall");
+    const rooms = await call("GET", "/admin/rooms", { token: tokens.Ann, schema: RoomsResponse });
+    expect(rooms.json.rooms.map((room: Room) => room.name)).toEqual(["Hall", "Rome"]);
+  });
+
+  it("reads and changes the caller's own profile", async () => {
+    expect(await call("GET", "/me/profile", { token: tokens.Bo, schema: Profile })).toEqual({
+      status: 200,
+      json: { displayName: "Bo" },
+    });
+    const changed = await call("PATCH", "/me/profile", {
+      token: tokens.Bo,
+      body: { displayName: "Bo B", timeZone: "Europe/Oslo", extensions: { mail: { sign: true } } },
+      schema: Profile,
+    });
+    expect(changed.json).toEqual({
+      displayName: "Bo B",
+      timeZone: "Europe/Oslo",
+      extensions: { mail: { sign: true } },
+    });
+    expect((await call("GET", "/me", { token: tokens.Bo })).json.player.displayName).toBe("Bo B");
+    expect(
+      (await call("PATCH", "/me/profile", { token: tokens.Bo, body: { timeZone: null } })).json,
+    ).toEqual({ displayName: "Bo B", extensions: { mail: { sign: true } } });
+    expect(
+      await call("PATCH", "/me/profile", { token: tokens.Bo, body: { timeZone: "Nowhere" } }),
+    ).toMatchObject({ status: 400, json: { error: expect.stringContaining("Nowhere") } });
+    expect(
+      (await call("PATCH", "/me/profile", { token: tokens.Bo, body: { language: 7 } })).status,
+    ).toBe(400);
+    expect((await call("GET", "/me/profile")).status).toBe(401);
   });
 
   it("sends messages once per request id, and hides rooms from non-members", async () => {

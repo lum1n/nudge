@@ -2,12 +2,13 @@ import Nudge
 import SwiftUI
 
 /// The player's rooms beside the open one: a sidebar on the Mac and the iPad, a stack on the
-/// iPhone.
+/// iPhone. A room's context menu renames it.
 struct RoomsView: View {
     @Environment(AppModel.self) private var model
     let client: NudgeClient
     let account: Account
     @State private var creating = false
+    @State private var renaming: Room?
     @State private var settings = false
     @State private var problem: String?
 
@@ -26,7 +27,14 @@ struct RoomsView: View {
                         .listRowSeparator(.hidden)
                 }
                 ForEach(rooms, id: \.room.id) { room in
-                    RoomRow(room: room, me: model.me?.player.id).tag(room.room.id)
+                    RoomRow(room: room, me: model.me?.player.id)
+                        .tag(room.room.id)
+                        .contextMenu {
+                            // Only admins rename the lobby.
+                            if room.room.kind != .lobby || model.me?.admin == true {
+                                Button("Rename…", systemImage: "pencil") { renaming = room.room }
+                            }
+                        }
                 }
                 if model.home?.value?.status == .live && rooms.isEmpty {
                     Text("No rooms yet.").foregroundStyle(.secondary)
@@ -63,6 +71,9 @@ struct RoomsView: View {
         }
         .sheet(isPresented: $creating) {
             NewRoomView(client: client) { model.selectedRoom = $0 }
+        }
+        .sheet(isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            if let renaming { RenameRoomView(client: client, room: renaming) }
         }
         .sheet(isPresented: $settings) {
             SettingsView(client: client, account: account)
@@ -168,6 +179,54 @@ struct NewRoomView: View {
         do {
             let room = try await client.createRoom(name: name.trimmingCharacters(in: .whitespaces), members: [])
             created(room.id)
+            dismiss()
+        } catch {
+            problem = explain(error)
+        }
+    }
+}
+
+/// The room keeps its id; the list shows the new name once the home view has it.
+struct RenameRoomView: View {
+    @Environment(\.dismiss) private var dismiss
+    let client: NudgeClient
+    let room: Room
+    @State private var name: String
+    @State private var problem: String?
+
+    init(client: NudgeClient, room: Room) {
+        self.client = client
+        self.room = room
+        _name = State(initialValue: room.name)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Name", text: $name).onSubmit { Task { await rename() } }
+                if let problem { Text(problem).foregroundStyle(.red) }
+            }
+            .formStyle(.grouped)
+            .navigationTitle("Rename room")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Rename") { Task { await rename() } }
+                        .disabled(trimmed.isEmpty || trimmed == room.name)
+                }
+            }
+        }
+        #if os(macOS)
+        .frame(minWidth: 360, minHeight: 160)
+        #endif
+    }
+
+    private var trimmed: String { name.trimmingCharacters(in: .whitespaces) }
+
+    private func rename() async {
+        guard !trimmed.isEmpty, trimmed != room.name else { return }
+        do {
+            _ = try await client.renameRoom(room: room.id, name: trimmed)
             dismiss()
         } catch {
             problem = explain(error)

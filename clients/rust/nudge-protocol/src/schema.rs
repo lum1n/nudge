@@ -580,6 +580,12 @@ pub struct CreateRoomRequest {
     pub members: Option<Vec<String>>,
 }
 
+/// The room keeps its id.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RenameRoomRequest {
+    pub name: String,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum WhenBusy {

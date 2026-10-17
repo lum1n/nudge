@@ -97,7 +97,7 @@ function Room() {
         >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <h2 className="text-lg font-medium">{view.room.name}</h2>
+              <RoomName view={view} />
               <p className="text-sm text-stone-600">
                 {view.room.members.map((member) => member.displayName).join(", ")}
               </p>
@@ -179,6 +179,79 @@ function Room() {
         </div>
       </div>
     </ViewContext>
+  );
+}
+
+/** The room's name, which its members may change; the lobby's only an admin. */
+function RoomName({ view }: { view: RoomView }) {
+  const { assistant, room } = Route.useParams();
+  const admin = useQuery(meQuery(assistant)).data?.admin ?? false;
+  const [draft, setDraft] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const name = draft?.trim() ?? "";
+    if (name === "") return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      // The new name comes back through the room's view.
+      await clientFor(assistant).api.renameRoom(room, name);
+      setDraft(undefined);
+    } catch (caught) {
+      setError((caught as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (draft === undefined)
+    return (
+      <div className="flex items-baseline gap-2">
+        <h2 className="text-lg font-medium">{view.room.name}</h2>
+        {(view.room.kind !== "lobby" || admin) && (
+          <button
+            type="button"
+            onClick={() => setDraft(view.room.name)}
+            className="text-sm text-stone-500 hover:text-stone-800"
+          >
+            Rename
+          </button>
+        )}
+      </div>
+    );
+  return (
+    <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-1">
+      <div className="flex gap-2">
+        <input
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          aria-label="Room name"
+          autoFocus
+          className="min-w-0 flex-1 rounded border border-stone-300 px-2 py-1 text-sm"
+        />
+        <button
+          type="submit"
+          disabled={busy || draft.trim() === ""}
+          className="rounded border px-2 py-1 text-sm disabled:opacity-50"
+        >
+          Save
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setDraft(undefined);
+            setError(undefined);
+          }}
+          className="rounded px-2 py-1 text-sm text-stone-600 hover:bg-stone-200"
+        >
+          Cancel
+        </button>
+      </div>
+      {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
+    </form>
   );
 }
 

@@ -332,6 +332,19 @@ final class ClientTests: XCTestCase {
         XCTAssertTrue(back.enabled)
     }
 
+    func testRenamesARoomKeepingItsId() async throws {
+        let member = try client(MemoryTokens(server.bo))
+        let renamed = try await member.renameRoom(room: "trip", name: "Trip to Bergen")
+        XCTAssertEqual(renamed.id, "trip")
+        XCTAssertEqual(renamed.name, "Trip to Bergen")
+        do {
+            _ = try await member.renameRoom(room: "lobby", name: "Hall")
+            XCTFail("not refused")
+        } catch NudgeError.Status(let status, _) {
+            XCTAssertEqual(status, 403)
+        }
+    }
+
     func testRefusalsAndRevocation() async throws {
         let admin = try client(MemoryTokens(server.ann))
         let member = try client(MemoryTokens(server.bo))

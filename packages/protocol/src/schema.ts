@@ -355,6 +355,10 @@ export const CreateRoomRequest = Type.Object({
 });
 export type CreateRoomRequest = Static<typeof CreateRoomRequest>;
 
+/** The room keeps its id. */
+export const RenameRoomRequest = Type.Object({ name: Type.String() });
+export type RenameRoomRequest = Static<typeof RenameRoomRequest>;
+
 export const WhenBusy = Type.Union([
   Type.Literal("followUp"),
   Type.Literal("steer"),
@@ -396,6 +400,44 @@ export type PlayerMemoryResponse = Static<typeof PlayerMemoryResponse>;
 
 export const ShareMemoryRequest = Type.Object({ shared: Type.Boolean() });
 export type ShareMemoryRequest = Static<typeof ShareMemoryRequest>;
+
+/** Which pushes a player gets; each kind is on unless `false`. */
+export const NotificationPrefs = Type.Object({
+  answers: Type.Optional(Type.Boolean()),
+  approvals: Type.Optional(Type.Boolean()),
+});
+export type NotificationPrefs = Static<typeof NotificationPrefs>;
+
+/** What a player says about themselves. Their home keeps it; other assistants are sent it. */
+export const Profile = Type.Object({
+  displayName: Type.String(),
+  /** A `data:image/…;base64,` URL of at most 64 KiB. */
+  avatar: Type.Optional(Type.String()),
+  /** IANA, such as `Europe/Oslo`; the assistant's when absent. Times of the player's nudges. */
+  timeZone: Type.Optional(Type.String()),
+  /** BCP 47, such as `nb`: the assistant answers the player in it. */
+  language: Type.Optional(Type.String()),
+  notifications: Type.Optional(NotificationPrefs),
+  /** Each extension's preferences for the player, by extension name. */
+  extensions: Type.Optional(Type.Record(Type.String(), Type.Record(Type.String(), Type.Unknown()))),
+});
+export type Profile = Static<typeof Profile>;
+
+/** The fields to change; absent ones stay, `null` clears one. */
+export const UpdateProfileRequest = Type.Object({
+  displayName: Type.Optional(Type.String()),
+  avatar: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  timeZone: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  language: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  notifications: Type.Optional(Type.Union([NotificationPrefs, Type.Null()])),
+  extensions: Type.Optional(
+    Type.Union([
+      Type.Record(Type.String(), Type.Record(Type.String(), Type.Unknown())),
+      Type.Null(),
+    ]),
+  ),
+});
+export type UpdateProfileRequest = Static<typeof UpdateProfileRequest>;
 
 /** A room's model context as its next request would send it, personal values as placeholders. */
 export const ModelViewResponse = Type.Object({
@@ -667,6 +709,7 @@ export const SCHEMAS = {
   PairResponse,
   MeResponse,
   CreateRoomRequest,
+  RenameRoomRequest,
   WhenBusy,
   MessageRequest,
   MessageResponse,
@@ -674,6 +717,9 @@ export const SCHEMAS = {
   RememberRequest,
   PlayerMemoryResponse,
   ShareMemoryRequest,
+  NotificationPrefs,
+  Profile,
+  UpdateProfileRequest,
   PushKeyResponse,
   PushSubscribeRequest,
   PushRenewRequest,

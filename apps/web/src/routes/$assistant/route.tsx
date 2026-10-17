@@ -57,6 +57,14 @@ function Assistant() {
           >
             Rooms
           </Link>
+          <Link
+            to="/$assistant/profile"
+            params={{ assistant }}
+            activeProps={active}
+            className={tab}
+          >
+            Profile
+          </Link>
           {me.data?.admin && (
             <Link
               to="/$assistant/settings"

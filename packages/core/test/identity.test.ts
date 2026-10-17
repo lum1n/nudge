@@ -170,6 +170,41 @@ describe("players and rooms", () => {
     await nudge.close(context);
   });
 
+  it("renames rooms for their members and admins, keeping their ids", async () => {
+    const { options } = setup(":memory:");
+    const nudge = await createNudge(options, context);
+    const ann = (await nudge.players.invite("Ann", context)).player;
+    const bo = (await nudge.players.invite("Bo", context)).player;
+    const cy = (await nudge.players.invite("Cy", context)).player;
+    await nudge.rooms.ensurePersonal(bo.id, context);
+    await nudge.rooms.createShared({ id: "trip", name: "Trip", members: [bo.id, cy.id] }, context);
+    const changes: string[] = [];
+    nudge.changes.subscribe((change) => changes.push(change.kind));
+
+    const renamed = await nudge.renameRoom("trip", "  Rome  ", context, { playerId: cy.id });
+    expect(renamed).toMatchObject({ id: "trip", name: "Rome", members: [bo.id, cy.id] });
+    expect((await nudge.rooms.get("trip", context))?.name).toBe("Rome");
+    expect(changes).toEqual(["rooms"]);
+    await nudge.renameRoom("personal-bo", "Bo's desk", context, { playerId: bo.id });
+    await expect(
+      nudge.renameRoom("personal-bo", "Mine", context, { playerId: cy.id }),
+    ).rejects.toThrow(/members/);
+    await expect(nudge.renameRoom(LOBBY, "Hall", context, { playerId: bo.id })).rejects.toThrow(
+      /admin/,
+    );
+    // Ann, the first player, is an admin.
+    await nudge.renameRoom(LOBBY, "Hall", context, { playerId: ann.id });
+    await nudge.renameRoom("trip", "Paris", context, { playerId: ann.id });
+    expect((await nudge.rooms.list(context)).map((room) => room.name)).toEqual([
+      "Hall",
+      "Bo's desk",
+      "Paris",
+    ]);
+    await expect(nudge.renameRoom("trip", " ", context)).rejects.toThrow(/name/);
+    await expect(nudge.renameRoom("nowhere", "X", context)).rejects.toThrow(/nowhere/);
+    await nudge.close(context);
+  });
+
   it("tells the model who is in the room, by placeholder", async () => {
     const { faux, options, answer, requests } = setup(":memory:");
     faux.setResponses([answer("Hello both."), answer("Hi Ann.")]);
@@ -187,6 +222,57 @@ describe("players and rooms", () => {
     expect(shared).toContain("People who can read this conversation: ⟦NAME1⟧, ⟦NAME2⟧.");
     expect(personal).toContain("This is ⟦NAME1⟧'s personal conversation");
     expect(shared).not.toMatch(/\bAnn\b|\bBo\b/);
+  });
+
+  it("keeps a profile per player, and tells the model their time zones and languages", async () => {
+    const { faux, options, answer, requests } = setup(":memory:");
+    faux.setResponses([answer("Hei.")]);
+    const nudge = await createNudge(options, context);
+    const ann = (await nudge.players.invite("Ann", context)).player;
+    const bo = (await nudge.players.invite("Bo", context)).player;
+    await nudge.rooms.createShared({ id: "trip", name: "Trip", members: [ann.id, bo.id] }, context);
+    const changes: unknown[] = [];
+    nudge.changes.subscribe((change) => changes.push(change));
+
+    expect(await nudge.profiles.get(ann.id, context)).toEqual({ displayName: "Ann" });
+    expect(await nudge.profiles.get("nobody", context)).toBeUndefined();
+    const updated = await nudge.profiles.update(
+      ann.id,
+      { displayName: "Anna", timeZone: "Europe/Oslo", language: "nb", notifications: {} },
+      context,
+    );
+    expect(updated).toEqual({
+      displayName: "Anna",
+      timeZone: "Europe/Oslo",
+      language: "nb",
+      notifications: {},
+    });
+    expect((await nudge.players.get(ann.id, context))?.displayName).toBe("Anna");
+    expect(changes).toEqual([{ kind: "profile", playerId: ann.id }]);
+    // Absent fields stay; null clears one.
+    expect(
+      await nudge.profiles.update(ann.id, { notifications: null, language: "nb-NO" }, context),
+    ).toEqual({ displayName: "Anna", timeZone: "Europe/Oslo", language: "nb-NO" });
+    for (const bad of [
+      { timeZone: "Mars/Olympus" },
+      { language: "not a tag" },
+      { avatar: "https://example.com/me.png" },
+      { avatar: `data:image/png;base64,${"A".repeat(100_000)}` },
+      { displayName: " " },
+    ])
+      await expect(nudge.profiles.update(ann.id, bad, context)).rejects.toThrow();
+    await nudge.profiles.update(bo.id, { timeZone: "America/New_York" }, context);
+
+    const author = { playerId: ann.id, displayName: "Anna" };
+    await (await nudge.submit("trip", { text: "hei", author }, context)).wait(context);
+    await nudge.close(context);
+    const [request] = requests.map((request) => JSON.stringify(request));
+    expect(request).toContain(
+      "⟦NAME3⟧: time zone Europe/Oslo, speaks Norwegian Bokmål (Norway).\\n" +
+        "⟦NAME2⟧: time zone America/New_York.\\n" +
+        "Answer each person in their language.",
+    );
+    expect(request).not.toContain("Anna");
   });
 
   it("moves every room to a new model from the config", async () => {

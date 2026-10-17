@@ -7,6 +7,8 @@ export type Owner = { readonly playerId: string; readonly displayName: string };
 
 /** What a tool call answers: a private message, nudge or approval makes everything it leads to private. */
 export type Turn = {
+  /** Who sent the message the turn answers; absent for fired nudges and approval outcomes. */
+  readonly by?: Owner;
   /** Set when only this player may see what the turn shows and makes. */
   readonly privateTo?: Owner;
   /**
@@ -56,9 +58,8 @@ export async function turnOf(
         displayName: string;
         private?: true;
       };
-      return data.private === true
-        ? { privateTo: { playerId: data.playerId, displayName: data.displayName } }
-        : {};
+      const by = { playerId: data.playerId, displayName: data.displayName };
+      return data.private === true ? { by, privateTo: by } : { by };
     }
     if (entry.kind === FIRE_ENTRY || entry.kind === APPROVAL_ENTRY) {
       const { privateTo } = entry.data as { privateTo?: Owner };

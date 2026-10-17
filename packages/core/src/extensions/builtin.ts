@@ -6,6 +6,7 @@ import {
   section,
 } from "@earendil-works/pi-durable";
 import { DirectoryDoc, type DirectoryState } from "../identity/directory.ts";
+import { ProfileDoc, type ProfileState } from "../identity/profiles.ts";
 import { createMemoryTools, memorySection } from "../memory/memory.ts";
 import type { Nudges } from "../nudges/nudges.ts";
 import { NudgeTimer } from "../nudges/timer-task.ts";
@@ -40,9 +41,15 @@ export function createBuiltinExtension(options: BuiltinOptions): Extension {
           `Several people may share a conversation; each message starts with the name of who wrote it.`,
         { tag: false },
       ),
-      section("members", async (input, context) =>
-        describeRoom(await input.read.snapshot(DirectoryDoc, context), input.conversationId),
-      ),
+      section("members", async (input, context) => {
+        const directory = await input.read.snapshot(DirectoryDoc, context);
+        const profiles: Record<string, ProfileState> = {};
+        for (const id of Object.keys(directory?.players ?? {})) {
+          const profile = await input.read.snapshot(ProfileDoc, id, context);
+          if (profile !== undefined) profiles[id] = profile;
+        }
+        return describeRoom(directory, input.conversationId, profiles);
+      }),
       memorySection(options.turn),
       // Rendered to the hour: a section that changes on every request defeats prompt caching.
       section("time", () => formatHour(options.now(), options.timeZone)),
@@ -65,20 +72,45 @@ export function formatHour(now: number, timeZone: string): string {
   return `It is ${text} (${timeZone}), give or take an hour.`;
 }
 
-/** Who the conversation `conversationId` belongs to, or undefined before anyone has joined. */
+/**
+ * Who the conversation `conversationId` belongs to, with the time zones and languages their
+ * profiles give, or undefined before anyone has joined.
+ */
 export function describeRoom(
   directory: Readonly<DirectoryState> | undefined,
   conversationId: number,
+  profiles: Readonly<Record<string, ProfileState>> = {},
 ): string | undefined {
   if (directory === undefined) return undefined;
   const room = Object.values(directory.rooms).find((r) => r.conversationId === conversationId);
   if (room === undefined) return undefined;
-  const players = Object.values(directory.players);
-  const names = (room.kind === "lobby" ? players.map((p) => p.id) : room.members)
-    .map((id) => directory.players[id]?.displayName)
-    .filter((name) => name !== undefined);
-  if (names.length === 0) return undefined;
-  if (room.kind === "personal")
-    return `This is ${names[0]}'s personal conversation; only ${names[0]} reads it.`;
-  return `People who can read this conversation: ${names.join(", ")}.`;
+  const players = (room.kind === "lobby" ? Object.keys(directory.players) : room.members)
+    .map((id) => directory.players[id])
+    .filter((player) => player !== undefined);
+  if (players.length === 0) return undefined;
+  const names = players.map((player) => player.displayName);
+  const lines =
+    room.kind === "personal"
+      ? [`This is ${names[0]}'s personal conversation; only ${names[0]} reads it.`]
+      : [`People who can read this conversation: ${names.join(", ")}.`];
+  let languages = false;
+  for (const player of players) {
+    const { timeZone, language } = profiles[player.id] ?? {};
+    const about = [
+      ...(timeZone === undefined ? [] : [`time zone ${timeZone}`]),
+      ...(language === undefined ? [] : [`speaks ${languageName(language)}`]),
+    ];
+    if (about.length > 0) lines.push(`${player.displayName}: ${about.join(", ")}.`);
+    languages ||= language !== undefined;
+  }
+  if (languages) lines.push("Answer each person in their language.");
+  return lines.join("\n");
+}
+
+function languageName(tag: string): string {
+  try {
+    return new Intl.DisplayNames(["en"], { type: "language" }).of(tag) ?? tag;
+  } catch {
+    return tag;
+  }
 }

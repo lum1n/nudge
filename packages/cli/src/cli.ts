@@ -5,6 +5,7 @@ import {
   nudges,
   pair,
   reload,
+  renameRoom,
   revoke,
   room,
   token,
@@ -35,6 +36,8 @@ Commands:
   admin [player]     Let a player use the admin API (--remove: no longer), or list
                      the admins; the first player always may
   room [name]        Create a shared room with --members, or list the rooms
+  room rename <id> <name>
+                     Give a room a new name; its id stays
   nudges             List the scheduled nudges of every room
   usage              Model spend by month, player and room, and the budget
   connectors [room]  List the APIs a room can call (default: the lobby)
@@ -155,6 +158,13 @@ async function main(argv: string[]): Promise<number> {
       await markAdmin({ ...access, player: argument, remove: values.remove });
       return 0;
     case "room": {
+      if (argument === "rename") {
+        const [id, ...words] = rest;
+        if (id === undefined || words.length === 0)
+          throw new UsageError("Usage: nudge room rename <id> <name>");
+        await renameRoom({ ...access, room: id, name: words.join(" ") });
+        return 0;
+      }
       const members = values.members
         .split(",")
         .map((id) => id.trim())

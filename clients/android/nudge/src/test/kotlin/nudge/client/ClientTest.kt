@@ -195,6 +195,19 @@ class ClientTest {
     }
 
     @Test
+    fun renamesARoomKeepingItsId() = runBlocking {
+        val member = client(MemoryTokens(bo))
+        val renamed = member.renameRoom("trip", "Trip to Bergen")
+        assertEquals("trip" to "Trip to Bergen", renamed.id to renamed.name)
+        try {
+            member.renameRoom("lobby", "Hall")
+            error("not refused")
+        } catch (e: NudgeException.Status) {
+            assertEquals(403.toUShort(), e.status)
+        }
+    }
+
+    @Test
     fun refusalsAndRevocation() = runBlocking {
         val admin = client(MemoryTokens(ann))
         val member = client(MemoryTokens(bo))

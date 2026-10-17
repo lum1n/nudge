@@ -136,6 +136,16 @@ export {
   PlayerMemoryDoc,
   type RoomFact,
 } from "./memory/memory.ts";
+export {
+  InvalidProfile,
+  MAX_AVATAR_LENGTH,
+  type NotificationPrefs,
+  type Profile,
+  ProfileDoc,
+  profileOf,
+  Profiles,
+  type ProfileUpdate,
+} from "./identity/profiles.ts";
 export { Rooms, type SharedRoomDraft } from "./identity/rooms.ts";
 export { scrubSecrets, SecretStore } from "./secrets.ts";
 export { type NudgeDraft, Nudges } from "./nudges/nudges.ts";

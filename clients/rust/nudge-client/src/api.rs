@@ -137,6 +137,15 @@ impl Api {
             .await
     }
 
+    /// The room keeps its id. Its owner or members may rename it, admins any room, the lobby too.
+    pub async fn rename_room(&self, room: &str, name: &str) -> Result<Room, ApiError> {
+        let body = RenameRoomRequest {
+            name: name.to_owned(),
+        };
+        self.request(Method::PATCH, &["rooms", room], &[], Some(&body))
+            .await
+    }
+
     /// The caller's personal room, made on first use.
     pub async fn personal_room(&self) -> Result<Room, ApiError> {
         self.request(Method::POST, &["rooms", "personal"], &[], NO_BODY)

@@ -222,6 +222,28 @@ def test_own_memory_and_room_extensions(server) -> None:
     run(test())
 
 
+def test_renames_a_room(server) -> None:
+    async def test() -> None:
+        async with Client(server.url, server.assistant, MemoryTokens(server.bo)) as bo:
+            renamed = await bo.rename_room("trip", "Trip to Bergen")
+            assert (renamed.id, renamed.name) == ("trip", "Trip to Bergen")
+            await bo.home().wait_for(
+                lambda u: (
+                    u.view is not None
+                    and any(r.room.name == "Trip to Bergen" for r in u.view.rooms)
+                ),
+                TIMEOUT,
+            )
+            with pytest.raises(NudgeError.Status) as refused:
+                await bo.rename_room("trip", "")
+            assert refused.value.status == 400
+            with pytest.raises(NudgeError.Status) as refused:
+                await bo.rename_room("lobby", "Hall")
+            assert refused.value.status == 403
+
+    run(test())
+
+
 def test_refusals(server) -> None:
     async def test() -> None:
         async with Client(server.url, server.assistant, MemoryTokens(server.bo)) as bo:

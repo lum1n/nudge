@@ -452,6 +452,11 @@ class Client:
         """A shared room with the caller and `members` (player ids)."""
         return await self.ffi.create_room(name, list(members))
 
+    async def rename_room(self, room: str, name: str) -> Room:
+        """The room keeps its id. Its owner or members may rename it, admins any room, the lobby
+        too."""
+        return await self.ffi.rename_room(room, name)
+
     async def personal_room(self) -> Room:
         """The caller's personal room, made on first use."""
         return await self.ffi.personal_room()
