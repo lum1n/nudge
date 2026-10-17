@@ -33,8 +33,8 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if let client = model.client, let account = model.account {
-                RoomsView(client: client, account: account)
+            if let session = model.session {
+                RoomsView(session: session)
             } else {
                 SignInView()
             }
@@ -50,6 +50,67 @@ struct RootView: View {
         }
         .sheet(item: $switching) { link in
             SwitchAccountView(link: link)
+        }
+        .sheet(item: Binding(
+            get: { model.session == nil ? nil : model.pendingJoin },
+            set: { model.pendingJoin = $0 }
+        )) { link in
+            JoinView(link: link)
+        }
+    }
+}
+
+/// An admin of another assistant invited the player: join it, the home vouching for them.
+struct JoinView: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let link: JoinLink
+    @State private var busy = false
+    @State private var problem: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    LabeledContent("Assistant", value: link.assistant)
+                    LabeledContent("Server", value: URL(string: link.server)?.host() ?? link.server)
+                } footer: {
+                    Text("\(model.account?.assistantName ?? "Your home") tells it who you are: your name, picture, time zone and language. Its rooms show up beside your own.")
+                }
+                if let problem {
+                    Section { Text(problem).foregroundStyle(.red) }
+                }
+            }
+            .formStyle(.grouped)
+            .navigationTitle("Join \(link.assistant)?")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        model.pendingJoin = nil
+                        dismiss()
+                    }
+                    .disabled(busy)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(problem == nil ? "Join" : "Try again") { Task { await join() } }
+                        .disabled(busy)
+                }
+            }
+        }
+        #if os(macOS)
+        .frame(minWidth: 380, minHeight: 240)
+        #endif
+    }
+
+    private func join() async {
+        busy = true
+        defer { busy = false }
+        do {
+            try await model.join(link)
+            model.pendingJoin = nil
+            dismiss()
+        } catch {
+            problem = explain(error)
         }
     }
 }

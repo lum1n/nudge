@@ -2,21 +2,24 @@ import Nudge
 import SwiftUI
 
 /// The player's rooms beside the open one: a sidebar on the Mac and the iPad, a stack on the
-/// iPhone. A room's context menu renames it.
+/// iPhone. The home's rooms come first, then those of each assistant joined from it. A room's
+/// context menu renames it.
 struct RoomsView: View {
     @Environment(AppModel.self) private var model
-    let client: NudgeClient
-    let account: Account
+    let session: Session
     @State private var creating = false
-    @State private var renaming: Room?
+    @State private var renaming: (session: Session, room: Room)?
     @State private var settings = false
     @State private var problem: String?
+
+    private var client: NudgeClient { session.client }
+    private var account: Account { session.account }
 
     var body: some View {
         @Bindable var model = model
         NavigationSplitView {
             List(selection: $model.selectedRoom) {
-                if let banner = connectionBanner {
+                if let banner = connectionBanner(session.connection.value) {
                     Label(banner, systemImage: "wifi.exclamationmark")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -26,18 +29,21 @@ struct RoomsView: View {
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                 }
-                ForEach(rooms, id: \.room.id) { room in
-                    RoomRow(room: room, me: model.me?.player.id)
-                        .tag(room.room.id)
-                        .contextMenu {
-                            // Only admins rename the lobby.
-                            if room.room.kind != .lobby || model.me?.admin == true {
-                                Button("Rename…", systemImage: "pencil") { renaming = room.room }
-                            }
-                        }
-                }
-                if model.home?.value?.status == .live && rooms.isEmpty {
+                RoomRows(session: session) { renaming = (session, $0) }
+                if session.home.value?.status == .live && model.sessions.allSatisfy({ rooms(of: $0).isEmpty }) {
                     Text("No rooms yet.").foregroundStyle(.secondary)
+                }
+                ForEach(model.places, id: \.account.keychainAccount) { place in
+                    Section {
+                        RoomRows(session: place) { renaming = (place, $0) }
+                    } header: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(place.account.assistantName)
+                            Text(connectionBanner(place.connection.value) ?? URL(string: place.account.server)?.host() ?? "")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
             }
             .navigationTitle(account.assistantName)
@@ -63,30 +69,29 @@ struct RoomsView: View {
             .navigationSplitViewColumnWidth(min: 220, ideal: 260)
             #endif
         } detail: {
-            if let room = model.selectedRoom {
-                RoomView(client: client, roomId: room, me: model.me?.player.id).id(room)
+            if let room = model.selectedRoom, let at = model.session(for: room.account) {
+                RoomView(client: at.client, roomId: room.room, me: at.me?.player.id).id(room)
             } else {
                 ContentUnavailableView("Pick a room", systemImage: "bubble.left.and.bubble.right")
             }
         }
         .sheet(isPresented: $creating) {
-            NewRoomView(client: client) { model.selectedRoom = $0 }
+            NewRoomView(client: client) { model.selectedRoom = RoomRef(account: account.keychainAccount, room: $0) }
         }
         .sheet(isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
-            if let renaming { RenameRoomView(client: client, room: renaming) }
+            if let renaming { RenameRoomView(client: renaming.session.client, room: renaming.room) }
         }
         .sheet(isPresented: $settings) {
             SettingsView(client: client, account: account)
         }
     }
 
-    /// Newest news first.
-    private var rooms: [HomeRoom] {
-        (model.home?.value?.view?.rooms ?? []).sorted { ($0.lastItemAt ?? 0) > ($1.lastItemAt ?? 0) }
+    private func rooms(of session: Session) -> [HomeRoom] {
+        session.home.value?.view?.rooms ?? []
     }
 
-    private var connectionBanner: String? {
-        switch model.connection?.value {
+    private func connectionBanner(_ status: ConnectionStatus?) -> String? {
+        switch status {
         case .waiting?: "Offline. Reconnecting…"
         case .connecting(let attempt)? where attempt > 0: "Reconnecting…"
         case .closed(let code, let reason)? where code != 1000 && code != 4401:
@@ -97,10 +102,33 @@ struct RoomsView: View {
 
     private func openPersonalRoom() async {
         do {
-            model.selectedRoom = try await client.personalRoom().id
+            model.selectedRoom = RoomRef(account: account.keychainAccount, room: try await client.personalRoom().id)
         } catch {
             problem = explain(error)
         }
+    }
+}
+
+/// One signed-in assistant's rooms, newest news first, each tagged with where it is.
+private struct RoomRows: View {
+    let session: Session
+    let rename: (Room) -> Void
+
+    var body: some View {
+        ForEach(rooms, id: \.room.id) { room in
+            RoomRow(room: room, me: session.me?.player.id)
+                .tag(RoomRef(account: session.account.keychainAccount, room: room.room.id))
+                .contextMenu {
+                    // Only admins rename the lobby.
+                    if room.room.kind != .lobby || session.me?.admin == true {
+                        Button("Rename…", systemImage: "pencil") { rename(room.room) }
+                    }
+                }
+        }
+    }
+
+    private var rooms: [HomeRoom] {
+        (session.home.value?.view?.rooms ?? []).sorted { ($0.lastItemAt ?? 0) > ($1.lastItemAt ?? 0) }
     }
 }
 

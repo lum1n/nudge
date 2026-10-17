@@ -17,14 +17,49 @@ struct SettingsView: View {
     @State private var notifications: UNAuthorizationStatus?
     @State private var problem: String?
     @State private var confirmSignOut = false
+    @State private var leaving: Membership?
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("Account") {
-                    LabeledContent("Signed in as", value: model.me?.player.displayName ?? "…")
+                    NavigationLink { ProfileView(client: client) } label: {
+                        LabeledContent("Signed in as", value: model.me?.player.displayName ?? "…")
+                    }
                     LabeledContent("Assistant", value: account.assistantName)
                     LabeledContent("Server", value: account.server)
+                }
+                if let joined = model.memberships {
+                    Section {
+                        LabeledContent("Your address") {
+                            Text(joined.address).textSelection(.enabled)
+                        }
+                        ForEach(joined.memberships, id: \.place) { membership in
+                            Toggle(isOn: Binding(
+                                get: { membership.carryMemory },
+                                set: { carry in Task { await change { try await model.carryMemory(membership, carry) } } }
+                            )) {
+                                VStack(alignment: .leading) {
+                                    Text(membership.assistant)
+                                    Text("Take my own memory there")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .contextMenu {
+                                Button("Leave", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
+                                    leaving = membership
+                                }
+                            }
+                            .swipeActions {
+                                Button("Leave", role: .destructive) { leaving = membership }
+                            }
+                        }
+                    } header: {
+                        Text("Other assistants")
+                    } footer: {
+                        Text("An admin of another assistant invites you by your address; the invite opens here. What only you see stays home.")
+                    }
                 }
                 if model.me?.admin == true {
                     Section {
@@ -124,7 +159,19 @@ struct SettingsView: View {
                     Task { await model.signOut() }
                 }
             } message: {
-                Text("You'll need a new pairing code to sign in again.")
+                Text("This device signs out of the assistants you joined from there too. You'll need a new pairing code to sign in again.")
+            }
+            .confirmationDialog(
+                "Leave \(leaving?.assistant ?? "")?",
+                isPresented: Binding(get: { leaving != nil }, set: { if !$0 { leaving = nil } })
+            ) {
+                Button("Leave", role: .destructive) {
+                    if let membership = leaving {
+                        Task { await change { try await model.leave(membership) } }
+                    }
+                }
+            } message: {
+                Text("Your home stops sending it your profile and memory, and this device signs out of it. You stay a member there.")
             }
             .task { await load() }
         }
@@ -184,6 +231,16 @@ struct SettingsView: View {
         await attempt { memory = try await client.shareMyMemory(shared: shared) }
     }
 
+    /// Runs a change of the memberships, saying what went wrong.
+    private func change(_ action: () async throws -> Void) async {
+        do {
+            try await action()
+            problem = nil
+        } catch {
+            problem = explain(error)
+        }
+    }
+
     /// Runs a change, then reads the memory and the hidden values again.
     private func attempt(_ change: () async throws -> Void) async {
         do {
@@ -195,4 +252,9 @@ struct SettingsView: View {
             problem = explain(error)
         }
     }
+}
+
+extension Membership {
+    /// The assistant it is at, as one string.
+    var place: String { "\(server)|\(assistant)" }
 }

@@ -74,9 +74,11 @@ final class AppDelegate: NSObject, UNUserNotificationCenterDelegate {
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter, willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
-        let room = notification.request.content.userInfo["roomId"] as? String
+        let info = notification.request.content.userInfo
+        let assistant = info["assistant"] as? String
+        let room = info["roomId"] as? String
         return await MainActor.run {
-            room != nil && room == model.selectedRoom ? [] : [.banner, .list, .sound]
+            model.showing(assistant: assistant, room: room) ? [] : [.banner, .list, .sound]
         }
     }
 
