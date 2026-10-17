@@ -19,6 +19,8 @@ struct FauxServer {
     url: String,
     ann: String,
     bo: String,
+    /// The admin of the second assistant, "team", which invited Ann from robin.
+    dee: String,
     _process: Child,
 }
 
@@ -53,6 +55,7 @@ async fn faux_server() -> Option<FauxServer> {
         url: started["url"].as_str().unwrap().to_owned(),
         ann: started["tokens"]["ann"].as_str().unwrap().to_owned(),
         bo: started["tokens"]["bo"].as_str().unwrap().to_owned(),
+        dee: started["team"]["token"].as_str().unwrap().to_owned(),
         _process: process,
     })
 }
@@ -140,7 +143,7 @@ async fn pairs_follows_home_and_a_room_and_swaps_a_pending_message_for_the_real_
             .iter()
             .map(|a| a.name.as_str())
             .collect::<Vec<_>>(),
-        ["robin"]
+        ["robin", "team"]
     );
     let admin = Api::new(&server.url, "robin", tokens(Some(&server.ann))).unwrap();
     let code = admin.pairing_code("bo").await.unwrap().code;
@@ -691,4 +694,83 @@ async fn sets_up_extensions_for_admins() {
         .await
         .unwrap_err();
     assert_eq!(refused.status(), Some(400));
+}
+
+#[tokio::test]
+async fn edits_the_profile_and_joins_another_assistant_from_home() {
+    let Some(server) = faux_server().await else {
+        return;
+    };
+    let home = Api::new(&server.url, "robin", tokens(Some(&server.ann))).unwrap();
+    let profile = home
+        .update_profile(&UpdateProfileRequest {
+            time_zone: Some(Some("Europe/Oslo".into())),
+            language: Some(Some("nb".into())),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(profile.display_name, "Ann");
+    assert_eq!(profile.time_zone.as_deref(), Some("Europe/Oslo"));
+    let cleared = home
+        .update_profile(&UpdateProfileRequest {
+            language: Some(None),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(cleared.language, None);
+    assert_eq!(home.profile().await.unwrap(), cleared);
+    let refused = home
+        .update_profile(&UpdateProfileRequest {
+            time_zone: Some(Some("Mars/Olympus".into())),
+            ..Default::default()
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(refused.status(), Some(400));
+    assert!(home.profile_extensions().await.is_ok());
+
+    let place = PlaceRequest {
+        server: server.url.clone(),
+        assistant: "team".into(),
+    };
+    let dee = Api::new(&server.url, "team", tokens(Some(&server.dee))).unwrap();
+    let address = format!("ann@{}/robin", server.url);
+    assert_eq!(
+        dee.invites()
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|invite| invite.address)
+            .collect::<Vec<_>>(),
+        vec![address.clone()]
+    );
+    let there = Api::new(&server.url, "team", tokens(None)).unwrap();
+    let joined = there
+        .join(home.vouch_for(&place).await.unwrap())
+        .await
+        .unwrap();
+    assert_eq!(joined.player.address.as_deref(), Some(address.as_str()));
+    assert_eq!(there.tokens().get(), Some(joined.token.clone()));
+    assert_eq!(
+        there.me().await.unwrap().player.address.as_deref(),
+        Some(address.as_str())
+    );
+    // The invite is used up.
+    assert!(dee.invites().await.unwrap().is_empty());
+
+    let memberships = home.memberships().await.unwrap();
+    assert_eq!(memberships.len(), 1);
+    assert_eq!(
+        (
+            memberships[0].assistant.as_str(),
+            memberships[0].carry_memory
+        ),
+        ("team", false)
+    );
+    assert!(home.carry_memory(&place, true).await.unwrap().carry_memory);
+    home.leave(&place).await.unwrap();
+    assert!(home.memberships().await.unwrap().is_empty());
+    assert_eq!(home.leave(&place).await.unwrap_err().status(), Some(404));
 }

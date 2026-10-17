@@ -597,6 +597,131 @@ fn http_bodies_match_the_schema() {
             relays: vec!["https://relay.example".into()],
         },
     );
+    let profile = Profile {
+        display_name: "Ann".into(),
+        avatar: Some("data:image/png;base64,AA==".into()),
+        time_zone: Some("Europe/Oslo".into()),
+        language: Some("nb".into()),
+        notifications: Some(NotificationPrefs {
+            answers: Some(true),
+            approvals: Some(false),
+        }),
+        extensions: Some([("hello".to_owned(), json_map(json!({ "greeting": "Hei" })))].into()),
+    };
+    check("Profile", &profile);
+    check(
+        "UpdateProfileRequest",
+        &UpdateProfileRequest {
+            display_name: Some("Ann".into()),
+            avatar: Some(None),
+            time_zone: Some(Some("Europe/Oslo".into())),
+            language: Some(None),
+            notifications: Some(Some(NotificationPrefs {
+                answers: Some(false),
+                approvals: Some(true),
+            })),
+            extensions: Some(Some(
+                [
+                    (
+                        "hello".to_owned(),
+                        Some(json_map(json!({ "greeting": "Hei" }))),
+                    ),
+                    ("mail".to_owned(), None),
+                ]
+                .into(),
+            )),
+        },
+    );
+    // Left out, `null` and set read back apart.
+    assert_eq!(
+        serde_json::to_value(UpdateProfileRequest {
+            avatar: Some(None),
+            ..Default::default()
+        })
+        .unwrap(),
+        json!({ "avatar": null })
+    );
+    let settings = PlayerSettingsSchema {
+        name: "hello".into(),
+        version: Some("1.0.0".into()),
+        description: Some("Says hello".into()),
+        schema: json!({ "type": "object" }),
+    };
+    check("PlayerSettingsSchema", &settings);
+    check(
+        "PlayerSettingsResponse",
+        &PlayerSettingsResponse {
+            extensions: vec![settings],
+        },
+    );
+    let place = PlaceRequest {
+        server: "https://away.example".into(),
+        assistant: "team".into(),
+    };
+    check("PlaceRequest", &place);
+    let membership = Membership {
+        server: place.server.clone(),
+        assistant: place.assistant.clone(),
+        since: 1.0,
+        carry_memory: true,
+    };
+    check("Membership", &membership);
+    check(
+        "MembershipsResponse",
+        &MembershipsResponse {
+            memberships: vec![membership],
+        },
+    );
+    check(
+        "CarryMemoryRequest",
+        &CarryMemoryRequest {
+            server: place.server.clone(),
+            assistant: place.assistant.clone(),
+            carry: false,
+        },
+    );
+    let sealed = Sealed {
+        v: 1,
+        epk: "e".into(),
+        iv: "i".into(),
+        data: "d".into(),
+        tag: "t".into(),
+    };
+    check("Sealed", &sealed);
+    check(
+        "AssertResponse",
+        &AssertResponse {
+            assertion: sealed.clone(),
+        },
+    );
+    check("JoinRequest", &JoinRequest { assertion: sealed });
+    check(
+        "InviteRequest",
+        &InviteRequest {
+            address: "vegard@home.example/robin".into(),
+        },
+    );
+    let invite = Invite {
+        id: "i1".into(),
+        address: "vegard@home.example/robin".into(),
+        by: "ann".into(),
+        created_at: 1.0,
+        expires_at: 2.0,
+    };
+    check("Invite", &invite);
+    check(
+        "InviteResponse",
+        &InviteResponse {
+            invite: invite.clone(),
+            link: "nudge://join?server=https%3A%2F%2Faway.example&assistant=team".into(),
+        },
+    );
+    check(
+        "InvitesResponse",
+        &InvitesResponse {
+            invites: vec![invite],
+        },
+    );
     let roles = [
         ModelRole::System,
         ModelRole::User,
@@ -669,5 +794,12 @@ fn ann_like(id: &str, name: &str) -> Player {
         id: id.into(),
         display_name: name.into(),
         address: Some(format!("{id}@home.example/robin")),
+    }
+}
+
+fn json_map(value: Value) -> Map<String, Value> {
+    match value {
+        Value::Object(map) => map,
+        _ => panic!("not an object"),
     }
 }

@@ -23,8 +23,11 @@ from nudge._ffi import (
     Fact,
     GoneReason,
     HomeUpdate,
+    Invite,
+    InviteLink,
     Live,
     MeInfo,
+    Membership,
     ModelMessage,
     Paired,
     PairingCode,
@@ -32,7 +35,10 @@ from nudge._ffi import (
     PendingMessage,
     Player,
     PlayerMemory,
+    PlayerSettings,
     PrivateValue,
+    Profile,
+    ProfileUpdate,
     PushEnvironment,
     PushPlatforms,
     QueuedMessage,
@@ -371,6 +377,8 @@ class Client:
         client_version: str = VERSION,
         platform: str = "python",
     ) -> None:
+        self.server = server
+        self.assistant = assistant
         self.tokens = tokens if tokens is not None else MemoryTokens()
         config = _ffi.ClientConfig(
             server=server,
@@ -556,7 +564,60 @@ class Client:
     async def unregister_device(self, token: str) -> None:
         await self.ffi.unregister_device(token)
 
+    async def profile(self) -> Profile:
+        """The player's profile: name, avatar, time zone, language and preferences."""
+        return await self.ffi.profile()
+
+    async def update_profile(self, update: ProfileUpdate) -> Profile:
+        """Changes the fields `update` sets; an empty string clears one. `NudgeError.Status` 400
+        for a value that isn't one, such as a time zone."""
+        return await self.ffi.update_profile(update)
+
+    async def profile_extensions(self) -> list[PlayerSettings]:
+        """The extensions that take settings from each player, their JSON Schemas as JSON text."""
+        return await self.ffi.profile_extensions()
+
+    # Roaming, through the extension `federation`: `NudgeError.Status` 404 on an assistant
+    # without it.
+
+    async def join_from(self, home: Client) -> Paired:
+        """Joins this client's assistant as the player `home` is signed in as, their home
+        vouching for them, and stores the token. An admin here must have invited their address."""
+        return await self.ffi.join(await home.vouch_for(self.server, self.assistant))
+
+    async def vouch_for(self, server: str, assistant: str) -> str:
+        """An assertion from the player's home that only `assistant` at `server` can read, for
+        `join` there; good for five minutes."""
+        return await self.ffi.vouch_for(server, assistant)
+
+    async def join(self, assertion: str) -> Paired:
+        """Joins this assistant with an assertion from `vouch_for`, and stores the token."""
+        return await self.ffi.join(assertion)
+
+    async def memberships(self) -> list[Membership]:
+        """The assistants the player joined from here, their home."""
+        return await self.ffi.memberships()
+
+    async def carry_memory(self, server: str, assistant: str, carry: bool) -> Membership:
+        """Starts or stops carrying the player's own memory to an assistant they joined."""
+        return await self.ffi.carry_memory(server, assistant, carry)
+
+    async def leave(self, server: str, assistant: str) -> None:
+        """Stops sending the player's profile and memory to an assistant they joined."""
+        await self.ffi.leave(server, assistant)
+
     # Admin commands, for players with the admin flag.
+
+    async def invite(self, address: str) -> InviteLink:
+        """Lets the person at `address` (`name@server/assistant`) join, for a week; the link is
+        for their app."""
+        return await self.ffi.invite(address)
+
+    async def invites(self) -> list[Invite]:
+        return await self.ffi.invites()
+
+    async def cancel_invite(self, invite_id: str) -> None:
+        await self.ffi.cancel_invite(invite_id)
 
     async def create_player(self, display_name: str) -> Player:
         return await self.ffi.create_player(display_name)

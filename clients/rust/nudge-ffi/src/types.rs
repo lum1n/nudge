@@ -843,3 +843,134 @@ impl From<p::UsageResponse> for Usage {
         }
     }
 }
+
+/// What a player says about themselves; their home keeps it and sends it to assistants they
+/// joined. Extensions' preferences cross as a JSON string.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct Profile {
+    pub display_name: String,
+    /// A `data:image/…;base64,` URL of at most 64 KiB.
+    pub avatar: Option<String>,
+    /// IANA, such as `Europe/Oslo`; the assistant's when absent.
+    pub time_zone: Option<String>,
+    /// BCP 47, such as `nb`: the assistant answers the player in it.
+    pub language: Option<String>,
+    pub notifications: Notifications,
+    /// Each extension's preferences for the player, a JSON object by extension name.
+    pub extensions_json: String,
+}
+
+/// Which pushes a player gets.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Record)]
+pub struct Notifications {
+    /// For finished answers.
+    pub answers: bool,
+    /// For actions waiting for approval.
+    pub approvals: bool,
+}
+
+impl From<p::Profile> for Profile {
+    fn from(profile: p::Profile) -> Self {
+        let notifications = profile.notifications.unwrap_or_default();
+        Profile {
+            display_name: profile.display_name,
+            avatar: profile.avatar,
+            time_zone: profile.time_zone,
+            language: profile.language,
+            notifications: Notifications {
+                answers: notifications.answers != Some(false),
+                approvals: notifications.approvals != Some(false),
+            },
+            extensions_json: serde_json::to_string(&profile.extensions.unwrap_or_default())
+                .expect("JSON values serialize"),
+        }
+    }
+}
+
+/// The fields of a profile to change; absent ones stay, and an empty string clears one.
+#[derive(Clone, Debug, Default, PartialEq, uniffi::Record)]
+pub struct ProfileUpdate {
+    #[uniffi(default = None)]
+    pub display_name: Option<String>,
+    #[uniffi(default = None)]
+    pub avatar: Option<String>,
+    #[uniffi(default = None)]
+    pub time_zone: Option<String>,
+    #[uniffi(default = None)]
+    pub language: Option<String>,
+    #[uniffi(default = None)]
+    pub notifications: Option<Notifications>,
+    /// A JSON object by extension name: each one named is replaced, `null` clears it.
+    #[uniffi(default = None)]
+    pub extensions_json: Option<String>,
+}
+
+/// An installed extension that takes settings from each player; `schema_json` is JSON Schema.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct PlayerSettings {
+    pub name: String,
+    pub version: Option<String>,
+    pub description: Option<String>,
+    pub schema_json: String,
+}
+
+impl From<p::PlayerSettingsSchema> for PlayerSettings {
+    fn from(settings: p::PlayerSettingsSchema) -> Self {
+        PlayerSettings {
+            name: settings.name,
+            version: settings.version,
+            description: settings.description,
+            schema_json: settings.schema.to_string(),
+        }
+    }
+}
+
+/// An assistant the player joined from their home; `carry_memory` once they allowed it.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct Membership {
+    pub server: String,
+    pub assistant: String,
+    pub since: f64,
+    pub carry_memory: bool,
+}
+
+impl From<p::Membership> for Membership {
+    fn from(membership: p::Membership) -> Self {
+        Membership {
+            server: membership.server,
+            assistant: membership.assistant,
+            since: membership.since,
+            carry_memory: membership.carry_memory,
+        }
+    }
+}
+
+/// Someone an admin asked to join, by their address; good for a week.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct Invite {
+    pub id: String,
+    pub address: String,
+    /// The admin's player id.
+    pub by: String,
+    pub created_at: f64,
+    pub expires_at: f64,
+}
+
+impl From<p::Invite> for Invite {
+    fn from(invite: p::Invite) -> Self {
+        Invite {
+            id: invite.id,
+            address: invite.address,
+            by: invite.by,
+            created_at: invite.created_at,
+            expires_at: invite.expires_at,
+        }
+    }
+}
+
+/// An invite, and the `nudge://join` link the invited person opens in their app.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct InviteLink {
+    pub invite: Invite,
+    pub link: String,
+}

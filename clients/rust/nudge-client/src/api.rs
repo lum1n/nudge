@@ -365,6 +365,107 @@ impl Api {
         .await
     }
 
+    /// The caller's profile: name, avatar, time zone, language and preferences.
+    pub async fn profile(&self) -> Result<Profile, ApiError> {
+        self.request(Method::GET, &["me", "profile"], &[], NO_BODY)
+            .await
+    }
+
+    /// Changes the fields `update` sets; 400 for a value that isn't one, such as a time zone.
+    pub async fn update_profile(&self, update: &UpdateProfileRequest) -> Result<Profile, ApiError> {
+        self.request(Method::PATCH, &["me", "profile"], &[], Some(update))
+            .await
+    }
+
+    /// The extensions that take settings from each player, with their schemas.
+    pub async fn profile_extensions(&self) -> Result<Vec<PlayerSettingsSchema>, ApiError> {
+        let response: PlayerSettingsResponse = self
+            .request(Method::GET, &["me", "profile", "extensions"], &[], NO_BODY)
+            .await?;
+        Ok(response.extensions)
+    }
+
+    // Roaming, through the extension `federation`: 404 on an assistant without it. To join
+    // another assistant, ask the home for an assertion with `vouch_for`, then pass it to `join`
+    // on an `Api` of the assistant joined.
+
+    /// Has the caller's home vouch for them to `place`, encrypted so only that assistant reads
+    /// it.
+    pub async fn vouch_for(&self, place: &PlaceRequest) -> Result<Sealed, ApiError> {
+        let response: AssertResponse = self
+            .request(
+                Method::POST,
+                &["ext", "federation", "assert"],
+                &[],
+                Some(place),
+            )
+            .await?;
+        Ok(response.assertion)
+    }
+
+    /// Joins this assistant with an assertion from the caller's home, and stores the token.
+    pub async fn join(&self, assertion: Sealed) -> Result<PairResponse, ApiError> {
+        let body = JoinRequest { assertion };
+        let joined: PairResponse = self
+            .request(
+                Method::POST,
+                &["ext", "federation", "join"],
+                &[],
+                Some(&body),
+            )
+            .await?;
+        self.tokens.set(Some(joined.token.clone()));
+        Ok(joined)
+    }
+
+    /// The assistants the caller joined from here, their home.
+    pub async fn memberships(&self) -> Result<Vec<Membership>, ApiError> {
+        let response: MembershipsResponse = self
+            .request(
+                Method::GET,
+                &["ext", "federation", "memberships"],
+                &[],
+                NO_BODY,
+            )
+            .await?;
+        Ok(response.memberships)
+    }
+
+    /// Starts or stops carrying the caller's own memory to an assistant they joined.
+    pub async fn carry_memory(
+        &self,
+        place: &PlaceRequest,
+        carry: bool,
+    ) -> Result<Membership, ApiError> {
+        let body = CarryMemoryRequest {
+            server: place.server.clone(),
+            assistant: place.assistant.clone(),
+            carry,
+        };
+        self.request(
+            Method::PUT,
+            &["ext", "federation", "memberships", "memory"],
+            &[],
+            Some(&body),
+        )
+        .await
+    }
+
+    /// Stops sending the caller's profile and memory to an assistant they joined.
+    pub async fn leave(&self, place: &PlaceRequest) -> Result<(), ApiError> {
+        let query = [
+            ("server", place.server.as_str()),
+            ("assistant", place.assistant.as_str()),
+        ];
+        self.request_empty(
+            Method::DELETE,
+            &["ext", "federation", "memberships"],
+            &query,
+            NO_BODY,
+        )
+        .await
+    }
+
     // Admin routes, for players with the admin flag.
 
     pub async fn create_player(&self, display_name: &str) -> Result<Player, ApiError> {
@@ -406,6 +507,37 @@ impl Api {
         self.request_empty(
             Method::DELETE,
             &["admin", "tokens", client_id],
+            &[],
+            NO_BODY,
+        )
+        .await
+    }
+
+    /// Lets the person at `address` (`name@server/assistant`) join, for a week.
+    pub async fn invite(&self, address: &str) -> Result<InviteResponse, ApiError> {
+        let body = InviteRequest {
+            address: address.to_owned(),
+        };
+        self.request(
+            Method::POST,
+            &["ext", "federation", "invites"],
+            &[],
+            Some(&body),
+        )
+        .await
+    }
+
+    pub async fn invites(&self) -> Result<Vec<Invite>, ApiError> {
+        let response: InvitesResponse = self
+            .request(Method::GET, &["ext", "federation", "invites"], &[], NO_BODY)
+            .await?;
+        Ok(response.invites)
+    }
+
+    pub async fn cancel_invite(&self, id: &str) -> Result<(), ApiError> {
+        self.request_empty(
+            Method::DELETE,
+            &["ext", "federation", "invites", id],
             &[],
             NO_BODY,
         )

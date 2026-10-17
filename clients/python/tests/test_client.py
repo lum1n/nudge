@@ -71,7 +71,7 @@ def test_file_tokens(tmp_path: Path) -> None:
 def test_pairing_and_a_streamed_answer(server, tmp_path: Path) -> None:
     async def test() -> None:
         assistants = await nudge.list_assistants(server.url)
-        assert [a.name for a in assistants] == ["robin"]
+        assert [a.name for a in assistants] == ["robin", "team"]
 
         async with Client(server.url, server.assistant, MemoryTokens(server.ann)) as ann:
             me = await ann.me()
@@ -421,5 +421,49 @@ def test_extension_settings(server) -> None:
             with pytest.raises(NudgeError.Status) as refused:
                 await ann.save_extension_setups(saved({"maxMegabytes": "lots"}))
             assert refused.value.status == 400
+
+    run(test())
+
+
+def test_profile_and_joining_another_assistant(server) -> None:
+    async def test() -> None:
+        async with Client(server.url, server.assistant, MemoryTokens(server.ann)) as home:
+            profile = await home.update_profile(
+                nudge.ProfileUpdate(
+                    time_zone="Europe/Oslo",
+                    language="nb",
+                    notifications=nudge.Notifications(answers=True, approvals=False),
+                )
+            )
+            assert (profile.display_name, profile.time_zone, profile.language) == (
+                "Ann",
+                "Europe/Oslo",
+                "nb",
+            )
+            assert not profile.notifications.approvals
+            cleared = await home.update_profile(nudge.ProfileUpdate(language=""))
+            assert cleared.language is None and cleared.time_zone == "Europe/Oslo"
+            assert json.loads(cleared.extensions_json) == {}
+            with pytest.raises(NudgeError.Status) as refused:
+                await home.update_profile(nudge.ProfileUpdate(time_zone="Mars/Olympus"))
+            assert refused.value.status == 400
+
+            address = f"ann@{server.url}/robin"
+            async with Client(server.url, "team", MemoryTokens(server.dee)) as dee:
+                assert [invite.address for invite in await dee.invites()] == [address]
+                tokens = MemoryTokens()
+                async with Client(server.url, "team", tokens) as there:
+                    joined = await there.join_from(home)
+                    assert joined.player.address == address
+                    assert tokens.get() is not None
+                    assert (await there.me()).player.display_name == "Ann"
+                assert await dee.invites() == []
+
+            [membership] = await home.memberships()
+            assert (membership.assistant, membership.carry_memory) == ("team", False)
+            carried = await home.carry_memory(server.url, "team", True)
+            assert carried.carry_memory
+            await home.leave(server.url, "team")
+            assert await home.memberships() == []
 
     run(test())

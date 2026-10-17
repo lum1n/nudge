@@ -920,3 +920,175 @@ pub struct UsageResponse {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub months: Option<Vec<MonthUsage>>,
 }
+
+/// Which pushes a player gets; each kind is on unless `false`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct NotificationPrefs {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub answers: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approvals: Option<bool>,
+}
+
+/// What a player says about themselves. Their home keeps it; other assistants are sent it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Profile {
+    pub display_name: String,
+    /// A `data:image/…;base64,` URL of at most 64 KiB.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar: Option<String>,
+    /// IANA, such as `Europe/Oslo`; the assistant's when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub time_zone: Option<String>,
+    /// BCP 47, such as `nb`: the assistant answers the player in it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notifications: Option<NotificationPrefs>,
+    /// Each extension's preferences for the player, by extension name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extensions: Option<std::collections::BTreeMap<String, serde_json::Map<String, Value>>>,
+}
+
+/// The fields to change: `None` leaves one as it is, `Some(None)` clears it.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateProfileRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "nullable")]
+    pub avatar: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "nullable")]
+    pub time_zone: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "nullable")]
+    pub language: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "nullable")]
+    pub notifications: Option<Option<NotificationPrefs>>,
+    /// By extension name: each one named is replaced, `None` clears it; `Some(None)` clears all.
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "nullable")]
+    pub extensions: Option<Option<ExtensionSettingsUpdate>>,
+}
+
+/// Each extension's new preferences for the player by name; `None` clears an extension's.
+pub type ExtensionSettingsUpdate =
+    std::collections::BTreeMap<String, Option<serde_json::Map<String, Value>>>;
+
+/// A field that may be left out (`None`), sent as `null` (`Some(None)`) or set.
+mod nullable {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<T: Serialize, S: Serializer>(
+        value: &Option<Option<T>>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        match value {
+            Some(inner) => inner.serialize(serializer),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, T: Deserialize<'de>, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Option<Option<T>>, D::Error> {
+        Option::<T>::deserialize(deserializer).map(Some)
+    }
+}
+
+/// An installed extension that takes settings from each player, for a profile's settings form.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PlayerSettingsSchema {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// JSON Schema of what the player may choose, with the defaults of what they leave out.
+    pub schema: Value,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PlayerSettingsResponse {
+    pub extensions: Vec<PlayerSettingsSchema>,
+}
+
+/// An assistant by its server and its name there, such as one to join.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct PlaceRequest {
+    pub server: String,
+    pub assistant: String,
+}
+
+/// An assistant the caller joined from here, their home; `carry_memory` once they allowed it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Membership {
+    pub server: String,
+    pub assistant: String,
+    pub since: f64,
+    pub carry_memory: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct MembershipsResponse {
+    pub memberships: Vec<Membership>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CarryMemoryRequest {
+    pub server: String,
+    pub assistant: String,
+    pub carry: bool,
+}
+
+/// Signed by one assistant and encrypted for another; clients only pass it on.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Sealed {
+    /// Always 1.
+    pub v: u8,
+    pub epk: String,
+    pub iv: String,
+    pub data: String,
+    pub tag: String,
+}
+
+/// The caller's home vouching for them, for the assistant they asked about only.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AssertResponse {
+    pub assertion: Sealed,
+}
+
+/// Answered with a `PairResponse`: a token for the player there, `address` the caller's home.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct JoinRequest {
+    pub assertion: Sealed,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct InviteRequest {
+    pub address: String,
+}
+
+/// Someone an admin asked to join, by their address; good for a week.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Invite {
+    pub id: String,
+    pub address: String,
+    /// The admin's player id.
+    pub by: String,
+    pub created_at: f64,
+    pub expires_at: f64,
+}
+
+/// `link` is `nudge://join?server=…&assistant=…`, for the invited person's app.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct InviteResponse {
+    pub invite: Invite,
+    pub link: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct InvitesResponse {
+    pub invites: Vec<Invite>,
+}

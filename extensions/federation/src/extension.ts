@@ -17,6 +17,19 @@ import {
   sameHome,
   Type,
 } from "@nudge/core";
+import {
+  type AssertResponse,
+  CarryMemoryRequest,
+  type InviteResponse,
+  type InvitesResponse,
+  InviteRequest,
+  JoinRequest,
+  type Invite as ShownInvite,
+  type Membership as ShownMembership,
+  type MembershipsResponse,
+  type PairResponse,
+  Sealed as SealedBody,
+} from "@nudge/protocol";
 import type { Static, TSchema } from "typebox";
 import { Value } from "typebox/value";
 import {
@@ -29,7 +42,6 @@ import {
   ProfileBody,
   ProfileClaim,
   RememberClaim,
-  SealedBody,
 } from "./messages.ts";
 import {
   checkSigned,
@@ -199,7 +211,9 @@ class Federation {
         auth: "player",
         handle: async (_request, { player, context }) => {
           const state = await this.state(context);
-          return Response.json({ memberships: (state.memberships[player!.id] ?? []).map(shown) });
+          return Response.json({
+            memberships: (state.memberships[player!.id] ?? []).map(shown),
+          } satisfies MembershipsResponse);
         },
       },
       {
@@ -207,10 +221,7 @@ class Federation {
         path: "/memberships/memory",
         auth: "player",
         handle: async (request, { player, context }) => {
-          const body = await read(
-            request,
-            Type.Object({ server: Type.String(), assistant: Type.String(), carry: Type.Boolean() }),
-          );
+          const body = await read(request, CarryMemoryRequest);
           return this.setCarry(player!.id, trimmedPlace(body), body.carry, context);
         },
       },
@@ -244,7 +255,7 @@ class Federation {
         path: "/invites",
         auth: "admin",
         handle: async (request, { player, context }) => {
-          const { address } = await read(request, Type.Object({ address: Type.String() }));
+          const { address } = await read(request, InviteRequest);
           return this.invite(address, player!.id, context);
         },
       },
@@ -257,7 +268,7 @@ class Federation {
           const invites = Object.values((await this.state(context)).invites)
             .filter((invite) => invite.expiresAt > now)
             .map(toInvite);
-          return Response.json({ invites });
+          return Response.json({ invites } satisfies InvitesResponse);
         },
       },
       {
@@ -279,7 +290,7 @@ class Federation {
         auth: "none",
         maxBodyBytes: MAX_SEALED_BYTES,
         handle: async (request, { context }) => {
-          const { assertion } = await read(request, Type.Object({ assertion: SealedBody }));
+          const { assertion } = await read(request, JoinRequest);
           return this.join(assertion, context);
         },
       },
@@ -341,7 +352,7 @@ class Federation {
             },
           ];
       }, context);
-    return Response.json({ assertion });
+    return Response.json({ assertion } satisfies AssertResponse);
   }
 
   /** Starts or stops carrying a player's own memory to one place they joined. */
@@ -381,7 +392,10 @@ class Federation {
     const link = new URL("nudge://join");
     link.searchParams.set("server", this.self.server);
     link.searchParams.set("assistant", this.self.assistant);
-    return Response.json({ invite: toInvite(invite), link: link.toString() }, { status: 201 });
+    return Response.json(
+      { invite: toInvite(invite), link: link.toString() } satisfies InviteResponse,
+      { status: 201 },
+    );
   }
 
   /**
@@ -449,7 +463,7 @@ class Federation {
         token: joined.token,
         clientId: joined.clientId,
         player: { id: joined.player.id, displayName: claimed.profile.displayName, address },
-      },
+      } satisfies PairResponse,
       { status: 201 },
     );
   }
@@ -872,7 +886,7 @@ function placeOf(place: Place): Place {
 }
 
 /** A membership as its player sees it: without the keys. */
-function shown(membership: Membership) {
+function shown(membership: Membership): ShownMembership {
   return {
     server: membership.server,
     assistant: membership.assistant,
@@ -886,7 +900,7 @@ function endpoint(place: Place, path: string): string {
   return `${place.server}/v1/a/${encodeURIComponent(place.assistant)}/ext/federation${path}`;
 }
 
-function toInvite(invite: Invite) {
+function toInvite(invite: Invite): ShownInvite {
   return {
     id: invite.id,
     address: addressOf(invite.home),

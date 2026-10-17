@@ -1,8 +1,10 @@
 // A Nudge server on a faux model, for testing clients in other languages (`clients/`): one
 // assistant "robin" with players Ann (the admin) and Bo and their shared room "trip".
 // Runs the built packages, so `pnpm build` first: `node packages/server/scripts/faux-server.ts`.
-// Prints one JSON line, `{ url, assistant, tokens: { ann, bo }, pairing: { bo, ann } }` (pairing
-// codes good for 10 minutes), and stops when stdin ends. The rooms have the lists, documents and
+// Prints one JSON line, `{ url, assistant, tokens: { ann, bo }, pairing: { bo, ann }, team }`
+// (pairing codes good for 10 minutes), and stops when stdin ends. `team` is a second assistant on
+// the server, `{ assistant, token, link }`: Dee is its admin, and invited Ann from robin, so she can
+// join it from there (the federation extension) with the `nudge://join` link. The rooms have the lists, documents and
 // connectors extensions, for clients' panels, and the admin's extension settings work: saving
 // installs the extensions again. The mail extension is listed as one nobody added yet.
 //
@@ -16,6 +18,7 @@
 // connector" makes it ask to add the connector "Weather", which takes an API key; and with the
 // browser, "log me in" makes it browse, and the browser ask for a login on example.com.
 import { mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
@@ -41,12 +44,24 @@ import {
 import browserExtension, { closeAllBrowsers } from "@nudge/ext-browser";
 import connectorsExtension from "@nudge/ext-connectors";
 import { documentsExtension } from "@nudge/ext-documents";
+import federationExtension from "@nudge/ext-federation";
 import { listsExtension } from "@nudge/ext-lists";
 import mailExtension from "@nudge/ext-mail";
-import type { ExtensionSetup } from "@nudge/protocol";
+import type { ExtensionSetup, InviteResponse } from "@nudge/protocol";
 import { type ExtensionSettings, serveNudge } from "@nudge/server";
 
 const context = BACKGROUND_CONTEXT;
+/** A port nothing listens on: federation has to know the server's address before it starts. */
+const freePort = () =>
+  new Promise<number>((resolve, reject) => {
+    const probe = createServer().listen(0, "127.0.0.1", () => {
+      const { port } = probe.address() as { port: number };
+      probe.close(() => resolve(port));
+    });
+    probe.once("error", reject);
+  });
+const port = Number(process.env.NUDGE_FAUX_PORT ?? 0) || (await freePort());
+const url = `http://127.0.0.1:${port}`;
 const withBrowser = process.env.NUDGE_FAUX_BROWSER === "1";
 /** Typed by the faux model as the browser's task, so its requests can be told apart. */
 const BROWSER_TASK = "Read the inbox on example.com";
@@ -182,6 +197,13 @@ const setups: Setup[] = [
       : {},
   },
   {
+    from: "@nudge/ext-federation",
+    extension: federationExtension,
+    configured: true,
+    enabled: true,
+    settings: { server: url },
+  },
+  {
     from: "@nudge/ext-mail",
     extension: mailExtension,
     configured: false,
@@ -219,6 +241,7 @@ const removeData = () => {
 
 const nudge = await createNudge(
   {
+    name: "robin",
     database: join(dataDir, "robin.sqlite"),
     models,
     model: { provider: faux.provider.id, modelId: faux.getModel().id },
@@ -272,27 +295,55 @@ const extensionSettings: ExtensionSettings = {
   },
 };
 
+// A second assistant on the server, for joining from robin: Ann may, by invite.
+const team = await createNudge(
+  {
+    name: "team",
+    database: join(dataDir, "team.sqlite"),
+    models,
+    model: { provider: faux.provider.id, modelId: faux.getModel().id },
+    extensions: [{ extension: federationExtension, settings: { server: url } }],
+  },
+  context,
+);
+
 const ann = (await nudge.players.invite("Ann", context)).token;
 const bo = (await nudge.players.invite("Bo", context)).token;
 await nudge.rooms.createShared({ id: "trip", name: "Trip", members: ["ann", "bo"] }, context);
-const port = Number(process.env.NUDGE_FAUX_PORT ?? 0);
+const dee = (await team.players.invite("Dee", context)).token;
 const server = await serveNudge({
-  assistants: new Map([["robin", nudge]]),
+  assistants: new Map([
+    ["robin", nudge],
+    ["team", team],
+  ]),
   port,
   extensionSettings,
 });
+const invited = await fetch(`${url}/v1/a/team/ext/federation/invites`, {
+  method: "POST",
+  headers: { authorization: `Bearer ${dee}`, "content-type": "application/json" },
+  body: JSON.stringify({ address: `ann@${url}/robin` }),
+});
+const { link } = (await invited.json()) as InviteResponse;
 const pairing = {
   bo: (await nudge.players.pairingCode("bo", context)).code,
   ann: (await nudge.players.pairingCode("ann", context)).code,
 };
 process.stdout.write(
-  `${JSON.stringify({ url: server.url, assistant: "robin", tokens: { ann, bo }, pairing })}\n`,
+  `${JSON.stringify({
+    url: server.url,
+    assistant: "robin",
+    tokens: { ann, bo },
+    pairing,
+    team: { assistant: "team", token: dee, link },
+  })}\n`,
 );
 
 const stop = () => {
   void server
     .close()
     .then(() => nudge.close(context))
+    .then(() => team.close(context))
     .then(() => (withBrowser ? closeAllBrowsers() : undefined))
     .finally(() => {
       removeData();

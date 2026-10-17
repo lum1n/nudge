@@ -1,18 +1,26 @@
 import type {
   Approval,
+  AssertResponse,
   AssistantsResponse,
+  CarryMemoryRequest,
   ClientInfo,
   CreateRoomRequest,
   ErrorResponse,
   ExtensionSetup,
   ExtensionSetupsResponse,
   Fact,
+  Invite,
+  InviteResponse,
+  InvitesResponse,
+  Membership,
+  MembershipsResponse,
   MeResponse,
   MessageRequest,
   MessageResponse,
   ModelViewResponse,
   PairingCodeResponse,
   PairResponse,
+  PlaceRequest,
   Player,
   PlayerMemoryResponse,
   PlayerResponse,
@@ -30,6 +38,7 @@ import type {
   RoomExtensionsResponse,
   RoomsResponse,
   SaveExtensionSetupsRequest,
+  Sealed,
   TimelineResponse,
   TokenInfo,
   TokensResponse,
@@ -213,6 +222,42 @@ export class Api {
     return this.request("DELETE", `/ext/push/web?endpoint=${encodeURIComponent(endpoint)}`);
   }
 
+  // Roaming, through the extension `federation`: 404 on an assistant without it. To join another
+  // assistant, ask the home for an assertion with `vouchFor`, then pass it to `join` on an `Api` of
+  // the assistant joined.
+
+  /** Has the caller's home vouch for them to `place`, encrypted so only that assistant reads it. */
+  async vouchFor(place: PlaceRequest): Promise<Sealed> {
+    return (await this.request<AssertResponse>("POST", "/ext/federation/assert", place)).assertion;
+  }
+
+  /** Joins this assistant with an assertion from the caller's home, and stores the token. */
+  async join(assertion: Sealed): Promise<PairResponse> {
+    const joined = await this.request<PairResponse>("POST", "/ext/federation/join", { assertion });
+    this.tokens.set(joined.token);
+    return joined;
+  }
+
+  /** The assistants the caller joined from here, their home. */
+  async memberships(): Promise<Membership[]> {
+    return (await this.request<MembershipsResponse>("GET", "/ext/federation/memberships"))
+      .memberships;
+  }
+
+  /** Starts or stops carrying the caller's own memory to an assistant they joined. */
+  carryMemory(place: PlaceRequest, carry: boolean): Promise<Membership> {
+    return this.request("PUT", "/ext/federation/memberships/memory", {
+      ...place,
+      carry,
+    } satisfies CarryMemoryRequest);
+  }
+
+  /** Stops sending the caller's profile and memory to an assistant they joined. */
+  leave(place: PlaceRequest): Promise<void> {
+    const query = new URLSearchParams({ server: place.server, assistant: place.assistant });
+    return this.request("DELETE", `/ext/federation/memberships?${query}`);
+  }
+
   decide(room: string, approval: string, approve: boolean): Promise<Approval> {
     return this.request("POST", `${roomPath(room)}/approvals/${encodeURIComponent(approval)}`, {
       approve,
@@ -288,6 +333,19 @@ export class Api {
   /** Revokes a client's token; its sockets close with 4401. */
   revoke(clientId: string): Promise<void> {
     return this.request("DELETE", `/admin/tokens/${encodeURIComponent(clientId)}`);
+  }
+
+  /** Lets the person at `address` (`name@server/assistant`) join, for a week. */
+  invite(address: string): Promise<InviteResponse> {
+    return this.request("POST", "/ext/federation/invites", { address });
+  }
+
+  async invites(): Promise<Invite[]> {
+    return (await this.request<InvitesResponse>("GET", "/ext/federation/invites")).invites;
+  }
+
+  cancelInvite(id: string): Promise<void> {
+    return this.request("DELETE", `/ext/federation/invites/${encodeURIComponent(id)}`);
   }
 
   /** The assistant's extensions and the ones it could add, with their settings and schemas. */

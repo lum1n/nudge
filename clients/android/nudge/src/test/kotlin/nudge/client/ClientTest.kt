@@ -13,10 +13,12 @@ import nudge.ffi.ApprovalStatus
 import nudge.ffi.ClientConfig
 import nudge.ffi.ConnectionStatus
 import nudge.ffi.NudgeClient
+import nudge.ffi.Notifications
 import nudge.ffi.NudgeException
 import nudge.ffi.PanelStatus
 import nudge.ffi.Part
 import nudge.ffi.PendingState
+import nudge.ffi.ProfileUpdate
 import nudge.ffi.Sent
 import nudge.ffi.SyncStatus
 import nudge.ffi.TimelineChange
@@ -37,6 +39,8 @@ class ClientTest {
     private lateinit var url: String
     private lateinit var ann: String
     private lateinit var bo: String
+    /** The admin of the second assistant, "team", which invited Ann from robin. */
+    private lateinit var dee: String
     private val clients = mutableListOf<NudgeClient>()
 
     @Before
@@ -56,6 +60,7 @@ class ClientTest {
         url = Regex("\"url\":\"([^\"]+)\"").find(started)!!.groupValues[1]
         ann = Regex("\"ann\":\"([^\"]+)\"").find(started)!!.groupValues[1]
         bo = Regex("\"bo\":\"([^\"]+)\"").find(started)!!.groupValues[1]
+        dee = Regex("\"team\":\\{[^}]*\"token\":\"([^\"]+)\"").find(started)!!.groupValues[1]
     }
 
     @After
@@ -64,8 +69,8 @@ class ClientTest {
         if (::server.isInitialized) server.destroy()
     }
 
-    private fun client(tokens: MemoryTokens): NudgeClient {
-        val config = ClientConfig(url, "robin", "nudge-android-test", "0", "jvm", null)
+    private fun client(tokens: MemoryTokens, assistant: String = "robin"): NudgeClient {
+        val config = ClientConfig(url, assistant, "nudge-android-test", "0", "jvm", null)
         return NudgeClient(config, tokens).also { clients += it; it.connect() }
     }
 
@@ -89,7 +94,7 @@ class ClientTest {
 
     @Test
     fun pairingAndAStreamedAnswer() = runBlocking {
-        assertEquals(listOf("robin"), listAssistants(url).map { it.name })
+        assertEquals(listOf("robin", "team"), listAssistants(url).map { it.name })
         val admin = client(MemoryTokens(ann))
         val me = admin.me()
         assertTrue(me.admin)
@@ -384,5 +389,48 @@ class ClientTest {
         )) {
             assertEquals(bad, null, PairingLink.parse(bad))
         }
+    }
+
+    @Test
+    fun joinLinks() {
+        assertEquals(
+            JoinLink("https://nudge.example/x", "team"),
+            JoinLink.parse("nudge://join?server=https%3A%2F%2Fnudge.example%2Fx&assistant=team"),
+        )
+        for (bad in listOf(
+            "nudge://join?server=ftp%3A%2F%2Fx&assistant=team",
+            "nudge://join?server=https%3A%2F%2Fx",
+            "nudge://pair?server=https%3A%2F%2Fx&assistant=team",
+            "not a link",
+        )) {
+            assertEquals(bad, null, JoinLink.parse(bad))
+        }
+    }
+
+    @Test
+    fun editsTheProfileAndJoinsAnotherAssistantFromHome() = runBlocking {
+        val home = client(MemoryTokens(ann))
+        val profile = home.updateProfile(
+            ProfileUpdate(timeZone = "Europe/Oslo", notifications = Notifications(answers = true, approvals = false)),
+        )
+        assertEquals("Europe/Oslo", profile.timeZone)
+        assertFalse(profile.notifications.approvals)
+        assertEquals(null, home.updateProfile(ProfileUpdate(timeZone = "")).timeZone)
+
+        val address = "ann@$url/robin"
+        val admin = client(MemoryTokens(dee), "team")
+        assertEquals(listOf(address), admin.invites().map { it.address })
+        val tokens = MemoryTokens(null)
+        val there = client(tokens, "team")
+        val joined = there.join(home.vouchFor(url, "team"))
+        assertEquals(address, joined.player.address)
+        assertNotNull(tokens.get())
+        assertEquals("Ann", there.me().player.displayName)
+
+        val membership = home.memberships().single()
+        assertEquals("team" to false, membership.assistant to membership.carryMemory)
+        assertTrue(home.carryMemory(url, "team", true).carryMemory)
+        home.leave(url, "team")
+        assertTrue(home.memberships().isEmpty())
     }
 }

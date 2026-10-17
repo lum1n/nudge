@@ -8,6 +8,8 @@ struct FauxServer {
     let url: String
     let ann: String
     let bo: String
+    /// The admin of the second assistant, "team", which invited Ann from robin.
+    let dee: String
     let process: Process
 }
 
@@ -35,7 +37,10 @@ final class ClientTests: XCTestCase {
         }
         let started = try XCTUnwrap(JSONSerialization.jsonObject(with: line) as? [String: Any], "node didn't start the server")
         let tokens = try XCTUnwrap(started["tokens"] as? [String: String])
-        server = FauxServer(url: started["url"] as! String, ann: tokens["ann"]!, bo: tokens["bo"]!, process: process)
+        let team = try XCTUnwrap(started["team"] as? [String: String])
+        server = FauxServer(
+            url: started["url"] as! String, ann: tokens["ann"]!, bo: tokens["bo"]!, dee: team["token"]!,
+            process: process)
     }
 
     override func tearDown() async throws {
@@ -44,9 +49,9 @@ final class ClientTests: XCTestCase {
         server?.process.terminate()
     }
 
-    func client(_ tokens: TokenStore) throws -> NudgeClient {
+    func client(_ tokens: TokenStore, assistant: String = "robin") throws -> NudgeClient {
         let config = ClientConfig(
-            server: server.url, assistant: "robin", clientName: "nudge-swift-test", clientVersion: "0",
+            server: server.url, assistant: assistant, clientName: "nudge-swift-test", clientVersion: "0",
             platform: "swift", cachePath: nil)
         let client = try NudgeClient(config: config, tokens: tokens)
         client.connect()
@@ -205,6 +210,49 @@ final class ClientTests: XCTestCase {
         }
     }
 
+    func testJoinLinks() {
+        let link = JoinLink(URL(string: "nudge://join?server=https%3A%2F%2Fnudge.example%2Fx&assistant=team")!)
+        XCTAssertEqual(link, JoinLink(server: "https://nudge.example/x", assistant: "team"))
+        for bad in [
+            "nudge://join?server=ftp%3A%2F%2Fx&assistant=team",
+            "nudge://join?server=https%3A%2F%2Fx",
+            "nudge://pair?server=https%3A%2F%2Fx&assistant=team",
+        ] {
+            XCTAssertNil(JoinLink(URL(string: bad)!), bad)
+        }
+    }
+
+    func testEditsTheProfileAndJoinsAnotherAssistantFromHome() async throws {
+        let home = try client(MemoryTokens(server.ann))
+        let profile = try await home.updateProfile(
+            update: ProfileUpdate(timeZone: "Europe/Oslo", notifications: Notifications(answers: true, approvals: false)))
+        XCTAssertEqual(profile.timeZone, "Europe/Oslo")
+        XCTAssertFalse(profile.notifications.approvals)
+        let cleared = try await home.updateProfile(update: ProfileUpdate(timeZone: ""))
+        XCTAssertNil(cleared.timeZone)
+
+        let address = "ann@\(server.url)/robin"
+        let admin = try client(MemoryTokens(server.dee), assistant: "team")
+        let invites = try await admin.invites()
+        XCTAssertEqual(invites.map(\.address), [address])
+        let tokens = MemoryTokens()
+        let there = try client(tokens, assistant: "team")
+        let joined = try await there.join(assertion: try await home.vouchFor(server: server.url, assistant: "team"))
+        XCTAssertEqual(joined.player.address, address)
+        XCTAssertNotNil(tokens.get())
+        let me = try await there.me()
+        XCTAssertEqual(me.player.displayName, "Ann")
+
+        let memberships = try await home.memberships()
+        XCTAssertEqual(memberships.map(\.assistant), ["team"])
+        XCTAssertFalse(memberships[0].carryMemory)
+        let carried = try await home.carryMemory(server: server.url, assistant: "team", carry: true)
+        XCTAssertTrue(carried.carryMemory)
+        try await home.leave(server: server.url, assistant: "team")
+        let left = try await home.memberships()
+        XCTAssertTrue(left.isEmpty)
+    }
+
     func testApplyingChanges() {
         func marker(_ id: String) -> TimelineItem { .marker(id: id, kind: .reset) }
         let timeline = [TimelineItem]().applying([
@@ -219,7 +267,7 @@ final class ClientTests: XCTestCase {
 
     func testPairingAndAStreamedAnswer() async throws {
         let assistants = try await listAssistants(server: server.url)
-        XCTAssertEqual(assistants.map(\.name), ["robin"])
+        XCTAssertEqual(assistants.map(\.name), ["robin", "team"])
         let admin = try client(MemoryTokens(server.ann))
         let me = try await admin.me()
         XCTAssertTrue(me.admin)

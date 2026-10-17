@@ -1,16 +1,9 @@
 import { Type } from "@nudge/core";
+import { PlaceRequest } from "@nudge/protocol";
 
-/** What goes between assistants, and the bodies of the routes that carry it. */
+/** What goes between assistants. The bodies of the routes apps call are in `@nudge/protocol`. */
 
-export const SealedBody = Type.Object({
-  v: Type.Literal(1),
-  epk: Type.String(),
-  iv: Type.String(),
-  data: Type.String(),
-  tag: Type.String(),
-});
-
-export const PlaceBody = Type.Object({ server: Type.String(), assistant: Type.String() });
+export const PlaceBody = PlaceRequest;
 
 const HomeBody = Type.Object({
   server: Type.String(),

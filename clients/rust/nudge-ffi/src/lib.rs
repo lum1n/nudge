@@ -799,6 +799,97 @@ impl NudgeClient {
         Ok(run(async move { api.forget_value(&placeholder).await }).await?)
     }
 
+    /// The player's profile: name, avatar, time zone, language and preferences.
+    pub async fn profile(&self) -> Result<Profile, NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.profile().await }).await?.into())
+    }
+
+    /// Changes the fields `update` sets; 400 for a value that isn't one, such as a time zone.
+    pub async fn update_profile(&self, update: ProfileUpdate) -> Result<Profile, NudgeError> {
+        let update = profile_update(update)?;
+        let api = self.client.api().clone();
+        Ok(run(async move { api.update_profile(&update).await })
+            .await?
+            .into())
+    }
+
+    /// The extensions that take settings from each player, for the profile's settings forms.
+    pub async fn profile_extensions(&self) -> Result<Vec<PlayerSettings>, NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.profile_extensions().await })
+            .await?
+            .into_iter()
+            .map(Into::into)
+            .collect())
+    }
+
+    // Roaming, through the extension `federation`: 404 on an assistant without it. To join
+    // another assistant, ask the home's client for an assertion with `vouch_for`, then pass it to
+    // `join` on a client of the assistant joined.
+
+    /// Has the player's home vouch for them to the assistant `assistant` at `server`: an
+    /// assertion only that assistant can read, good for five minutes.
+    pub async fn vouch_for(&self, server: String, assistant: String) -> Result<String, NudgeError> {
+        let api = self.client.api().clone();
+        let place = p::PlaceRequest { server, assistant };
+        let sealed = run(async move { api.vouch_for(&place).await }).await?;
+        Ok(serde_json::to_string(&sealed).expect("JSON values serialize"))
+    }
+
+    /// Joins this assistant with an assertion from `vouch_for`, and stores the token. A socket
+    /// that gave up for want of a token connects again.
+    pub async fn join(&self, assertion: String) -> Result<Paired, NudgeError> {
+        let assertion: p::Sealed =
+            serde_json::from_str(&assertion).map_err(|error| NudgeError::Decode {
+                detail: format!("Not an assertion: {error}"),
+            })?;
+        let api = self.client.api().clone();
+        let joined = run(async move { api.join(assertion).await }).await?;
+        if let nudge_client::ConnectionStatus::Closed {
+            code: p::close::UNAUTHORIZED,
+            ..
+        } = self.client.connection().status()
+        {
+            self.client.open();
+        }
+        Ok(Paired {
+            client_id: joined.client_id,
+            player: joined.player.into(),
+        })
+    }
+
+    /// The assistants the player joined from here, their home.
+    pub async fn memberships(&self) -> Result<Vec<Membership>, NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.memberships().await })
+            .await?
+            .into_iter()
+            .map(Into::into)
+            .collect())
+    }
+
+    /// Starts or stops carrying the player's own memory to an assistant they joined.
+    pub async fn carry_memory(
+        &self,
+        server: String,
+        assistant: String,
+        carry: bool,
+    ) -> Result<Membership, NudgeError> {
+        let api = self.client.api().clone();
+        let place = p::PlaceRequest { server, assistant };
+        Ok(run(async move { api.carry_memory(&place, carry).await })
+            .await?
+            .into())
+    }
+
+    /// Stops sending the player's profile and memory to an assistant they joined.
+    pub async fn leave(&self, server: String, assistant: String) -> Result<(), NudgeError> {
+        let api = self.client.api().clone();
+        let place = p::PlaceRequest { server, assistant };
+        Ok(run(async move { api.leave(&place).await }).await?)
+    }
+
     // Admin commands, for players with the admin flag.
 
     pub async fn create_player(&self, display_name: String) -> Result<Player, NudgeError> {
@@ -852,6 +943,31 @@ impl NudgeClient {
         Ok(run(async move { api.revoke(&client_id).await }).await?)
     }
 
+    /// Lets the person at `address` (`name@server/assistant`) join, for a week.
+    pub async fn invite(&self, address: String) -> Result<InviteLink, NudgeError> {
+        let api = self.client.api().clone();
+        let invited = run(async move { api.invite(&address).await }).await?;
+        Ok(InviteLink {
+            invite: invited.invite.into(),
+            link: invited.link,
+        })
+    }
+
+    /// The open invites.
+    pub async fn invites(&self) -> Result<Vec<Invite>, NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.invites().await })
+            .await?
+            .into_iter()
+            .map(Into::into)
+            .collect())
+    }
+
+    pub async fn cancel_invite(&self, id: String) -> Result<(), NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.cancel_invite(&id).await }).await?)
+    }
+
     /// The assistant's extensions and the ones it could add, with their settings and schemas;
     /// 404 when the server can't set up extensions.
     pub async fn extension_setups(&self) -> Result<Vec<ExtensionSetup>, NudgeError> {
@@ -897,6 +1013,33 @@ impl NudgeClient {
         let setups = run(async move { api.save_extension_setups(extensions).await }).await?;
         Ok(setups.into_iter().map(Into::into).collect())
     }
+}
+
+/// An empty string clears a field; the extensions' JSON must be an object of objects or `null`s.
+fn profile_update(update: ProfileUpdate) -> Result<p::UpdateProfileRequest, NudgeError> {
+    let clearable = |value: Option<String>| value.map(|v| (!v.is_empty()).then_some(v));
+    let notifications = update.notifications.map(|n| {
+        Some(p::NotificationPrefs {
+            answers: Some(n.answers),
+            approvals: Some(n.approvals),
+        })
+    });
+    let extensions = match update.extensions_json {
+        None => None,
+        Some(json) => Some(Some(serde_json::from_str(&json).map_err(|_| {
+            NudgeError::Decode {
+                detail: "The extensions' settings are not a JSON object of objects".into(),
+            }
+        })?)),
+    };
+    Ok(p::UpdateProfileRequest {
+        display_name: update.display_name,
+        avatar: clearable(update.avatar),
+        time_zone: clearable(update.time_zone),
+        language: clearable(update.language),
+        notifications,
+        extensions,
+    })
 }
 
 impl From<nudge_client::Sent> for Sent {

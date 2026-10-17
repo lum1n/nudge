@@ -555,6 +555,68 @@ export const DevicesResponse = Type.Object({
 });
 export type DevicesResponse = Static<typeof DevicesResponse>;
 
+/** An assistant by its server and its name there, such as one to join. */
+export const PlaceRequest = Type.Object({ server: Type.String(), assistant: Type.String() });
+export type PlaceRequest = Static<typeof PlaceRequest>;
+
+/** An assistant the caller joined from here, their home; `carryMemory` once they allowed it. */
+export const Membership = Type.Object({
+  server: Type.String(),
+  assistant: Type.String(),
+  since: Type.Number(),
+  carryMemory: Type.Boolean(),
+});
+export type Membership = Static<typeof Membership>;
+
+export const MembershipsResponse = Type.Object({ memberships: Type.Array(Membership) });
+export type MembershipsResponse = Static<typeof MembershipsResponse>;
+
+export const CarryMemoryRequest = Type.Object({
+  server: Type.String(),
+  assistant: Type.String(),
+  carry: Type.Boolean(),
+});
+export type CarryMemoryRequest = Static<typeof CarryMemoryRequest>;
+
+/** Signed by one assistant and encrypted for another; clients only pass it on. */
+export const Sealed = Type.Object({
+  v: Type.Literal(1),
+  epk: Type.String(),
+  iv: Type.String(),
+  data: Type.String(),
+  tag: Type.String(),
+});
+export type Sealed = Static<typeof Sealed>;
+
+/** The caller's home vouching for them, for the assistant they asked about only. */
+export const AssertResponse = Type.Object({ assertion: Sealed });
+export type AssertResponse = Static<typeof AssertResponse>;
+
+/** Answered like `POST /pair`: a token for the player there, `address` the caller's home. */
+export const JoinRequest = Type.Object({ assertion: Sealed });
+export type JoinRequest = Static<typeof JoinRequest>;
+
+export const InviteRequest = Type.Object({ address: Type.String() });
+export type InviteRequest = Static<typeof InviteRequest>;
+
+/** Someone an admin asked to join, by their address; good for a week. */
+export const Invite = Type.Object({
+  id: Type.String(),
+  address: Type.String(),
+  /** The admin's player id. */
+  by: Type.String(),
+  createdAt: Type.Number(),
+  expiresAt: Type.Number(),
+});
+export type Invite = Static<typeof Invite>;
+
+/** `link` is `nudge://join?server=…&assistant=…`, for the invited person's app. */
+export const InviteResponse = Type.Object({ invite: Invite, link: Type.String() });
+export type InviteResponse = Static<typeof InviteResponse>;
+
+export const InvitesResponse = Type.Object({ invites: Type.Array(Invite) });
+export type InvitesResponse = Static<typeof InvitesResponse>;
+
 export const DecideRequest = Type.Object({ approve: Type.Boolean() });
 export type DecideRequest = Static<typeof DecideRequest>;
 
@@ -766,6 +828,17 @@ export const SCHEMAS = {
   PushRenewRequest,
   DeviceRequest,
   DevicesResponse,
+  PlaceRequest,
+  Membership,
+  MembershipsResponse,
+  CarryMemoryRequest,
+  Sealed,
+  AssertResponse,
+  JoinRequest,
+  InviteRequest,
+  Invite,
+  InviteResponse,
+  InvitesResponse,
   ModelViewResponse,
   MonthUsage,
   UsageResponse,
