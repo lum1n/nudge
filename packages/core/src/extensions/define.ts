@@ -156,6 +156,12 @@ export type ExtensionParts = Omit<Extension, "name"> & {
    * extension or the assistant closed. Calls that already started may still be finishing.
    */
   readonly close?: () => void | Promise<void>;
+  /**
+   * Runs once when the assistant is about to be deleted for good, such as to tell other
+   * assistants it is gone. Best effort: the deletion goes on after a failure, or after
+   * `RETIRE_TIMEOUT_MS`.
+   */
+  readonly retire?: (context: Context) => void | Promise<void>;
 };
 
 export type NudgeExtension<S extends TSchema = TSchema, P extends TSchema = TSchema> = {
@@ -246,6 +252,7 @@ export type SetUpExtension = {
   readonly approvals: Readonly<Record<string, ApprovalHandler>>;
   readonly onRoomEvent?: (event: RoomEvent) => void | Promise<void>;
   readonly close?: () => void | Promise<void>;
+  readonly retire?: (context: Context) => void | Promise<void>;
 };
 
 /** Checks the settings and runs `setup`. A plain extension passes through. */
@@ -288,6 +295,7 @@ export async function setUpExtension(
     approvals = {},
     onRoomEvent,
     close,
+    retire,
     ...parts
   } = await definition.setup({
     ...base,
@@ -310,6 +318,7 @@ export async function setUpExtension(
     ...(roomSocket === undefined ? {} : { roomSocket }),
     ...(onRoomEvent === undefined ? {} : { onRoomEvent }),
     ...(close === undefined ? {} : { close }),
+    ...(retire === undefined ? {} : { retire }),
   };
 }
 

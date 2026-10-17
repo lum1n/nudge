@@ -126,3 +126,12 @@ export const ForgetClaim = Type.Object({
   factId: Type.String(),
   issuedAt: Type.Number(),
 });
+
+/** An assistant someone joined → their home: it is being deleted, so their membership there ends. */
+export const ClosedClaim = Type.Object({
+  kind: Type.Literal("nudge.closed"),
+  from: PlaceBody,
+  audience: PlaceBody,
+  playerId: Type.String(),
+  issuedAt: Type.Number(),
+});

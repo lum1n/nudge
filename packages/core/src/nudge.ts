@@ -825,6 +825,30 @@ export class Nudge {
     return room;
   }
 
+  /**
+   * Lets each extension say goodbye before the assistant is deleted, such as federation telling
+   * its guests' homes. Waits for each at most `RETIRE_TIMEOUT_MS`; failures are reported.
+   */
+  async retire(context: Context): Promise<void> {
+    for (const { extension, retire } of this.installed) {
+      if (retire === undefined) continue;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const late = new Promise<void>((resolve) => {
+        timer = setTimeout(() => {
+          this.report(new Error(`${extension.name} took too long to retire`));
+          resolve();
+        }, RETIRE_TIMEOUT_MS);
+      });
+      try {
+        await Promise.race([Promise.resolve(retire(context)), late]);
+      } catch (error) {
+        this.report(error);
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+  }
+
   async close(context: Context): Promise<void> {
     try {
       this.events.close();
@@ -837,6 +861,9 @@ export class Nudge {
     }
   }
 }
+
+/** How long an extension may take to retire before an assistant's deletion goes on without it. */
+export const RETIRE_TIMEOUT_MS = 15_000;
 
 /** Strings longer than this in a socket frame are data, such as a screenshot, not text. */
 const SHOWN_LIMIT = 64 * 1024;

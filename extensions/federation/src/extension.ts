@@ -33,6 +33,7 @@ import {
 import type { Static, TSchema } from "typebox";
 import { Value } from "typebox/value";
 import {
+  ClosedClaim,
   FactBody,
   ForgetClaim,
   JoinClaim,
@@ -120,7 +121,11 @@ export function federationExtension(options: FederationOptions = {}) {
         options.fetch ?? fetch,
         options.report ?? ((error) => console.error("federation:", error)),
       );
-      return { routes: federation.routes(), close: () => federation.close() };
+      return {
+        routes: federation.routes(),
+        close: () => federation.close(),
+        retire: (context) => federation.retire(context),
+      };
     },
   });
 }
@@ -550,6 +555,8 @@ class Federation {
       case "nudge.remember":
       case "nudge.forget":
         return this.fromPlace(signed, context);
+      case "nudge.closed":
+        return this.placeClosed(signed, context);
       default:
         return problem(400, "Unknown message");
     }
@@ -609,6 +616,52 @@ class Federation {
       delete state.guests[playerId];
     }, context);
     await this.memoryChanged(playerId, context);
+  }
+
+  /**
+   * Tells every guest's home that this assistant is being deleted, so their memberships here go
+   * and their apps stop signing in. Each home is told once, all at the same time; a home that
+   * can't be reached keeps the membership until the person leaves it.
+   */
+  async retire(context: Context): Promise<void> {
+    const nudge = this.nudge();
+    const { guests } = await this.state(context);
+    await Promise.all(
+      Object.entries(guests).map(async ([playerId, guest]) => {
+        const player = await nudge.players.get(playerId, context);
+        if (player?.home === undefined) return;
+        const home: Place = { server: player.home.server, assistant: player.home.assistant };
+        await this.send(home, guest, {
+          kind: "nudge.closed",
+          from: this.self,
+          audience: home,
+          playerId: player.home.playerId,
+          issuedAt: this.nextSignedAt(),
+        } satisfies Static<typeof ClosedClaim>);
+      }),
+    );
+  }
+
+  /** An assistant one of this home's people joined is gone: their membership there ends. */
+  private async placeClosed(signed: Signed, context: Context): Promise<Response> {
+    const claim = peek(signed);
+    if (!Value.Check(ClosedClaim, claim)) return problem(400, "Malformed message");
+    if (!samePlace(claim.audience, this.self)) return problem(400, "Not for this assistant");
+    const from = trimmedPlace(claim.from);
+    const membership = (await this.state(context)).memberships[claim.playerId]?.find((m) =>
+      samePlace(m, from),
+    );
+    if (membership === undefined) return problem(404, "No such membership");
+    const checked = await this.checkFrom(from, membership, signed, context);
+    const claimed = checked?.claim;
+    if (!Value.Check(ClosedClaim, claimed)) return problem(401, "That assistant did not sign that");
+    // One signed before they joined, replayed, mustn't end a newer stay.
+    if (claimed.issuedAt <= membership.since) return problem(409, "That is older than the stay");
+    // Not waited for, as the other messages: the place may be waiting for this player's queue.
+    void this.enqueue(claimed.playerId, () =>
+      this.dropMemberships(claimed.playerId, [from], context),
+    );
+    return new Response(null, { status: 204 });
   }
 
   /** A fact one of this home's people remembered or forgot elsewhere, for their own memory. */

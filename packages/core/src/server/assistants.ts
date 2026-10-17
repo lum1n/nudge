@@ -150,8 +150,9 @@ export class Assistants {
 
   /**
    * Deletes an assistant: `backup` copies it first (it gets a config holding this assistant
-   * alone), then it is closed, taken out of the config, and its database, key and extensions'
-   * data are removed. Returns what `backup` returned.
+   * alone), then its extensions retire (federation tells its guests' homes), it is closed, taken
+   * out of the config, and its database, key and extensions' data are removed. Returns what
+   * `backup` returned.
    */
   remove<T>(name: string, backup: (config: NudgeConfig) => Promise<T>): Promise<T> {
     return this.serially(async () => {
@@ -162,7 +163,10 @@ export class Assistants {
       const kept = await backup({ ...config, assistants: [entry] });
       const nudge = this.running.get(name);
       this.running.delete(name);
-      await nudge?.close(this.options.context);
+      if (nudge !== undefined) {
+        await nudge.retire(this.options.context);
+        await nudge.close(this.options.context);
+      }
       raw.assistants = raw.assistants.filter((assistant) => assistant.name !== name);
       await writeRawConfig(this.configPath, raw);
       if (entry.database !== undefined) await removeFiles(entry.database);
@@ -177,7 +181,10 @@ export class Assistants {
   }
 
   /** Sets up the assistant's extensions as `choices` say, and writes them once they started. */
-  saveExtensionSetups(name: string, choices: readonly ExtensionChoice[]): Promise<ExtensionSetup[]> {
+  saveExtensionSetups(
+    name: string,
+    choices: readonly ExtensionChoice[],
+  ): Promise<ExtensionSetup[]> {
     return this.serially(async () => {
       await saveExtensionSetups(this.configPath, name, choices, async (config) => {
         const nudge = this.running.get(name);

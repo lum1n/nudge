@@ -266,6 +266,44 @@ describe("federation", () => {
       .toBe("nb");
   });
 
+  it("ends memberships at home when the assistant joined is deleted", async () => {
+    const join = async () => {
+      await call(AWAY, "POST", "/ext/federation/invites", {
+        token: ann,
+        body: { address: "vegard@home.example/robin" },
+      });
+      expect(
+        (
+          await call(AWAY, "POST", "/ext/federation/join", {
+            body: { assertion: await assertion() },
+          })
+        ).status,
+      ).toBe(201);
+    };
+    const memberships = async () =>
+      (await call(HOME, "GET", "/ext/federation/memberships", { token: vegard })).json
+        .memberships as unknown[];
+    await join();
+    expect(await memberships()).toHaveLength(1);
+
+    const sent = wire.length;
+    await away.retire(context);
+    expect(wire.length).toBe(sent + 1);
+    await expect.poll(memberships).toEqual([]);
+
+    // Joined again, the old goodbye sent once more doesn't end the new stay.
+    const goodbye = wire[sent]!;
+    await sleep(2);
+    await join();
+    const replayed = await between(`${HOME}/v1/a/robin/ext/federation/inbox`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: goodbye,
+    });
+    expect(replayed.status).toBe(409);
+    expect(await memberships()).toHaveLength(1);
+  });
+
   it("signs the guest out there when they leave at home, until invited again", async () => {
     await call(AWAY, "POST", "/ext/federation/invites", {
       token: ann,

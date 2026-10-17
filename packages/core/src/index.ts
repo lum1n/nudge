@@ -13,6 +13,7 @@ import {
   type PrivacyOptions,
   type PrivateValue,
   type PlayerSettingsSchema,
+  RETIRE_TIMEOUT_MS,
   type RoomExtension,
   RoomNotFound,
 } from "./nudge.ts";
@@ -205,6 +206,7 @@ export {
   type PrivacyOptions,
   type PrivateValue,
   type PlayerSettingsSchema,
+  RETIRE_TIMEOUT_MS,
   type RoomExtension,
   RoomNotFound,
 };
