@@ -50,6 +50,7 @@ export {
   requestApproval,
 } from "./approvals/approvals.ts";
 export { type Change, type ChangeListener, Changes } from "./changes.ts";
+export { type RawConfig, readRawConfig, writeRawConfig } from "./config-file.ts";
 export {
   type AssistantChange,
   type AssistantDraft,
@@ -74,6 +75,19 @@ export {
   serverOwnersFile,
 } from "./server/owners.ts";
 export { openRecoveryKit, RecoveryKitError, sealRecoveryKit } from "./server/recovery.ts";
+export {
+  canonicalJson,
+  checkManifest,
+  newer,
+  RELEASE_KEYS,
+  RELEASE_MANIFEST_URL,
+  type ReleaseManifest,
+  RESTART_EXIT_CODE,
+  UpdateError,
+  Updates,
+  type UpdatesOptions,
+  type UpdateState,
+} from "./server/updates.ts";
 export {
   completeSetup,
   detectLocalServers,

@@ -29,6 +29,8 @@ import {
   ServerSessionRequest,
   type ServerSessionResponse,
   SetProviderKeyRequest,
+  SetUpdatesRequest,
+  type UpdateState,
   UpdateAssistantRequest,
 } from "@nudge/protocol";
 import { type Context as HonoContext, Hono, type MiddlewareHandler } from "hono";
@@ -50,6 +52,16 @@ export type ServerControl = {
   testKey(provider: string, key: string): Promise<void>;
   /** The key the server's backups are encrypted with, for the recovery kit. */
   backupKey(): Promise<Buffer>;
+  /** Self-update, for a server `nudge-server` runs; absent otherwise. */
+  readonly updates?: UpdateControl;
+};
+
+/** What owners see of and do with updates. */
+export type UpdateControl = {
+  state(): UpdateState;
+  /** Looks for a newer release now; installs it when updates are automatic. */
+  check(): Promise<UpdateState>;
+  setAutomatic(automatic: boolean): Promise<UpdateState>;
 };
 
 export type ServerRoutesOptions = {
@@ -100,8 +112,25 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
       version: options.version,
       owner: c.var.owner,
       assistants: await listAssistants(control),
+      ...(control.updates === undefined ? {} : { updates: control.updates.state() }),
     } satisfies ServerInfoResponse),
   );
+
+  const updates = () => {
+    if (control.updates === undefined)
+      throw new HttpError(
+        404,
+        "This server doesn't update itself: it wasn't started by nudge-server",
+      );
+    return control.updates;
+  };
+
+  app.post("/updates/check", async (c) => c.json(await updates().check()));
+
+  app.put("/updates", async (c) => {
+    const { automatic } = await readJson(c, SetUpdatesRequest);
+    return c.json(await updates().setAutomatic(automatic));
+  });
 
   app.delete("/session", (c) => {
     control.owners.revoke(c.var.clientId);

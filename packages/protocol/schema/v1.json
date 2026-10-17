@@ -6450,6 +6450,41 @@
         }
       }
     },
+    "UpdateState": {
+      "type": "object",
+      "required": [
+        "current",
+        "automatic"
+      ],
+      "properties": {
+        "current": {
+          "type": "string"
+        },
+        "automatic": {
+          "type": "boolean"
+        },
+        "available": {
+          "type": "string"
+        },
+        "checkedAt": {
+          "type": "number"
+        },
+        "error": {
+          "type": "string"
+        }
+      }
+    },
+    "SetUpdatesRequest": {
+      "type": "object",
+      "required": [
+        "automatic"
+      ],
+      "properties": {
+        "automatic": {
+          "type": "boolean"
+        }
+      }
+    },
     "ServerInfoResponse": {
       "type": "object",
       "required": [
@@ -6543,6 +6578,30 @@
               "running": {
                 "type": "boolean"
               }
+            }
+          }
+        },
+        "updates": {
+          "type": "object",
+          "required": [
+            "current",
+            "automatic"
+          ],
+          "properties": {
+            "current": {
+              "type": "string"
+            },
+            "automatic": {
+              "type": "boolean"
+            },
+            "available": {
+              "type": "string"
+            },
+            "checkedAt": {
+              "type": "number"
+            },
+            "error": {
+              "type": "string"
             }
           }
         }

@@ -86,6 +86,8 @@ const ServerSchema = Type.Object({
   publicUrl: Type.Optional(Type.String({ pattern: "^https?://" })),
   /** Behind a proxy that ends TLS, such as exe.dev's: believe its `X-Forwarded-*` headers. */
   trustProxy: Type.Optional(Type.Boolean()),
+  /** Whether the server installs new releases itself; default "auto". */
+  updates: Type.Optional(Type.Union([Type.Literal("auto"), Type.Literal("off")])),
 });
 
 export const NudgeConfigSchema = Type.Object({

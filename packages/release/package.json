@@ -1,0 +1,26 @@
+{
+  "name": "@nudge/release",
+  "version": "0.0.0",
+  "private": true,
+  "description": "What a Nudge server release holds: the CLI, the web UI and the extensions a server ships with.",
+  "type": "module",
+  "files": [],
+  "dependencies": {
+    "@nudge/cli": "workspace:*",
+    "@nudge/ext-calendar": "workspace:*",
+    "@nudge/ext-codemode": "workspace:*",
+    "@nudge/ext-connectors": "workspace:*",
+    "@nudge/ext-documents": "workspace:*",
+    "@nudge/ext-federation": "workspace:*",
+    "@nudge/ext-lists": "workspace:*",
+    "@nudge/ext-mail": "workspace:*",
+    "@nudge/ext-matrix": "workspace:*",
+    "@nudge/ext-mcp": "workspace:*",
+    "@nudge/ext-ner": "workspace:*",
+    "@nudge/ext-push": "workspace:*",
+    "@nudge/ext-search": "workspace:*",
+    "@nudge/ext-signal": "workspace:*",
+    "@nudge/ext-telegram": "workspace:*",
+    "@nudge/ext-watches": "workspace:*"
+  }
+}

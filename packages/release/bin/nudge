@@ -1,0 +1,5 @@
+#!/bin/sh
+# The `nudge` command of a release, for everything but running the server (nudge-server does
+# that): it runs with the release's own Node.
+here=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
+exec "$here/node/bin/node" "$here/app/node_modules/@nudge/cli/dist/main.js" "$@"

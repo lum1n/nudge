@@ -25,7 +25,23 @@ An extendable, multiplayer personal assistant that keeps personal data away from
 - `@nudge/ext-federation`: lets people from other assistants join, with their home vouching for them (`extensions/federation`).
 - `@nudge/ext-push`: notifications of answers and approvals, through Web Push, APNs and FCM (`extensions/push`).
 
+## Install a server
+
+On a Linux machine (a home server, a Pi, a VPS):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lum1n/nudge/main/packages/release/install.sh | sh
+```
+
+It installs the newest release with its own Node into `~/.local/share/nudge` (or `/var/lib/nudge` as root), starts it as a systemd service, and prints the setup link. With Docker, `docker compose up -d` with [`packages/release/compose.yaml`](packages/release/compose.yaml) runs `ghcr.io/lum1n/nudge:stable` with its data in a volume; `docker compose logs` shows the setup link.
+
+A server updates itself: once a day it looks for a newer release, installs one the project signed, and starts it. If the new one stops with an error before it has run for 30 seconds, `nudge-server` goes back to the one before and doesn't try it again. Owners see this at `GET /v1/server` and can turn it off (`PUT /v1/server/updates`).
+
+Releases are made by pushing a tag such as `v0.2.0` ([`.github/workflows/release.yml`](.github/workflows/release.yml)): an archive per architecture from [`packages/release/scripts/bundle.sh`](packages/release/scripts/bundle.sh), a `manifest.json` signed with the `NUDGE_RELEASE_KEY` secret, and the image. Make that key once with `node packages/release/scripts/keygen.mjs`, and put its public half in `RELEASE_KEYS` (`packages/core/src/server/updates.ts`); until then servers don't update themselves.
+
 ## Use
+
+From a checkout:
 
 ```bash
 pnpm install && pnpm build

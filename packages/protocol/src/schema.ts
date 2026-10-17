@@ -909,11 +909,29 @@ export const ServerSessionResponse = Type.Object({
 });
 export type ServerSessionResponse = Static<typeof ServerSessionResponse>;
 
+export const UpdateState = Type.Object({
+  /** The version running. */
+  current: Type.String(),
+  /** Whether the server installs new releases itself; false when an owner paused it. */
+  automatic: Type.Boolean(),
+  /** A newer release the project signed, not installed yet. */
+  available: Type.Optional(Type.String()),
+  checkedAt: Type.Optional(Type.Number()),
+  /** Why the last check failed. */
+  error: Type.Optional(Type.String()),
+});
+export type UpdateState = Static<typeof UpdateState>;
+
+export const SetUpdatesRequest = Type.Object({ automatic: Type.Boolean() });
+export type SetUpdatesRequest = Static<typeof SetUpdatesRequest>;
+
 export const ServerInfoResponse = Type.Object({
   version: Type.String(),
   /** The owner whose token asked. */
   owner: ServerOwner,
   assistants: Type.Array(ServerAssistant),
+  /** Absent for a server that can't update itself, such as one run from a checkout. */
+  updates: Type.Optional(UpdateState),
 });
 export type ServerInfoResponse = Static<typeof ServerInfoResponse>;
 
@@ -1095,6 +1113,8 @@ export const SCHEMAS = {
   AddOwnerRequest,
   ServerSessionRequest,
   ServerSessionResponse,
+  UpdateState,
+  SetUpdatesRequest,
   ServerInfoResponse,
   SetupProvider,
   SetupLocalServer,

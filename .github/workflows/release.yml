@@ -1,0 +1,82 @@
+# A Nudge server release (ADR 11), from a tag such as v0.2.0 (v0.3.0-beta.1 makes a pre-release,
+# which servers on the stable channel skip):
+#   - an archive per architecture, each built on its own machine (the SQLite module is native),
+#   - manifest.json, signed with the NUDGE_RELEASE_KEY secret, that servers update from,
+#   - the image ghcr.io/<owner>/nudge, tagged with the version and, for a release, stable.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  bundle:
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: x64
+            docker: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+            docker: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: pnpm install --frozen-lockfile
+      - run: packages/release/scripts/bundle.sh "${GITHUB_REF_NAME#v}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: dist/release/nudge-*-linux-${{ matrix.arch }}.tar.gz
+
+  publish:
+    needs: bundle
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Sign the manifest
+        env:
+          NUDGE_RELEASE_KEY: ${{ secrets.NUDGE_RELEASE_KEY }}
+        run: |
+          node packages/release/scripts/sign.mjs "${GITHUB_REF_NAME#v}" out \
+            "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
+      - name: Make the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          case "$GITHUB_REF_NAME" in *-*) pre=--prerelease ;; *) pre= ;; esac
+          gh release create "$GITHUB_REF_NAME" $pre --generate-notes out/*.tar.gz out/manifest.json
+      - name: Lay out the image's build context
+        run: |
+          mkdir image
+          cp out/nudge-*-linux-x64.tar.gz image/linux-amd64.tar.gz
+          cp out/nudge-*-linux-arm64.tar.gz image/linux-arm64.tar.gz
+          cp packages/release/Dockerfile image/
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Build and push the image
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER}/nudge"
+          version="${GITHUB_REF_NAME#v}"
+          tags="--tag $image:$version"
+          case "$version" in *-*) ;; *) tags="$tags --tag $image:stable" ;; esac
+          docker buildx build image --platform linux/amd64,linux/arm64 $tags --push

@@ -1,0 +1,12 @@
+# docker compose up -d, then: docker compose logs nudge, and open the setup link it printed
+# (with this machine's address instead of 127.0.0.1).
+services:
+  nudge:
+    image: ghcr.io/lum1n/nudge:stable
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    volumes:
+      - nudge:/data
+volumes:
+  nudge:

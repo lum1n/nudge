@@ -141,7 +141,7 @@ async function main(argv: string[]): Promise<number> {
       const port = Number(values.port);
       if (!Number.isInteger(port) || port < 0 || port > 65535)
         throw new UsageError(`--port ${values.port} is not a port`);
-      await serve({
+      return await serve({
         config,
         port,
         host: values.host,
@@ -149,7 +149,6 @@ async function main(argv: string[]): Promise<number> {
         publicUrl: values["public-url"],
         trustProxy: values["trust-proxy"],
       });
-      return 0;
     }
     case "invite":
       if (argument === undefined) throw new UsageError("invite needs a name: nudge invite <name>");

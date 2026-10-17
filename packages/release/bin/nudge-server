@@ -1,0 +1,59 @@
+#!/bin/sh
+# Runs the current Nudge release as a server, and keeps it running (ADR 11): the image's
+# entrypoint and the systemd unit's command. Arguments go to `nudge serve`.
+#
+# A release lives in $NUDGE_HOME/releases/<version>, and `current` points at the one to run. The
+# server updates itself: it unpacks a newer release, points `current` at it, writes `pending`
+# with the version it came from, and exits with 75; this starts the new one. A release that
+# stops with an error before it confirmed itself healthy (by removing `pending`) is rolled
+# back: `current` goes back, and the release is named in `failed` so it isn't tried again.
+set -u
+
+home=${NUDGE_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/nudge}
+releases=$home/releases
+here=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
+mkdir -p "$releases"
+
+# The release this script came with becomes the current one the first time, and again when it is
+# newer than the current one, as after pulling a newer image.
+if [ -f "$here/VERSION" ]; then
+  version=$(cat "$here/VERSION")
+  current=$(cat "$releases/current/VERSION" 2>/dev/null || true)
+  newest=$(printf '%s\n%s\n' "$version" "$current" | sort -V | tail -1)
+  if [ -z "$current" ] || { [ "$newest" = "$version" ] && [ "$version" != "$current" ]; }; then
+    if [ "$here" != "$releases/$version" ] && [ ! -d "$releases/$version" ]; then
+      cp -a "$here" "$releases/$version.tmp" && mv "$releases/$version.tmp" "$releases/$version"
+    fi
+    ln -sfn "$version" "$releases/current.tmp" && mv -T "$releases/current.tmp" "$releases/current"
+  fi
+fi
+
+export NUDGE_HOME="$home" NUDGE_RELEASES="$releases"
+child=
+stop() {
+  [ -n "$child" ] && kill -TERM "$child" 2>/dev/null && wait "$child"
+  exit 0
+}
+trap stop TERM INT
+
+while :; do
+  NUDGE_VERSION=$(cat "$releases/current/VERSION")
+  export NUDGE_VERSION
+  "$releases/current/node/bin/node" "$releases/current/app/node_modules/@nudge/cli/dist/main.js" \
+    serve "$@" &
+  child=$!
+  wait "$child"
+  code=$?
+  child=
+  [ "$code" -eq 75 ] && continue
+  if [ -f "$releases/pending" ]; then
+    previous=$(cat "$releases/pending")
+    failed=$(readlink "$releases/current")
+    echo "nudge-server: $failed stopped with $code before it was healthy; back to $previous" >&2
+    echo "$failed" >>"$releases/failed"
+    ln -sfn "$previous" "$releases/current.tmp" && mv -T "$releases/current.tmp" "$releases/current"
+    rm -f "$releases/pending"
+    continue
+  fi
+  exit "$code"
+done

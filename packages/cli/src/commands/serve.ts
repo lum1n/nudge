@@ -14,14 +14,23 @@ import {
   loadConfig,
   newSetupCode,
   openAssistant,
+  readRawConfig,
+  RESTART_EXIT_CODE,
   ServerKeys,
   serverKeysDir,
   ServerOwners,
   serverOwnersFile,
   SetupCodes,
   testProviderKey,
+  Updates,
+  writeRawConfig,
 } from "@nudge/core";
-import { type ServerControl, type SetupControl, serveNudge } from "@nudge/server";
+import {
+  type ServerControl,
+  type SetupControl,
+  serveNudge,
+  type UpdateControl,
+} from "@nudge/server";
 import { renderUnicodeCompact } from "uqr";
 import { UsageError } from "../errors.ts";
 import { keyPath, scheduleBackups } from "./backup.ts";
@@ -128,7 +137,7 @@ export function startupLines(
  * config it starts in setup mode (ADR 11): it prints a one-time code, and the wizard at `/setup`
  * sets the server up with it, after which the new assistant runs here without a restart.
  */
-export async function serve(options: ServeOptions): Promise<void> {
+export async function serve(options: ServeOptions): Promise<number> {
   const context = BACKGROUND_CONTEXT;
   const configPath = resolve(options.config);
   const say = (line: string) => console.log(line);
@@ -153,6 +162,23 @@ export async function serve(options: ServeOptions): Promise<void> {
   const testKey = (provider: string, key: string) =>
     testProviderKey(provider, key, config?.providers ?? []);
   const theBackupKey = () => backupKey(keyPath(configPath, config ?? { assistants: [] }), true);
+  // Set when the server should stop and start again, as after installing a new release.
+  let restart = () => {};
+  let restarting = false;
+  const updates = selfUpdates(
+    () => config?.server?.updates !== "off",
+    async (automatic) => {
+      const raw = await readRawConfig(configPath);
+      raw.server = { ...(raw.server as object | undefined), updates: automatic ? "auto" : "off" };
+      await writeRawConfig(configPath, raw);
+      config = await loadConfig(configPath);
+    },
+    () => {
+      restarting = true;
+      restart();
+    },
+    say,
+  );
   try {
     const web = await webRoot(options.web);
     const control: ServerControl = {
@@ -172,6 +198,7 @@ export async function serve(options: ServeOptions): Promise<void> {
       },
       testKey,
       backupKey: theBackupKey,
+      ...(updates === undefined ? {} : { updates: updates.control }),
     };
     // A server made from the app gets its code, and how long it waits, in the environment.
     const code = process.env.NUDGE_SETUP_CODE || newSetupCode();
@@ -204,6 +231,7 @@ export async function serve(options: ServeOptions): Promise<void> {
           };
     const server = await serveNudge({
       assistants: assistants.running,
+      version: process.env.NUDGE_VERSION ?? "0.0.0",
       port: options.port,
       hostname: options.host,
       web,
@@ -222,17 +250,89 @@ export async function serve(options: ServeOptions): Promise<void> {
         : setupLines(server.url, options.host, code, web);
     for (const line of lines) console.log(line);
     const stopReloading = reloadOnHangup(assistants, say);
+    const stopUpdates = updates?.start() ?? (() => {});
     await new Promise<void>((resolve) => {
+      restart = resolve;
       process.once("SIGINT", resolve);
       process.once("SIGTERM", resolve);
     });
     stopReloading();
+    stopUpdates();
     stopBackups();
-    console.log("Stopping…");
+    console.log(restarting ? "Restarting into the new release…" : "Stopping…");
     await server.close();
   } finally {
     await assistants.close();
   }
+  return restarting ? RESTART_EXIT_CODE : 0;
+}
+
+/**
+ * Self-update (ADR 11) when `nudge-server` started this server, which says so with
+ * `NUDGE_RELEASES` and `NUDGE_VERSION`: a check 10 minutes after starting (or
+ * `NUDGE_UPDATE_DELAY` seconds) and every day after, installing what it finds while `automatic`
+ * says so. After 30 s of running, this release confirms itself, so a rollback no longer happens.
+ */
+function selfUpdates(
+  automatic: () => boolean,
+  setAutomatic: (automatic: boolean) => Promise<void>,
+  restart: () => void,
+  say: (line: string) => void,
+): { control: UpdateControl; start(): () => void } | undefined {
+  const releasesDir = process.env.NUDGE_RELEASES;
+  const current = process.env.NUDGE_VERSION;
+  if (releasesDir === undefined || current === undefined) return undefined;
+  const updates = new Updates({
+    releasesDir,
+    current,
+    platform: `linux-${process.arch}`,
+    ...(process.env.NUDGE_UPDATES_URL ? { manifestUrl: process.env.NUDGE_UPDATES_URL } : {}),
+    // Another signer's releases, such as a fork's or a test's; anyone who sets this runs the server.
+    ...(process.env.NUDGE_RELEASE_KEYS ? { keys: process.env.NUDGE_RELEASE_KEYS.split(",") } : {}),
+  });
+  let installing = false;
+  const check = async () => {
+    const release = await updates.check();
+    if (release !== undefined && automatic() && !installing) {
+      installing = true;
+      try {
+        say(`Installing Nudge ${release.version}…`);
+        await updates.install(release);
+        restart();
+      } catch (error) {
+        say(`Could not install ${release.version}: ${(error as Error).message}`);
+        installing = false;
+      }
+    }
+    return updates.state(automatic());
+  };
+  return {
+    control: {
+      state: () => updates.state(automatic()),
+      check,
+      setAutomatic: async (on) => {
+        await setAutomatic(on);
+        return updates.state(automatic());
+      },
+    },
+    start: () => {
+      const delay = Number(process.env.NUDGE_UPDATE_DELAY ?? 600) * 1000;
+      const confirm = setTimeout(
+        () => void updates.confirm().catch((error: Error) => say(error.message)),
+        30_000,
+      );
+      let daily: ReturnType<typeof setInterval> | undefined;
+      const first = setTimeout(() => {
+        void check();
+        daily = setInterval(() => void check(), 24 * 60 * 60_000);
+      }, delay);
+      return () => {
+        clearTimeout(confirm);
+        clearTimeout(first);
+        clearInterval(daily);
+      };
+    },
+  };
 }
 
 async function webRoot(option: string | undefined): Promise<string | undefined> {
