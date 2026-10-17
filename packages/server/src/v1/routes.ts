@@ -15,6 +15,8 @@ export type V1Options = {
   readonly report: (error: unknown) => void;
   /** The server's address as clients reach it, for pairing links; default each request's origin. */
   readonly publicUrl?: string;
+  /** Whether to believe a proxy's `X-Forwarded-*` about the request's origin. */
+  readonly trustProxy?: boolean;
   /** Setting up extensions from the web UI; none without. */
   readonly extensionSettings?: ExtensionSettings;
   /** Defaults: 25 s heartbeat, 50 ms between patches, 10 s for the hello. */
@@ -101,6 +103,7 @@ export function v1Routes(options: V1Options): Hono {
       assistants: options.assistants,
       hubsOf,
       publicUrl: options.publicUrl,
+      trustProxy: options.trustProxy,
       extensionSettings: options.extensionSettings,
     }),
   );

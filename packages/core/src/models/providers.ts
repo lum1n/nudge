@@ -1,5 +1,6 @@
 import {
   type ApiKeyAuth,
+  type CredentialStore,
   createProvider,
   envApiKeyAuth,
   type Model,
@@ -12,11 +13,15 @@ import type { LocalProviderConfig } from "../config.ts";
 
 /**
  * Every provider pi-ai knows (Anthropic, OpenAI, xAI, Google, OpenRouter, …; each reads its own key
- * from the environment, such as `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`), plus the configured
- * OpenAI-compatible servers, which replace a built-in provider with the same id.
+ * from the environment, such as `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`, or from `credentials`,
+ * such as the keys set on the server), plus the configured OpenAI-compatible servers, which
+ * replace a built-in provider with the same id.
  */
-export function buildModels(providers: readonly LocalProviderConfig[] = []): MutableModels {
-  const models = createModels();
+export function buildModels(
+  providers: readonly LocalProviderConfig[] = [],
+  credentials?: CredentialStore,
+): MutableModels {
+  const models = createModels(credentials === undefined ? {} : { credentials });
   for (const provider of builtinProviders()) models.setProvider(provider);
   for (const provider of providers) models.setProvider(localProvider(provider));
   return models;

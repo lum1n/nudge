@@ -84,6 +84,8 @@ export type RestOptions = {
   readonly hubsOf: (nudge: Nudge) => Hubs;
   /** The server's address as clients reach it, for pairing links; default the request's origin. */
   readonly publicUrl?: string;
+  /** Whether the request's origin is the one a proxy in front says (`X-Forwarded-*`). */
+  readonly trustProxy?: boolean;
   /** Setting up extensions from a client; the admin's settings routes answer 404 without. */
   readonly extensionSettings?: ExtensionSettings;
 };
@@ -676,7 +678,7 @@ export function restRoutes(options: RestOptions): Hono {
     if ((await c.var.nudge.players.get(body.playerId, context)) === undefined)
       throw new HttpError(404, `No player "${body.playerId}"`);
     const { code, expiresAt } = await c.var.nudge.players.pairingCode(body.playerId, context);
-    const server = options.publicUrl ?? new URL(c.req.url).origin;
+    const server = options.publicUrl ?? requestOrigin(c.req.raw, options.trustProxy === true);
     return c.json(
       {
         code,
@@ -787,4 +789,19 @@ async function readBody<S extends TSchema>(c: HonoContext<Env>, schema: S): Prom
     400,
     first === undefined ? "Bad body" : `${first.instancePath || "body"} ${first.message}`,
   );
+}
+
+/**
+ * Where the client reached the server: the request's own origin, or behind a proxy that ends TLS,
+ * such as exe.dev's, the one its `X-Forwarded-Proto` and `X-Forwarded-Host` name. Only trusted when
+ * the server is told to, since anyone can send those headers to a server reached directly.
+ */
+export function requestOrigin(request: Request, trustProxy: boolean): string {
+  const own = new URL(request.url);
+  if (!trustProxy) return own.origin;
+  const first = (name: string) => request.headers.get(name)?.split(",")[0]?.trim() || undefined;
+  const proto = first("x-forwarded-proto");
+  const host = first("x-forwarded-host");
+  const protocol = proto === "https" || proto === "http" ? proto : own.protocol.slice(0, -1);
+  return `${protocol}://${host ?? own.host}`;
 }

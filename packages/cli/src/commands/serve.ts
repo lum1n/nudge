@@ -3,7 +3,14 @@ import { createRequire } from "node:module";
 import { networkInterfaces } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { Assistants, buildModels, loadConfig, openAssistant } from "@nudge/core";
+import {
+  Assistants,
+  buildModels,
+  loadConfig,
+  openAssistant,
+  ServerKeys,
+  serverKeysDir,
+} from "@nudge/core";
 import { serveNudge } from "@nudge/server";
 import { UsageError } from "../errors.ts";
 import { scheduleBackups } from "./backup.ts";
@@ -17,6 +24,8 @@ export type ServeOptions = {
   readonly web?: string;
   /** The address apps reach the server at, for pairing links; default each request's. */
   readonly publicUrl?: string;
+  /** Behind a proxy that ends TLS, such as exe.dev's: believe its `X-Forwarded-*` headers. */
+  readonly trustProxy?: boolean;
 };
 
 /**
@@ -60,12 +69,15 @@ export function startupLines(
 export async function serve(options: ServeOptions): Promise<void> {
   const context = BACKGROUND_CONTEXT;
   const config = await loadConfig(options.config);
-  const models = buildModels(config.providers);
+  const keys = new ServerKeys(serverKeysDir(options.config));
   const say = (line: string) => console.log(line);
   const assistants = await Assistants.open({
     configPath: options.config,
     open: (config, assistant) =>
-      openAssistant(config, assistant, context, { ...hostOptions(assistant), models }),
+      openAssistant(config, assistant, context, {
+        ...hostOptions(assistant),
+        models: buildModels(config.providers, keys.credentialsFor(assistant.name)),
+      }),
     context,
     say,
   });
@@ -77,6 +89,7 @@ export async function serve(options: ServeOptions): Promise<void> {
       hostname: options.host,
       web,
       publicUrl: options.publicUrl,
+      trustProxy: options.trustProxy,
       extensionSettings: {
         list: (assistant) => assistants.extensionSetups(assistant),
         save: (assistant, extensions) => assistants.saveExtensionSetups(assistant, extensions),

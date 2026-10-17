@@ -21,6 +21,8 @@ export type AppOptions = {
   readonly timing?: V1Options["timing"];
   /** The server's address as clients reach it, for pairing links; default each request's origin. */
   readonly publicUrl?: string;
+  /** Whether to believe a proxy's `X-Forwarded-*` about the request's origin, as behind exe.dev's. */
+  readonly trustProxy?: boolean;
   /** Setting up extensions from the web UI, such as in the config file; none without. */
   readonly extensionSettings?: V1Options["extensionSettings"];
 };
@@ -46,6 +48,7 @@ export function createApp(options: AppOptions): Hono {
       report,
       timing: options.timing,
       publicUrl: options.publicUrl,
+      trustProxy: options.trustProxy,
       extensionSettings: options.extensionSettings,
     }),
   );

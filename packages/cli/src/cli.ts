@@ -78,6 +78,8 @@ Options:
                            "none" to serve only the API)
       --public-url <url>   serve: the address apps reach the server at, for pairing
                            links (default: each request's)
+      --trust-proxy        serve: behind a proxy that ends TLS, such as exe.dev's, take
+                           the address from its X-Forwarded-* headers (NUDGE_TRUST_PROXY=1)
       --remove             admin: take the flag away
       --to <dir>           backup, restore: where to
       --force              restore: overwrite files that are there
@@ -99,6 +101,7 @@ async function main(argv: string[]): Promise<number> {
       host: { type: "string", default: "127.0.0.1" },
       web: { type: "string" },
       "public-url": { type: "string" },
+      "trust-proxy": { type: "boolean", default: process.env.NUDGE_TRUST_PROXY === "1" },
       ping: { type: "boolean", default: false },
       privacy: { type: "boolean", default: false },
       remove: { type: "boolean", default: false },
@@ -133,6 +136,7 @@ async function main(argv: string[]): Promise<number> {
         host: values.host,
         web: values.web,
         publicUrl: values["public-url"],
+        trustProxy: values["trust-proxy"],
       });
       return 0;
     }

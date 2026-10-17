@@ -34,7 +34,12 @@ import { RoomProjector, TIMELINE_LIMIT } from "@nudge/protocol/project";
 import type { TSchema } from "typebox";
 import { Value } from "typebox/value";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { type ExtensionSettings, type RunningServer, serveNudge } from "../src/index.ts";
+import {
+  type ExtensionSettings,
+  requestOrigin,
+  type RunningServer,
+  serveNudge,
+} from "../src/index.ts";
 
 const context = BACKGROUND_CONTEXT;
 
@@ -698,3 +703,29 @@ async function eventually(check: () => boolean, ms = 5000): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
+
+describe("requestOrigin", () => {
+  const request = (headers: Record<string, string>) =>
+    new Request("http://127.0.0.1:8787/v1/a/robin/admin/pairing-codes", { headers });
+
+  it("is the request's own unless the proxy is trusted", () => {
+    const behind = request({
+      "x-forwarded-proto": "https",
+      "x-forwarded-host": "robin.exe.xyz",
+    });
+    expect(requestOrigin(behind, false)).toBe("http://127.0.0.1:8787");
+    expect(requestOrigin(behind, true)).toBe("https://robin.exe.xyz");
+  });
+
+  it("takes the first of a chain of proxies, and falls back to the request's own", () => {
+    expect(
+      requestOrigin(
+        request({ "x-forwarded-proto": "https, http", "x-forwarded-host": "a.example, b" }),
+        true,
+      ),
+    ).toBe("https://a.example");
+    expect(requestOrigin(request({ "x-forwarded-proto": "gopher" }), true)).toBe(
+      "http://127.0.0.1:8787",
+    );
+  });
+});

@@ -1,6 +1,7 @@
 import { constants } from "node:fs";
 import { access, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
+import type { Models } from "@earendil-works/pi-ai";
 import {
   buildModels,
   builtinDetectors,
@@ -8,7 +9,10 @@ import {
   databaseEncryption,
   databaseKey,
   DEFAULT_MODEL,
+  keyFile,
   loadConfig,
+  ServerKeys,
+  serverKeysDir,
   Vault,
 } from "@nudge/core";
 
@@ -55,8 +59,8 @@ export async function doctor(options: DoctorOptions): Promise<boolean> {
     return false;
   }
 
-  const models = buildModels(config.providers);
-  const ping = async (label: string, provider: string, modelId: string) => {
+  const keys = new ServerKeys(serverKeysDir(options.config));
+  const ping = async (models: Models, label: string, provider: string, modelId: string) => {
     const model = models.getModel(provider, modelId);
     if (model === undefined) return;
     const answer = await models.completeSimple(model, {
@@ -66,6 +70,8 @@ export async function doctor(options: DoctorOptions): Promise<boolean> {
     check(!failed, `${label}: ping ${failed ? (answer.errorMessage ?? "failed") : "answered"}`);
   };
   for (const assistant of config.assistants) {
+    // With the keys set on the server for this assistant, as `nudge serve` builds them.
+    const models = buildModels(config.providers, keys.credentialsFor(assistant.name));
     const ref = assistant.model ?? DEFAULT_MODEL;
     const label = `${assistant.name}: ${ref.provider}/${ref.modelId}`;
     const database = assistant.database ?? "";
@@ -88,8 +94,11 @@ export async function doctor(options: DoctorOptions): Promise<boolean> {
             ? `${assistant.name}: not encrypted ("nudge db encrypt" to encrypt it)`
             : `${assistant.name}: not encrypted, but ${key.source} is set`,
         );
-      else if (key !== undefined)
-        check(true, `${assistant.name}: will be created encrypted (key ${key.source})`);
+      else
+        check(
+          true,
+          `${assistant.name}: will be created encrypted (key ${key?.source ?? keyFile(database)})`,
+        );
     } catch (error) {
       check(false, `${assistant.name}: encryption: ${(error as Error).message}`);
     }
@@ -108,7 +117,8 @@ export async function doctor(options: DoctorOptions): Promise<boolean> {
             // Such as the browser extension's own model, which may be another provider's.
             const auth = await models.checkAuth(used.provider).catch(() => undefined);
             check(auth !== undefined, `${what}: credentials ${auth?.source ?? "missing"}`);
-            if (options.ping && auth !== undefined) await ping(what, used.provider, used.modelId);
+            if (options.ping && auth !== undefined)
+              await ping(models, what, used.provider, used.modelId);
           }
       } catch (error) {
         check(false, `${assistant.name}: extensions: ${(error as Error).message}`);
@@ -121,7 +131,7 @@ export async function doctor(options: DoctorOptions): Promise<boolean> {
     }
     const auth = await models.checkAuth(ref.provider).catch(() => undefined);
     check(auth !== undefined, `${label}: credentials ${auth?.source ?? "missing"}`);
-    if (options.ping && auth !== undefined) await ping(label, ref.provider, ref.modelId);
+    if (options.ping && auth !== undefined) await ping(models, label, ref.provider, ref.modelId);
   }
   return ok;
 }

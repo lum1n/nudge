@@ -18,6 +18,7 @@ import {
   type Nudge,
   pruneBackups,
   restoreBackup,
+  ServerKeys,
 } from "../src/index.ts";
 
 const context = BACKGROUND_CONTEXT;
@@ -62,6 +63,7 @@ describe("backups", () => {
       join(dir, "home", "data", "robin.sqlite.extensions", "lists", "note"),
       "extension data",
     );
+    new ServerKeys(join(dir, "home", "server", "keys"), () => []).set("anthropic", "sk-ant-x");
   };
 
   it("backs up a running assistant, unreadable without the key, and restores it whole", async () => {
@@ -82,7 +84,7 @@ describe("backups", () => {
     await nudge.close(context);
     expect(file).toMatch(/nudge-\d{8}T\d{6}Z\.nudgebackup$/);
     const raw = await readFile(file);
-    for (const secret of ["Ingrid", "flowerpot", "extension data", "robin.sqlite"])
+    for (const secret of ["Ingrid", "flowerpot", "extension data", "robin.sqlite", "sk-ant"])
       expect(raw.includes(Buffer.from(secret))).toBe(false);
 
     const restored = join(dir, "restored");
@@ -92,6 +94,8 @@ describe("backups", () => {
       "data/robin.sqlite",
       "data/robin.sqlite.extensions/lists/note",
       "nudge.json",
+      "server/keys/key",
+      "server/keys/secrets.enc",
     ]);
     expect(await readFile(join(restored, "data/robin.sqlite.extensions/lists/note"), "utf8")).toBe(
       "extension data",

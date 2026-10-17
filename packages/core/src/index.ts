@@ -57,6 +57,7 @@ export {
   type AssistantsOptions,
 } from "./server/assistants.ts";
 export { defaultConfigPath, serverHome } from "./server/home.ts";
+export { type KeySource, ServerKeys, serverKeysDir } from "./server/keys.ts";
 export {
   BACKUP_SUFFIX,
   BackupError,

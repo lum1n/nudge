@@ -1,4 +1,4 @@
 export { type AppOptions, createApp } from "./app.ts";
 export { type RunningServer, type ServeOptions, serveNudge } from "./serve.ts";
 export { type Hub, type HubListener, Hubs, type Lease, type RoomHub } from "./v1/hub.ts";
-export { type ExtensionSettings, pairingLink } from "./v1/rest.ts";
+export { type ExtensionSettings, pairingLink, requestOrigin } from "./v1/rest.ts";

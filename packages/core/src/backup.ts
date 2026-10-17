@@ -48,7 +48,8 @@ export async function backupKey(file: string, create = false): Promise<Buffer> {
 
 /**
  * What a backup of `config` holds, as absolute paths: every assistant's database (copied
- * consistently, encrypted ones staying so), its key file, its extensions' data, and the config file.
+ * consistently, encrypted ones staying so), its key file, its extensions' data, the config file,
+ * and the server's own files under `server/` beside it.
  */
 async function collect(
   configPath: string,
@@ -60,6 +61,8 @@ async function collect(
       found.push({ source, database });
   };
   if (existsSync(configPath)) await add(resolve(configPath));
+  // The server's own: the model keys set on it (ADR 11).
+  for (const file of await walk(join(dirname(resolve(configPath)), "server"))) await add(file);
   for (const assistant of config.assistants) {
     const database = assistant.database;
     if (database === undefined || database === ":memory:") continue;
