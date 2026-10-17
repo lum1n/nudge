@@ -139,8 +139,9 @@ describe("v1 stream", () => {
       ),
       async () => {
         await firstTurnHeld;
+        // Long enough to stream over several flushes even when the machine is busy.
         return fauxAssistantMessage(
-          "Noted: Ann likes tea, and I will remember it for a good long while.",
+          "Noted: Ann likes tea, and I will remember it for a good long while. ".repeat(3).trim(),
         );
       },
       fauxAssistantMessage("And Bo likes coffee."),
