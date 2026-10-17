@@ -55,6 +55,7 @@ export async function checkExtensions(
   { name: string; version?: string; models: readonly { provider: string; modelId: string }[] }[]
 > {
   const host = {
+    name: "check",
     displayName: "Nudge",
     timeZone: "UTC",
     now: Date.now,
@@ -65,6 +66,8 @@ export async function checkExtensions(
     assistant: () => {
       throw new Error("No assistant is open while checking");
     },
+    // Nothing opens while checking.
+    whenOpen: () => new Promise<never>(() => {}),
   };
   const checked: Awaited<ReturnType<typeof checkExtensions>> = [];
   for (const input of await loadExtensions(entries)) {

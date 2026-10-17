@@ -71,6 +71,8 @@ export type NudgeOptions = {
   readonly models: Models;
   /** Model the assistant runs with. */
   readonly model: ModelRef;
+  /** The assistant's name in URLs (`/v1/a/<name>`), as the config has it. Default "nudge". */
+  readonly name?: string;
   /** What the assistant calls itself. Default "Nudge". */
   readonly displayName?: string;
   /** IANA time zone. Default: the host's. */
@@ -224,6 +226,8 @@ export class Nudge {
     const timeZone = options.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
     const registry = createRegistry();
     let opened: Nudge | undefined;
+    let resolveOpen: (nudge: Nudge) => void = () => {};
+    const open = new Promise<Nudge>((resolve) => (resolveOpen = resolve));
     const whenOpen = () => {
       if (opened === undefined) throw new Error("The assistant is not open yet");
       return opened;
@@ -249,12 +253,14 @@ export class Nudge {
       ),
     );
     const host: Parts["host"] = {
+      name: options.name ?? "nudge",
       displayName,
       timeZone,
       now,
       protect: (value, kind) => whenOpen().protect(value, kind),
       documents: () => whenOpen().harness,
       assistant: whenOpen,
+      whenOpen: () => open,
       ...(options.database === ":memory:" ? {} : { dataRoot: `${options.database}.extensions` }),
     };
     if (options.database !== ":memory:")
@@ -361,6 +367,7 @@ export class Nudge {
       await nudge.selectExtensions(context);
       await nudge.nudges.reconcile(context);
       opened = nudge;
+      resolveOpen(nudge);
       // Pending nudge timers rearm here; those whose time passed while the host was down fire now.
       harness.resume();
       await nudge.approvals.recover(context);

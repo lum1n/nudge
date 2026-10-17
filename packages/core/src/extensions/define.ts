@@ -25,6 +25,8 @@ export type ExtensionHost<Settings, PlayerSettings = undefined> = {
     playerId: string,
     context: Context,
   ) => Promise<PlayerSettings | undefined>;
+  /** The assistant's name in URLs: `/v1/a/<name>`. */
+  readonly name: string;
   /** What the assistant calls itself. */
   readonly displayName: string;
   readonly timeZone: string;
@@ -46,6 +48,11 @@ export type ExtensionHost<Settings, PlayerSettings = undefined> = {
    * job. Throws until the assistant is open.
    */
   readonly assistant: () => Nudge;
+  /**
+   * The assistant once it is open, such as to listen to its `changes`; at once for an extension
+   * a reload sets up. Never settles when the assistant fails to open.
+   */
+  readonly whenOpen: () => Promise<Nudge>;
 };
 
 /** Reading, watching and changing the assistant's documents. */

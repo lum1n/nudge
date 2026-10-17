@@ -245,6 +245,7 @@ async function assistantOptions(
   overrides: Partial<NudgeOptions> & { models?: Models },
 ): Promise<NudgeOptions> {
   return {
+    name: assistant.name,
     database: assistant.database ?? ":memory:",
     models: overrides.models ?? buildModels(config.providers),
     model: assistant.model ?? DEFAULT_MODEL,
