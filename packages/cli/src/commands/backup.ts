@@ -11,7 +11,7 @@ import {
 import { UsageError } from "../errors.ts";
 
 /** Where the backup key lives unless NUDGE_BACKUP_KEY is set. */
-function keyPath(configPath: string, config: NudgeConfig): string {
+export function keyPath(configPath: string, config: NudgeConfig): string {
   return config.backup?.keyFile ?? join(dirname(resolve(configPath)), "nudge-backup.key");
 }
 

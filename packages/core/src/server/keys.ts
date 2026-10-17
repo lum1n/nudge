@@ -1,6 +1,8 @@
 import { dirname, join, resolve } from "node:path";
 import type { Credential, CredentialInfo, CredentialStore } from "@earendil-works/pi-ai";
 import { findEnvKeys } from "@earendil-works/pi-ai/compat";
+import type { LocalProviderConfig } from "../config.ts";
+import { buildModels } from "../models/providers.ts";
 import { SecretStore } from "../secrets.ts";
 
 /** Where a server keeps the model keys set on it: `server/keys` beside its config. */
@@ -104,4 +106,33 @@ export class ServerKeys {
       delete: async (provider) => void this.delete(provider, assistant),
     };
   }
+}
+
+/**
+ * Sends one tiny request to `provider` with `key`, through its cheapest model, and throws with the
+ * provider's answer when that fails: a wrong key is refused before it is kept.
+ */
+export async function testProviderKey(
+  provider: string,
+  key: string,
+  providers: readonly LocalProviderConfig[] = [],
+): Promise<void> {
+  const only: CredentialStore = {
+    read: async (id) => (id === provider ? { type: "api_key", key } : undefined),
+    list: async () => [{ providerId: provider, type: "api_key" }],
+    modify: async () => ({ type: "api_key", key }),
+    delete: async () => {},
+  };
+  const models = buildModels(providers, only);
+  const cheapest = [...models.getModels(provider)].sort(
+    (a, b) => a.cost.input + a.cost.output - (b.cost.input + b.cost.output),
+  )[0];
+  if (cheapest === undefined) throw new Error(`No models from "${provider}"`);
+  const answer = await models.completeSimple(
+    cheapest,
+    { messages: [{ role: "user", content: "Reply with the word pong.", timestamp: Date.now() }] },
+    { maxTokens: 16 },
+  );
+  if (answer.stopReason === "error" || answer.stopReason === "aborted")
+    throw new Error(answer.errorMessage ?? `${provider} refused the key`);
 }

@@ -19,6 +19,7 @@ import { connector } from "./commands/connector.ts";
 import { db } from "./commands/db.ts";
 import { doctor } from "./commands/doctor.ts";
 import { init } from "./commands/init.ts";
+import { owner } from "./commands/owner.ts";
 import { serve } from "./commands/serve.ts";
 import { UsageError } from "./errors.ts";
 
@@ -54,7 +55,11 @@ Commands:
   backup             Make an encrypted backup of every assistant now, into --to <dir> or
                      the config's backup.dir; works while "nudge serve" runs
   restore <file>     Unpack a backup into --to <dir> (--force overwrites files there)
-  reload             Reinstall extensions from the config in the running assistant
+  owner [list|add <player>|remove <id>|token <player>]
+                     The server's owners, who create, change and delete assistants and
+                     set model keys over /v1/server; token prints one for an owner
+  reload             Read the config again in the running server: new assistants open,
+                     removed ones close, changed ones reopen, extensions reinstall
   doctor             Check Node, config, storage and model credentials;
                      --ping sends one request, --privacy tests redaction
 
@@ -219,6 +224,9 @@ async function main(argv: string[]): Promise<number> {
       )
         throw new UsageError("Usage: nudge db [encrypt|decrypt|redact]");
       await db({ ...admin, verb: argument });
+      return 0;
+    case "owner":
+      await owner({ ...admin, verb: argument, id: rest[0] });
       return 0;
     case "reload":
       return (await reload(admin)) ? 0 : 1;

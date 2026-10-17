@@ -7,6 +7,7 @@ import { Connection, type ConnectionOptions } from "./connection.ts";
 import { ExtensionSocket } from "./extension-socket.ts";
 import { Hubs } from "./hub.ts";
 import { type ExtensionSettings, restRoutes } from "./rest.ts";
+import { type ServerControl, serverRoutes } from "./server.ts";
 
 export type V1Options = {
   readonly assistants: ReadonlyMap<string, Nudge>;
@@ -19,6 +20,8 @@ export type V1Options = {
   readonly trustProxy?: boolean;
   /** Setting up extensions from the web UI; none without. */
   readonly extensionSettings?: ExtensionSettings;
+  /** The server's own API for its owners, at `/v1/server` (ADR 11); absent, it answers 404. */
+  readonly server?: ServerControl;
   /** Defaults: 25 s heartbeat, 50 ms between patches, 10 s for the hello. */
   readonly timing?: Partial<Pick<ConnectionOptions, "heartbeatMs" | "flushMs" | "helloTimeoutMs">>;
 };
@@ -96,6 +99,17 @@ export function v1Routes(options: V1Options): Hono {
       };
     }),
   );
+
+  if (options.server !== undefined)
+    app.route(
+      "/server",
+      serverRoutes({
+        control: options.server,
+        version: options.version,
+        publicUrl: options.publicUrl,
+        trustProxy: options.trustProxy,
+      }),
+    );
 
   app.route(
     "/",

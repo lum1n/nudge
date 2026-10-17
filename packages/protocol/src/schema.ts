@@ -789,6 +789,134 @@ export const CLOSE = {
   goingAway: 1001,
 } as const;
 
+// The server's own API, under `/v1/server` (ADR 11): for its owners, not an assistant's admins.
+
+export const ModelChoice = Type.Object({ provider: Type.String(), modelId: Type.String() });
+export type ModelChoice = Static<typeof ModelChoice>;
+
+export const AssistantBudget = Type.Object({
+  monthlyUsd: Type.Optional(Type.Number({ exclusiveMinimum: 0 })),
+  perPlayerUsd: Type.Optional(Type.Number({ exclusiveMinimum: 0 })),
+  warnAt: Type.Optional(Type.Number({ exclusiveMinimum: 0, maximum: 1 })),
+});
+export type AssistantBudget = Static<typeof AssistantBudget>;
+
+/** One of the server's assistants, with its settings. */
+export const ServerAssistant = Type.Object({
+  /** In its URLs and its people's addresses; it never changes. */
+  name: Type.String(),
+  displayName: Type.String(),
+  model: ModelChoice,
+  timeZone: Type.Optional(Type.String()),
+  instructions: Type.Optional(Type.String()),
+  budget: Type.Optional(AssistantBudget),
+  /** False when it is in the config but failed to open. */
+  running: Type.Boolean(),
+});
+export type ServerAssistant = Static<typeof ServerAssistant>;
+
+export const ServerAssistantsResponse = Type.Object({ assistants: Type.Array(ServerAssistant) });
+export type ServerAssistantsResponse = Static<typeof ServerAssistantsResponse>;
+
+export const CreateAssistantRequest = Type.Object({
+  name: Type.String({ pattern: "^[a-z0-9][a-z0-9-]*$", maxLength: 40 }),
+  displayName: Type.Optional(Type.String({ minLength: 1 })),
+  model: Type.Optional(ModelChoice),
+  timeZone: Type.Optional(Type.String()),
+  instructions: Type.Optional(Type.String()),
+  budget: Type.Optional(AssistantBudget),
+  /** Someone whose home it is to be: made its first player, so its admin, with a pairing code. */
+  firstPlayer: Type.Optional(Type.Object({ displayName: Type.String({ minLength: 1 }) })),
+});
+export type CreateAssistantRequest = Static<typeof CreateAssistantRequest>;
+
+export const CreateAssistantResponse = Type.Object({
+  assistant: ServerAssistant,
+  /** For `firstPlayer`: the code they pair their app with. */
+  pairing: Type.Optional(
+    Type.Intersect([PairingCodeResponse, Type.Object({ playerId: Type.String() })]),
+  ),
+});
+export type CreateAssistantResponse = Static<typeof CreateAssistantResponse>;
+
+/** A value sets the setting, `null` goes back to the default; absent leaves it. */
+export const UpdateAssistantRequest = Type.Object({
+  displayName: Type.Optional(Type.Union([Type.String({ minLength: 1 }), Type.Null()])),
+  model: Type.Optional(Type.Union([ModelChoice, Type.Null()])),
+  timeZone: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  instructions: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  budget: Type.Optional(Type.Union([AssistantBudget, Type.Null()])),
+});
+export type UpdateAssistantRequest = Static<typeof UpdateAssistantRequest>;
+
+export const DeleteAssistantResponse = Type.Object({
+  /** The backup made before it went, in the server's `server/deleted`. */
+  backup: Type.String(),
+});
+export type DeleteAssistantResponse = Static<typeof DeleteAssistantResponse>;
+
+/** Where an assistant's key for a model provider comes from; the key itself is never shown. */
+export const ProviderKey = Type.Object({
+  provider: Type.String(),
+  /** `env`: the server's environment, which wins; `none`: no key. */
+  source: Type.Union([
+    Type.Literal("env"),
+    Type.Literal("server"),
+    Type.Literal("assistant"),
+    Type.Literal("none"),
+  ]),
+  /** For `env`: which variables. */
+  variables: Type.Optional(Type.Array(Type.String())),
+});
+export type ProviderKey = Static<typeof ProviderKey>;
+
+export const ProviderKeysResponse = Type.Object({ keys: Type.Array(ProviderKey) });
+export type ProviderKeysResponse = Static<typeof ProviderKeysResponse>;
+
+export const SetProviderKeyRequest = Type.Object({
+  key: Type.String({ minLength: 1 }),
+  /** For one assistant only; default every assistant on the server. */
+  assistant: Type.Optional(Type.String()),
+  /** Send one tiny request with it first, and refuse it if that fails; default true. */
+  test: Type.Optional(Type.Boolean()),
+});
+export type SetProviderKeyRequest = Static<typeof SetProviderKeyRequest>;
+
+export const ServerOwner = Type.Object({
+  id: Type.String(),
+  /** The assistant they are a player of, and their id there. */
+  assistant: Type.String(),
+  playerId: Type.String(),
+  addedAt: Type.Number(),
+});
+export type ServerOwner = Static<typeof ServerOwner>;
+
+export const ServerOwnersResponse = Type.Object({ owners: Type.Array(ServerOwner) });
+export type ServerOwnersResponse = Static<typeof ServerOwnersResponse>;
+
+export const AddOwnerRequest = Type.Object({ assistant: Type.String(), playerId: Type.String() });
+export type AddOwnerRequest = Static<typeof AddOwnerRequest>;
+
+/** Sent with the player's token of `assistant`: an owner's server token for this client. */
+export const ServerSessionRequest = Type.Object({ assistant: Type.String(), client: ClientInfo });
+export type ServerSessionRequest = Static<typeof ServerSessionRequest>;
+
+/** `token` is shown only here; keep it like a password. */
+export const ServerSessionResponse = Type.Object({
+  token: Type.String(),
+  clientId: Type.String(),
+  owner: ServerOwner,
+});
+export type ServerSessionResponse = Static<typeof ServerSessionResponse>;
+
+export const ServerInfoResponse = Type.Object({
+  version: Type.String(),
+  /** The owner whose token asked. */
+  owner: ServerOwner,
+  assistants: Type.Array(ServerAssistant),
+});
+export type ServerInfoResponse = Static<typeof ServerInfoResponse>;
+
 /** Every named schema, for `schema/v1.json`. */
 export const SCHEMAS = {
   Player,
@@ -875,4 +1003,21 @@ export const SCHEMAS = {
   RoomsResponse,
   AdminCreateRoomRequest,
   NudgesResponse,
+  ModelChoice,
+  AssistantBudget,
+  ServerAssistant,
+  ServerAssistantsResponse,
+  CreateAssistantRequest,
+  CreateAssistantResponse,
+  UpdateAssistantRequest,
+  DeleteAssistantResponse,
+  ProviderKey,
+  ProviderKeysResponse,
+  SetProviderKeyRequest,
+  ServerOwner,
+  ServerOwnersResponse,
+  AddOwnerRequest,
+  ServerSessionRequest,
+  ServerSessionResponse,
+  ServerInfoResponse,
 };

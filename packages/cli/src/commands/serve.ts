@@ -1,19 +1,24 @@
-import { access } from "node:fs/promises";
+import { access, readdir, rm, stat } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { networkInterfaces } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
   Assistants,
+  backupKey,
   buildModels,
+  createBackup,
   loadConfig,
   openAssistant,
   ServerKeys,
   serverKeysDir,
+  ServerOwners,
+  serverOwnersFile,
+  testProviderKey,
 } from "@nudge/core";
-import { serveNudge } from "@nudge/server";
+import { type ServerControl, serveNudge } from "@nudge/server";
 import { UsageError } from "../errors.ts";
-import { scheduleBackups } from "./backup.ts";
+import { keyPath, scheduleBackups } from "./backup.ts";
 import { hostOptions, reloadOnHangup } from "../host.ts";
 
 export type ServeOptions = {
@@ -83,6 +88,23 @@ export async function serve(options: ServeOptions): Promise<void> {
   });
   try {
     const web = await webRoot(options.web);
+    const control: ServerControl = {
+      assistants,
+      keys,
+      owners: new ServerOwners(serverOwnersFile(options.config)),
+      backupBeforeDelete: async (only) => {
+        const dir = join(dirname(resolve(options.config)), "server", "deleted");
+        const file = await createBackup({
+          configPath: options.config,
+          config: only,
+          dir,
+          key: await backupKey(keyPath(options.config, config), true),
+        });
+        await pruneOlder(dir, DELETED_KEPT_MS);
+        return basename(file);
+      },
+      testKey: (provider, key) => testProviderKey(provider, key, config.providers),
+    };
     const server = await serveNudge({
       assistants: assistants.running,
       port: options.port,
@@ -90,6 +112,7 @@ export async function serve(options: ServeOptions): Promise<void> {
       web,
       publicUrl: options.publicUrl,
       trustProxy: options.trustProxy,
+      server: control,
       extensionSettings: {
         list: (assistant) => assistants.extensionSetups(assistant),
         save: (assistant, extensions) => assistants.saveExtensionSetups(assistant, extensions),
@@ -131,6 +154,17 @@ async function webRoot(option: string | undefined): Promise<string | undefined> 
   }
   console.log("No web UI built (pnpm build); serving the API only.");
   return undefined;
+}
+
+/** How long the backup of a deleted assistant is kept, in case it was deleted by mistake. */
+const DELETED_KEPT_MS = 30 * 24 * 60 * 60_000;
+
+async function pruneOlder(dir: string, age: number): Promise<void> {
+  for (const name of await readdir(dir).catch(() => [] as string[])) {
+    const file = join(dir, name);
+    const info = await stat(file).catch(() => undefined);
+    if (info !== undefined && Date.now() - info.mtimeMs > age) await rm(file, { force: true });
+  }
 }
 
 async function exists(path: string): Promise<boolean> {

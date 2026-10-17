@@ -380,7 +380,8 @@ export class Api {
   }
 }
 
-async function read<T>(response: Response): Promise<T> {
+/** A response's JSON body, or an `ApiError` with its `{ error }`. */
+export async function read<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const body = (await response.json().catch(() => undefined)) as ErrorResponse | undefined;
     throw new ApiError(response.status, body?.error ?? response.statusText);
@@ -392,6 +393,6 @@ function roomPath(room: string): string {
   return `/rooms/${encodeURIComponent(room)}`;
 }
 
-function trim(server: string): string {
+export function trim(server: string): string {
   return server.replace(/\/+$/, "");
 }
