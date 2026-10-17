@@ -274,9 +274,15 @@ describe("redaction in a running assistant", () => {
     const partials: string[] = [];
     stream.start(async (events) => {
       for (const event of events) {
+        // Chunks that came close together may arrive with the message's or the block's start.
+        if (event.type === "message_start" && event.message.role === "assistant")
+          for (const block of event.message.content)
+            if (block.type === "text") partials.push(block.text);
         if (event.type === "message_update") {
           for (const change of event.changes)
             if (change.type === "text_delta") partials.push(change.delta);
+            else if (change.type === "text_start" && change.block.type === "text")
+              partials.push(change.block.text);
         }
       }
     });

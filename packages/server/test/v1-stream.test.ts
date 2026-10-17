@@ -114,6 +114,8 @@ describe("v1 stream", () => {
   let server: RunningServer;
   let connectUrl: string;
   let tokens: Record<string, string>;
+  /** Holds the first turn's last answer back, so the room is busy until a test lets it go. */
+  let finishFirstTurn: () => void;
 
   const open = (name: string) => connect(connectUrl, helloFor(tokens[name]!));
   const post = (path: string, token: string, body: object) =>
@@ -125,6 +127,7 @@ describe("v1 stream", () => {
 
   beforeEach(async () => {
     const faux = fauxProvider({ tokensPerSecond: 200 });
+    const firstTurnHeld = new Promise<void>((resolve) => (finishFirstTurn = resolve));
     faux.setResponses([
       fauxAssistantMessage(
         [
@@ -134,7 +137,12 @@ describe("v1 stream", () => {
         ],
         { stopReason: "toolUse" },
       ),
-      fauxAssistantMessage("Noted: Ann likes tea, and I will remember it for a good long while."),
+      async () => {
+        await firstTurnHeld;
+        return fauxAssistantMessage(
+          "Noted: Ann likes tea, and I will remember it for a good long while.",
+        );
+      },
       fauxAssistantMessage("And Bo likes coffee."),
       fauxAssistantMessage("Time to put the kettle on!"),
     ]);
@@ -158,6 +166,7 @@ describe("v1 stream", () => {
   });
 
   afterEach(async () => {
+    finishFirstTurn();
     await server.close();
     await nudge.close(context);
     expect(problems.splice(0)).toEqual([]);
@@ -254,9 +263,14 @@ describe("v1 stream", () => {
     await eventually(() => ann.view<RoomView>("room:trip")?.live.running === true);
     // Bo writes while the assistant is busy: the message waits in the queue.
     await post("/rooms/trip/messages", tokens.Bo!, { text: "I like coffee", requestId: "r1" });
+    await eventually(() => (ann.view<RoomView>("room:trip")?.queue.length ?? 0) > 0);
+    finishFirstTurn();
     await nudge.harness.waitForIdle(context);
     await nudge.nudges.schedule("trip", { message: "Kettle", fireAt: Date.now() + 300 }, context);
-    await eventually(() => (ann.view<HomeView>("home")?.nudges.length ?? 0) === 1);
+    // It may fire before the check looks, so any view since counts.
+    await eventually(() =>
+      (ann.views.get("home") as HomeView[]).some((home) => home.nudges.length === 1),
+    );
     await eventually(() =>
       (ann.view<RoomView>("room:trip")?.timeline ?? []).some((item) => item.type === "nudge"),
     );

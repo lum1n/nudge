@@ -506,7 +506,8 @@ class Federation {
     if (player === undefined || guest === undefined) return problem(404, "No such guest");
     const claimed = checkSigned(guest.signingKey, signed);
     if (!Value.Check(schema, claimed)) return problem(401, "The home did not sign that");
-    await this.enqueue(player.id, async () => {
+    // Not waited for: the home may be waiting for this player's queue here to answer it.
+    void this.enqueue(player.id, async () => {
       const newer = await this.commit((state) => {
         const current = state.guests[player.id];
         if (current === undefined || claimed.issuedAt <= (current.seen[claimed.kind] ?? 0))
@@ -561,26 +562,49 @@ class Federation {
     if (!Value.Check(schema, claimed)) return problem(401, "That assistant did not sign that");
     // Only with their consent: memory goes both ways or not at all.
     if (!membership.carry) return problem(403, "Their memory isn't carried there");
-    const newer = await this.commit((state) => {
-      const current = state.memberships[claimed.playerId]?.find((m) => samePlace(m, from));
-      if (current === undefined || claimed.issuedAt <= (current.seen[claimed.kind] ?? 0))
-        return false;
-      current.seen[claimed.kind] = claimed.issuedAt;
-      return true;
-    }, context);
-    if (!newer) return new Response(null, { status: 204 });
-    const memory = this.nudge().memory;
-    if (Value.Check(RememberClaim, claimed)) {
-      const player = await this.nudge().players.get(claimed.playerId, context);
-      const text = await this.protectFact(claimed.fact);
-      if (player !== undefined && text !== undefined)
-        await memory.rememberFor(claimed.playerId, text, context, {
-          playerId: player.id,
-          displayName: player.displayName,
-        });
-    } else
-      await memory.forgetFor(claimed.playerId, (claimed as { factId: string }).factId, context);
+    const { playerId } = claimed;
+    // In the player's queue, so the memory their change sends knows where the fact came from.
+    // Not waited for: that place may be waiting for this player's queue here to answer it.
+    void this.enqueue(playerId, async () => {
+      const newer = await this.commit((state) => {
+        const current = state.memberships[playerId]?.find((m) => samePlace(m, from));
+        if (current === undefined || claimed.issuedAt <= (current.seen[claimed.kind] ?? 0))
+          return false;
+        current.seen[claimed.kind] = claimed.issuedAt;
+        return true;
+      }, context);
+      if (!newer) return;
+      if (Value.Check(RememberClaim, claimed)) await this.rememberFrom(from, claimed, context);
+      else await this.nudge().memory.forgetFor(playerId, claimed.factId, context);
+    });
     return new Response(null, { status: 204 });
+  }
+
+  /**
+   * Remembers a fact one of this home's people remembered at `from`, and that it came from there.
+   * Once only: a remember sent again, after its answer got lost, finds it there already.
+   */
+  private async rememberFrom(
+    from: Place,
+    claim: Static<typeof RememberClaim>,
+    context: Context,
+  ): Promise<void> {
+    const membership = (await this.state(context)).memberships[claim.playerId]?.find((m) =>
+      samePlace(m, from),
+    );
+    if (Object.values(membership?.origins ?? {}).includes(claim.factId)) return;
+    const nudge = this.nudge();
+    const player = await nudge.players.get(claim.playerId, context);
+    const text = await this.protectFact(claim.fact);
+    if (player === undefined || text === undefined) return;
+    const fact = await nudge.memory.rememberFor(claim.playerId, text, context, {
+      playerId: player.id,
+      displayName: player.displayName,
+    });
+    await this.commit((state) => {
+      const current = state.memberships[claim.playerId]?.find((m) => samePlace(m, from));
+      if (current !== undefined) current.origins = { ...current.origins, [fact.id]: claim.factId };
+    }, context);
   }
 
   /**
@@ -612,39 +636,60 @@ class Federation {
 
   /**
    * Makes a guest's own memory here what their home carries: its facts, their values protected
-   * here, then what they remembered here that hasn't gone home yet. When the home stops carrying,
-   * the facts that came from it go.
+   * here, then what they remembered here that hasn't come back yet. A fact that went home comes
+   * back naming its id here as `origin`, and takes its place. When the home stops carrying, the
+   * facts that came from it go.
    */
   private async applyMemory(
     playerId: string,
     claim: Static<typeof MemoryClaim>,
     context: Context,
   ): Promise<void> {
-    const incoming: { id: string; text: string; createdAt: number }[] = [];
+    const incoming: { id: string; text: string; createdAt: number; origin?: string }[] = [];
     if (claim.carry)
       for (const fact of claim.facts.slice(0, MAX_FACTS)) {
         const text = await this.protectFact(fact);
-        if (text !== undefined) incoming.push({ id: fact.id, text, createdAt: fact.createdAt });
+        if (text !== undefined)
+          incoming.push({ id: fact.id, text, createdAt: fact.createdAt, origin: fact.origin });
       }
     await this.host.documents().commit(async (tx) => {
       const memory = await tx.doc(PlayerMemoryDoc, playerId, null);
       const guest = (await tx.doc(FederationDoc)).guests[playerId];
       if (guest === undefined) return;
       const localOf = new Map(Object.entries(guest.carried).map(([local, home]) => [home, local]));
-      const kept = memory.facts
-        .filter((fact) => !(fact.id in guest.carried) && !guest.forwarded.includes(fact.id))
-        .map((fact) => structuredClone({ ...fact }));
+      const here = new Set(memory.facts.map((fact) => fact.id));
       const carried: Record<string, string> = {};
-      const arrived = incoming.map((fact) => {
+      const returned = new Set<string>();
+      const arrived: { id: string; text: string; createdAt: number }[] = [];
+      for (const fact of incoming) {
         let id = localOf.get(fact.id);
-        if (id === undefined) id = `p${memory.next++}`;
+        const origin = fact.origin;
+        // Also after a send that seemed to fail: then it is no longer marked forwarded.
+        if (
+          id === undefined &&
+          origin !== undefined &&
+          !(origin in guest.carried) &&
+          (here.has(origin) || guest.forwarded.includes(origin))
+        ) {
+          id = origin;
+          returned.add(origin);
+          // Forgotten here before it came back: kept as carried, so the forget goes home.
+          if (!here.has(origin)) {
+            carried[origin] = fact.id;
+            continue;
+          }
+        }
+        id ??= `p${memory.next++}`;
         carried[id] = fact.id;
-        return { id, text: fact.text, createdAt: fact.createdAt };
-      });
+        arrived.push({ id, text: fact.text, createdAt: fact.createdAt });
+      }
+      const kept = memory.facts
+        .filter((fact) => !(fact.id in guest.carried) && !returned.has(fact.id))
+        .map((fact) => structuredClone({ ...fact }));
       memory.facts = [...arrived, ...kept].slice(0, MAX_FACTS);
       guest.carry = claim.carry;
       guest.carried = carried;
-      guest.forwarded = [];
+      guest.forwarded = claim.carry ? guest.forwarded.filter((id) => !returned.has(id)) : [];
     }, context);
     await this.memoryChanged(playerId, context);
   }
@@ -680,13 +725,14 @@ class Federation {
       if (fact.privateTo !== undefined) continue;
       const carried = this.carriable(fact.text);
       if (carried === undefined) continue;
-      // Marked first: the memory that comes back drops it, as it brings it from home.
+      // Marked first, so it isn't sent twice while it is on its way.
       await this.commit((state) => {
         state.guests[playerId]?.forwarded.push(fact.id);
       }, context);
       const sent = await this.send(home, guest, {
         kind: "nudge.remember",
         ...base,
+        factId: fact.id,
         fact: carried,
         issuedAt: this.nextSignedAt(),
       } satisfies Static<typeof RememberClaim>);
@@ -740,6 +786,7 @@ class Federation {
       const found = this.carriable(fact.text);
       return found === undefined ? [] : [{ ...found, id: fact.id, createdAt: fact.createdAt }];
     });
+    await this.forgetOrigins(playerId, new Set(facts.map((fact) => fact.id)), context);
     const issuedAt = this.nextSignedAt();
     const gone: Place[] = [];
     for (const membership of memberships) {
@@ -749,12 +796,36 @@ class Federation {
         home: { ...this.self, playerId },
         audience: placeOf(membership),
         carry,
-        facts: carry ? carried : [],
+        facts: carry
+          ? carried.map((fact) => {
+              const origin = membership.origins?.[fact.id];
+              return origin === undefined ? fact : { ...fact, origin };
+            })
+          : [],
         issuedAt,
       } satisfies Static<typeof MemoryClaim>);
       if (sent === "gone") gone.push(membership);
     }
     await this.dropMemberships(playerId, gone, context);
+  }
+
+  /** Drops where facts came from once the player no longer has them. */
+  private async forgetOrigins(
+    playerId: string,
+    kept: Set<string>,
+    context: Context,
+  ): Promise<void> {
+    const stale = ((await this.state(context)).memberships[playerId] ?? []).some((membership) =>
+      Object.keys(membership.origins ?? {}).some((id) => !kept.has(id)),
+    );
+    if (!stale) return;
+    await this.commit((state) => {
+      for (const membership of state.memberships[playerId] ?? [])
+        if (membership.origins !== undefined)
+          membership.origins = Object.fromEntries(
+            Object.entries(membership.origins).filter(([id]) => kept.has(id)),
+          );
+    }, context);
   }
 
   /**

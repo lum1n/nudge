@@ -30,7 +30,7 @@ export type Guest = Keys & {
   carry: boolean;
   /** Their own facts here that came from home: the id here, then the id at home. */
   carried: Record<string, string>;
-  /** Facts they remembered here, sent home and waiting to come back with the next memory. */
+  /** Facts they remembered here, sent home and waiting to come back as `origin` of a carried one. */
   forwarded: string[];
 };
 
@@ -42,6 +42,8 @@ export type Membership = Place &
     carry: boolean;
     /** When it signed the last message of each kind taken from it. */
     seen: Record<string, number>;
+    /** Their own facts here that they remembered there: the id here, then the id there. */
+    origins?: Record<string, string>;
   };
 
 // Stored in a document, so plain JSON.

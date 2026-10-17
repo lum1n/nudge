@@ -68,7 +68,15 @@ export const MemoryClaim = Type.Object({
   audience: PlaceBody,
   carry: Type.Boolean(),
   facts: Type.Array(
-    Type.Intersect([FactBody, Type.Object({ id: Type.String(), createdAt: Type.Number() })]),
+    Type.Intersect([
+      FactBody,
+      Type.Object({
+        id: Type.String(),
+        createdAt: Type.Number(),
+        /** The fact's id at the receiver, when the person remembered it there. */
+        origin: Type.Optional(Type.String()),
+      }),
+    ]),
   ),
   issuedAt: Type.Number(),
 });
@@ -87,6 +95,8 @@ export const RememberClaim = Type.Object({
   from: PlaceBody,
   audience: PlaceBody,
   playerId: Type.String(),
+  /** Its id at the sender, which the home names as the fact's `origin` when it carries it back. */
+  factId: Type.String(),
   fact: FactBody,
   issuedAt: Type.Number(),
 });

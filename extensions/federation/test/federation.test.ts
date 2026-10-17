@@ -20,13 +20,24 @@ describe("federation", () => {
   /** Requests between the two servers, without leaving the process. */
   /** Every body sent to an inbox, as it went. */
   const wire: string[] = [];
+  /** While set, messages to inboxes on that server wait in `held` until let go. */
+  let holding: string | undefined;
+  const held: (() => void)[] = [];
+  /** A server whose next inbox message arrives, but whose answer is lost on the way back. */
+  let losing: string | undefined;
   const between: typeof fetch = async (input, init) => {
     const url = new URL(String(input));
-    if (url.pathname.endsWith("/inbox") || url.pathname.endsWith("/join"))
-      wire.push(String(init?.body));
+    const inbox = url.pathname.endsWith("/inbox");
+    if (inbox || url.pathname.endsWith("/join")) wire.push(String(init?.body));
     const app = apps.get(url.origin);
     if (app === undefined) throw new Error(`No server at ${url.origin}`);
-    return app.request(url.toString(), init);
+    if (inbox && holding === url.origin) await new Promise<void>((resolve) => held.push(resolve));
+    const response = await app.request(url.toString(), init);
+    if (inbox && losing === url.origin) {
+      losing = undefined;
+      throw new Error("The answer was lost");
+    }
+    return response;
   };
   let home: Nudge;
   let away: Nudge;
@@ -80,6 +91,9 @@ describe("federation", () => {
   beforeEach(async () => {
     errors.length = 0;
     wire.length = 0;
+    holding = undefined;
+    held.length = 0;
+    losing = undefined;
     home = await open("robin", HOME);
     away = await open("team", AWAY);
     vegard = (await home.players.invite("Vegard", context)).token;
@@ -182,7 +196,10 @@ describe("federation", () => {
       body: { address: "vegard@home.example/robin" },
     });
     const sealed = await assertion();
-    const tampered = { ...sealed, data: `A${sealed.data.slice(1)}` };
+    const tampered = {
+      ...sealed,
+      data: `${sealed.data[0] === "A" ? "B" : "A"}${sealed.data.slice(1)}`,
+    };
     expect(
       await call(AWAY, "POST", "/ext/federation/join", { body: { assertion: tampered } }),
     ).toMatchObject({ status: 400, json: { error: "That was not encrypted for this assistant" } });
@@ -338,7 +355,7 @@ describe("federation", () => {
         away.showTo("vegard", fact.text),
       );
     // The private value stays home; the other is protected anew there.
-    expect(await away_facts()).toEqual(["Lives in Storgata 1"]);
+    await expect.poll(away_facts).toEqual(["Lives in Storgata 1"]);
     const [carried] = (await away.memory.ofPlayer("vegard", context)).facts;
     expect(carried!.text).toMatch(/^Lives in ⟦ADDRESS\d+⟧$/);
     for (const body of wire) {
@@ -365,10 +382,52 @@ describe("federation", () => {
 
     // Turned off, what came from home leaves; what they remember there stays there.
     await carry(false);
-    expect(await away_facts()).toEqual([]);
+    await expect.poll(away_facts).toEqual([]);
     await away.memory.rememberFor("vegard", "Likes the window seat", context);
     await sleep(20);
     expect((await home.memory.ofPlayer("vegard", context)).facts).toHaveLength(2);
     expect(guest).toBeTypeOf("string");
+  });
+
+  it("keeps a fact remembered there while it is on its way home, and takes it once", async () => {
+    await call(AWAY, "POST", "/ext/federation/invites", {
+      token: ann,
+      body: { address: "vegard@home.example/robin" },
+    });
+    await call(AWAY, "POST", "/ext/federation/join", { body: { assertion: await assertion() } });
+    await call(HOME, "PUT", "/ext/federation/memberships/memory", {
+      token: vegard,
+      body: { server: AWAY, assistant: "team", carry: true },
+    });
+    const texts = async (nudge: Nudge) =>
+      (await nudge.memory.ofPlayer("vegard", context)).facts.map((fact) => fact.text);
+
+    // A memory the home sent before the fact reached it arrives after it went: the fact stays.
+    holding = AWAY;
+    await home.memory.rememberFor("vegard", "Likes tea", context);
+    await expect.poll(() => held.length).toBe(1);
+    await away.memory.rememberFor("vegard", "Allergic to nuts", context);
+    held.shift()!();
+    await expect.poll(() => texts(away)).toContain("Likes tea");
+    expect(await texts(away)).toEqual(["Likes tea", "Allergic to nuts"]);
+    // The memory that brings it back from home takes its place.
+    await expect.poll(() => held.length).toBe(1);
+    holding = undefined;
+    held.shift()!();
+    await expect.poll(() => texts(home)).toEqual(["Likes tea", "Allergic to nuts"]);
+    await sleep(20);
+    expect(await texts(away)).toEqual(["Likes tea", "Allergic to nuts"]);
+
+    // Its answer lost, a fact that reached home anyway is there once, on both sides.
+    losing = HOME;
+    await away.memory.rememberFor("vegard", "Sits by the window", context);
+    await expect.poll(() => texts(home)).toContain("Sits by the window");
+    await away.memory.rememberFor("vegard", "Takes the stairs", context);
+    await expect.poll(() => texts(home)).toContain("Takes the stairs");
+    await sleep(20);
+    const all = ["Likes tea", "Allergic to nuts", "Sits by the window", "Takes the stairs"];
+    expect(await texts(home)).toEqual(all);
+    expect(await texts(away)).toEqual(all);
+    expect(errors.splice(0)).toEqual([new Error("The answer was lost")]);
   });
 });
