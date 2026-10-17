@@ -12,6 +12,8 @@ struct SignInView: View {
     @State private var looking = false
     @State private var signingIn = false
     @State private var problem: String?
+    /// Making a server on exe.dev, or setting up one already started.
+    @State private var newServer: NewServer?
 
     var body: some View {
         NavigationStack {
@@ -62,8 +64,13 @@ struct SignInView: View {
                 if let problem {
                     Section { Text(problem).foregroundStyle(.red) }
                 }
+                Section("No server yet?") {
+                    Button("Make one on exe.dev", systemImage: "cloud") { newServer = .exe }
+                    Button("Set up one I started", systemImage: "server.rack") { newServer = .setup(SetupStart()) }
+                }
             }
             .formStyle(.grouped)
+            .sheet(item: $newServer) { NewServerView(start: $0) }
             .safeAreaBar(edge: .bottom) {
                 Button {
                     Task { await signIn() }
@@ -98,14 +105,14 @@ struct SignInView: View {
     }
 
     private func findAssistants() async {
-        let address = normalized(server)
+        let address = normalizedAddress(server)
         guard !address.isEmpty else { return }
         looking = true
         defer { looking = false }
         do {
             let found = try await listAssistants(server: address)
             // Typing on may have changed the address meanwhile.
-            guard normalized(server) == address else { return }
+            guard normalizedAddress(server) == address else { return }
             assistants = found
             if assistant == nil || !found.contains(where: { $0.name == assistant }) {
                 assistant = found.first?.name
@@ -122,40 +129,40 @@ struct SignInView: View {
         signingIn = true
         defer { signingIn = false }
         do {
-            try await model.signIn(server: normalized(server), assistant: chosen, code: code)
+            try await model.signIn(server: normalizedAddress(server), assistant: chosen, code: code)
             problem = nil
         } catch {
             problem = explain(error)
         }
     }
+}
 
-    /// `nudge.example` → `https://nudge.example`, `192.168.1.10:8787` → `http://192.168.1.10:8787`
-    /// (a server on the local network rarely has a certificate), and no trailing slash.
-    private func normalized(_ text: String) -> String {
-        var address = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if address.isEmpty { return address }
-        if !address.contains("://") { address = (isLocal(address) ? "http://" : "https://") + address }
-        while address.hasSuffix("/") { address.removeLast() }
-        return address
+/// `nudge.example` → `https://nudge.example`, `192.168.1.10:8787` → `http://192.168.1.10:8787`
+/// (a server on the local network rarely has a certificate), and no trailing slash.
+func normalizedAddress(_ text: String) -> String {
+    var address = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    if address.isEmpty { return address }
+    if !address.contains("://") { address = (isLocal(address) ? "http://" : "https://") + address }
+    while address.hasSuffix("/") { address.removeLast() }
+    return address
+}
+
+/// Whether an address without a scheme names a host on this network.
+private func isLocal(_ address: String) -> Bool {
+    var host = String(address.prefix { $0 != "/" })
+    if host.hasPrefix("[") { return host.hasPrefix("[fd") || host.hasPrefix("[fc") || host.hasPrefix("[fe80") || host.hasPrefix("[::1]") }
+    if let colon = host.lastIndex(of: ":") { host = String(host[..<colon]) }
+    host = host.lowercased()
+    if host == "localhost" || [".local", ".lan", ".home.arpa", ".internal"].contains(where: host.hasSuffix) {
+        return true
     }
-
-    /// Whether an address without a scheme names a host on this network.
-    private func isLocal(_ address: String) -> Bool {
-        var host = String(address.prefix { $0 != "/" })
-        if host.hasPrefix("[") { return host.hasPrefix("[fd") || host.hasPrefix("[fc") || host.hasPrefix("[fe80") || host.hasPrefix("[::1]") }
-        if let colon = host.lastIndex(of: ":") { host = String(host[..<colon]) }
-        host = host.lowercased()
-        if host == "localhost" || [".local", ".lan", ".home.arpa", ".internal"].contains(where: host.hasSuffix) {
-            return true
-        }
-        let parts = host.split(separator: ".").compactMap { Int($0) }
-        guard parts.count == 4 else { return false }
-        switch (parts[0], parts[1]) {
-        case (10, _), (127, _), (192, 168), (169, 254): return true
-        case (172, 16...31): return true
-        case (100, 64...127): return true  // carrier-grade NAT, such as Tailscale
-        default: return false
-        }
+    let parts = host.split(separator: ".").compactMap { Int($0) }
+    guard parts.count == 4 else { return false }
+    switch (parts[0], parts[1]) {
+    case (10, _), (127, _), (192, 168), (169, 254): return true
+    case (172, 16...31): return true
+    case (100, 64...127): return true  // carrier-grade NAT, such as Tailscale
+    default: return false
     }
 }
 

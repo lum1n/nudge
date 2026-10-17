@@ -2,8 +2,8 @@ import Nudge
 import SwiftUI
 import UserNotifications
 
-/// The account, the extensions and invites of each assistant the player is an admin of, the
-/// player's own memory, this month's spend, notifications, and signing out.
+/// The account, the servers this device owns, the extensions and invites of each assistant the
+/// player is an admin of, the player's own memory, this month's spend, notifications, and signing out.
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -28,6 +28,17 @@ struct SettingsView: View {
                     }
                     LabeledContent("Assistant", value: account.assistantName)
                     LabeledContent("Server", value: account.server)
+                }
+                Section {
+                    NavigationLink { ServersView(address: model.memberships?.address) } label: {
+                        Label(
+                            model.servers.owned.isEmpty ? "Servers" : "Servers (\(model.servers.owned.count))",
+                            systemImage: "server.rack")
+                    }
+                } footer: {
+                    Text(model.servers.owned.isEmpty
+                        ? "Make your own on exe.dev, and assistants on it."
+                        : "Yours: their assistants, model keys and updates.")
                 }
                 if let joined = model.memberships {
                     Section {

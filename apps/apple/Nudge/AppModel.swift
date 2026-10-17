@@ -73,6 +73,8 @@ final class AppModel {
     var pendingJoin: JoinLink?
     /// Why the app signed out on its own, for the sign-in screen.
     var signedOutBecause: String?
+    /// The servers this device owns, and the exe.dev token it makes new ones with.
+    let servers = Servers()
 
     var account: Account? { session?.account }
     var client: NudgeClient? { session?.client }
@@ -124,6 +126,65 @@ final class AppModel {
         signedOutBecause = nil
         start(account, client: client)
         Push.requestPermission()
+    }
+
+    /// Sets a server up with what the wizard asked (ADR 11), and signs in: to its new assistant as
+    /// the person's home, and to the server as its owner.
+    func setUpServer(_ server: String, choices: SetupChoices) async throws {
+        let done = try await setUp(server: server, choices: choices, clientName: "nudge-apple", platform: Push.platformName)
+        servers.remember(server, token: done.serverToken)
+        if let home = session { return try await joinFromHome(home, server: server, done: done) }
+        let account = Account(server: server, assistant: done.assistant, assistantName: choices.displayName ?? done.assistant)
+        KeychainTokens(account: account.keychainAccount).set(token: done.token)
+        defaults.set(try JSONEncoder().encode(account), forKey: Self.accountKey)
+        signedOutBecause = nil
+        start(account)
+        Push.requestPermission()
+    }
+
+    /// A server set up while signed in at home: its first assistant is joined from home rather
+    /// than made a second home. Setup made a player there for the person, the first and so the
+    /// admin; with its token the app invites the home's address, joins, makes that guest an admin
+    /// and an owner of the server, and signs the setup player's token out.
+    private func joinFromHome(_ home: Session, server: String, done: SetupResult) async throws {
+        guard let address = memberships?.address else { throw ServerProblem.noFederation }
+        var setupConfig = config(for: Account(server: server, assistant: done.assistant, assistantName: done.assistant))
+        setupConfig.cachePath = nil
+        let setup = try NudgeClient(config: setupConfig, tokens: MemoryTokens(done.token))
+        _ = try await setup.invite(address: address)
+        try await join(JoinLink(server: server, assistant: done.assistant))
+        guard let place = places.first(where: { $0.account.isAt(server: server, assistant: done.assistant) }) else {
+            throw ServerProblem.notJoined
+        }
+        let guest = try await place.client.me().player.id
+        _ = try await setup.setAdmin(playerId: guest, admin: true)
+        _ = try await servers.client(server).addOwner(assistant: done.assistant, playerId: guest)
+        try? await setup.signOut()
+    }
+
+    /// Makes an assistant on a server this device owns. One that is "for me" is joined from home
+    /// at once, so its rooms show beside the home's and the person is its first admin.
+    func createAssistant(on server: String, _ new: NewAssistant) async throws -> MadeAssistant {
+        let made = try await servers.client(server).createAssistant(new: new)
+        if let link = made.joinLink.flatMap(URL.init(string:)).flatMap(JoinLink.init) {
+            try await join(link)
+        }
+        return made
+    }
+
+    /// Signs in to the home's server as its owner, when the player is one; quietly not otherwise.
+    private func signInAsOwner(_ home: Session) async {
+        let server = home.account.server
+        guard !servers.owned.contains(server),
+            let token = KeychainTokens(account: home.account.keychainAccount).get()
+        else { return }
+        do {
+            // The client keeps the server token it gets.
+            _ = try await servers.client(server).signIn(assistant: home.account.assistant, playerToken: token)
+            servers.remember(server)
+        } catch {
+            // Not an owner, or an older server without the server API.
+        }
     }
 
     /// Forgets the tokens, the device's push registrations and the cached views, everywhere.
@@ -232,6 +293,7 @@ final class AppModel {
         }
         Push.registerIfAllowed()
         Task { await syncPlaces() }
+        Task { await signInAsOwner(session) }
     }
 
     /// A client of `account`, connected, its player and pushes asked for.
@@ -364,6 +426,18 @@ enum JoinProblem: LocalizedError {
     case home
 
     var errorDescription: String? { "That is your home." }
+}
+
+enum ServerProblem: LocalizedError {
+    case noFederation
+    case notJoined
+
+    var errorDescription: String? {
+        switch self {
+        case .noFederation: "Your home has no federation, so it can't join the new assistant."
+        case .notJoined: "Joining the new assistant from home didn't work."
+        }
+    }
 }
 
 extension NudgeError {
