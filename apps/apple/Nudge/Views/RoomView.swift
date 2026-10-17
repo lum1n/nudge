@@ -88,7 +88,10 @@ struct RoomView: View {
     private var timeline: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 14) {
+                // Not lazy: the view's window is at most 100 items, plus the pages loaded on
+                // demand, and on iOS a LazyVStack pinned to the bottom re-estimates its rows'
+                // heights against the anchor until the app hangs.
+                VStack(alignment: .leading, spacing: 14) {
                     if let state, state.canLoadEarlier || state.loadingEarlier {
                         Button {
                             Task { await observed?.loadEarlier() }
