@@ -244,6 +244,73 @@ describe("federation", () => {
       .toBe("nb");
   });
 
+  it("signs the guest out there when they leave at home, until invited again", async () => {
+    await call(AWAY, "POST", "/ext/federation/invites", {
+      token: ann,
+      body: { address: "vegard@home.example/robin" },
+    });
+    const guest = (
+      await call(AWAY, "POST", "/ext/federation/join", { body: { assertion: await assertion() } })
+    ).json.token as string;
+    await call(HOME, "PUT", "/ext/federation/memberships/memory", {
+      token: vegard,
+      body: { server: AWAY, assistant: "team", carry: true },
+    });
+    await home.memory.rememberFor("vegard", "Likes tea", context);
+    await expect
+      .poll(async () => (await away.memory.ofPlayer("vegard", context)).facts.length)
+      .toBe(1);
+    await away.memory.rememberFor("vegard", "Sits by the window", context);
+    await expect
+      .poll(async () => (await home.memory.ofPlayer("vegard", context)).facts.length)
+      .toBe(2);
+    const leaving = wire.length;
+
+    expect(
+      (
+        await call(
+          HOME,
+          "DELETE",
+          "/ext/federation/memberships?server=https://away.example&assistant=team",
+          {
+            token: vegard,
+          },
+        )
+      ).status,
+    ).toBe(204);
+    await expect
+      .poll(async () => (await call(AWAY, "GET", "/me", { token: guest })).status)
+      .toBe(401);
+    expect(await away.players.tokens("vegard", context)).toEqual([]);
+    expect((await away.memory.ofPlayer("vegard", context)).facts).toEqual([]);
+    expect(
+      (await call(HOME, "GET", "/ext/federation/memberships", { token: vegard })).json,
+    ).toMatchObject({ memberships: [] });
+    // The player stays for the rooms' history; their home's word alone no longer lets them in.
+    expect(await away.players.get("vegard", context)).toMatchObject({ displayName: "Vegard" });
+    expect(
+      (await call(AWAY, "POST", "/ext/federation/join", { body: { assertion: await assertion() } }))
+        .status,
+    ).toBe(403);
+
+    // Invited again, the old leave sent once more doesn't end the new stay.
+    await call(AWAY, "POST", "/ext/federation/invites", {
+      token: ann,
+      body: { address: "vegard@home.example/robin" },
+    });
+    const back = (
+      await call(AWAY, "POST", "/ext/federation/join", { body: { assertion: await assertion() } })
+    ).json.token as string;
+    const replayed = wire.slice(leaving).find((body) => body.startsWith('{"message"'))!;
+    await between(`${AWAY}/v1/a/team/ext/federation/inbox`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: replayed,
+    });
+    await sleep(20);
+    expect((await call(AWAY, "GET", "/me", { token: back })).status).toBe(200);
+  });
+
   it("carries own memory where the person allows it, encrypted, and both ways", async () => {
     await call(AWAY, "POST", "/ext/federation/invites", {
       token: ann,

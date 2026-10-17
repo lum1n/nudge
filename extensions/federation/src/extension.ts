@@ -37,6 +37,7 @@ import {
   ForgetClaim,
   JoinClaim,
   KeysBody,
+  LeaveClaim,
   MemoryClaim,
   PlaceBody,
   ProfileBody,
@@ -240,13 +241,16 @@ class Federation {
             samePlace(m, place),
           );
           if (found === undefined) return problem(404, "No such membership");
-          // Their memory leaves with them.
-          if (found.carry) await this.setCarry(player!.id, place, false, context);
-          await this.commit((state) => {
-            state.memberships[player!.id] = (state.memberships[player!.id] ?? []).filter(
-              (membership) => !samePlace(membership, place),
-            );
-          }, context);
+          // After what is on its way there; dropped here even when the place can't be reached.
+          await this.enqueue(player!.id, async () => {
+            await this.send(found, found, {
+              kind: "nudge.leave",
+              home: { ...this.self, playerId: player!.id },
+              audience: placeOf(found),
+              issuedAt: this.nextSignedAt(),
+            } satisfies Static<typeof LeaveClaim>);
+            await this.dropMemberships(player!.id, [found], context);
+          });
           return new Response(null, { status: 204 });
         },
       },
@@ -448,7 +452,8 @@ class Federation {
         state.guests[joined.player.id] = {
           signingKey: keys.signingKey,
           encryptionKey: keys.encryptionKey,
-          seen: { "nudge.profile": claimed.issuedAt },
+          // A leave from before they joined, replayed, mustn't end this stay.
+          seen: { "nudge.profile": claimed.issuedAt, "nudge.leave": claimed.issuedAt },
           carry: false,
           carried: {},
           forwarded: [],
@@ -477,6 +482,7 @@ class Federation {
     switch (claim?.kind) {
       case "nudge.profile":
       case "nudge.memory":
+      case "nudge.leave":
         return this.fromHome(signed, context);
       case "nudge.remember":
       case "nudge.forget":
@@ -486,11 +492,14 @@ class Federation {
     }
   }
 
-  /** A guest's profile or own memory, from their home. */
+  /** A guest's profile or own memory, or that they left, from their home. */
   private async fromHome(signed: Signed, context: Context): Promise<Response> {
     const claim = peek(signed);
-    const schema = Value.Check(ProfileClaim, claim) ? ProfileClaim : MemoryClaim;
-    if (!Value.Check(schema, claim)) return problem(400, "Malformed message");
+    const schema = [ProfileClaim, MemoryClaim, LeaveClaim].find((schema) =>
+      Value.Check(schema, claim),
+    );
+    if (schema === undefined || !Value.Check(schema, claim))
+      return problem(400, "Malformed message");
     if (!samePlace(claim.audience, this.self)) return problem(400, "Not for this assistant");
     const player = await this.nudge().players.byHome(claim.home, context);
     const guest = player === undefined ? undefined : (await this.state(context)).guests[player.id];
@@ -508,9 +517,33 @@ class Federation {
       if (!newer) return;
       if (Value.Check(ProfileClaim, claimed))
         await this.applyProfile(player.id, claimed.profile, context);
-      else await this.applyMemory(player.id, claimed as Static<typeof MemoryClaim>, context);
+      else if (Value.Check(MemoryClaim, claimed))
+        await this.applyMemory(player.id, claimed, context);
+      else await this.applyLeave(player.id, context);
     });
     return new Response(null, { status: 204 });
+  }
+
+  /**
+   * A guest left from their home: their tokens here stop, which closes their sockets and ends
+   * their pushes, and what came from home goes. Joining again takes a new invite. The player
+   * stays, so the rooms' history still names them.
+   */
+  private async applyLeave(playerId: string, context: Context): Promise<void> {
+    const nudge = this.nudge();
+    for (const { clientId } of await nudge.players.tokens(playerId, context))
+      await nudge.players.revoke(clientId, context);
+    await this.host.documents().commit(async (tx) => {
+      const state = await tx.doc(FederationDoc);
+      const guest = state.guests[playerId];
+      if (guest === undefined) return;
+      const memory = await tx.doc(PlayerMemoryDoc, playerId, null);
+      memory.facts = memory.facts
+        .filter((fact) => !(fact.id in guest.carried))
+        .map((fact) => structuredClone({ ...fact }));
+      delete state.guests[playerId];
+    }, context);
+    await this.memoryChanged(playerId, context);
   }
 
   /** A fact one of this home's people remembered or forgot elsewhere, for their own memory. */

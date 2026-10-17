@@ -73,6 +73,14 @@ export const MemoryClaim = Type.Object({
   issuedAt: Type.Number(),
 });
 
+/** Home → an assistant one of its people joined: they left it, so their tokens there stop. */
+export const LeaveClaim = Type.Object({
+  kind: Type.Literal("nudge.leave"),
+  home: HomeBody,
+  audience: PlaceBody,
+  issuedAt: Type.Number(),
+});
+
 /** An assistant someone joined → their home: a fact they remembered there, for all of them. */
 export const RememberClaim = Type.Object({
   kind: Type.Literal("nudge.remember"),
