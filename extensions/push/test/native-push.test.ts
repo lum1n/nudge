@@ -283,6 +283,7 @@ describe("native push through the server", () => {
     expect((await call("GET", "/ext/push/devices", tokens.Ann!)).json).toEqual({
       apns: true,
       fcm: true,
+      relays: [],
     });
     const ann = "a1".repeat(32);
     expect(
@@ -375,6 +376,7 @@ describe("native push through the server", () => {
     expect((await call("GET", "/ext/push/devices", tokens.Ann!)).json).toEqual({
       apns: false,
       fcm: false,
+      relays: [],
     });
     const refused = await call("POST", "/ext/push/devices", tokens.Ann!, {
       platform: "fcm",

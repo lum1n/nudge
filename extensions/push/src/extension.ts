@@ -13,6 +13,7 @@ import { Value } from "typebox/value";
 import { Apns } from "./apns.ts";
 import { Fcm, type ServiceAccount } from "./fcm.ts";
 import { BadSubscription, Pushes } from "./pushes.ts";
+import { Relays } from "./relays.ts";
 import { generateVapidKeys, type VapidKeys } from "./web-push.ts";
 
 const VERSION = "0.1.0";
@@ -62,10 +63,16 @@ const Settings = Type.Object({
       { title: "FCM", description: "Pushes to the Android app, through a Firebase project." },
     ),
   ),
+  relays: Type.Array(Type.String({ pattern: "^https?://" }), {
+    default: [],
+    title: "Relays",
+    description:
+      "Push relays to reach the published apps through, whose APNs key and Firebase project only the relay has. Pushes are sealed for each device, so a relay reads nothing.",
+  }),
 });
 
 export type PushExtensionOptions = {
-  /** How pushes reach browsers' push services and FCM; tests pass a fake. */
+  /** How pushes reach browsers' push services, FCM and relays; tests pass a fake. */
   readonly fetch?: typeof fetch;
   /** For tests: where to reach APNs and FCM instead of Apple's and Google's hosts. */
   readonly apnsOrigins?: { readonly production: string; readonly sandbox: string };
@@ -116,6 +123,7 @@ export function pushExtension(options: PushExtensionOptions = {}) {
                   ...(options.fcmOrigin === undefined ? {} : { origin: options.fcmOrigin }),
                   ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
                 }),
+          relays: new Relays(host.settings.relays, options.fetch),
         },
       );
       return {

@@ -1,9 +1,11 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { defineDocFamily } from "@earendil-works/pi-durable";
 import { DirectoryDoc, type Nudge, type RoomEvent } from "@nudge/core";
 import type { Apns, ApnsEnvironment } from "./apns.ts";
+import { isDeviceKey, sealForDevice } from "./device-seal.ts";
 import type { Fcm } from "./fcm.ts";
+import type { Relays } from "./relays.ts";
 import { type PushOptions, type PushTarget, sendPush } from "./web-push.ts";
 
 const context = BACKGROUND_CONTEXT;
@@ -20,10 +22,14 @@ type Subscription = {
 
 // Stored in a document, so plain JSON.
 type Device = {
-  platform: "apns" | "fcm";
+  platform: "apns" | "fcm" | "relay";
+  /** The APNs or FCM token, or the relay's handle for the device. */
   token: string;
   /** APNs only: apps built for development take pushes through Apple's sandbox. */
   environment?: ApnsEnvironment;
+  /** Relay only: where to send, and the device's X25519 key that pushes are sealed for. */
+  relay?: string;
+  deviceKey?: string;
   /** The client whose token added it; it stops getting pushes once that token is revoked. */
   clientId: string;
   createdAt: number;
@@ -62,15 +68,22 @@ export type PushesOptions = PushOptions & {
   readonly preview?: boolean;
 };
 
-/** The native push services the assistant sends through; none without. */
-export type NativeSenders = { readonly apns?: Apns; readonly fcm?: Fcm };
+/** The native push services and relays the assistant sends through; none without. */
+export type NativeSenders = { readonly apns?: Apns; readonly fcm?: Fcm; readonly relays?: Relays };
 
 /** What a device registers with. */
-export type DeviceTarget = {
-  readonly platform: "apns" | "fcm";
-  readonly token: string;
-  readonly environment?: ApnsEnvironment;
-};
+export type DeviceTarget =
+  | {
+      readonly platform: "apns" | "fcm";
+      readonly token: string;
+      readonly environment?: ApnsEnvironment;
+    }
+  | {
+      readonly platform: "relay";
+      readonly relay: string;
+      readonly handle: string;
+      readonly deviceKey: string;
+    };
 
 export class BadSubscription extends Error {
   override name = "BadSubscription";
@@ -158,29 +171,58 @@ export class Pushes {
     return false;
   }
 
-  /** Which native pushes this server sends. */
-  get platforms(): { apns: boolean; fcm: boolean } {
-    return { apns: this.native.apns !== undefined, fcm: this.native.fcm !== undefined };
+  /** Which native pushes this server sends, and through which relays. */
+  get platforms(): { apns: boolean; fcm: boolean; relays: string[] } {
+    return {
+      apns: this.native.apns !== undefined,
+      fcm: this.native.fcm !== undefined,
+      relays: this.native.relays?.urls ?? [],
+    };
   }
 
   async register(playerId: string, clientId: string, device: DeviceTarget): Promise<void> {
-    if (this.native[device.platform] === undefined)
-      throw new BadSubscription(`This server sends no ${device.platform.toUpperCase()} pushes`);
-    if (device.platform === "apns" && !/^[0-9a-f]{16,200}$/i.test(device.token))
-      throw new BadSubscription("An APNs device token is hex");
+    const stored = this.device(device);
     await this.nudge().harness.commit(async (tx) => {
       const doc = await tx.doc(PushDoc, playerId, null);
-      // A device token moves with the device: whoever registers it last gets its pushes.
-      const kept = (doc.devices ?? []).filter((d) => d.token !== device.token);
-      kept.push({
-        platform: device.platform,
-        token: device.token,
-        ...(device.platform === "apns" ? { environment: device.environment ?? "production" } : {}),
-        clientId,
-        createdAt: Date.now(),
-      });
+      // A device moves between people: whoever registers it last gets its pushes. Behind a relay
+      // its key says which device it is, since each registration there makes a new handle.
+      const kept = (doc.devices ?? []).filter(
+        (d) =>
+          d.token !== stored.token &&
+          (stored.deviceKey === undefined || d.deviceKey !== stored.deviceKey),
+      );
+      kept.push({ ...stored, clientId, createdAt: Date.now() });
       doc.devices = kept.slice(-MAX_PER_PLAYER);
     }, context);
+  }
+
+  private device(device: DeviceTarget): Omit<Device, "clientId" | "createdAt"> {
+    if (device.platform === "relay") {
+      const relay = this.native.relays?.find(device.relay);
+      if (relay === undefined)
+        throw new BadSubscription(`This server sends no pushes through ${device.relay}`);
+      if (!isDeviceKey(device.deviceKey))
+        throw new BadSubscription("deviceKey is not an X25519 key");
+      if (!/^[A-Za-z0-9._~-]+$/.test(device.handle))
+        throw new BadSubscription("The handle is not what a relay makes");
+      return {
+        platform: "relay",
+        token: device.handle,
+        relay,
+        deviceKey: device.deviceKey,
+      };
+    }
+    if (this.native[device.platform] === undefined)
+      throw new BadSubscription(
+        `This server sends no ${device.platform === "apns" ? "APNs" : "FCM"} pushes`,
+      );
+    if (device.platform === "apns" && !/^[0-9a-f]{16,200}$/i.test(device.token))
+      throw new BadSubscription("An APNs device token is hex");
+    return {
+      platform: device.platform,
+      token: device.token,
+      ...(device.platform === "apns" ? { environment: device.environment ?? "production" } : {}),
+    };
   }
 
   /** False when the player had no such device. */
@@ -256,6 +298,24 @@ export class Pushes {
       kind: message.kind,
       url: message.url,
     };
+    if (device.platform === "relay") {
+      const relays = this.native.relays;
+      const relay = device.relay === undefined ? undefined : relays?.find(device.relay);
+      // A relay the admin no longer lists: the device must register again.
+      if (relays === undefined || relay === undefined || device.deviceKey === undefined)
+        return Promise.resolve("gone");
+      return relays.send(relay, {
+        handle: device.token,
+        sealed: sealForDevice(device.deviceKey, {
+          ...data,
+          title: message.title,
+          body: message.body,
+          tag: message.tag,
+        }),
+        // The relay and Apple see it, so not the room's name: a hash still groups a room's pushes.
+        collapseId: createHash("sha256").update(message.tag).digest("base64url").slice(0, 22),
+      });
+    }
     if (device.platform === "apns") {
       const apns = this.native.apns;
       if (apns === undefined) return Promise.resolve("sent");

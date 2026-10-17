@@ -5,7 +5,10 @@
   "$defs": {
     "Player": {
       "type": "object",
-      "required": ["id", "displayName"],
+      "required": [
+        "id",
+        "displayName"
+      ],
       "properties": {
         "id": {
           "type": "string"
@@ -36,7 +39,12 @@
     },
     "Room": {
       "type": "object",
-      "required": ["id", "kind", "name", "members"],
+      "required": [
+        "id",
+        "kind",
+        "name",
+        "members"
+      ],
       "properties": {
         "id": {
           "type": "string"
@@ -64,7 +72,10 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["id", "displayName"],
+            "required": [
+              "id",
+              "displayName"
+            ],
             "properties": {
               "id": {
                 "type": "string"
@@ -106,7 +117,13 @@
     },
     "ToolPart": {
       "type": "object",
-      "required": ["type", "callId", "name", "args", "status"],
+      "required": [
+        "type",
+        "callId",
+        "name",
+        "args",
+        "status"
+      ],
       "properties": {
         "type": {
           "type": "string",
@@ -159,7 +176,10 @@
       "anyOf": [
         {
           "type": "object",
-          "required": ["type", "text"],
+          "required": [
+            "type",
+            "text"
+          ],
           "properties": {
             "type": {
               "type": "string",
@@ -172,7 +192,10 @@
         },
         {
           "type": "object",
-          "required": ["type", "text"],
+          "required": [
+            "type",
+            "text"
+          ],
           "properties": {
             "type": {
               "type": "string",
@@ -185,7 +208,13 @@
         },
         {
           "type": "object",
-          "required": ["type", "callId", "name", "args", "status"],
+          "required": [
+            "type",
+            "callId",
+            "name",
+            "args",
+            "status"
+          ],
           "properties": {
             "type": {
               "type": "string",
@@ -240,7 +269,11 @@
       "anyOf": [
         {
           "type": "object",
-          "required": ["type", "id", "text"],
+          "required": [
+            "type",
+            "id",
+            "text"
+          ],
           "properties": {
             "type": {
               "type": "string",
@@ -254,7 +287,10 @@
             },
             "author": {
               "type": "object",
-              "required": ["id", "displayName"],
+              "required": [
+                "id",
+                "displayName"
+              ],
               "properties": {
                 "id": {
                   "type": "string"
@@ -278,7 +314,10 @@
             },
             "privateTo": {
               "type": "object",
-              "required": ["id", "displayName"],
+              "required": [
+                "id",
+                "displayName"
+              ],
               "properties": {
                 "id": {
                   "type": "string"
@@ -295,7 +334,12 @@
         },
         {
           "type": "object",
-          "required": ["type", "id", "text", "firedAt"],
+          "required": [
+            "type",
+            "id",
+            "text",
+            "firedAt"
+          ],
           "properties": {
             "type": {
               "type": "string",
@@ -312,7 +356,10 @@
             },
             "privateTo": {
               "type": "object",
-              "required": ["id", "displayName"],
+              "required": [
+                "id",
+                "displayName"
+              ],
               "properties": {
                 "id": {
                   "type": "string"
@@ -329,7 +376,13 @@
         },
         {
           "type": "object",
-          "required": ["type", "id", "approvalId", "summary", "status"],
+          "required": [
+            "type",
+            "id",
+            "approvalId",
+            "summary",
+            "status"
+          ],
           "properties": {
             "type": {
               "type": "string",
@@ -373,7 +426,10 @@
             },
             "privateTo": {
               "type": "object",
-              "required": ["id", "displayName"],
+              "required": [
+                "id",
+                "displayName"
+              ],
               "properties": {
                 "id": {
                   "type": "string"
@@ -390,7 +446,12 @@
         },
         {
           "type": "object",
-          "required": ["type", "id", "status", "parts"],
+          "required": [
+            "type",
+            "id",
+            "status",
+            "parts"
+          ],
           "properties": {
             "type": {
               "type": "string",
@@ -428,7 +489,10 @@
                 "anyOf": [
                   {
                     "type": "object",
-                    "required": ["type", "text"],
+                    "required": [
+                      "type",
+                      "text"
+                    ],
                     "properties": {
                       "type": {
                         "type": "string",
@@ -441,7 +505,10 @@
                   },
                   {
                     "type": "object",
-                    "required": ["type", "text"],
+                    "required": [
+                      "type",
+                      "text"
+                    ],
                     "properties": {
                       "type": {
                         "type": "string",
@@ -454,7 +521,13 @@
                   },
                   {
                     "type": "object",
-                    "required": ["type", "callId", "name", "args", "status"],
+                    "required": [
+                      "type",
+                      "callId",
+                      "name",
+                      "args",
+                      "status"
+                    ],
                     "properties": {
                       "type": {
                         "type": "string",
@@ -508,7 +581,10 @@
             },
             "privateTo": {
               "type": "object",
-              "required": ["id", "displayName"],
+              "required": [
+                "id",
+                "displayName"
+              ],
               "properties": {
                 "id": {
                   "type": "string"
@@ -525,7 +601,11 @@
         },
         {
           "type": "object",
-          "required": ["type", "id", "kind"],
+          "required": [
+            "type",
+            "id",
+            "kind"
+          ],
           "properties": {
             "type": {
               "type": "string",
@@ -554,7 +634,12 @@
       "anyOf": [
         {
           "type": "object",
-          "required": ["kind", "attempt", "at", "error"],
+          "required": [
+            "kind",
+            "attempt",
+            "at",
+            "error"
+          ],
           "properties": {
             "kind": {
               "type": "string",
@@ -573,7 +658,9 @@
         },
         {
           "type": "object",
-          "required": ["kind"],
+          "required": [
+            "kind"
+          ],
           "properties": {
             "kind": {
               "type": "string",
@@ -583,7 +670,10 @@
         },
         {
           "type": "object",
-          "required": ["kind", "error"],
+          "required": [
+            "kind",
+            "error"
+          ],
           "properties": {
             "kind": {
               "type": "string",
@@ -598,7 +688,12 @@
     },
     "QueuedMessage": {
       "type": "object",
-      "required": ["id", "mode", "text", "nudge"],
+      "required": [
+        "id",
+        "mode",
+        "text",
+        "nudge"
+      ],
       "properties": {
         "id": {
           "type": "integer"
@@ -620,7 +715,10 @@
         },
         "author": {
           "type": "object",
-          "required": ["id", "displayName"],
+          "required": [
+            "id",
+            "displayName"
+          ],
           "properties": {
             "id": {
               "type": "string"
@@ -644,7 +742,10 @@
         },
         "privateTo": {
           "type": "object",
-          "required": ["id", "displayName"],
+          "required": [
+            "id",
+            "displayName"
+          ],
           "properties": {
             "id": {
               "type": "string"
@@ -661,7 +762,12 @@
     },
     "Approval": {
       "type": "object",
-      "required": ["id", "summary", "status", "requestedAt"],
+      "required": [
+        "id",
+        "summary",
+        "status",
+        "requestedAt"
+      ],
       "properties": {
         "id": {
           "type": "string"
@@ -698,7 +804,10 @@
         },
         "decidedBy": {
           "type": "object",
-          "required": ["id", "displayName"],
+          "required": [
+            "id",
+            "displayName"
+          ],
           "properties": {
             "id": {
               "type": "string"
@@ -719,7 +828,10 @@
         },
         "privateTo": {
           "type": "object",
-          "required": ["id", "displayName"],
+          "required": [
+            "id",
+            "displayName"
+          ],
           "properties": {
             "id": {
               "type": "string"
@@ -736,7 +848,11 @@
     },
     "Fact": {
       "type": "object",
-      "required": ["id", "text", "createdAt"],
+      "required": [
+        "id",
+        "text",
+        "createdAt"
+      ],
       "properties": {
         "id": {
           "type": "string"
@@ -749,7 +865,10 @@
         },
         "by": {
           "type": "object",
-          "required": ["id", "displayName"],
+          "required": [
+            "id",
+            "displayName"
+          ],
           "properties": {
             "id": {
               "type": "string"
@@ -764,7 +883,10 @@
         },
         "owner": {
           "type": "object",
-          "required": ["id", "displayName"],
+          "required": [
+            "id",
+            "displayName"
+          ],
           "properties": {
             "id": {
               "type": "string"
@@ -779,7 +901,10 @@
         },
         "privateTo": {
           "type": "object",
-          "required": ["id", "displayName"],
+          "required": [
+            "id",
+            "displayName"
+          ],
           "properties": {
             "id": {
               "type": "string"
@@ -796,7 +921,11 @@
     },
     "RoomNudge": {
       "type": "object",
-      "required": ["id", "message", "fireAt"],
+      "required": [
+        "id",
+        "message",
+        "fireAt"
+      ],
       "properties": {
         "id": {
           "type": "string"
@@ -812,7 +941,10 @@
         },
         "privateTo": {
           "type": "object",
-          "required": ["id", "displayName"],
+          "required": [
+            "id",
+            "displayName"
+          ],
           "properties": {
             "id": {
               "type": "string"
@@ -842,7 +974,12 @@
       "properties": {
         "room": {
           "type": "object",
-          "required": ["id", "kind", "name", "members"],
+          "required": [
+            "id",
+            "kind",
+            "name",
+            "members"
+          ],
           "properties": {
             "id": {
               "type": "string"
@@ -870,7 +1007,10 @@
               "type": "array",
               "items": {
                 "type": "object",
-                "required": ["id", "displayName"],
+                "required": [
+                  "id",
+                  "displayName"
+                ],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -892,7 +1032,11 @@
             "anyOf": [
               {
                 "type": "object",
-                "required": ["type", "id", "text"],
+                "required": [
+                  "type",
+                  "id",
+                  "text"
+                ],
                 "properties": {
                   "type": {
                     "type": "string",
@@ -906,7 +1050,10 @@
                   },
                   "author": {
                     "type": "object",
-                    "required": ["id", "displayName"],
+                    "required": [
+                      "id",
+                      "displayName"
+                    ],
                     "properties": {
                       "id": {
                         "type": "string"
@@ -930,7 +1077,10 @@
                   },
                   "privateTo": {
                     "type": "object",
-                    "required": ["id", "displayName"],
+                    "required": [
+                      "id",
+                      "displayName"
+                    ],
                     "properties": {
                       "id": {
                         "type": "string"
@@ -947,7 +1097,12 @@
               },
               {
                 "type": "object",
-                "required": ["type", "id", "text", "firedAt"],
+                "required": [
+                  "type",
+                  "id",
+                  "text",
+                  "firedAt"
+                ],
                 "properties": {
                   "type": {
                     "type": "string",
@@ -964,7 +1119,10 @@
                   },
                   "privateTo": {
                     "type": "object",
-                    "required": ["id", "displayName"],
+                    "required": [
+                      "id",
+                      "displayName"
+                    ],
                     "properties": {
                       "id": {
                         "type": "string"
@@ -981,7 +1139,13 @@
               },
               {
                 "type": "object",
-                "required": ["type", "id", "approvalId", "summary", "status"],
+                "required": [
+                  "type",
+                  "id",
+                  "approvalId",
+                  "summary",
+                  "status"
+                ],
                 "properties": {
                   "type": {
                     "type": "string",
@@ -1025,7 +1189,10 @@
                   },
                   "privateTo": {
                     "type": "object",
-                    "required": ["id", "displayName"],
+                    "required": [
+                      "id",
+                      "displayName"
+                    ],
                     "properties": {
                       "id": {
                         "type": "string"
@@ -1042,7 +1209,12 @@
               },
               {
                 "type": "object",
-                "required": ["type", "id", "status", "parts"],
+                "required": [
+                  "type",
+                  "id",
+                  "status",
+                  "parts"
+                ],
                 "properties": {
                   "type": {
                     "type": "string",
@@ -1080,7 +1252,10 @@
                       "anyOf": [
                         {
                           "type": "object",
-                          "required": ["type", "text"],
+                          "required": [
+                            "type",
+                            "text"
+                          ],
                           "properties": {
                             "type": {
                               "type": "string",
@@ -1093,7 +1268,10 @@
                         },
                         {
                           "type": "object",
-                          "required": ["type", "text"],
+                          "required": [
+                            "type",
+                            "text"
+                          ],
                           "properties": {
                             "type": {
                               "type": "string",
@@ -1106,7 +1284,13 @@
                         },
                         {
                           "type": "object",
-                          "required": ["type", "callId", "name", "args", "status"],
+                          "required": [
+                            "type",
+                            "callId",
+                            "name",
+                            "args",
+                            "status"
+                          ],
                           "properties": {
                             "type": {
                               "type": "string",
@@ -1160,7 +1344,10 @@
                   },
                   "privateTo": {
                     "type": "object",
-                    "required": ["id", "displayName"],
+                    "required": [
+                      "id",
+                      "displayName"
+                    ],
                     "properties": {
                       "id": {
                         "type": "string"
@@ -1177,7 +1364,11 @@
               },
               {
                 "type": "object",
-                "required": ["type", "id", "kind"],
+                "required": [
+                  "type",
+                  "id",
+                  "kind"
+                ],
                 "properties": {
                   "type": {
                     "type": "string",
@@ -1208,7 +1399,9 @@
         },
         "live": {
           "type": "object",
-          "required": ["running"],
+          "required": [
+            "running"
+          ],
           "properties": {
             "running": {
               "type": "boolean"
@@ -1217,7 +1410,12 @@
               "anyOf": [
                 {
                   "type": "object",
-                  "required": ["kind", "attempt", "at", "error"],
+                  "required": [
+                    "kind",
+                    "attempt",
+                    "at",
+                    "error"
+                  ],
                   "properties": {
                     "kind": {
                       "type": "string",
@@ -1236,7 +1434,9 @@
                 },
                 {
                   "type": "object",
-                  "required": ["kind"],
+                  "required": [
+                    "kind"
+                  ],
                   "properties": {
                     "kind": {
                       "type": "string",
@@ -1246,7 +1446,10 @@
                 },
                 {
                   "type": "object",
-                  "required": ["kind", "error"],
+                  "required": [
+                    "kind",
+                    "error"
+                  ],
                   "properties": {
                     "kind": {
                       "type": "string",
@@ -1265,7 +1468,12 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["id", "mode", "text", "nudge"],
+            "required": [
+              "id",
+              "mode",
+              "text",
+              "nudge"
+            ],
             "properties": {
               "id": {
                 "type": "integer"
@@ -1287,7 +1495,10 @@
               },
               "author": {
                 "type": "object",
-                "required": ["id", "displayName"],
+                "required": [
+                  "id",
+                  "displayName"
+                ],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -1311,7 +1522,10 @@
               },
               "privateTo": {
                 "type": "object",
-                "required": ["id", "displayName"],
+                "required": [
+                  "id",
+                  "displayName"
+                ],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -1331,7 +1545,12 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["id", "summary", "status", "requestedAt"],
+            "required": [
+              "id",
+              "summary",
+              "status",
+              "requestedAt"
+            ],
             "properties": {
               "id": {
                 "type": "string"
@@ -1368,7 +1587,10 @@
               },
               "decidedBy": {
                 "type": "object",
-                "required": ["id", "displayName"],
+                "required": [
+                  "id",
+                  "displayName"
+                ],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -1389,7 +1611,10 @@
               },
               "privateTo": {
                 "type": "object",
-                "required": ["id", "displayName"],
+                "required": [
+                  "id",
+                  "displayName"
+                ],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -1409,7 +1634,11 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["id", "text", "createdAt"],
+            "required": [
+              "id",
+              "text",
+              "createdAt"
+            ],
             "properties": {
               "id": {
                 "type": "string"
@@ -1422,7 +1651,10 @@
               },
               "by": {
                 "type": "object",
-                "required": ["id", "displayName"],
+                "required": [
+                  "id",
+                  "displayName"
+                ],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -1437,7 +1669,10 @@
               },
               "owner": {
                 "type": "object",
-                "required": ["id", "displayName"],
+                "required": [
+                  "id",
+                  "displayName"
+                ],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -1452,7 +1687,10 @@
               },
               "privateTo": {
                 "type": "object",
-                "required": ["id", "displayName"],
+                "required": [
+                  "id",
+                  "displayName"
+                ],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -1472,7 +1710,11 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["id", "message", "fireAt"],
+            "required": [
+              "id",
+              "message",
+              "fireAt"
+            ],
             "properties": {
               "id": {
                 "type": "string"
@@ -1488,7 +1730,10 @@
               },
               "privateTo": {
                 "type": "object",
-                "required": ["id", "displayName"],
+                "required": [
+                  "id",
+                  "displayName"
+                ],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -1508,11 +1753,20 @@
     },
     "HomeRoom": {
       "type": "object",
-      "required": ["room", "running", "pendingApprovals"],
+      "required": [
+        "room",
+        "running",
+        "pendingApprovals"
+      ],
       "properties": {
         "room": {
           "type": "object",
-          "required": ["id", "kind", "name", "members"],
+          "required": [
+            "id",
+            "kind",
+            "name",
+            "members"
+          ],
           "properties": {
             "id": {
               "type": "string"
@@ -1540,7 +1794,10 @@
               "type": "array",
               "items": {
                 "type": "object",
-                "required": ["id", "displayName"],
+                "required": [
+                  "id",
+                  "displayName"
+                ],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -1569,7 +1826,12 @@
     },
     "HomeNudge": {
       "type": "object",
-      "required": ["id", "roomId", "message", "fireAt"],
+      "required": [
+        "id",
+        "roomId",
+        "message",
+        "fireAt"
+      ],
       "properties": {
         "id": {
           "type": "string"
@@ -1588,7 +1850,10 @@
         },
         "privateTo": {
           "type": "object",
-          "required": ["id", "displayName"],
+          "required": [
+            "id",
+            "displayName"
+          ],
           "properties": {
             "id": {
               "type": "string"
@@ -1605,11 +1870,18 @@
     },
     "HomeView": {
       "type": "object",
-      "required": ["player", "rooms", "nudges"],
+      "required": [
+        "player",
+        "rooms",
+        "nudges"
+      ],
       "properties": {
         "player": {
           "type": "object",
-          "required": ["id", "displayName"],
+          "required": [
+            "id",
+            "displayName"
+          ],
           "properties": {
             "id": {
               "type": "string"
@@ -1626,11 +1898,20 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["room", "running", "pendingApprovals"],
+            "required": [
+              "room",
+              "running",
+              "pendingApprovals"
+            ],
             "properties": {
               "room": {
                 "type": "object",
-                "required": ["id", "kind", "name", "members"],
+                "required": [
+                  "id",
+                  "kind",
+                  "name",
+                  "members"
+                ],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -1658,7 +1939,10 @@
                     "type": "array",
                     "items": {
                       "type": "object",
-                      "required": ["id", "displayName"],
+                      "required": [
+                        "id",
+                        "displayName"
+                      ],
                       "properties": {
                         "id": {
                           "type": "string"
@@ -1690,7 +1974,12 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["id", "roomId", "message", "fireAt"],
+            "required": [
+              "id",
+              "roomId",
+              "message",
+              "fireAt"
+            ],
             "properties": {
               "id": {
                 "type": "string"
@@ -1709,7 +1998,10 @@
               },
               "privateTo": {
                 "type": "object",
-                "required": ["id", "displayName"],
+                "required": [
+                  "id",
+                  "displayName"
+                ],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -1745,7 +2037,11 @@
       "anyOf": [
         {
           "type": "object",
-          "required": ["op", "path", "value"],
+          "required": [
+            "op",
+            "path",
+            "value"
+          ],
           "properties": {
             "op": {
               "type": "string",
@@ -1770,7 +2066,10 @@
         },
         {
           "type": "object",
-          "required": ["op", "path"],
+          "required": [
+            "op",
+            "path"
+          ],
           "properties": {
             "op": {
               "type": "string",
@@ -1794,7 +2093,11 @@
         },
         {
           "type": "object",
-          "required": ["op", "path", "text"],
+          "required": [
+            "op",
+            "path",
+            "text"
+          ],
           "properties": {
             "op": {
               "type": "string",
@@ -1821,7 +2124,13 @@
         },
         {
           "type": "object",
-          "required": ["op", "path", "index", "remove", "insert"],
+          "required": [
+            "op",
+            "path",
+            "index",
+            "remove",
+            "insert"
+          ],
           "properties": {
             "op": {
               "type": "string",
@@ -1865,7 +2174,12 @@
       "anyOf": [
         {
           "type": "object",
-          "required": ["type", "protocol", "token", "client"],
+          "required": [
+            "type",
+            "protocol",
+            "token",
+            "client"
+          ],
           "properties": {
             "type": {
               "type": "string",
@@ -1880,7 +2194,11 @@
             },
             "client": {
               "type": "object",
-              "required": ["name", "version", "platform"],
+              "required": [
+                "name",
+                "version",
+                "platform"
+              ],
               "properties": {
                 "name": {
                   "type": "string"
@@ -1897,7 +2215,10 @@
         },
         {
           "type": "object",
-          "required": ["type", "target"],
+          "required": [
+            "type",
+            "target"
+          ],
           "properties": {
             "type": {
               "type": "string",
@@ -1911,7 +2232,10 @@
         },
         {
           "type": "object",
-          "required": ["type", "target"],
+          "required": [
+            "type",
+            "target"
+          ],
           "properties": {
             "type": {
               "type": "string",
@@ -1925,7 +2249,9 @@
         },
         {
           "type": "object",
-          "required": ["type"],
+          "required": [
+            "type"
+          ],
           "properties": {
             "type": {
               "type": "string",
@@ -1939,7 +2265,15 @@
       "anyOf": [
         {
           "type": "object",
-          "required": ["type", "protocol", "server", "epoch", "player", "clientId", "heartbeatMs"],
+          "required": [
+            "type",
+            "protocol",
+            "server",
+            "epoch",
+            "player",
+            "clientId",
+            "heartbeatMs"
+          ],
           "properties": {
             "type": {
               "type": "string",
@@ -1950,7 +2284,9 @@
             },
             "server": {
               "type": "object",
-              "required": ["version"],
+              "required": [
+                "version"
+              ],
               "properties": {
                 "version": {
                   "type": "string"
@@ -1962,7 +2298,10 @@
             },
             "player": {
               "type": "object",
-              "required": ["id", "displayName"],
+              "required": [
+                "id",
+                "displayName"
+              ],
               "properties": {
                 "id": {
                   "type": "string"
@@ -1985,7 +2324,12 @@
         },
         {
           "type": "object",
-          "required": ["type", "target", "seq", "view"],
+          "required": [
+            "type",
+            "target",
+            "seq",
+            "view"
+          ],
           "properties": {
             "type": {
               "type": "string",
@@ -2016,7 +2360,12 @@
                   "properties": {
                     "room": {
                       "type": "object",
-                      "required": ["id", "kind", "name", "members"],
+                      "required": [
+                        "id",
+                        "kind",
+                        "name",
+                        "members"
+                      ],
                       "properties": {
                         "id": {
                           "type": "string"
@@ -2044,7 +2393,10 @@
                           "type": "array",
                           "items": {
                             "type": "object",
-                            "required": ["id", "displayName"],
+                            "required": [
+                              "id",
+                              "displayName"
+                            ],
                             "properties": {
                               "id": {
                                 "type": "string"
@@ -2066,7 +2418,11 @@
                         "anyOf": [
                           {
                             "type": "object",
-                            "required": ["type", "id", "text"],
+                            "required": [
+                              "type",
+                              "id",
+                              "text"
+                            ],
                             "properties": {
                               "type": {
                                 "type": "string",
@@ -2080,7 +2436,10 @@
                               },
                               "author": {
                                 "type": "object",
-                                "required": ["id", "displayName"],
+                                "required": [
+                                  "id",
+                                  "displayName"
+                                ],
                                 "properties": {
                                   "id": {
                                     "type": "string"
@@ -2104,7 +2463,10 @@
                               },
                               "privateTo": {
                                 "type": "object",
-                                "required": ["id", "displayName"],
+                                "required": [
+                                  "id",
+                                  "displayName"
+                                ],
                                 "properties": {
                                   "id": {
                                     "type": "string"
@@ -2121,7 +2483,12 @@
                           },
                           {
                             "type": "object",
-                            "required": ["type", "id", "text", "firedAt"],
+                            "required": [
+                              "type",
+                              "id",
+                              "text",
+                              "firedAt"
+                            ],
                             "properties": {
                               "type": {
                                 "type": "string",
@@ -2138,7 +2505,10 @@
                               },
                               "privateTo": {
                                 "type": "object",
-                                "required": ["id", "displayName"],
+                                "required": [
+                                  "id",
+                                  "displayName"
+                                ],
                                 "properties": {
                                   "id": {
                                     "type": "string"
@@ -2155,7 +2525,13 @@
                           },
                           {
                             "type": "object",
-                            "required": ["type", "id", "approvalId", "summary", "status"],
+                            "required": [
+                              "type",
+                              "id",
+                              "approvalId",
+                              "summary",
+                              "status"
+                            ],
                             "properties": {
                               "type": {
                                 "type": "string",
@@ -2199,7 +2575,10 @@
                               },
                               "privateTo": {
                                 "type": "object",
-                                "required": ["id", "displayName"],
+                                "required": [
+                                  "id",
+                                  "displayName"
+                                ],
                                 "properties": {
                                   "id": {
                                     "type": "string"
@@ -2216,7 +2595,12 @@
                           },
                           {
                             "type": "object",
-                            "required": ["type", "id", "status", "parts"],
+                            "required": [
+                              "type",
+                              "id",
+                              "status",
+                              "parts"
+                            ],
                             "properties": {
                               "type": {
                                 "type": "string",
@@ -2254,7 +2638,10 @@
                                   "anyOf": [
                                     {
                                       "type": "object",
-                                      "required": ["type", "text"],
+                                      "required": [
+                                        "type",
+                                        "text"
+                                      ],
                                       "properties": {
                                         "type": {
                                           "type": "string",
@@ -2267,7 +2654,10 @@
                                     },
                                     {
                                       "type": "object",
-                                      "required": ["type", "text"],
+                                      "required": [
+                                        "type",
+                                        "text"
+                                      ],
                                       "properties": {
                                         "type": {
                                           "type": "string",
@@ -2280,7 +2670,13 @@
                                     },
                                     {
                                       "type": "object",
-                                      "required": ["type", "callId", "name", "args", "status"],
+                                      "required": [
+                                        "type",
+                                        "callId",
+                                        "name",
+                                        "args",
+                                        "status"
+                                      ],
                                       "properties": {
                                         "type": {
                                           "type": "string",
@@ -2334,7 +2730,10 @@
                               },
                               "privateTo": {
                                 "type": "object",
-                                "required": ["id", "displayName"],
+                                "required": [
+                                  "id",
+                                  "displayName"
+                                ],
                                 "properties": {
                                   "id": {
                                     "type": "string"
@@ -2351,7 +2750,11 @@
                           },
                           {
                             "type": "object",
-                            "required": ["type", "id", "kind"],
+                            "required": [
+                              "type",
+                              "id",
+                              "kind"
+                            ],
                             "properties": {
                               "type": {
                                 "type": "string",
@@ -2382,7 +2785,9 @@
                     },
                     "live": {
                       "type": "object",
-                      "required": ["running"],
+                      "required": [
+                        "running"
+                      ],
                       "properties": {
                         "running": {
                           "type": "boolean"
@@ -2391,7 +2796,12 @@
                           "anyOf": [
                             {
                               "type": "object",
-                              "required": ["kind", "attempt", "at", "error"],
+                              "required": [
+                                "kind",
+                                "attempt",
+                                "at",
+                                "error"
+                              ],
                               "properties": {
                                 "kind": {
                                   "type": "string",
@@ -2410,7 +2820,9 @@
                             },
                             {
                               "type": "object",
-                              "required": ["kind"],
+                              "required": [
+                                "kind"
+                              ],
                               "properties": {
                                 "kind": {
                                   "type": "string",
@@ -2420,7 +2832,10 @@
                             },
                             {
                               "type": "object",
-                              "required": ["kind", "error"],
+                              "required": [
+                                "kind",
+                                "error"
+                              ],
                               "properties": {
                                 "kind": {
                                   "type": "string",
@@ -2439,7 +2854,12 @@
                       "type": "array",
                       "items": {
                         "type": "object",
-                        "required": ["id", "mode", "text", "nudge"],
+                        "required": [
+                          "id",
+                          "mode",
+                          "text",
+                          "nudge"
+                        ],
                         "properties": {
                           "id": {
                             "type": "integer"
@@ -2461,7 +2881,10 @@
                           },
                           "author": {
                             "type": "object",
-                            "required": ["id", "displayName"],
+                            "required": [
+                              "id",
+                              "displayName"
+                            ],
                             "properties": {
                               "id": {
                                 "type": "string"
@@ -2485,7 +2908,10 @@
                           },
                           "privateTo": {
                             "type": "object",
-                            "required": ["id", "displayName"],
+                            "required": [
+                              "id",
+                              "displayName"
+                            ],
                             "properties": {
                               "id": {
                                 "type": "string"
@@ -2505,7 +2931,12 @@
                       "type": "array",
                       "items": {
                         "type": "object",
-                        "required": ["id", "summary", "status", "requestedAt"],
+                        "required": [
+                          "id",
+                          "summary",
+                          "status",
+                          "requestedAt"
+                        ],
                         "properties": {
                           "id": {
                             "type": "string"
@@ -2542,7 +2973,10 @@
                           },
                           "decidedBy": {
                             "type": "object",
-                            "required": ["id", "displayName"],
+                            "required": [
+                              "id",
+                              "displayName"
+                            ],
                             "properties": {
                               "id": {
                                 "type": "string"
@@ -2563,7 +2997,10 @@
                           },
                           "privateTo": {
                             "type": "object",
-                            "required": ["id", "displayName"],
+                            "required": [
+                              "id",
+                              "displayName"
+                            ],
                             "properties": {
                               "id": {
                                 "type": "string"
@@ -2583,7 +3020,11 @@
                       "type": "array",
                       "items": {
                         "type": "object",
-                        "required": ["id", "text", "createdAt"],
+                        "required": [
+                          "id",
+                          "text",
+                          "createdAt"
+                        ],
                         "properties": {
                           "id": {
                             "type": "string"
@@ -2596,7 +3037,10 @@
                           },
                           "by": {
                             "type": "object",
-                            "required": ["id", "displayName"],
+                            "required": [
+                              "id",
+                              "displayName"
+                            ],
                             "properties": {
                               "id": {
                                 "type": "string"
@@ -2611,7 +3055,10 @@
                           },
                           "owner": {
                             "type": "object",
-                            "required": ["id", "displayName"],
+                            "required": [
+                              "id",
+                              "displayName"
+                            ],
                             "properties": {
                               "id": {
                                 "type": "string"
@@ -2626,7 +3073,10 @@
                           },
                           "privateTo": {
                             "type": "object",
-                            "required": ["id", "displayName"],
+                            "required": [
+                              "id",
+                              "displayName"
+                            ],
                             "properties": {
                               "id": {
                                 "type": "string"
@@ -2646,7 +3096,11 @@
                       "type": "array",
                       "items": {
                         "type": "object",
-                        "required": ["id", "message", "fireAt"],
+                        "required": [
+                          "id",
+                          "message",
+                          "fireAt"
+                        ],
                         "properties": {
                           "id": {
                             "type": "string"
@@ -2662,7 +3116,10 @@
                           },
                           "privateTo": {
                             "type": "object",
-                            "required": ["id", "displayName"],
+                            "required": [
+                              "id",
+                              "displayName"
+                            ],
                             "properties": {
                               "id": {
                                 "type": "string"
@@ -2682,11 +3139,18 @@
                 },
                 {
                   "type": "object",
-                  "required": ["player", "rooms", "nudges"],
+                  "required": [
+                    "player",
+                    "rooms",
+                    "nudges"
+                  ],
                   "properties": {
                     "player": {
                       "type": "object",
-                      "required": ["id", "displayName"],
+                      "required": [
+                        "id",
+                        "displayName"
+                      ],
                       "properties": {
                         "id": {
                           "type": "string"
@@ -2703,11 +3167,20 @@
                       "type": "array",
                       "items": {
                         "type": "object",
-                        "required": ["room", "running", "pendingApprovals"],
+                        "required": [
+                          "room",
+                          "running",
+                          "pendingApprovals"
+                        ],
                         "properties": {
                           "room": {
                             "type": "object",
-                            "required": ["id", "kind", "name", "members"],
+                            "required": [
+                              "id",
+                              "kind",
+                              "name",
+                              "members"
+                            ],
                             "properties": {
                               "id": {
                                 "type": "string"
@@ -2735,7 +3208,10 @@
                                 "type": "array",
                                 "items": {
                                   "type": "object",
-                                  "required": ["id", "displayName"],
+                                  "required": [
+                                    "id",
+                                    "displayName"
+                                  ],
                                   "properties": {
                                     "id": {
                                       "type": "string"
@@ -2767,7 +3243,12 @@
                       "type": "array",
                       "items": {
                         "type": "object",
-                        "required": ["id", "roomId", "message", "fireAt"],
+                        "required": [
+                          "id",
+                          "roomId",
+                          "message",
+                          "fireAt"
+                        ],
                         "properties": {
                           "id": {
                             "type": "string"
@@ -2786,7 +3267,10 @@
                           },
                           "privateTo": {
                             "type": "object",
-                            "required": ["id", "displayName"],
+                            "required": [
+                              "id",
+                              "displayName"
+                            ],
                             "properties": {
                               "id": {
                                 "type": "string"
@@ -2810,7 +3294,12 @@
         },
         {
           "type": "object",
-          "required": ["type", "target", "seq", "ops"],
+          "required": [
+            "type",
+            "target",
+            "seq",
+            "ops"
+          ],
           "properties": {
             "type": {
               "type": "string",
@@ -2830,7 +3319,11 @@
                 "anyOf": [
                   {
                     "type": "object",
-                    "required": ["op", "path", "value"],
+                    "required": [
+                      "op",
+                      "path",
+                      "value"
+                    ],
                     "properties": {
                       "op": {
                         "type": "string",
@@ -2855,7 +3348,10 @@
                   },
                   {
                     "type": "object",
-                    "required": ["op", "path"],
+                    "required": [
+                      "op",
+                      "path"
+                    ],
                     "properties": {
                       "op": {
                         "type": "string",
@@ -2879,7 +3375,11 @@
                   },
                   {
                     "type": "object",
-                    "required": ["op", "path", "text"],
+                    "required": [
+                      "op",
+                      "path",
+                      "text"
+                    ],
                     "properties": {
                       "op": {
                         "type": "string",
@@ -2906,7 +3406,13 @@
                   },
                   {
                     "type": "object",
-                    "required": ["op", "path", "index", "remove", "insert"],
+                    "required": [
+                      "op",
+                      "path",
+                      "index",
+                      "remove",
+                      "insert"
+                    ],
                     "properties": {
                       "op": {
                         "type": "string",
@@ -2947,7 +3453,11 @@
         },
         {
           "type": "object",
-          "required": ["type", "target", "reason"],
+          "required": [
+            "type",
+            "target",
+            "reason"
+          ],
           "properties": {
             "type": {
               "type": "string",
@@ -2973,7 +3483,9 @@
         },
         {
           "type": "object",
-          "required": ["type"],
+          "required": [
+            "type"
+          ],
           "properties": {
             "type": {
               "type": "string",
@@ -2983,7 +3495,10 @@
         },
         {
           "type": "object",
-          "required": ["type", "message"],
+          "required": [
+            "type",
+            "message"
+          ],
           "properties": {
             "type": {
               "type": "string",
@@ -2998,7 +3513,9 @@
     },
     "ErrorResponse": {
       "type": "object",
-      "required": ["error"],
+      "required": [
+        "error"
+      ],
       "properties": {
         "error": {
           "type": "string"
@@ -3007,13 +3524,18 @@
     },
     "AssistantsResponse": {
       "type": "object",
-      "required": ["assistants"],
+      "required": [
+        "assistants"
+      ],
       "properties": {
         "assistants": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["name", "displayName"],
+            "required": [
+              "name",
+              "displayName"
+            ],
             "properties": {
               "name": {
                 "type": "string"
@@ -3028,7 +3550,10 @@
     },
     "ClientInfo": {
       "type": "object",
-      "required": ["name", "platform"],
+      "required": [
+        "name",
+        "platform"
+      ],
       "properties": {
         "name": {
           "type": "string"
@@ -3040,14 +3565,20 @@
     },
     "PairRequest": {
       "type": "object",
-      "required": ["code", "client"],
+      "required": [
+        "code",
+        "client"
+      ],
       "properties": {
         "code": {
           "type": "string"
         },
         "client": {
           "type": "object",
-          "required": ["name", "platform"],
+          "required": [
+            "name",
+            "platform"
+          ],
           "properties": {
             "name": {
               "type": "string"
@@ -3061,7 +3592,11 @@
     },
     "PairResponse": {
       "type": "object",
-      "required": ["token", "clientId", "player"],
+      "required": [
+        "token",
+        "clientId",
+        "player"
+      ],
       "properties": {
         "token": {
           "type": "string"
@@ -3071,7 +3606,10 @@
         },
         "player": {
           "type": "object",
-          "required": ["id", "displayName"],
+          "required": [
+            "id",
+            "displayName"
+          ],
           "properties": {
             "id": {
               "type": "string"
@@ -3088,11 +3626,18 @@
     },
     "MeResponse": {
       "type": "object",
-      "required": ["player", "clientId", "admin"],
+      "required": [
+        "player",
+        "clientId",
+        "admin"
+      ],
       "properties": {
         "player": {
           "type": "object",
-          "required": ["id", "displayName"],
+          "required": [
+            "id",
+            "displayName"
+          ],
           "properties": {
             "id": {
               "type": "string"
@@ -3115,7 +3660,9 @@
     },
     "CreateRoomRequest": {
       "type": "object",
-      "required": ["name"],
+      "required": [
+        "name"
+      ],
       "properties": {
         "name": {
           "type": "string"
@@ -3130,7 +3677,9 @@
     },
     "RenameRoomRequest": {
       "type": "object",
-      "required": ["name"],
+      "required": [
+        "name"
+      ],
       "properties": {
         "name": {
           "type": "string"
@@ -3155,7 +3704,10 @@
     },
     "MessageRequest": {
       "type": "object",
-      "required": ["text", "requestId"],
+      "required": [
+        "text",
+        "requestId"
+      ],
       "properties": {
         "text": {
           "type": "string"
@@ -3186,7 +3738,9 @@
     },
     "MessageResponse": {
       "type": "object",
-      "required": ["submissionId"],
+      "required": [
+        "submissionId"
+      ],
       "properties": {
         "submissionId": {
           "type": "integer"
@@ -3195,7 +3749,9 @@
     },
     "TimelineResponse": {
       "type": "object",
-      "required": ["items"],
+      "required": [
+        "items"
+      ],
       "properties": {
         "items": {
           "type": "array",
@@ -3203,7 +3759,11 @@
             "anyOf": [
               {
                 "type": "object",
-                "required": ["type", "id", "text"],
+                "required": [
+                  "type",
+                  "id",
+                  "text"
+                ],
                 "properties": {
                   "type": {
                     "type": "string",
@@ -3217,7 +3777,10 @@
                   },
                   "author": {
                     "type": "object",
-                    "required": ["id", "displayName"],
+                    "required": [
+                      "id",
+                      "displayName"
+                    ],
                     "properties": {
                       "id": {
                         "type": "string"
@@ -3241,7 +3804,10 @@
                   },
                   "privateTo": {
                     "type": "object",
-                    "required": ["id", "displayName"],
+                    "required": [
+                      "id",
+                      "displayName"
+                    ],
                     "properties": {
                       "id": {
                         "type": "string"
@@ -3258,7 +3824,12 @@
               },
               {
                 "type": "object",
-                "required": ["type", "id", "text", "firedAt"],
+                "required": [
+                  "type",
+                  "id",
+                  "text",
+                  "firedAt"
+                ],
                 "properties": {
                   "type": {
                     "type": "string",
@@ -3275,7 +3846,10 @@
                   },
                   "privateTo": {
                     "type": "object",
-                    "required": ["id", "displayName"],
+                    "required": [
+                      "id",
+                      "displayName"
+                    ],
                     "properties": {
                       "id": {
                         "type": "string"
@@ -3292,7 +3866,13 @@
               },
               {
                 "type": "object",
-                "required": ["type", "id", "approvalId", "summary", "status"],
+                "required": [
+                  "type",
+                  "id",
+                  "approvalId",
+                  "summary",
+                  "status"
+                ],
                 "properties": {
                   "type": {
                     "type": "string",
@@ -3336,7 +3916,10 @@
                   },
                   "privateTo": {
                     "type": "object",
-                    "required": ["id", "displayName"],
+                    "required": [
+                      "id",
+                      "displayName"
+                    ],
                     "properties": {
                       "id": {
                         "type": "string"
@@ -3353,7 +3936,12 @@
               },
               {
                 "type": "object",
-                "required": ["type", "id", "status", "parts"],
+                "required": [
+                  "type",
+                  "id",
+                  "status",
+                  "parts"
+                ],
                 "properties": {
                   "type": {
                     "type": "string",
@@ -3391,7 +3979,10 @@
                       "anyOf": [
                         {
                           "type": "object",
-                          "required": ["type", "text"],
+                          "required": [
+                            "type",
+                            "text"
+                          ],
                           "properties": {
                             "type": {
                               "type": "string",
@@ -3404,7 +3995,10 @@
                         },
                         {
                           "type": "object",
-                          "required": ["type", "text"],
+                          "required": [
+                            "type",
+                            "text"
+                          ],
                           "properties": {
                             "type": {
                               "type": "string",
@@ -3417,7 +4011,13 @@
                         },
                         {
                           "type": "object",
-                          "required": ["type", "callId", "name", "args", "status"],
+                          "required": [
+                            "type",
+                            "callId",
+                            "name",
+                            "args",
+                            "status"
+                          ],
                           "properties": {
                             "type": {
                               "type": "string",
@@ -3471,7 +4071,10 @@
                   },
                   "privateTo": {
                     "type": "object",
-                    "required": ["id", "displayName"],
+                    "required": [
+                      "id",
+                      "displayName"
+                    ],
                     "properties": {
                       "id": {
                         "type": "string"
@@ -3488,7 +4091,11 @@
               },
               {
                 "type": "object",
-                "required": ["type", "id", "kind"],
+                "required": [
+                  "type",
+                  "id",
+                  "kind"
+                ],
                 "properties": {
                   "type": {
                     "type": "string",
@@ -3521,7 +4128,9 @@
     },
     "RememberRequest": {
       "type": "object",
-      "required": ["text"],
+      "required": [
+        "text"
+      ],
       "properties": {
         "text": {
           "type": "string"
@@ -3530,13 +4139,20 @@
     },
     "PlayerMemoryResponse": {
       "type": "object",
-      "required": ["facts", "shared"],
+      "required": [
+        "facts",
+        "shared"
+      ],
       "properties": {
         "facts": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["id", "text", "createdAt"],
+            "required": [
+              "id",
+              "text",
+              "createdAt"
+            ],
             "properties": {
               "id": {
                 "type": "string"
@@ -3549,7 +4165,10 @@
               },
               "by": {
                 "type": "object",
-                "required": ["id", "displayName"],
+                "required": [
+                  "id",
+                  "displayName"
+                ],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -3564,7 +4183,10 @@
               },
               "owner": {
                 "type": "object",
-                "required": ["id", "displayName"],
+                "required": [
+                  "id",
+                  "displayName"
+                ],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -3579,7 +4201,10 @@
               },
               "privateTo": {
                 "type": "object",
-                "required": ["id", "displayName"],
+                "required": [
+                  "id",
+                  "displayName"
+                ],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -3602,7 +4227,9 @@
     },
     "ShareMemoryRequest": {
       "type": "object",
-      "required": ["shared"],
+      "required": [
+        "shared"
+      ],
       "properties": {
         "shared": {
           "type": "boolean"
@@ -3622,7 +4249,9 @@
     },
     "Profile": {
       "type": "object",
-      "required": ["displayName"],
+      "required": [
+        "displayName"
+      ],
       "properties": {
         "displayName": {
           "type": "string"
@@ -3743,7 +4372,10 @@
     },
     "PlayerSettingsSchema": {
       "type": "object",
-      "required": ["name", "schema"],
+      "required": [
+        "name",
+        "schema"
+      ],
       "properties": {
         "name": {
           "type": "string"
@@ -3759,13 +4391,18 @@
     },
     "PlayerSettingsResponse": {
       "type": "object",
-      "required": ["extensions"],
+      "required": [
+        "extensions"
+      ],
       "properties": {
         "extensions": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["name", "schema"],
+            "required": [
+              "name",
+              "schema"
+            ],
             "properties": {
               "name": {
                 "type": "string"
@@ -3784,7 +4421,9 @@
     },
     "PushKeyResponse": {
       "type": "object",
-      "required": ["publicKey"],
+      "required": [
+        "publicKey"
+      ],
       "properties": {
         "publicKey": {
           "type": "string"
@@ -3793,14 +4432,20 @@
     },
     "PushSubscribeRequest": {
       "type": "object",
-      "required": ["endpoint", "keys"],
+      "required": [
+        "endpoint",
+        "keys"
+      ],
       "properties": {
         "endpoint": {
           "type": "string"
         },
         "keys": {
           "type": "object",
-          "required": ["p256dh", "auth"],
+          "required": [
+            "p256dh",
+            "auth"
+          ],
           "properties": {
             "p256dh": {
               "type": "string"
@@ -3814,11 +4459,17 @@
     },
     "PushRenewRequest": {
       "type": "object",
-      "required": ["old", "subscription"],
+      "required": [
+        "old",
+        "subscription"
+      ],
       "properties": {
         "old": {
           "type": "object",
-          "required": ["endpoint", "auth"],
+          "required": [
+            "endpoint",
+            "auth"
+          ],
           "properties": {
             "endpoint": {
               "type": "string"
@@ -3830,14 +4481,20 @@
         },
         "subscription": {
           "type": "object",
-          "required": ["endpoint", "keys"],
+          "required": [
+            "endpoint",
+            "keys"
+          ],
           "properties": {
             "endpoint": {
               "type": "string"
             },
             "keys": {
               "type": "object",
-              "required": ["p256dh", "auth"],
+              "required": [
+                "p256dh",
+                "auth"
+              ],
               "properties": {
                 "p256dh": {
                   "type": "string"
@@ -3852,61 +4509,112 @@
       }
     },
     "DeviceRequest": {
-      "type": "object",
-      "required": ["platform", "token"],
-      "properties": {
-        "platform": {
-          "anyOf": [
-            {
-              "type": "string",
-              "const": "apns"
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "platform",
+            "token"
+          ],
+          "properties": {
+            "platform": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "apns"
+                },
+                {
+                  "type": "string",
+                  "const": "fcm"
+                }
+              ]
             },
-            {
+            "token": {
               "type": "string",
-              "const": "fcm"
-            }
-          ]
-        },
-        "token": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 4096
-        },
-        "environment": {
-          "anyOf": [
-            {
-              "type": "string",
-              "const": "production"
+              "minLength": 1,
+              "maxLength": 4096
             },
-            {
-              "type": "string",
-              "const": "sandbox"
+            "environment": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "production"
+                },
+                {
+                  "type": "string",
+                  "const": "sandbox"
+                }
+              ]
             }
-          ]
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "platform",
+            "relay",
+            "handle",
+            "deviceKey"
+          ],
+          "properties": {
+            "platform": {
+              "type": "string",
+              "const": "relay"
+            },
+            "relay": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            "handle": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192
+            },
+            "deviceKey": {
+              "type": "string",
+              "minLength": 43,
+              "maxLength": 43
+            }
+          }
         }
-      }
+      ]
     },
     "DevicesResponse": {
       "type": "object",
-      "required": ["apns", "fcm"],
+      "required": [
+        "apns",
+        "fcm"
+      ],
       "properties": {
         "apns": {
           "type": "boolean"
         },
         "fcm": {
           "type": "boolean"
+        },
+        "relays": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
     "ModelViewResponse": {
       "type": "object",
-      "required": ["messages"],
+      "required": [
+        "messages"
+      ],
       "properties": {
         "messages": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["role", "text"],
+            "required": [
+              "role",
+              "text"
+            ],
             "properties": {
               "role": {
                 "anyOf": [
@@ -3938,7 +4646,12 @@
     },
     "MonthUsage": {
       "type": "object",
-      "required": ["month", "total", "players", "rooms"],
+      "required": [
+        "month",
+        "total",
+        "players",
+        "rooms"
+      ],
       "properties": {
         "month": {
           "type": "string",
@@ -3967,7 +4680,12 @@
     },
     "UsageResponse": {
       "type": "object",
-      "required": ["month", "total", "mine", "budget"],
+      "required": [
+        "month",
+        "total",
+        "mine",
+        "budget"
+      ],
       "properties": {
         "month": {
           "type": "string"
@@ -3993,7 +4711,12 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["month", "total", "players", "rooms"],
+            "required": [
+              "month",
+              "total",
+              "players",
+              "rooms"
+            ],
             "properties": {
               "month": {
                 "type": "string",
@@ -4025,7 +4748,9 @@
     },
     "DecideRequest": {
       "type": "object",
-      "required": ["approve"],
+      "required": [
+        "approve"
+      ],
       "properties": {
         "approve": {
           "type": "boolean"
@@ -4034,7 +4759,11 @@
     },
     "RoomExtension": {
       "type": "object",
-      "required": ["name", "enabled", "byDefault"],
+      "required": [
+        "name",
+        "enabled",
+        "byDefault"
+      ],
       "properties": {
         "name": {
           "type": "string"
@@ -4055,13 +4784,19 @@
     },
     "RoomExtensionsResponse": {
       "type": "object",
-      "required": ["extensions"],
+      "required": [
+        "extensions"
+      ],
       "properties": {
         "extensions": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["name", "enabled", "byDefault"],
+            "required": [
+              "name",
+              "enabled",
+              "byDefault"
+            ],
             "properties": {
               "name": {
                 "type": "string"
@@ -4085,7 +4820,9 @@
     },
     "SetRoomExtensionRequest": {
       "type": "object",
-      "required": ["enabled"],
+      "required": [
+        "enabled"
+      ],
       "properties": {
         "enabled": {
           "anyOf": [
@@ -4101,7 +4838,13 @@
     },
     "ExtensionSetup": {
       "type": "object",
-      "required": ["from", "configured", "enabled", "settings", "missingEnv"],
+      "required": [
+        "from",
+        "configured",
+        "enabled",
+        "settings",
+        "missingEnv"
+      ],
       "properties": {
         "from": {
           "type": "string"
@@ -4161,13 +4904,21 @@
     },
     "ExtensionSetupsResponse": {
       "type": "object",
-      "required": ["extensions"],
+      "required": [
+        "extensions"
+      ],
       "properties": {
         "extensions": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["from", "configured", "enabled", "settings", "missingEnv"],
+            "required": [
+              "from",
+              "configured",
+              "enabled",
+              "settings",
+              "missingEnv"
+            ],
             "properties": {
               "from": {
                 "type": "string"
@@ -4230,13 +4981,18 @@
     },
     "SaveExtensionSetupsRequest": {
       "type": "object",
-      "required": ["extensions"],
+      "required": [
+        "extensions"
+      ],
       "properties": {
         "extensions": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["from", "enabled"],
+            "required": [
+              "from",
+              "enabled"
+            ],
             "properties": {
               "from": {
                 "type": "string"
@@ -4277,7 +5033,9 @@
     },
     "ProtectRequest": {
       "type": "object",
-      "required": ["value"],
+      "required": [
+        "value"
+      ],
       "properties": {
         "value": {
           "type": "string"
@@ -4293,7 +5051,9 @@
     },
     "ProtectResponse": {
       "type": "object",
-      "required": ["placeholder"],
+      "required": [
+        "placeholder"
+      ],
       "properties": {
         "placeholder": {
           "type": "string"
@@ -4302,7 +5062,11 @@
     },
     "PrivateValue": {
       "type": "object",
-      "required": ["placeholder", "kind", "value"],
+      "required": [
+        "placeholder",
+        "kind",
+        "value"
+      ],
       "properties": {
         "placeholder": {
           "type": "string"
@@ -4317,13 +5081,19 @@
     },
     "PrivateValuesResponse": {
       "type": "object",
-      "required": ["values"],
+      "required": [
+        "values"
+      ],
       "properties": {
         "values": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["placeholder", "kind", "value"],
+            "required": [
+              "placeholder",
+              "kind",
+              "value"
+            ],
             "properties": {
               "placeholder": {
                 "type": "string"
@@ -4341,7 +5111,9 @@
     },
     "CreatePlayerRequest": {
       "type": "object",
-      "required": ["displayName"],
+      "required": [
+        "displayName"
+      ],
       "properties": {
         "displayName": {
           "type": "string"
@@ -4350,11 +5122,16 @@
     },
     "PlayerResponse": {
       "type": "object",
-      "required": ["player"],
+      "required": [
+        "player"
+      ],
       "properties": {
         "player": {
           "type": "object",
-          "required": ["id", "displayName"],
+          "required": [
+            "id",
+            "displayName"
+          ],
           "properties": {
             "id": {
               "type": "string"
@@ -4371,7 +5148,9 @@
     },
     "PairingCodeRequest": {
       "type": "object",
-      "required": ["playerId"],
+      "required": [
+        "playerId"
+      ],
       "properties": {
         "playerId": {
           "type": "string"
@@ -4380,7 +5159,11 @@
     },
     "PairingCodeResponse": {
       "type": "object",
-      "required": ["code", "link", "expiresAt"],
+      "required": [
+        "code",
+        "link",
+        "expiresAt"
+      ],
       "properties": {
         "code": {
           "type": "string"
@@ -4395,7 +5178,11 @@
     },
     "TokenInfo": {
       "type": "object",
-      "required": ["clientId", "playerId", "createdAt"],
+      "required": [
+        "clientId",
+        "playerId",
+        "createdAt"
+      ],
       "properties": {
         "clientId": {
           "type": "string"
@@ -4408,7 +5195,10 @@
         },
         "client": {
           "type": "object",
-          "required": ["name", "platform"],
+          "required": [
+            "name",
+            "platform"
+          ],
           "properties": {
             "name": {
               "type": "string"
@@ -4422,13 +5212,19 @@
     },
     "TokensResponse": {
       "type": "object",
-      "required": ["tokens"],
+      "required": [
+        "tokens"
+      ],
       "properties": {
         "tokens": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["clientId", "playerId", "createdAt"],
+            "required": [
+              "clientId",
+              "playerId",
+              "createdAt"
+            ],
             "properties": {
               "clientId": {
                 "type": "string"
@@ -4441,7 +5237,10 @@
               },
               "client": {
                 "type": "object",
-                "required": ["name", "platform"],
+                "required": [
+                  "name",
+                  "platform"
+                ],
                 "properties": {
                   "name": {
                     "type": "string"
@@ -4458,7 +5257,11 @@
     },
     "AdminPlayer": {
       "type": "object",
-      "required": ["id", "displayName", "admin"],
+      "required": [
+        "id",
+        "displayName",
+        "admin"
+      ],
       "properties": {
         "id": {
           "type": "string"
@@ -4473,13 +5276,19 @@
     },
     "PlayersResponse": {
       "type": "object",
-      "required": ["players"],
+      "required": [
+        "players"
+      ],
       "properties": {
         "players": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["id", "displayName", "admin"],
+            "required": [
+              "id",
+              "displayName",
+              "admin"
+            ],
             "properties": {
               "id": {
                 "type": "string"
@@ -4497,7 +5306,9 @@
     },
     "SetAdminRequest": {
       "type": "object",
-      "required": ["admin"],
+      "required": [
+        "admin"
+      ],
       "properties": {
         "admin": {
           "type": "boolean"
@@ -4506,7 +5317,9 @@
     },
     "IssueTokenRequest": {
       "type": "object",
-      "required": ["playerId"],
+      "required": [
+        "playerId"
+      ],
       "properties": {
         "playerId": {
           "type": "string"
@@ -4515,13 +5328,20 @@
     },
     "RoomsResponse": {
       "type": "object",
-      "required": ["rooms"],
+      "required": [
+        "rooms"
+      ],
       "properties": {
         "rooms": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["id", "kind", "name", "members"],
+            "required": [
+              "id",
+              "kind",
+              "name",
+              "members"
+            ],
             "properties": {
               "id": {
                 "type": "string"
@@ -4549,7 +5369,10 @@
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "required": ["id", "displayName"],
+                  "required": [
+                    "id",
+                    "displayName"
+                  ],
                   "properties": {
                     "id": {
                       "type": "string"
@@ -4570,7 +5393,10 @@
     },
     "AdminCreateRoomRequest": {
       "type": "object",
-      "required": ["name", "members"],
+      "required": [
+        "name",
+        "members"
+      ],
       "properties": {
         "name": {
           "type": "string"
@@ -4585,13 +5411,20 @@
     },
     "NudgesResponse": {
       "type": "object",
-      "required": ["nudges"],
+      "required": [
+        "nudges"
+      ],
       "properties": {
         "nudges": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["id", "roomId", "message", "fireAt"],
+            "required": [
+              "id",
+              "roomId",
+              "message",
+              "fireAt"
+            ],
             "properties": {
               "id": {
                 "type": "string"
@@ -4610,7 +5443,10 @@
               },
               "privateTo": {
                 "type": "object",
-                "required": ["id", "displayName"],
+                "required": [
+                  "id",
+                  "displayName"
+                ],
                 "properties": {
                   "id": {
                     "type": "string"

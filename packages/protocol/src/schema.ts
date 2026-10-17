@@ -526,16 +526,33 @@ export type PushRenewRequest = Static<typeof PushRenewRequest>;
 /**
  * A phone or a Mac that takes native pushes: an APNs device token (hex) or an FCM registration
  * token. `sandbox` is for apps built for development, which APNs reaches through its sandbox.
+ * Or, for apps whose push credentials the server doesn't have, a relay's handle for the device
+ * and the device's X25519 key (32 bytes, base64url), which pushes are sealed for.
  */
-export const DeviceRequest = Type.Object({
-  platform: Type.Union([Type.Literal("apns"), Type.Literal("fcm")]),
-  token: Type.String({ minLength: 1, maxLength: 4096 }),
-  environment: Type.Optional(Type.Union([Type.Literal("production"), Type.Literal("sandbox")])),
-});
+export const DeviceRequest = Type.Union([
+  Type.Object({
+    platform: Type.Union([Type.Literal("apns"), Type.Literal("fcm")]),
+    token: Type.String({ minLength: 1, maxLength: 4096 }),
+    environment: Type.Optional(Type.Union([Type.Literal("production"), Type.Literal("sandbox")])),
+  }),
+  Type.Object({
+    platform: Type.Literal("relay"),
+    relay: Type.String({ minLength: 1, maxLength: 2048 }),
+    handle: Type.String({ minLength: 1, maxLength: 8192 }),
+    deviceKey: Type.String({ minLength: 43, maxLength: 43 }),
+  }),
+]);
 export type DeviceRequest = Static<typeof DeviceRequest>;
 
-/** Which native pushes this server can send; a platform it can't is `false`. */
-export const DevicesResponse = Type.Object({ apns: Type.Boolean(), fcm: Type.Boolean() });
+/**
+ * Which native pushes this server can send; a platform it can't is `false`. `relays` lists the
+ * push relays it sends through.
+ */
+export const DevicesResponse = Type.Object({
+  apns: Type.Boolean(),
+  fcm: Type.Boolean(),
+  relays: Type.Optional(Type.Array(Type.String())),
+});
 export type DevicesResponse = Static<typeof DevicesResponse>;
 
 export const DecideRequest = Type.Object({ approve: Type.Boolean() });

@@ -24,6 +24,8 @@ export type ApnsNotification = {
   /** Groups notifications in Notification Center. */
   readonly threadId: string;
   readonly data: Readonly<Record<string, string>>;
+  /** Lets the app's notification service extension change it before it is shown, such as to decrypt it. */
+  readonly mutableContent?: boolean;
 };
 
 const ORIGINS = {
@@ -63,6 +65,7 @@ export class Apns {
         alert: { title: notification.title, body: notification.body },
         sound: "default",
         "thread-id": notification.threadId,
+        ...(notification.mutableContent === true ? { "mutable-content": 1 } : {}),
       },
       ...notification.data,
     });
