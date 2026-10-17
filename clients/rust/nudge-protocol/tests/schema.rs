@@ -569,6 +569,7 @@ fn http_bodies_match_the_schema() {
                 platform,
                 token: "ab12".into(),
                 environment,
+                account: Some("a".into()),
             }),
         );
     }
@@ -578,6 +579,7 @@ fn http_bodies_match_the_schema() {
             platform: DevicePlatform::Fcm,
             token: "x".into(),
             environment: Some(PushEnvironment::Production),
+            account: Some("Ab_-12".into()),
         }),
     );
     check(
@@ -587,6 +589,7 @@ fn http_bodies_match_the_schema() {
             relay: "https://relay.example".into(),
             handle: "h1.abc".into(),
             device_key: "A".repeat(43),
+            account: Some("x".repeat(22)),
         }),
     );
     check(

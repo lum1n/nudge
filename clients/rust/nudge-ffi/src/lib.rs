@@ -364,6 +364,7 @@ pub fn open_push(private_key: String, sealed: String) -> Option<PushPayload> {
         title: push.title,
         body: push.body,
         tag: push.tag,
+        account: push.account,
     })
 }
 
@@ -643,6 +644,7 @@ impl NudgeClient {
             platform: platform.into(),
             token,
             environment: environment.map(Into::into),
+            account: None,
         });
         Ok(run(async move { api.register_device(&device).await }).await?)
     }
@@ -663,8 +665,16 @@ impl NudgeClient {
             relay,
             handle,
             device_key,
+            account: None,
         });
         Ok(run(async move { api.register_device(&device).await }).await?)
+    }
+
+    /// What this client's pushes carry as `account`, given with every device it registers: the
+    /// same for every client of this server and assistant, and different from any other, though
+    /// their assistants share a name.
+    pub fn push_account(&self) -> String {
+        self.client.api().push_account()
     }
 
     /// Stops pushes to this device, as when signing out.

@@ -106,6 +106,7 @@ pub async fn register_with_relay(
         platform,
         token: token.to_owned(),
         environment,
+        account: None,
     };
     let registered: Registered =
         read(reqwest::Client::new().post(url).json(&device).send().await).await?;
@@ -349,10 +350,32 @@ impl Api {
     }
 
     /// Has the server push to this device when one of the player's rooms has news and they don't
-    /// have it open. Registering again with the same token replaces the old one.
+    /// have it open. Registering again with the same token replaces the old one. Without an
+    /// `account`, it is `push_account()`, so pushes say which sign-in they are for.
     pub async fn register_device(&self, device: &DeviceRequest) -> Result<(), ApiError> {
-        self.request_empty(Method::POST, &["ext", "push", "devices"], &[], Some(device))
-            .await
+        let mut device = device.clone();
+        let account = match &mut device {
+            DeviceRequest::Native(native) => &mut native.account,
+            DeviceRequest::Relay(relay) => &mut relay.account,
+        };
+        account.get_or_insert_with(|| self.push_account());
+        self.request_empty(
+            Method::POST,
+            &["ext", "push", "devices"],
+            &[],
+            Some(&device),
+        )
+        .await
+    }
+
+    /// What this client's pushes carry as `account`: the same for every client of this server and
+    /// assistant, and different for any other, though their assistants share a name. A hash, so
+    /// APNs and FCM don't learn the server's address from it.
+    pub fn push_account(&self) -> String {
+        use base64::Engine;
+        use sha2::Digest;
+        let digest = sha2::Sha256::digest(self.base.as_str().as_bytes());
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&digest[..16])
     }
 
     pub async fn unregister_device(&self, token: &str) -> Result<(), ApiError> {

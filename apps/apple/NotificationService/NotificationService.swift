@@ -23,6 +23,7 @@ final class NotificationService: UNNotificationServiceExtension {
         info["roomId"] = opened.roomId
         info["kind"] = opened.kind
         info["url"] = opened.url
+        if let account = opened.account { info["account"] = account }
         content.userInfo = info
         contentHandler(content)
     }

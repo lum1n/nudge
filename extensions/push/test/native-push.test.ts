@@ -292,13 +292,28 @@ describe("native push through the server", () => {
           platform: "apns",
           token: ann,
           environment: "sandbox",
+          account: "home-robin",
         })
       ).status,
     ).toBe(204);
     expect(
-      (await call("POST", "/ext/push/devices", tokens.Bo!, { platform: "fcm", token: "bo-phone" }))
-        .status,
+      (
+        await call("POST", "/ext/push/devices", tokens.Bo!, {
+          platform: "fcm",
+          token: "bo-phone",
+          account: "bo_1",
+        })
+      ).status,
     ).toBe(204);
+    expect(
+      (
+        await call("POST", "/ext/push/devices", tokens.Bo!, {
+          platform: "fcm",
+          token: "bo-phone",
+          account: "not a name",
+        })
+      ).status,
+    ).toBe(400);
     expect(
       (await call("POST", "/ext/push/devices", tokens.Cy!, { platform: "fcm", token: "cy-phone" }))
         .status,
@@ -324,6 +339,7 @@ describe("native push through the server", () => {
       title: "Robin · Trip",
       body: "New message",
       tag: "robin/trip",
+      account: "bo_1",
     });
     expect(apns.received[0]!.headers[":path"]).toBe(`/3/device/${ann}`);
     expect(apns.received[0]!.body).toMatchObject({
@@ -331,6 +347,7 @@ describe("native push through the server", () => {
       assistant: "robin",
       roomId: "trip",
       kind: "answer",
+      account: "home-robin",
     });
 
     expect((await call("DELETE", `/ext/push/devices/${ann}`, tokens.Ann!)).status).toBe(204);

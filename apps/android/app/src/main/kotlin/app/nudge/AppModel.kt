@@ -206,17 +206,27 @@ class AppModel(private val context: Context) {
     /** What a push through the relay says, opened with the device's key; null if it isn't for it. */
     fun openPush(sealed: String): PushPayload? = nudge.ffi.openPush(deviceKey.privateKey, sealed)
 
-    /** A tapped notification: open its room, at the assistant of that name. */
-    fun open(assistant: String?, room: String?) {
+    /**
+     * The session a push is for: by the `account` it carries, or, from a server that sends none, by
+     * the assistant's name, which two servers may share.
+     */
+    private fun sessionForPush(account: String?, assistant: String?): Session? {
+        val sessions = sessions()
+        if (account != null) sessions.firstOrNull { it.client.pushAccount() == account }?.let { return it }
+        return sessions.firstOrNull { assistant == null || it.account.assistant == assistant }
+    }
+
+    /** A tapped notification: open its room, at the assistant it came from. */
+    fun open(account: String?, assistant: String?, room: String?) {
         if (room == null) return
-        val session = sessions().firstOrNull { assistant == null || it.account.assistant == assistant } ?: return
+        val session = sessionForPush(account, assistant) ?: return
         requestedRoom.value = RoomRef(session.account.key, room)
     }
 
     /** Whether the room a push is about is on screen. */
-    fun showing(assistant: String?, room: String): Boolean {
+    fun showing(account: String?, assistant: String?, room: String): Boolean {
         val shown = selectedRoom.value ?: return false
-        return shown.room == room && (assistant == null || sessionFor(shown.account)?.account?.assistant == assistant)
+        return shown.room == room && sessionForPush(account, assistant)?.account?.key == shown.account
     }
 
     /**

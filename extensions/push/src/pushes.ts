@@ -30,6 +30,8 @@ type Device = {
   /** Relay only: where to send, and the device's X25519 key that pushes are sealed for. */
   relay?: string;
   deviceKey?: string;
+  /** The app's name for the sign-in that registered it, given back in its pushes. */
+  account?: string;
   /** The client whose token added it; it stops getting pushes once that token is revoked. */
   clientId: string;
   createdAt: number;
@@ -77,12 +79,14 @@ export type DeviceTarget =
       readonly platform: "apns" | "fcm";
       readonly token: string;
       readonly environment?: ApnsEnvironment;
+      readonly account?: string;
     }
   | {
       readonly platform: "relay";
       readonly relay: string;
       readonly handle: string;
       readonly deviceKey: string;
+      readonly account?: string;
     };
 
 export class BadSubscription extends Error {
@@ -197,6 +201,9 @@ export class Pushes {
   }
 
   private device(device: DeviceTarget): Omit<Device, "clientId" | "createdAt"> {
+    if (device.account !== undefined && !/^[A-Za-z0-9_-]{1,64}$/.test(device.account))
+      throw new BadSubscription("account is 1 to 64 letters, digits, - or _");
+    const account = device.account === undefined ? {} : { account: device.account };
     if (device.platform === "relay") {
       const relay = this.native.relays?.find(device.relay);
       if (relay === undefined)
@@ -210,6 +217,7 @@ export class Pushes {
         token: device.handle,
         relay,
         deviceKey: device.deviceKey,
+        ...account,
       };
     }
     if (this.native[device.platform] === undefined)
@@ -222,6 +230,7 @@ export class Pushes {
       platform: device.platform,
       token: device.token,
       ...(device.platform === "apns" ? { environment: device.environment ?? "production" } : {}),
+      ...account,
     };
   }
 
@@ -297,6 +306,7 @@ export class Pushes {
       roomId: message.roomId,
       kind: message.kind,
       url: message.url,
+      ...(device.account === undefined ? {} : { account: device.account }),
     };
     if (device.platform === "relay") {
       const relays = this.native.relays;

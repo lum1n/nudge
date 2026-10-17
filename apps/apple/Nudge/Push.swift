@@ -75,10 +75,12 @@ final class AppDelegate: NSObject, UNUserNotificationCenterDelegate {
         _ center: UNUserNotificationCenter, willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
         let info = notification.request.content.userInfo
+        let account = info["account"] as? String
         let assistant = info["assistant"] as? String
         let room = info["roomId"] as? String
         return await MainActor.run {
-            model.showing(assistant: assistant, room: room) ? [] : [.banner, .list, .sound]
+            model.showing(account: account, assistant: assistant, room: room)
+                ? [] : [.banner, .list, .sound]
         }
     }
 
@@ -86,9 +88,10 @@ final class AppDelegate: NSObject, UNUserNotificationCenterDelegate {
         _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse
     ) async {
         let info = response.notification.request.content.userInfo
+        let account = info["account"] as? String
         let assistant = info["assistant"] as? String
         let room = info["roomId"] as? String
-        await MainActor.run { model.open(assistant: assistant, room: room) }
+        await MainActor.run { model.open(account: account, assistant: assistant, room: room) }
     }
 }
 

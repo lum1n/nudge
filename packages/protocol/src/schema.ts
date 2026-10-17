@@ -527,19 +527,24 @@ export type PushRenewRequest = Static<typeof PushRenewRequest>;
  * A phone or a Mac that takes native pushes: an APNs device token (hex) or an FCM registration
  * token. `sandbox` is for apps built for development, which APNs reaches through its sandbox.
  * Or, for apps whose push credentials the server doesn't have, a relay's handle for the device
- * and the device's X25519 key (32 bytes, base64url), which pushes are sealed for.
+ * and the device's X25519 key (32 bytes, base64url), which pushes are sealed for. `account` is
+ * the app's own name for this sign-in, given back in every push, so an app signed in to several
+ * assistants of the same name knows whose push it is.
  */
+const PushAccount = Type.Optional(Type.String({ pattern: "^[A-Za-z0-9_-]{1,64}$" }));
 export const DeviceRequest = Type.Union([
   Type.Object({
     platform: Type.Union([Type.Literal("apns"), Type.Literal("fcm")]),
     token: Type.String({ minLength: 1, maxLength: 4096 }),
     environment: Type.Optional(Type.Union([Type.Literal("production"), Type.Literal("sandbox")])),
+    account: PushAccount,
   }),
   Type.Object({
     platform: Type.Literal("relay"),
     relay: Type.String({ minLength: 1, maxLength: 2048 }),
     handle: Type.String({ minLength: 1, maxLength: 8192 }),
     deviceKey: Type.String({ minLength: 43, maxLength: 43 }),
+    account: PushAccount,
   }),
 ]);
 export type DeviceRequest = Static<typeof DeviceRequest>;

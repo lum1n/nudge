@@ -29,16 +29,18 @@ class PushService : FirebaseMessagingService() {
                 "title" to push.title,
                 "body" to push.body,
                 "tag" to push.tag,
+                "account" to push.account,
             )
         } ?: message.data
         val room = data["roomId"] ?: return
         // The room is on screen: the timeline shows it already.
-        if (model.foreground && model.showing(data["assistant"], room)) return
+        if (model.foreground && model.showing(data["account"], data["assistant"], room)) return
         val open = Intent(this, MainActivity::class.java)
             .setAction(Intent.ACTION_VIEW)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             .putExtra(MainActivity.EXTRA_ROOM, room)
             .putExtra(MainActivity.EXTRA_ASSISTANT, data["assistant"])
+            .putExtra(MainActivity.EXTRA_ACCOUNT, data["account"])
         val tag = data["tag"] ?: room
         val notification = NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)

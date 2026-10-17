@@ -837,6 +837,9 @@ pub struct NativeDevice {
     pub token: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub environment: Option<PushEnvironment>,
+    /// The app's name for this sign-in, given back in every push.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
 }
 
 /// Always `relay`.
@@ -855,6 +858,9 @@ pub struct RelayDevice {
     pub relay: String,
     pub handle: String,
     pub device_key: String,
+    /// The app's name for this sign-in, given back in every push.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
 }
 
 /// Which native pushes the server can send, and the push relays it sends through.

@@ -46,6 +46,9 @@ pub struct PushPayload {
     pub body: String,
     /// The same for every push of a room, so a newer one replaces the older.
     pub tag: String,
+    /// The sign-in it is for, as `Api::push_account`; absent from servers before it.
+    #[serde(default)]
+    pub account: Option<String>,
 }
 
 /// What `sealed` holds, if it was sealed for the device whose private key is `private_key`;
@@ -116,6 +119,7 @@ mod tests {
                 title: "Robin · Trip".into(),
                 body: "The train leaves at 09:12.".into(),
                 tag: "robin/trip".into(),
+                account: None,
             })
         );
     }

@@ -162,18 +162,25 @@ final class AppModel {
         Task { for session in sessions { await registerDevice(session) } }
     }
 
-    /// A tapped notification: open its room, at the assistant of that name.
-    func open(assistant: String?, room: String?) {
-        guard let room,
-            let session = sessions.first(where: { assistant == nil || $0.account.assistant == assistant })
-        else { return }
+    /// The session a push is for: by the `account` it carries, or, from a server that sends none,
+    /// by the assistant's name, which two servers may share.
+    private func session(forPush account: String?, assistant: String?) -> Session? {
+        if let account, let session = sessions.first(where: { $0.client.pushAccount() == account }) {
+            return session
+        }
+        return sessions.first(where: { assistant == nil || $0.account.assistant == assistant })
+    }
+
+    /// A tapped notification: open its room, at the assistant it came from.
+    func open(account: String?, assistant: String?, room: String?) {
+        guard let room, let session = session(forPush: account, assistant: assistant) else { return }
         selectedRoom = RoomRef(account: session.account.keychainAccount, room: room)
     }
 
     /// Whether the room a notification is about is on screen.
-    func showing(assistant: String?, room: String?) -> Bool {
+    func showing(account: String?, assistant: String?, room: String?) -> Bool {
         guard let room, let shown = selectedRoom, shown.room == room else { return false }
-        return assistant == nil || session(for: shown.account)?.account.assistant == assistant
+        return session(forPush: account, assistant: assistant)?.account.keychainAccount == shown.account
     }
 
     /// A `nudge://pair` link: sign in with it, or ask first when signed in elsewhere. A

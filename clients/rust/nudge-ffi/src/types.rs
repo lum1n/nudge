@@ -748,6 +748,8 @@ pub struct PushPayload {
     pub body: String,
     /// The same for every push of a room, so a newer one replaces the older.
     pub tag: String,
+    /// The sign-in it is for, as `NudgeClient::push_account`; absent from servers before it.
+    pub account: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]

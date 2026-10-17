@@ -4545,6 +4545,10 @@
                   "const": "sandbox"
                 }
               ]
+            },
+            "account": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$"
             }
           }
         },
@@ -4575,6 +4579,10 @@
               "type": "string",
               "minLength": 43,
               "maxLength": 43
+            },
+            "account": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,64}$"
             }
           }
         }

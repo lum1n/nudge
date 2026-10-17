@@ -43,7 +43,7 @@ class MainActivity : ComponentActivity() {
             JoinLink.parse(uri.toString())?.let { model.pendingJoin.value = it }
         }
         intent.getStringExtra(EXTRA_ROOM)?.let { room ->
-            model.open(intent.getStringExtra(EXTRA_ASSISTANT), room)
+            model.open(intent.getStringExtra(EXTRA_ACCOUNT), intent.getStringExtra(EXTRA_ASSISTANT), room)
         }
     }
 
@@ -56,5 +56,6 @@ class MainActivity : ComponentActivity() {
     companion object {
         const val EXTRA_ROOM = "app.nudge.room"
         const val EXTRA_ASSISTANT = "app.nudge.assistant"
+        const val EXTRA_ACCOUNT = "app.nudge.account"
     }
 }
