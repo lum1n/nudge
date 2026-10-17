@@ -2,7 +2,6 @@ import {
   type AppendMessage,
   AssistantRuntimeProvider,
   ComposerPrimitive,
-  MessagePartPrimitive,
   MessagePrimitive,
   type MessageState,
   type MessageStatus,
@@ -29,6 +28,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
 } from "react";
 import { clientFor, forgetToken, useConnection, useRoom } from "../../api.ts";
@@ -38,6 +38,7 @@ import {
   type Lane,
   PLACEHOLDER,
   toThreadMessageLike,
+  transcript,
 } from "../../assistant-runtime.ts";
 import { meQuery } from "../../queries.ts";
 
@@ -123,6 +124,14 @@ function Room() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
+              to="/$assistant/$room/activity"
+              params={{ assistant, room }}
+              title="Tool calls, nudges, watches and approvals behind the chat"
+              className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
+            >
+              Activity
+            </Link>
+            <Link
               to="/$assistant/$room/browser"
               params={{ assistant, room }}
               className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
@@ -167,7 +176,14 @@ function Room() {
         </aside>
         <div className="flex min-h-0 min-w-0 flex-1 flex-col px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-4 sm:pt-4 sm:pb-4">
           <div className="mb-2 flex items-center justify-between gap-2 md:hidden">
-            <h2 className="truncate font-medium">{view.room.name}</h2>
+            <h2 className="min-w-0 flex-1 truncate font-medium">{view.room.name}</h2>
+            <Link
+              to="/$assistant/$room/activity"
+              params={{ assistant, room }}
+              className="shrink-0 rounded border border-stone-300 bg-white px-3 py-1 text-sm"
+            >
+              Activity
+            </Link>
             <button
               type="button"
               onClick={() => setDrawer(true)}
@@ -291,8 +307,13 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
     [me],
   );
 
+  // Tool calls, nudges and ended approvals are on the activity page, not in the chat.
+  const messages = useMemo(
+    () => transcript(state.timeline, view.approvals),
+    [state.timeline, view.approvals],
+  );
   const runtime = useExternalStoreRuntime({
-    messages: state.timeline,
+    messages,
     convertMessage,
     isRunning: view.live.running,
     hasEarlier: state.canLoadEarlier,
@@ -461,6 +482,7 @@ function UserMessage({ message }: { message: MessageState }) {
 }
 
 function AssistantMessage({ message }: { message: Extract<MessageState, { role: "assistant" }> }) {
+  const { assistant, room } = Route.useParams();
   const secret = (message.metadata.custom as { private?: boolean } | undefined)?.private === true;
   return (
     <MessagePrimitive.Root>
@@ -470,12 +492,25 @@ function AssistantMessage({ message }: { message: Extract<MessageState, { role: 
           <MessagePrimitive.Parts
             components={{
               Text: MarkdownText,
-              Reasoning: ReasoningPart,
               tools: { Fallback: ToolCallPart },
             }}
           />
           {message.status.type !== "complete" && (
-            <p className="text-xs text-stone-500">{statusLabel(message.status)}</p>
+            <p className="text-xs text-stone-500">
+              {statusLabel(message.status)}
+              {message.status.type === "running" && (
+                <>
+                  {" · "}
+                  <Link
+                    to="/$assistant/$room/activity"
+                    params={{ assistant, room }}
+                    className="underline"
+                  >
+                    what it's doing
+                  </Link>
+                </>
+              )}
+            </p>
           )}
         </div>
       </div>
@@ -484,14 +519,9 @@ function AssistantMessage({ message }: { message: Extract<MessageState, { role: 
 }
 
 function SystemMessage({ message }: { message: MessageState }) {
-  // See `toThreadMessageLike`: the line's kind and data are in `metadata.custom`.
+  // See `toThreadMessageLike`: the line's kind and data are in `metadata.custom`. Nudges and
+  // ended approvals are on the activity page instead.
   const custom = message.metadata.custom as { kind?: string; text?: string } | undefined;
-  if (custom?.kind === "nudge")
-    return (
-      <p className="text-center text-sm [overflow-wrap:anywhere] text-stone-600 italic">
-        Nudge: {custom.text}
-      </p>
-    );
   if (custom?.kind === "marker") return <hr className="border-stone-200" />;
   if (custom?.kind === "private")
     return (
@@ -500,16 +530,6 @@ function SystemMessage({ message }: { message: MessageState }) {
         {custom.text}
       </p>
     );
-  if (custom?.kind === "approval") {
-    const data = custom as { summary: string; status: string; decidedBy?: string };
-    return (
-      <p className="text-center text-sm [overflow-wrap:anywhere] text-stone-600 italic">
-        {data.decidedBy ?? "Someone"} {data.status === "denied" ? "denied" : "approved"}{" "}
-        {data.summary}
-        {data.status === "failed" ? " — it failed" : ""}
-      </p>
-    );
-  }
   return null;
 }
 
@@ -580,11 +600,8 @@ function MarkdownText() {
   );
 }
 
-function ReasoningPart() {
-  return <MessagePartPrimitive.Text component="p" className="text-sm text-stone-500" />;
-}
-
-function ToolCallPart({ toolName, status, result, isError, artifact }: ToolCallMessagePartProps) {
+/** What `transcript` keeps of a tool: a login the browser waits for, or a pending approval. */
+function ToolCallPart({ toolName, artifact }: ToolCallMessagePartProps) {
   const { assistant, room } = Route.useParams();
   if (toolName === "browse" && (artifact as { needsLogin?: boolean } | undefined)?.needsLogin)
     return (
@@ -600,25 +617,13 @@ function ToolCallPart({ toolName, status, result, isError, artifact }: ToolCallM
     );
   const approval = (artifact as { approval?: string } | undefined)?.approval;
   if (typeof approval === "string") return <ApprovalCard id={approval} />;
-  const progress = (artifact as { progress?: string } | undefined)?.progress;
-  return (
-    <p className="text-sm [overflow-wrap:anywhere] text-stone-500">
-      {toolName} —{" "}
-      {result !== undefined
-        ? isError
-          ? "failed"
-          : "done"
-        : typeof progress === "string"
-          ? progress
-          : status.type}
-    </p>
-  );
+  return null;
 }
 
 function statusLabel(status: MessageStatus): string {
   switch (status.type) {
     case "running":
-      return "running";
+      return "Working…";
     case "requires-action":
       return status.reason;
     case "incomplete":

@@ -17,6 +17,7 @@ import { Route as AssistantIndexRouteImport } from './routes/$assistant/index'
 import { Route as AssistantRoomRouteImport } from './routes/$assistant/$room'
 import { Route as AssistantProfileRouteImport } from './routes/$assistant/profile'
 import { Route as AssistantSettingsRouteImport } from './routes/$assistant/settings'
+import { Route as AssistantRoomActivityRouteImport } from './routes/$assistant/$room_.activity'
 import { Route as AssistantRoomBrowserRouteImport } from './routes/$assistant/$room_.browser'
 import { Route as AssistantRoomConnectorsRouteImport } from './routes/$assistant/$room_.connectors'
 import { Route as AssistantRoomDocumentsRouteImport } from './routes/$assistant/$room_.documents'
@@ -63,6 +64,11 @@ const AssistantSettingsRoute = AssistantSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AssistantRouteRoute,
 } as any)
+const AssistantRoomActivityRoute = AssistantRoomActivityRouteImport.update({
+  id: '/$room_/activity',
+  path: '/$room/activity',
+  getParentRoute: () => AssistantRouteRoute,
+} as any)
 const AssistantRoomBrowserRoute = AssistantRoomBrowserRouteImport.update({
   id: '/$room_/browser',
   path: '/$room/browser',
@@ -98,6 +104,7 @@ export interface FileRoutesByFullPath {
   '/$assistant/profile': typeof AssistantProfileRoute
   '/$assistant/settings': typeof AssistantSettingsRoute
   '/$assistant/': typeof AssistantIndexRoute
+  '/$assistant/$room/activity': typeof AssistantRoomActivityRoute
   '/$assistant/$room/browser': typeof AssistantRoomBrowserRoute
   '/$assistant/$room/connectors': typeof AssistantRoomConnectorsRoute
   '/$assistant/$room/documents': typeof AssistantRoomDocumentsRoute
@@ -112,6 +119,7 @@ export interface FileRoutesByTo {
   '/$assistant/profile': typeof AssistantProfileRoute
   '/$assistant/settings': typeof AssistantSettingsRoute
   '/$assistant': typeof AssistantIndexRoute
+  '/$assistant/$room/activity': typeof AssistantRoomActivityRoute
   '/$assistant/$room/browser': typeof AssistantRoomBrowserRoute
   '/$assistant/$room/connectors': typeof AssistantRoomConnectorsRoute
   '/$assistant/$room/documents': typeof AssistantRoomDocumentsRoute
@@ -128,6 +136,7 @@ export interface FileRoutesById {
   '/$assistant/profile': typeof AssistantProfileRoute
   '/$assistant/settings': typeof AssistantSettingsRoute
   '/$assistant/': typeof AssistantIndexRoute
+  '/$assistant/$room_/activity': typeof AssistantRoomActivityRoute
   '/$assistant/$room_/browser': typeof AssistantRoomBrowserRoute
   '/$assistant/$room_/connectors': typeof AssistantRoomConnectorsRoute
   '/$assistant/$room_/documents': typeof AssistantRoomDocumentsRoute
@@ -145,6 +154,7 @@ export interface FileRouteTypes {
     | '/$assistant/profile'
     | '/$assistant/settings'
     | '/$assistant/'
+    | '/$assistant/$room/activity'
     | '/$assistant/$room/browser'
     | '/$assistant/$room/connectors'
     | '/$assistant/$room/documents'
@@ -159,6 +169,7 @@ export interface FileRouteTypes {
     | '/$assistant/profile'
     | '/$assistant/settings'
     | '/$assistant'
+    | '/$assistant/$room/activity'
     | '/$assistant/$room/browser'
     | '/$assistant/$room/connectors'
     | '/$assistant/$room/documents'
@@ -174,6 +185,7 @@ export interface FileRouteTypes {
     | '/$assistant/profile'
     | '/$assistant/settings'
     | '/$assistant/'
+    | '/$assistant/$room_/activity'
     | '/$assistant/$room_/browser'
     | '/$assistant/$room_/connectors'
     | '/$assistant/$room_/documents'
@@ -246,6 +258,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AssistantSettingsRouteImport
       parentRoute: typeof AssistantRouteRoute
     }
+    '/$assistant/$room_/activity': {
+      id: '/$assistant/$room_/activity'
+      path: '/$room/activity'
+      fullPath: '/$assistant/$room/activity'
+      preLoaderRoute: typeof AssistantRoomActivityRouteImport
+      parentRoute: typeof AssistantRouteRoute
+    }
     '/$assistant/$room_/browser': {
       id: '/$assistant/$room_/browser'
       path: '/$room/browser'
@@ -289,6 +308,7 @@ interface AssistantRouteRouteChildren {
   AssistantProfileRoute: typeof AssistantProfileRoute
   AssistantSettingsRoute: typeof AssistantSettingsRoute
   AssistantIndexRoute: typeof AssistantIndexRoute
+  AssistantRoomActivityRoute: typeof AssistantRoomActivityRoute
   AssistantRoomBrowserRoute: typeof AssistantRoomBrowserRoute
   AssistantRoomConnectorsRoute: typeof AssistantRoomConnectorsRoute
   AssistantRoomDocumentsRoute: typeof AssistantRoomDocumentsRoute
@@ -301,6 +321,7 @@ const AssistantRouteRouteChildren: AssistantRouteRouteChildren = {
   AssistantProfileRoute: AssistantProfileRoute,
   AssistantSettingsRoute: AssistantSettingsRoute,
   AssistantIndexRoute: AssistantIndexRoute,
+  AssistantRoomActivityRoute: AssistantRoomActivityRoute,
   AssistantRoomBrowserRoute: AssistantRoomBrowserRoute,
   AssistantRoomConnectorsRoute: AssistantRoomConnectorsRoute,
   AssistantRoomDocumentsRoute: AssistantRoomDocumentsRoute,

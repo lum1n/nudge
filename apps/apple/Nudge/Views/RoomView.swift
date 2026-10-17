@@ -10,6 +10,7 @@ struct RoomView: View {
     @State private var draft = ""
     @State private var secret = false
     @State private var showing: Sheet?
+    @State private var activity = false
     @State private var problem: String?
 
     enum Sheet: String, Identifiable {
@@ -25,6 +26,8 @@ struct RoomView: View {
             #endif
             .toolbar {
                 ToolbarItemGroup(placement: .primaryAction) {
+                    Button("Activity", systemImage: "list.bullet.rectangle") { activity.toggle() }
+                        .help("Tool calls, nudges, watches and approvals")
                     Button("Lists", systemImage: "checklist") { showing = .lists }
                     Button("Room", systemImage: "info.circle") { showing = .info }
                 }
@@ -36,7 +39,16 @@ struct RoomView: View {
                 case .browser: PanelSheet { BrowserView(client: client, roomId: roomId) }
                 }
             }
+            // Behind the transcript: from the right on macOS, a sheet on iOS.
+            .inspector(isPresented: $activity) {
+                ActivityView(observed: observed, isPresented: $activity)
+                    .inspectorColumnWidth(min: 300, ideal: 380, max: 560)
+                    #if os(iOS)
+                    .presentationDetents([.medium, .large])
+                    #endif
+            }
             .environment(\.openBrowser, { showing = .browser })
+            .environment(\.openActivity, { activity = true })
             .alert("Something went wrong", isPresented: Binding(get: { problem != nil }, set: { if !$0 { problem = nil } })) {
                 Button("OK") { problem = nil }
             } message: {
@@ -62,7 +74,7 @@ struct RoomView: View {
                 .safeAreaBar(edge: .bottom) {
                     GlassEffectContainer(spacing: 8) {
                         VStack(spacing: 8) {
-                            // Asked for by a tool and waiting: the timeline shows them once decided.
+                            // Asked for by a tool and waiting: the activity shows them once decided.
                             ForEach(state?.approvals.filter { $0.status == .pending } ?? [], id: \.id) { approval in
                                 ApprovalCard(summary: approval.summary, status: approval.status, decidedBy: nil) { approve in
                                     decide(approval.id, approve)
@@ -104,8 +116,9 @@ struct RoomView: View {
                     if let error = state?.earlierError {
                         Text(error).font(.footnote).foregroundStyle(.red)
                     }
-                    ForEach(state?.timeline ?? [], id: \.id) { item in
-                        TimelineRow(item: item, me: me, decide: decide)
+                    // Tool calls, nudges and ended approvals are in the activity.
+                    ForEach(transcript, id: \.id) { item in
+                        TimelineRow(item: item, me: me)
                     }
                     ForEach(queued, id: \.id) { message in
                         let mine = message.author == nil || message.author?.id == me
@@ -139,10 +152,13 @@ struct RoomView: View {
 
     private static let bottom = "bottom"
 
+    private var transcript: [TimelineItem] { state?.timeline.transcript ?? [] }
+
     /// What changes when the bottom of the timeline does: follow it.
     private var scrollKey: [String] {
         guard let state else { return [] }
-        var key = [state.timeline.last.map(answerLength) ?? "", "\(state.timeline.count)"]
+        let transcript = transcript
+        var key = [transcript.last.map(answerLength) ?? "", "\(transcript.count)"]
         key.append("\(state.pending.count)/\(state.queue.count)")
         return key
     }

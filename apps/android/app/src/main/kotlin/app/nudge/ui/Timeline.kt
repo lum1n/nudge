@@ -69,10 +69,14 @@ val TimelineItem.itemId: String
         is TimelineItem.Marker -> id
     }
 
-/** One item of a room's timeline; `openBrowser` opens the room's browser, to log in where it asks. */
+/**
+ * One item of a room's transcript: a message, an answer or a marker; nudges and ended approvals
+ * are in the activity ([ActivityRow]). `openBrowser` opens the room's browser, to log in where it
+ * asks; `openActivity` shows what a working answer is doing.
+ */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun TimelineRow(item: TimelineItem, me: String?, decide: (String, Boolean) -> Unit, openBrowser: () -> Unit) {
+fun TimelineRow(item: TimelineItem, me: String?, openBrowser: () -> Unit, openActivity: () -> Unit) {
     when (item) {
         // Someone else's private message: the server sent it empty, so it is a line, not a bubble.
         is TimelineItem.User -> if (item.privateTo != null && item.text.isEmpty()) {
@@ -84,30 +88,11 @@ fun TimelineRow(item: TimelineItem, me: String?, decide: (String, Boolean) -> Un
                 Bubble(item.text, mine, if (mine) null else item.author?.displayName)
             }
         }
-        is TimelineItem.Nudge -> if (item.privateTo != null && item.text.isEmpty()) {
-            PrivateLine("A nudge for ${item.privateTo?.displayName}")
-        } else Surface(
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            shape = MaterialTheme.shapes.large,
-        ) { Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Icon(Icons.Outlined.NotificationsActive, null)
-            Column {
-                Text(withHidden(item.text))
-                Text(
-                    DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(item.firedAt.toLong())),
-                    style = MaterialTheme.typography.labelSmall,
-                )
-            }
-        } }
-        is TimelineItem.Approval -> if (item.privateTo != null && item.summary.isEmpty()) {
-            PrivateLine("An approval for ${item.privateTo?.displayName} ended")
-        } else {
-            ApprovalCard(item.summary, item.status, item.decidedBy) { approve -> decide(item.approvalId, approve) }
-        }
+        is TimelineItem.Nudge, is TimelineItem.Approval -> {}
         is TimelineItem.Answer -> when (val owner = item.privateTo) {
-            null -> Answer(item, openBrowser)
+            null -> Answer(item, openBrowser, openActivity)
             else -> if (owner.id == me) {
-                Column { OnlyYou(); Answer(item, openBrowser) }
+                Column { OnlyYou(); Answer(item, openBrowser, openActivity) }
             } else {
                 PrivateLine(
                     if (item.status == AnswerStatus.RUNNING) "Answering ${owner.displayName} privately…"
@@ -171,10 +156,45 @@ fun PendingRow(message: PendingMessage, retry: () -> Unit, dismiss: () -> Unit) 
     }
 }
 
-/** The assistant's answer: its text, what it thought, and the tools it used, as they stream. */
+/** One thing in a room's activity: a nudge or watch that fired, an ended approval, or an answer's tools. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun Answer(answer: TimelineItem.Answer, openBrowser: () -> Unit) {
+fun ActivityRow(item: TimelineItem, openBrowser: () -> Unit) {
+    when (item) {
+        is TimelineItem.Nudge -> if (item.privateTo != null && item.text.isEmpty()) {
+            PrivateLine("A nudge for ${item.privateTo?.displayName}")
+        } else Surface(
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            shape = MaterialTheme.shapes.large,
+            modifier = Modifier.fillMaxWidth(),
+        ) { Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Icon(Icons.Outlined.NotificationsActive, null)
+            Column {
+                Text(withHidden(item.text))
+                Text(
+                    DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(item.firedAt.toLong())),
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+        } }
+        is TimelineItem.Approval -> if (item.privateTo != null && item.summary.isEmpty()) {
+            PrivateLine("An approval for ${item.privateTo?.displayName} ended")
+        } else {
+            // Ended: nothing left to decide.
+            ApprovalCard(item.summary, item.status, item.decidedBy) {}
+        }
+        is TimelineItem.Answer -> Answer(item, openBrowser, openActivity = {})
+        is TimelineItem.User, is TimelineItem.Marker -> {}
+    }
+}
+
+/**
+ * The assistant's answer as it streams: its text in the transcript; what it thought and the tools
+ * it used in the activity.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun Answer(answer: TimelineItem.Answer, openBrowser: () -> Unit, openActivity: () -> Unit) {
     Column(Modifier.fillMaxWidth().animateContentSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         answer.parts.forEach { part ->
             when (part) {
@@ -195,7 +215,17 @@ private fun Answer(answer: TimelineItem.Answer, openBrowser: () -> Unit) {
             }
         }
         when (answer.status) {
-            AnswerStatus.RUNNING -> if (answer.parts.isEmpty()) LoadingIndicator(Modifier.size(40.dp))
+            // At work with nothing to say yet: tapping it shows what it is doing.
+            AnswerStatus.RUNNING -> if (answer.parts.isEmpty()) {
+                Row(
+                    Modifier.clickable(onClick = openActivity),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    LoadingIndicator(Modifier.size(32.dp))
+                    Text("Working…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
             AnswerStatus.STOPPED ->
                 Text("Stopped", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             AnswerStatus.FAILED -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

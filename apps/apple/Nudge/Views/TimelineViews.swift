@@ -1,11 +1,11 @@
 import Nudge
 import SwiftUI
 
-/// One item of a room's timeline.
+/// One item of a room's transcript: a message, an answer or a marker. Nudges and ended
+/// approvals are in the activity (`ActivityView`).
 struct TimelineRow: View {
     let item: TimelineItem
     let me: String?
-    let decide: (_ approval: String, _ approve: Bool) -> Void
 
     var body: some View {
         switch item {
@@ -19,26 +19,8 @@ struct TimelineRow: View {
                 MessageBubble(text: text, mine: mine, author: mine ? nil : author?.displayName)
             }
             .frame(maxWidth: .infinity, alignment: mine ? .trailing : .leading)
-        case .nudge(_, let text, _, let privateTo?) where text.isEmpty:
-            PrivateLine(text: "A nudge for \(privateTo.displayName)")
-        case .nudge(_, let text, let firedAt, _):
-            Label {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(hidingValues(text))
-                    Text(date(firedAt), style: .time).font(.caption).foregroundStyle(.secondary)
-                }
-            } icon: {
-                Image(systemName: "bell.fill").foregroundStyle(.orange)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .glassEffect(.regular.tint(.orange.opacity(0.15)), in: .rect(cornerRadius: 18))
-        case .approval(_, _, let summary, _, _, let privateTo?) where summary.isEmpty:
-            PrivateLine(text: "An approval for \(privateTo.displayName) ended")
-        case .approval(_, let approvalId, let summary, let status, let decidedBy, _):
-            ApprovalCard(summary: summary, status: status, decidedBy: decidedBy) { approve in
-                decide(approvalId, approve)
-            }
+        case .nudge, .approval:
+            EmptyView()
         case .answer(_, let status, _, _, let privateTo?) where privateTo.id != me:
             PrivateLine(
                 text: status == .running
@@ -120,7 +102,8 @@ struct MessageBubble: View {
     }
 }
 
-/// The assistant's answer: its text, what it thought, and the tools it used, as they stream.
+/// The assistant's answer as it streams: its text in the transcript; what it thought and the
+/// tools it used in the activity.
 struct AnswerView: View {
     let status: AnswerStatus
     let error: String?
@@ -150,7 +133,7 @@ struct AnswerView: View {
             }
             switch status {
             case .running where parts.isEmpty:
-                ProgressView().controlSize(.small)
+                WorkingButton()
             case .stopped:
                 Label("Stopped", systemImage: "stop.circle").font(.caption).foregroundStyle(.secondary)
             case .failed:
@@ -176,6 +159,29 @@ struct AnswerView: View {
 extension EnvironmentValues {
     /// Opens the room's browser, to log in where it asks.
     @Entry var openBrowser: (() -> Void)?
+}
+
+extension EnvironmentValues {
+    /// Opens the room's activity: the tool calls, nudges and approvals behind the transcript.
+    @Entry var openActivity: (() -> Void)?
+}
+
+/// An answer at work with nothing to say yet; tapping it shows what it is doing.
+struct WorkingButton: View {
+    @Environment(\.openActivity) private var openActivity
+
+    var body: some View {
+        Button { openActivity?() } label: {
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text("Working…")
+            }
+        }
+        .buttonStyle(.plain)
+        .font(.callout)
+        .foregroundStyle(.secondary)
+        .disabled(openActivity == nil)
+    }
 }
 
 struct LoginButton: View {

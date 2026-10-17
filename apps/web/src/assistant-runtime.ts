@@ -5,7 +5,73 @@ import type {
   QueueItemState,
   ThreadMessageLike,
 } from "@assistant-ui/react";
-import type { Part, PendingMessage, QueuedMessage, TimelineItem } from "@nudge/client";
+import type {
+  Approval,
+  Part,
+  PendingMessage,
+  QueuedMessage,
+  TimelineItem,
+  ToolPart,
+} from "@nudge/client";
+
+type Answer = Extract<TimelineItem, { type: "answer" }>;
+
+/**
+ * The chat itself: messages and what the assistant said. Tool calls, thinking, fired nudges and
+ * ended approvals are left to `activity`, except a tool that waits on the reader: a login, or an
+ * approval still pending. An answer with nothing left to say drops out once it is done.
+ */
+export function transcript(
+  timeline: readonly TimelineItem[],
+  approvals: readonly Approval[],
+): TimelineItem[] {
+  const pending = new Set(approvals.filter((a) => a.status === "pending").map((a) => a.id));
+  return timeline.flatMap((item): TimelineItem[] => {
+    switch (item.type) {
+      case "nudge":
+      case "approval":
+        return [];
+      case "answer": {
+        const parts = item.parts.filter(
+          (part) => part.type === "text" || (part.type === "tool" && asksReader(part, pending)),
+        );
+        // Someone else's private answer comes without parts, and stays as a line saying so.
+        const othersPrivate = item.privateTo !== undefined && item.parts.length === 0;
+        if (parts.length === 0 && item.status === "done" && !othersPrivate) return [];
+        return [{ ...item, parts }];
+      }
+      default:
+        return [item];
+    }
+  });
+}
+
+/** A tool the reader has to act on in the chat: the browser wants a login, or an approval. */
+function asksReader(part: ToolPart, pending: ReadonlySet<string>): boolean {
+  const details = part.details as { needsLogin?: boolean; approval?: string } | undefined;
+  if (part.name === "browse" && details?.needsLogin === true) return true;
+  return typeof details?.approval === "string" && pending.has(details.approval);
+}
+
+/**
+ * What happened behind the chat, oldest first: fired nudges and watches, ended approvals, and
+ * each answer's tool calls and thinking (its text stays in the chat).
+ */
+export function activity(timeline: readonly TimelineItem[]): TimelineItem[] {
+  return timeline.flatMap((item): TimelineItem[] => {
+    switch (item.type) {
+      case "nudge":
+      case "approval":
+        return [item];
+      case "answer": {
+        const parts = item.parts.filter((part) => part.type !== "text");
+        return parts.length === 0 ? [] : [{ ...item, parts } satisfies Answer];
+      }
+      default:
+        return [];
+    }
+  });
+}
 
 /** A timeline item as the `ThreadMessageLike` assistant-ui renders; `me` is the player's id. */
 export function toThreadMessageLike(item: TimelineItem, me: string): ThreadMessageLike {
@@ -134,7 +200,7 @@ export function progressLine(output: string): string | undefined {
   return line.length > 100 ? `${line.slice(0, 99)}…` : line;
 }
 
-function toStatus(answer: Extract<TimelineItem, { type: "answer" }>): MessageStatus {
+function toStatus(answer: Answer): MessageStatus {
   switch (answer.status) {
     case "running":
       return { type: "running" };

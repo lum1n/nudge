@@ -1,10 +1,12 @@
 import { type AppendMessage, fromThreadMessageLike } from "@assistant-ui/react";
 import { describe, expect, it } from "vitest";
 import {
+  activity,
   appendText,
   buildQueueAdapter,
   progressLine,
   toThreadMessageLike,
+  transcript,
 } from "../src/assistant-runtime.ts";
 import type { QueuedMessage, TimelineItem } from "@nudge/client";
 
@@ -151,6 +153,71 @@ describe("toThreadMessageLike", () => {
     expect(toThreadMessageLike({ ...base, status: "done" }, "ann")).toMatchObject({
       status: { type: "complete", reason: "stop" },
     });
+  });
+});
+
+describe("transcript and activity", () => {
+  const tool = (callId: string, details?: unknown) => ({
+    type: "tool" as const,
+    callId,
+    name: callId === "login" ? "browse" : "call_api",
+    args: {},
+    status: "done" as const,
+    result: "ok",
+    ...(details === undefined ? {} : { details }),
+  });
+  const timeline: TimelineItem[] = [
+    { type: "nudge", id: "n", text: "Watch w1: 2 new", firedAt: 1 },
+    {
+      type: "answer",
+      id: "a1",
+      status: "done",
+      parts: [
+        { type: "reasoning", text: "hm" },
+        tool("c1"),
+        tool("login", { needsLogin: true }),
+        tool("ask", { approval: "p1" }),
+        tool("old", { approval: "p0" }),
+        { type: "text", text: "Two new mails." },
+      ],
+    },
+    { type: "approval", id: "ap", approvalId: "p0", summary: "Send", status: "done" },
+    { type: "answer", id: "a2", status: "done", parts: [tool("c2")] },
+    { type: "answer", id: "a3", status: "running", parts: [tool("c3")] },
+    { type: "marker", id: "m", kind: "reset" },
+  ];
+  const approvals = [
+    { id: "p1", summary: "Pay", status: "pending" as const },
+    { id: "p0", summary: "Send", status: "done" as const },
+  ] as unknown as Parameters<typeof transcript>[1];
+
+  it("keeps messages and the answers' text, and only the tools waiting on the reader", () => {
+    expect(transcript(timeline, approvals)).toMatchObject([
+      {
+        id: "a1",
+        parts: [{ callId: "login" }, { callId: "ask" }, { type: "text", text: "Two new mails." }],
+      },
+      { id: "a3", status: "running", parts: [] },
+      { id: "m" },
+    ]);
+  });
+
+  it("keeps someone else's private answer, which comes without parts", () => {
+    const secret: TimelineItem = {
+      type: "answer",
+      id: "s",
+      status: "done",
+      parts: [],
+      privateTo: { id: "bo", displayName: "Bo" },
+    };
+    expect(transcript([secret], [])).toEqual([secret]);
+  });
+
+  it("gives nudges, ended approvals and each answer's tools and thinking to the activity", () => {
+    const items = activity(timeline);
+    expect(items.map((item) => item.id)).toEqual(["n", "a1", "ap", "a2", "a3"]);
+    expect(items[1]).toMatchObject({ parts: { length: 5 } });
+    expect(JSON.stringify(items)).not.toContain("Two new mails.");
   });
 });
 

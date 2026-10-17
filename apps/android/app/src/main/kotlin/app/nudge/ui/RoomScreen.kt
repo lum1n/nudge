@@ -19,6 +19,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
@@ -35,6 +36,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -60,7 +62,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import nudge.client.ObservedRoom
 import nudge.client.RoomState
+import nudge.client.activity
 import nudge.client.observeRoomState
+import nudge.client.transcript
 import nudge.ffi.ApprovalStatus
 import nudge.ffi.GoneReason
 import nudge.ffi.NudgeClient
@@ -94,6 +98,7 @@ fun RoomScreen(
     var draft by remember(roomId) { mutableStateOf("") }
     var secret by remember(roomId) { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
+    var showActivity by remember(roomId) { mutableStateOf(false) }
 
     fun attempt(action: suspend () -> Unit) = scope.launch {
         try {
@@ -107,7 +112,7 @@ fun RoomScreen(
         bottomBar = {
             if (state?.status != SyncStatus.GONE) {
                 Column(Modifier.imePadding()) {
-                    // Asked for by a tool and waiting: the timeline shows them once decided.
+                    // Asked for by a tool and waiting: the activity shows them once decided.
                     state?.approvals?.filter { it.status == ApprovalStatus.PENDING }?.forEach { approval ->
                         Box(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
                             ApprovalCard(approval.summary, approval.status, null) { approve ->
@@ -155,6 +160,7 @@ fun RoomScreen(
                     back?.let { IconButton(onClick = it) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Rooms") } }
                 },
                 actions = {
+                    IconButton(onClick = { showActivity = true }) { Icon(Icons.Outlined.History, "Activity") }
                     IconButton(onClick = lists) { Icon(Icons.Outlined.Checklist, "Lists") }
                     IconButton(onClick = info) { Icon(Icons.Outlined.Info, "Room") }
                 },
@@ -172,12 +178,18 @@ fun RoomScreen(
                 else -> Timeline(
                     state, me?.player?.id,
                     loadEarlier = { scope.launch { room?.loadEarlier() } },
-                    decide = { approval, approve -> attempt { client.decide(roomId, approval, approve) } },
                     retry = { requestId -> attempt { client.resend(roomId, requestId) } },
                     dismiss = { requestId -> client.dismiss(roomId, requestId) },
                     openBrowser = browser,
+                    openActivity = { showActivity = true },
                 )
             }
+        }
+    }
+
+    if (showActivity && state != null) {
+        ModalBottomSheet(onDismissRequest = { showActivity = false }) {
+            Activity(state, loadEarlier = { scope.launch { room?.loadEarlier() } }, openBrowser = browser)
         }
     }
 
@@ -198,10 +210,10 @@ private fun Timeline(
     state: RoomState,
     me: String?,
     loadEarlier: () -> Unit,
-    decide: (String, Boolean) -> Unit,
     retry: (String) -> Unit,
     dismiss: (String) -> Unit,
     openBrowser: () -> Unit,
+    openActivity: () -> Unit,
 ) {
     // Laid out from the bottom, so a growing answer stays in view.
     val listState = rememberLazyListState()
@@ -229,9 +241,46 @@ private fun Timeline(
                 )
             }
         }
-        items(state.timeline.asReversed(), key = { it.itemId }) { item ->
-            TimelineRow(item, me, decide, openBrowser)
+        // Tool calls, nudges and ended approvals are in the activity.
+        items(state.timeline.transcript.asReversed(), key = { it.itemId }) { item ->
+            TimelineRow(item, me, openBrowser, openActivity)
         }
+        if (state.canLoadEarlier || state.loadingEarlier) {
+            item(key = "earlier") {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    if (state.loadingEarlier) {
+                        LoadingIndicator(Modifier.size(32.dp))
+                    } else {
+                        FilledTonalButton(onClick = loadEarlier, shapes = ButtonDefaults.shapes()) { Text("Load earlier") }
+                    }
+                }
+            }
+        }
+        state.earlierError?.let { error ->
+            item(key = "earlierError") { Text(error, color = MaterialTheme.colorScheme.error) }
+        }
+    }
+}
+
+/** What happened behind the transcript, newest first: tool calls, thinking, nudges, watches, approvals. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun Activity(state: RoomState, loadEarlier: () -> Unit, openBrowser: () -> Unit) {
+    val items = state.timeline.activity.asReversed()
+    LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+    ) {
+        item(key = "title") { Text("Activity", style = MaterialTheme.typography.titleLarge) }
+        if (items.isEmpty()) {
+            item(key = "empty") {
+                Text(
+                    "Nothing yet: tool calls, nudges, watches and approvals show up here.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        items(items, key = { it.itemId }) { item -> ActivityRow(item, openBrowser) }
         if (state.canLoadEarlier || state.loadingEarlier) {
             item(key = "earlier") {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
