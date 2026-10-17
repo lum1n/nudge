@@ -1,2 +1,11 @@
 export { default, type FederationOptions, federationExtension } from "./extension.ts";
-export { newKey, publicKeyOf, seal, type Signed, unseal } from "./signing.ts";
+export {
+  checkSigned,
+  newKey,
+  open,
+  publicKeyOf,
+  seal,
+  type Sealed,
+  type Signed,
+  signPayload,
+} from "./signing.ts";

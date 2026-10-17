@@ -5,7 +5,10 @@ import { createNudge, type Nudge } from "@nudge/core";
 import { createApp } from "@nudge/server";
 import type { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { federationExtension } from "../src/index.ts";
+import { randomUUID } from "node:crypto";
+import { federationExtension, newKey, seal } from "../src/index.ts";
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const context = BACKGROUND_CONTEXT;
 const HOME = "https://home.example";
@@ -15,8 +18,12 @@ describe("federation", () => {
   const apps = new Map<string, Hono>();
   const errors: unknown[] = [];
   /** Requests between the two servers, without leaving the process. */
+  /** Every body sent to an inbox, as it went. */
+  const wire: string[] = [];
   const between: typeof fetch = async (input, init) => {
     const url = new URL(String(input));
+    if (url.pathname.endsWith("/inbox") || url.pathname.endsWith("/join"))
+      wire.push(String(init?.body));
     const app = apps.get(url.origin);
     if (app === undefined) throw new Error(`No server at ${url.origin}`);
     return app.request(url.toString(), init);
@@ -72,6 +79,7 @@ describe("federation", () => {
 
   beforeEach(async () => {
     errors.length = 0;
+    wire.length = 0;
     home = await open("robin", HOME);
     away = await open("team", AWAY);
     vegard = (await home.players.invite("Vegard", context)).token;
@@ -161,7 +169,9 @@ describe("federation", () => {
     expect(
       (await call(HOME, "GET", "/ext/federation/memberships", { token: vegard })).json,
     ).toEqual({
-      memberships: [{ server: AWAY, assistant: "team", since: expect.any(Number) }],
+      memberships: [
+        { server: AWAY, assistant: "team", since: expect.any(Number), carryMemory: false },
+      ],
     });
   });
 
@@ -170,23 +180,35 @@ describe("federation", () => {
       token: ann,
       body: { address: "vegard@home.example/robin" },
     });
-    const signed = await assertion();
-    const claim = JSON.parse(Buffer.from(signed.payload, "base64url").toString());
-    const forged = {
-      ...signed,
-      payload: Buffer.from(
-        JSON.stringify({ ...claim, profile: { displayName: "Mallory" } }),
-      ).toString("base64url"),
-    };
+    const sealed = await assertion();
+    const tampered = { ...sealed, data: `A${sealed.data.slice(1)}` };
     expect(
-      (await call(AWAY, "POST", "/ext/federation/join", { body: { assertion: forged } })).status,
-    ).toBe(401);
-    const elsewhere = (
-      await call(HOME, "POST", "/ext/federation/assert", {
-        token: vegard,
-        body: { server: "https://third.example", assistant: "team" },
-      })
-    ).json.assertion;
+      await call(AWAY, "POST", "/ext/federation/join", { body: { assertion: tampered } }),
+    ).toMatchObject({ status: 400, json: { error: "That was not encrypted for this assistant" } });
+    // Encrypted for the right assistant, but signed by someone other than the home.
+    const keys = (await call(AWAY, "GET", "/ext/federation/key")).json;
+    const now = Date.now();
+    const forged = seal(newKey("ed25519"), keys.encryptionKey, {
+      kind: "nudge.join",
+      home: { server: HOME, assistant: "robin", playerId: "vegard" },
+      audience: { server: AWAY, assistant: "team" },
+      profile: { displayName: "Mallory" },
+      issuedAt: now,
+      expiresAt: now + 60_000,
+      nonce: randomUUID(),
+    });
+    expect(
+      await call(AWAY, "POST", "/ext/federation/join", { body: { assertion: forged } }),
+    ).toMatchObject({ status: 401, json: { error: "The home did not sign that" } });
+    const elsewhere = seal(newKey("ed25519"), keys.encryptionKey, {
+      kind: "nudge.join",
+      home: { server: HOME, assistant: "robin", playerId: "vegard" },
+      audience: { server: "https://third.example", assistant: "team" },
+      profile: { displayName: "Vegard" },
+      issuedAt: now,
+      expiresAt: now + 60_000,
+      nonce: randomUUID(),
+    });
     expect(
       await call(AWAY, "POST", "/ext/federation/join", { body: { assertion: elsewhere } }),
     ).toMatchObject({ status: 400, json: { error: "Not for this assistant" } });
@@ -215,21 +237,70 @@ describe("federation", () => {
       .poll(() => away.profiles.get("vegard", context))
       .toEqual({ displayName: "Vegard S", timeZone: "Europe/Oslo" });
 
-    // An assistant that no longer knows them is dropped from their memberships.
-    await call(HOME, "POST", "/ext/federation/assert", {
-      token: vegard,
-      body: { server: AWAY, assistant: "gone" },
-    });
     await call(HOME, "PATCH", "/me/profile", { token: vegard, body: { language: "nb" } });
     await expect
       .poll(async () => (await away.profiles.get("vegard", context))?.language)
       .toBe("nb");
+  });
+
+  it("carries own memory where the person allows it, encrypted, and both ways", async () => {
+    await call(AWAY, "POST", "/ext/federation/invites", {
+      token: ann,
+      body: { address: "vegard@home.example/robin" },
+    });
+    const guest = (
+      await call(AWAY, "POST", "/ext/federation/join", { body: { assertion: await assertion() } })
+    ).json.token as string;
+    await home.protect("Storgata 1", "ADDRESS");
+    await home.protect("the blue box", "PRIVATE", { owner: "vegard" });
+    await home.memory.rememberFor("vegard", "Lives in Storgata 1", context);
+    await home.memory.rememberFor("vegard", "Keeps the spare key in the blue box", context);
+    // Nothing goes before they say so.
+    await sleep(20);
+    expect((await away.memory.ofPlayer("vegard", context)).facts).toEqual([]);
+
+    const carry = (on: boolean) =>
+      call(HOME, "PUT", "/ext/federation/memberships/memory", {
+        token: vegard,
+        body: { server: AWAY, assistant: "team", carry: on },
+      });
+    expect((await carry(true)).json).toMatchObject({ carryMemory: true });
+    const away_facts = async () =>
+      (await away.memory.ofPlayer("vegard", context)).facts.map((fact) =>
+        away.showTo("vegard", fact.text),
+      );
+    // The private value stays home; the other is protected anew there.
+    expect(await away_facts()).toEqual(["Lives in Storgata 1"]);
+    const [carried] = (await away.memory.ofPlayer("vegard", context)).facts;
+    expect(carried!.text).toMatch(/^Lives in ⟦ADDRESS\d+⟧$/);
+    for (const body of wire) {
+      expect(body).not.toContain("Storgata");
+      expect(body).not.toContain(Buffer.from("Storgata").toString("base64url").slice(0, 8));
+    }
+
+    // Remembered there, it goes home and comes back from there.
+    await away.memory.rememberFor("vegard", "Allergic to nuts", context);
     await expect
-      .poll(
-        async () =>
-          (await call(HOME, "GET", "/ext/federation/memberships", { token: vegard })).json
-            .memberships.length,
+      .poll(async () =>
+        (await home.memory.ofPlayer("vegard", context)).facts.map((fact) => fact.text),
       )
-      .toBe(1);
+      .toContain("Allergic to nuts");
+    await expect.poll(away_facts).toEqual(["Lives in Storgata 1", "Allergic to nuts"]);
+    // Forgotten there, it is forgotten at home.
+    const nuts = (await away.memory.ofPlayer("vegard", context)).facts[1]!;
+    await away.memory.forgetFor("vegard", nuts.id, context);
+    await expect
+      .poll(async () =>
+        (await home.memory.ofPlayer("vegard", context)).facts.map((fact) => fact.text),
+      )
+      .not.toContain("Allergic to nuts");
+
+    // Turned off, what came from home leaves; what they remember there stays there.
+    await carry(false);
+    expect(await away_facts()).toEqual([]);
+    await away.memory.rememberFor("vegard", "Likes the window seat", context);
+    await sleep(20);
+    expect((await home.memory.ofPlayer("vegard", context)).facts).toHaveLength(2);
+    expect(guest).toBeTypeOf("string");
   });
 });

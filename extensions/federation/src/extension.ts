@@ -3,13 +3,15 @@ import type { Context } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
   addressOf,
+  type Change,
   defineNudgeExtension,
   type ExtensionHost,
   type ExtensionRoute,
   InvalidProfile,
+  MAX_FACTS,
   type Nudge,
   parseAddress,
-  type PlayerHome,
+  PlayerMemoryDoc,
   type Profile,
   ProfileDoc,
   sameHome,
@@ -17,17 +19,40 @@ import {
 } from "@nudge/core";
 import type { Static, TSchema } from "typebox";
 import { Value } from "typebox/value";
-import { newKey, peek, publicKeyOf, seal, type Signed, unseal } from "./signing.ts";
+import {
+  FactBody,
+  ForgetClaim,
+  JoinClaim,
+  KeysBody,
+  MemoryClaim,
+  PlaceBody,
+  ProfileBody,
+  ProfileClaim,
+  RememberClaim,
+  SealedBody,
+} from "./messages.ts";
+import {
+  checkSigned,
+  newKey,
+  open,
+  peek,
+  publicKeyOf,
+  seal,
+  type Sealed,
+  type Signed,
+} from "./signing.ts";
 import {
   emptyState,
   FederationDoc,
   type FederationState,
   type Invite,
+  type Keys,
+  type Membership,
   type Place,
   samePlace,
 } from "./state.ts";
 
-const VERSION = "0.1.0";
+const VERSION = "0.2.0";
 
 const Settings = Type.Object({
   server: Type.String({
@@ -38,60 +63,19 @@ const Settings = Type.Object({
   }),
 });
 
-/** Where the signing key is kept in the extension's secrets. */
-const KEY = ["assistant", "signing-key"] as const;
+/** Where the keys are kept in the extension's secrets. */
+const SCOPE = "assistant";
 /** How long a join assertion works. */
 const JOIN_TTL_MS = 5 * 60_000;
 /** How long an invite waits for its person. */
 const INVITE_TTL_MS = 7 * 24 * 60 * 60_000;
 /** How far apart two hosts' clocks may be. */
 const SKEW_MS = 60_000;
-/** Signed bodies carry a profile, with its avatar. */
-const MAX_SIGNED_BYTES = 256 * 1024;
+/** Sealed bodies carry a profile, with its avatar, or a whole memory. */
+const MAX_SEALED_BYTES = 512 * 1024;
+const PLACEHOLDER = /⟦[A-Z]+\d+⟧/g;
 
-const SignedBody = Type.Object({ payload: Type.String(), signature: Type.String() });
-const PlaceBody = Type.Object({ server: Type.String(), assistant: Type.String() });
-const HomeBody = Type.Object({
-  server: Type.String(),
-  assistant: Type.String(),
-  playerId: Type.String(),
-});
-const ProfileBody = Type.Object({
-  displayName: Type.String({ minLength: 1 }),
-  avatar: Type.Optional(Type.String()),
-  timeZone: Type.Optional(Type.String()),
-  language: Type.Optional(Type.String()),
-  notifications: Type.Optional(
-    Type.Object({
-      answers: Type.Optional(Type.Boolean()),
-      approvals: Type.Optional(Type.Boolean()),
-    }),
-  ),
-  extensions: Type.Optional(Type.Record(Type.String(), Type.Record(Type.String(), Type.Unknown()))),
-});
-/** What a home signs for one of its people to join another assistant. */
-const JoinClaim = Type.Object({
-  kind: Type.Literal("nudge.join"),
-  home: HomeBody,
-  audience: PlaceBody,
-  profile: ProfileBody,
-  issuedAt: Type.Number(),
-  expiresAt: Type.Number(),
-  nonce: Type.String({ minLength: 16 }),
-});
-/** What a home signs when one of its people changed their profile. */
-const ProfileClaim = Type.Object({
-  kind: Type.Literal("nudge.profile"),
-  home: HomeBody,
-  audience: PlaceBody,
-  profile: ProfileBody,
-  issuedAt: Type.Number(),
-});
-const KeyResponse = Type.Object({
-  key: Type.String(),
-  server: Type.String(),
-  assistant: Type.String(),
-});
+type CarriedFact = Static<typeof FactBody>;
 
 export type FederationOptions = {
   /** How this assistant reaches others; tests pass one that never leaves the process. */
@@ -101,16 +85,17 @@ export type FederationOptions = {
 
 /**
  * Roaming (ADR 10), with its HTTP client chosen; the default export uses the global `fetch`. As a
- * home, the assistant vouches for its people: it signs their joins elsewhere and sends their
- * profile to every assistant they joined. As a place to join, it takes people an admin invited by
- * address, once their home vouched for them.
+ * home, the assistant vouches for its people: it signs their joins elsewhere, and sends their
+ * profile, and their own memory where they allow it, to every assistant they joined. As a place to
+ * join, it takes people an admin invited by address, once their home vouched for them. Everything
+ * between assistants is signed by the sender and encrypted for the receiver.
  */
 export function federationExtension(options: FederationOptions = {}) {
   return defineNudgeExtension({
     name: "federation",
     version: VERSION,
     description:
-      "People from other assistants can join this one, and people here can join others. Their profile comes from their home.",
+      "People from other assistants can join this one, and people here can join others. Their profile, and their own memory if they allow it, come from their home.",
     settings: Settings,
     setup: (host) => {
       const federation = new Federation(
@@ -126,30 +111,26 @@ export function federationExtension(options: FederationOptions = {}) {
 class Federation {
   /** This assistant, as others name it. */
   private readonly self: Place;
-  private readonly key: string;
+  private readonly signingKey: string;
+  private readonly encryptionKey: string;
   private unsubscribe: (() => void) | undefined;
   private closed = false;
-  /** When the last profile was signed, so each one signed later is newer. */
+  /** When the last message was signed, so each one signed later is newer. */
   private signedAt = 0;
+  /** Work for each player, one after the other, so their messages go and apply in order. */
+  private readonly queues = new Map<string, Promise<void>>();
 
   constructor(
     private readonly host: ExtensionHost<Static<typeof Settings>, unknown>,
     private readonly fetch: typeof globalThis.fetch,
     private readonly report: (error: unknown) => void,
   ) {
-    this.self = { server: host.settings.server.replace(/\/+$/, ""), assistant: host.name };
-    let key = host.secrets.get(...KEY);
-    if (key === undefined) {
-      key = newKey();
-      host.secrets.set(...KEY, key);
-    }
-    this.key = key;
+    this.self = { server: trimmed(host.settings.server), assistant: host.name };
+    this.signingKey = this.ownKey("signing-key", "ed25519");
+    this.encryptionKey = this.ownKey("encryption-key", "x25519");
     void host.whenOpen().then((nudge) => {
       if (this.closed) return;
-      this.unsubscribe = nudge.changes.subscribe((change) => {
-        if (change.kind === "profile")
-          this.sendProfile(change.playerId, this.context()).catch(this.report);
-      });
+      this.unsubscribe = nudge.changes.subscribe((change) => this.changed(change));
     });
   }
 
@@ -158,19 +139,58 @@ class Federation {
     this.unsubscribe?.();
   }
 
+  private ownKey(name: string, type: "ed25519" | "x25519"): string {
+    let key = this.host.secrets.get(SCOPE, name);
+    if (key === undefined) {
+      key = newKey(type);
+      this.host.secrets.set(SCOPE, name, key);
+    }
+    return key;
+  }
+
+  private changed(change: Change): void {
+    if (change.kind !== "profile" && change.kind !== "player-memory") return;
+    const { playerId } = change;
+    void this.enqueue(playerId, async () => {
+      const context = BACKGROUND_CONTEXT;
+      const player = await this.nudge().players.get(playerId, context);
+      if (player === undefined) return;
+      if (player.home !== undefined) {
+        if (change.kind === "player-memory") await this.forwardMemory(playerId, context);
+      } else if (change.kind === "profile") await this.sendProfile(playerId, context);
+      else await this.sendMemory(playerId, undefined, context);
+    });
+  }
+
+  private enqueue(playerId: string, work: () => Promise<void>): Promise<void> {
+    const next = (this.queues.get(playerId) ?? Promise.resolve()).then(work).catch(this.report);
+    this.queues.set(playerId, next);
+    return next;
+  }
+
   routes(): ExtensionRoute[] {
     const routes: ExtensionRoute[] = [
-      { method: "GET", path: "/key", auth: "none", handle: () => this.publicKey() },
+      {
+        method: "GET",
+        path: "/key",
+        auth: "none",
+        handle: () =>
+          Response.json({
+            ...this.self,
+            signingKey: publicKeyOf(this.signingKey),
+            encryptionKey: publicKeyOf(this.encryptionKey),
+          } satisfies Static<typeof KeysBody>),
+      },
       // As a home.
       {
         method: "POST",
         path: "/assert",
         auth: "player",
         handle: async (request, { player, context }) => {
-          const audience = await read(request, PlaceBody);
+          const audience = trimmedPlace(await read(request, PlaceBody));
           if (player!.home !== undefined)
             return problem(403, "Only people who live here can be vouched for");
-          return this.assert(player!.id, normalize(audience), context);
+          return this.assert(player!.id, audience, context);
         },
       },
       {
@@ -179,7 +199,19 @@ class Federation {
         auth: "player",
         handle: async (_request, { player, context }) => {
           const state = await this.state(context);
-          return Response.json({ memberships: state.memberships[player!.id] ?? [] });
+          return Response.json({ memberships: (state.memberships[player!.id] ?? []).map(shown) });
+        },
+      },
+      {
+        method: "PUT",
+        path: "/memberships/memory",
+        auth: "player",
+        handle: async (request, { player, context }) => {
+          const body = await read(
+            request,
+            Type.Object({ server: Type.String(), assistant: Type.String(), carry: Type.Boolean() }),
+          );
+          return this.setCarry(player!.id, trimmedPlace(body), body.carry, context);
         },
       },
       {
@@ -188,17 +220,22 @@ class Federation {
         auth: "player",
         handle: async (request, { player, context }) => {
           const query = new URL(request.url).searchParams;
-          const place = normalize({
+          const place = trimmedPlace({
             server: query.get("server") ?? "",
             assistant: query.get("assistant") ?? "",
           });
-          const left = await this.commit(async (state) => {
-            const list = state.memberships[player!.id] ?? [];
-            const kept = list.filter((membership) => !samePlace(membership, place));
-            state.memberships[player!.id] = kept;
-            return kept.length < list.length;
+          const found = (await this.state(context)).memberships[player!.id]?.find((m) =>
+            samePlace(m, place),
+          );
+          if (found === undefined) return problem(404, "No such membership");
+          // Their memory leaves with them.
+          if (found.carry) await this.setCarry(player!.id, place, false, context);
+          await this.commit((state) => {
+            state.memberships[player!.id] = (state.memberships[player!.id] ?? []).filter(
+              (membership) => !samePlace(membership, place),
+            );
           }, context);
-          return left ? new Response(null, { status: 204 }) : problem(404, "No such membership");
+          return new Response(null, { status: 204 });
         },
       },
       // As a place to join.
@@ -240,40 +277,45 @@ class Federation {
         method: "POST",
         path: "/join",
         auth: "none",
-        maxBodyBytes: MAX_SIGNED_BYTES,
+        maxBodyBytes: MAX_SEALED_BYTES,
         handle: async (request, { context }) => {
-          const { assertion } = await read(request, Type.Object({ assertion: SignedBody }));
+          const { assertion } = await read(request, Type.Object({ assertion: SealedBody }));
           return this.join(assertion, context);
         },
       },
+      // Both: what other assistants send.
       {
         method: "POST",
-        path: "/profile",
+        path: "/inbox",
         auth: "none",
-        maxBodyBytes: MAX_SIGNED_BYTES,
+        maxBodyBytes: MAX_SEALED_BYTES,
         handle: async (request, { context }) => {
-          const { update } = await read(request, Type.Object({ update: SignedBody }));
-          return this.takeProfile(update, context);
+          const { message } = await read(request, Type.Object({ message: SealedBody }));
+          return this.receive(message, context);
         },
       },
     ];
     return routes.map((route) => ({ ...route, handle: answerProblems(route.handle) }));
   }
 
-  private publicKey(): Response {
-    return Response.json({ key: publicKeyOf(this.key), ...this.self });
-  }
-
-  /** Signs that `playerId` lives here, for `audience` to let them join, and remembers it. */
+  /**
+   * Signs that `playerId` lives here, encrypted for `audience` so only it can read their profile,
+   * and remembers the place and its keys.
+   */
   private async assert(playerId: string, audience: Place, context: Context): Promise<Response> {
     if (samePlace(audience, this.self)) return problem(400, "That is this assistant");
-    // This server sends their profile there later; plain HTTP only between local test servers.
+    // This server writes to it later; plain HTTP only between local test servers.
     if (!audience.server.startsWith("https://") && this.self.server.startsWith("https://"))
       return problem(400, "Other assistants are reached over HTTPS");
     const profile = await this.nudge().profiles.get(playerId, context);
     if (profile === undefined) return problem(404, "No such player");
+    const known = (await this.state(context)).memberships[playerId]?.find((m) =>
+      samePlace(m, audience),
+    );
+    const keys = known ?? (await this.keysOf(audience));
+    if (keys === undefined) return problem(502, `Could not reach ${audience.server}`);
     const now = this.host.now();
-    const assertion = seal(this.key, {
+    const assertion = seal(this.signingKey, keys.encryptionKey, {
       kind: "nudge.join",
       home: { ...this.self, playerId },
       audience,
@@ -282,13 +324,43 @@ class Federation {
       expiresAt: now + JOIN_TTL_MS,
       nonce: randomUUID(),
     } satisfies Static<typeof JoinClaim>);
-    // Kept before they join: the place answers 404 to profiles for someone who never did.
-    await this.commit((state) => {
-      const list = state.memberships[playerId] ?? [];
-      if (!list.some((membership) => samePlace(membership, audience)))
-        state.memberships[playerId] = [...list, { ...audience, since: now }];
-    }, context);
+    // Kept before they join: the place refuses messages for someone who never did.
+    if (known === undefined)
+      await this.commit((state) => {
+        const list = state.memberships[playerId] ?? [];
+        if (!list.some((membership) => samePlace(membership, audience)))
+          state.memberships[playerId] = [
+            ...list,
+            {
+              ...audience,
+              signingKey: keys.signingKey,
+              encryptionKey: keys.encryptionKey,
+              since: now,
+              carry: false,
+              seen: {},
+            },
+          ];
+      }, context);
     return Response.json({ assertion });
+  }
+
+  /** Starts or stops carrying a player's own memory to one place they joined. */
+  private async setCarry(
+    playerId: string,
+    place: Place,
+    carry: boolean,
+    context: Context,
+  ): Promise<Response> {
+    const membership = await this.commit((state) => {
+      const found = state.memberships[playerId]?.find((m) => samePlace(m, place));
+      if (found !== undefined) found.carry = carry;
+      return found === undefined ? undefined : shown(found);
+    }, context);
+    if (membership === undefined) return problem(404, "No such membership");
+    await this.enqueue(playerId, () =>
+      this.sendMemory(playerId, place, context, { stopping: !carry }),
+    );
+    return Response.json(membership);
   }
 
   private async invite(address: string, by: string, context: Context): Promise<Response> {
@@ -316,8 +388,10 @@ class Federation {
    * Lets someone in whose home vouched for them, when an admin invited them or they joined before:
    * a player here with that home, and a token for it.
    */
-  private async join(assertion: Signed, context: Context): Promise<Response> {
-    const claim = peek(assertion);
+  private async join(assertion: Sealed, context: Context): Promise<Response> {
+    const signed = open(this.encryptionKey, assertion);
+    if (signed === undefined) return problem(400, "That was not encrypted for this assistant");
+    const claim = peek(signed);
     if (!Value.Check(JoinClaim, claim)) return problem(400, "Not a join assertion");
     if (!samePlace(claim.audience, this.self)) return problem(400, "Not for this assistant");
     const now = this.host.now();
@@ -338,9 +412,9 @@ class Federation {
     );
     if (guest === undefined && !invited) return problem(403, `No invite for ${address}`);
     // Only once someone here vouched for the address: the home is fetched from what it says.
-    const key = guest?.key ?? (await this.homeKey(home));
-    if (key === undefined) return problem(502, `Could not reach the home of ${address}`);
-    const claimed = unseal(key, assertion);
+    const keys = guest ?? (await this.keysOf(home));
+    if (keys === undefined) return problem(502, `Could not reach the home of ${address}`);
+    const claimed = checkSigned(keys.signingKey, signed);
     if (!Value.Check(JoinClaim, claimed)) return problem(401, "The home did not sign that");
     const fresh = await this.commit((state) => {
       for (const [nonce, expiresAt] of Object.entries(state.used))
@@ -353,11 +427,23 @@ class Federation {
     }, context);
     if (!fresh) return problem(401, "The assertion was used already");
     const joined = await nudge.players.addRoaming(home, claimed.profile.displayName, context);
-    await this.commit((state) => {
-      const profileAt = Math.max(state.guests[joined.player.id]?.profileAt ?? 0, claimed.issuedAt);
-      state.guests[joined.player.id] = { key, profileAt };
+    const applies = await this.commit((state) => {
+      const current = state.guests[joined.player.id];
+      if (current === undefined)
+        state.guests[joined.player.id] = {
+          signingKey: keys.signingKey,
+          encryptionKey: keys.encryptionKey,
+          seen: { "nudge.profile": claimed.issuedAt },
+          carry: false,
+          carried: {},
+          forwarded: [],
+        };
+      else if ((current.seen["nudge.profile"] ?? 0) < claimed.issuedAt)
+        current.seen["nudge.profile"] = claimed.issuedAt;
+      else return false;
+      return true;
     }, context);
-    await this.applyProfile(joined.player.id, claimed.profile, context);
+    if (applies) await this.applyProfile(joined.player.id, claimed.profile, context);
     return Response.json(
       {
         token: joined.token,
@@ -368,23 +454,84 @@ class Federation {
     );
   }
 
-  /** A guest's profile from their home: applied when it is newer than the last one. */
-  private async takeProfile(update: Signed, context: Context): Promise<Response> {
-    const claim = peek(update);
-    if (!Value.Check(ProfileClaim, claim)) return problem(400, "Not a profile");
+  /** A message from another assistant: opened, its sender checked, then applied once. */
+  private async receive(message: Sealed, context: Context): Promise<Response> {
+    const signed = open(this.encryptionKey, message);
+    if (signed === undefined) return problem(400, "That was not encrypted for this assistant");
+    const claim = peek(signed) as { kind?: unknown } | undefined;
+    switch (claim?.kind) {
+      case "nudge.profile":
+      case "nudge.memory":
+        return this.fromHome(signed, context);
+      case "nudge.remember":
+      case "nudge.forget":
+        return this.fromPlace(signed, context);
+      default:
+        return problem(400, "Unknown message");
+    }
+  }
+
+  /** A guest's profile or own memory, from their home. */
+  private async fromHome(signed: Signed, context: Context): Promise<Response> {
+    const claim = peek(signed);
+    const schema = Value.Check(ProfileClaim, claim) ? ProfileClaim : MemoryClaim;
+    if (!Value.Check(schema, claim)) return problem(400, "Malformed message");
     if (!samePlace(claim.audience, this.self)) return problem(400, "Not for this assistant");
     const player = await this.nudge().players.byHome(claim.home, context);
     const guest = player === undefined ? undefined : (await this.state(context)).guests[player.id];
     if (player === undefined || guest === undefined) return problem(404, "No such guest");
-    const claimed = unseal(guest.key, update);
-    if (!Value.Check(ProfileClaim, claimed)) return problem(401, "The home did not sign that");
+    const claimed = checkSigned(guest.signingKey, signed);
+    if (!Value.Check(schema, claimed)) return problem(401, "The home did not sign that");
+    await this.enqueue(player.id, async () => {
+      const newer = await this.commit((state) => {
+        const current = state.guests[player.id];
+        if (current === undefined || claimed.issuedAt <= (current.seen[claimed.kind] ?? 0))
+          return false;
+        current.seen[claimed.kind] = claimed.issuedAt;
+        return true;
+      }, context);
+      if (!newer) return;
+      if (Value.Check(ProfileClaim, claimed))
+        await this.applyProfile(player.id, claimed.profile, context);
+      else await this.applyMemory(player.id, claimed as Static<typeof MemoryClaim>, context);
+    });
+    return new Response(null, { status: 204 });
+  }
+
+  /** A fact one of this home's people remembered or forgot elsewhere, for their own memory. */
+  private async fromPlace(signed: Signed, context: Context): Promise<Response> {
+    const claim = peek(signed);
+    const schema = Value.Check(RememberClaim, claim) ? RememberClaim : ForgetClaim;
+    if (!Value.Check(schema, claim)) return problem(400, "Malformed message");
+    if (!samePlace(claim.audience, this.self)) return problem(400, "Not for this assistant");
+    const from = trimmedPlace(claim.from);
+    const membership = (await this.state(context)).memberships[claim.playerId]?.find((m) =>
+      samePlace(m, from),
+    );
+    if (membership === undefined) return problem(404, "No such membership");
+    const claimed = checkSigned(membership.signingKey, signed);
+    if (!Value.Check(schema, claimed)) return problem(401, "That assistant did not sign that");
+    // Only with their consent: memory goes both ways or not at all.
+    if (!membership.carry) return problem(403, "Their memory isn't carried there");
     const newer = await this.commit((state) => {
-      const current = state.guests[player.id];
-      if (current === undefined || claimed.issuedAt <= current.profileAt) return false;
-      current.profileAt = claimed.issuedAt;
+      const current = state.memberships[claimed.playerId]?.find((m) => samePlace(m, from));
+      if (current === undefined || claimed.issuedAt <= (current.seen[claimed.kind] ?? 0))
+        return false;
+      current.seen[claimed.kind] = claimed.issuedAt;
       return true;
     }, context);
-    if (newer) await this.applyProfile(player.id, claimed.profile, context);
+    if (!newer) return new Response(null, { status: 204 });
+    const memory = this.nudge().memory;
+    if (Value.Check(RememberClaim, claimed)) {
+      const player = await this.nudge().players.get(claimed.playerId, context);
+      const text = await this.protectFact(claimed.fact);
+      if (player !== undefined && text !== undefined)
+        await memory.rememberFor(claimed.playerId, text, context, {
+          playerId: player.id,
+          displayName: player.displayName,
+        });
+    } else
+      await memory.forgetFor(claimed.playerId, (claimed as { factId: string }).factId, context);
     return new Response(null, { status: 204 });
   }
 
@@ -415,64 +562,248 @@ class Federation {
     }, context);
   }
 
-  /** Sends a player's profile to every assistant they joined; those that don't know them are dropped. */
-  private async sendProfile(playerId: string, context: Context): Promise<void> {
-    const places = (await this.state(context)).memberships[playerId] ?? [];
-    if (places.length === 0) return;
-    const profile = await this.nudge().profiles.get(playerId, context);
-    if (profile === undefined) return;
-    this.signedAt = Math.max(this.host.now(), this.signedAt + 1);
-    const gone: Place[] = [];
-    for (const place of places) {
-      const update = seal(this.key, {
-        kind: "nudge.profile",
-        home: { ...this.self, playerId },
-        audience: { server: place.server, assistant: place.assistant },
-        profile,
-        issuedAt: this.signedAt,
-      } satisfies Static<typeof ProfileClaim>);
-      try {
-        const response = await this.fetch(endpoint(place, "/profile"), {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ update }),
-        });
-        if (response.status === 404) gone.push(place);
-        else if (!response.ok)
-          this.report(new Error(`${place.server} answered ${response.status} to a profile`));
-      } catch (error) {
-        this.report(error);
+  /**
+   * Makes a guest's own memory here what their home carries: its facts, their values protected
+   * here, then what they remembered here that hasn't gone home yet. When the home stops carrying,
+   * the facts that came from it go.
+   */
+  private async applyMemory(
+    playerId: string,
+    claim: Static<typeof MemoryClaim>,
+    context: Context,
+  ): Promise<void> {
+    const incoming: { id: string; text: string; createdAt: number }[] = [];
+    if (claim.carry)
+      for (const fact of claim.facts.slice(0, MAX_FACTS)) {
+        const text = await this.protectFact(fact);
+        if (text !== undefined) incoming.push({ id: fact.id, text, createdAt: fact.createdAt });
       }
-    }
-    if (gone.length > 0)
-      await this.commit((state) => {
-        state.memberships[playerId] = (state.memberships[playerId] ?? []).filter(
-          (membership) => !gone.some((place) => samePlace(place, membership)),
-        );
-      }, context);
+    await this.host.documents().commit(async (tx) => {
+      const memory = await tx.doc(PlayerMemoryDoc, playerId, null);
+      const guest = (await tx.doc(FederationDoc)).guests[playerId];
+      if (guest === undefined) return;
+      const localOf = new Map(Object.entries(guest.carried).map(([local, home]) => [home, local]));
+      const kept = memory.facts
+        .filter((fact) => !(fact.id in guest.carried) && !guest.forwarded.includes(fact.id))
+        .map((fact) => structuredClone({ ...fact }));
+      const carried: Record<string, string> = {};
+      const arrived = incoming.map((fact) => {
+        let id = localOf.get(fact.id);
+        if (id === undefined) id = `p${memory.next++}`;
+        carried[id] = fact.id;
+        return { id, text: fact.text, createdAt: fact.createdAt };
+      });
+      memory.facts = [...arrived, ...kept].slice(0, MAX_FACTS);
+      guest.carry = claim.carry;
+      guest.carried = carried;
+      guest.forwarded = [];
+    }, context);
+    await this.memoryChanged(playerId, context);
   }
 
-  /** The key `home` publishes, if it answers for itself. */
-  private async homeKey(home: PlayerHome): Promise<string | undefined> {
+  /**
+   * Sends a guest's own facts they remembered or forgot here to their home, while it carries
+   * their memory. Facts with values someone made private here stay here.
+   */
+  private async forwardMemory(playerId: string, context: Context): Promise<void> {
+    const nudge = this.nudge();
+    const player = await nudge.players.get(playerId, context);
+    const guest = (await this.state(context)).guests[playerId];
+    if (player?.home === undefined || guest === undefined || !guest.carry) return;
+    const { facts } = await nudge.memory.ofPlayer(playerId, context);
+    const home: Place = { server: player.home.server, assistant: player.home.assistant };
+    const base = { from: this.self, audience: home, playerId: player.home.playerId };
+    for (const [local, homeId] of Object.entries(guest.carried)) {
+      if (facts.some((fact) => fact.id === local)) continue;
+      const sent = await this.send(home, guest, {
+        kind: "nudge.forget",
+        ...base,
+        factId: homeId,
+        issuedAt: this.nextSignedAt(),
+      } satisfies Static<typeof ForgetClaim>);
+      if (sent === true)
+        await this.commit((state) => {
+          const current = state.guests[playerId];
+          if (current !== undefined) delete current.carried[local];
+        }, context);
+    }
+    for (const fact of facts) {
+      if (fact.id in guest.carried || guest.forwarded.includes(fact.id)) continue;
+      if (fact.privateTo !== undefined) continue;
+      const carried = this.carriable(fact.text);
+      if (carried === undefined) continue;
+      // Marked first: the memory that comes back drops it, as it brings it from home.
+      await this.commit((state) => {
+        state.guests[playerId]?.forwarded.push(fact.id);
+      }, context);
+      const sent = await this.send(home, guest, {
+        kind: "nudge.remember",
+        ...base,
+        fact: carried,
+        issuedAt: this.nextSignedAt(),
+      } satisfies Static<typeof RememberClaim>);
+      if (sent !== true)
+        await this.commit((state) => {
+          const current = state.guests[playerId];
+          if (current !== undefined)
+            current.forwarded = current.forwarded.filter((id) => id !== fact.id);
+        }, context);
+    }
+  }
+
+  /** Sends a player's profile to every assistant they joined; those that don't know them are dropped. */
+  private async sendProfile(playerId: string, context: Context): Promise<void> {
+    const memberships = (await this.state(context)).memberships[playerId] ?? [];
+    if (memberships.length === 0) return;
+    const profile = await this.nudge().profiles.get(playerId, context);
+    if (profile === undefined) return;
+    const issuedAt = this.nextSignedAt();
+    const gone: Place[] = [];
+    for (const membership of memberships) {
+      const sent = await this.send(membership, membership, {
+        kind: "nudge.profile",
+        home: { ...this.self, playerId },
+        audience: placeOf(membership),
+        profile,
+        issuedAt,
+      } satisfies Static<typeof ProfileClaim>);
+      if (sent === "gone") gone.push(membership);
+    }
+    await this.dropMemberships(playerId, gone, context);
+  }
+
+  /**
+   * Sends a player's own memory to the places they carry it to, or only to `only`; with
+   * `stopping`, tells `only` it is no longer carried.
+   */
+  private async sendMemory(
+    playerId: string,
+    only: Place | undefined,
+    context: Context,
+    { stopping = false }: { stopping?: boolean } = {},
+  ): Promise<void> {
+    const memberships = ((await this.state(context)).memberships[playerId] ?? []).filter(
+      (membership) => (only === undefined ? membership.carry : samePlace(membership, only)),
+    );
+    if (memberships.length === 0) return;
+    const { facts } = await this.nudge().memory.ofPlayer(playerId, context);
+    const carried = facts.flatMap((fact) => {
+      if (fact.privateTo !== undefined) return [];
+      const found = this.carriable(fact.text);
+      return found === undefined ? [] : [{ ...found, id: fact.id, createdAt: fact.createdAt }];
+    });
+    const issuedAt = this.nextSignedAt();
+    const gone: Place[] = [];
+    for (const membership of memberships) {
+      const carry = membership.carry && !stopping;
+      const sent = await this.send(membership, membership, {
+        kind: "nudge.memory",
+        home: { ...this.self, playerId },
+        audience: placeOf(membership),
+        carry,
+        facts: carry ? carried : [],
+        issuedAt,
+      } satisfies Static<typeof MemoryClaim>);
+      if (sent === "gone") gone.push(membership);
+    }
+    await this.dropMemberships(playerId, gone, context);
+  }
+
+  /**
+   * A fact with the values behind its placeholders, to carry to another assistant; undefined when
+   * it holds a value someone made private, one that was forgotten, or one this vault doesn't know.
+   */
+  private carriable(text: string): CarriedFact | undefined {
+    const entries = this.nudge().valuesIn(text);
+    const placeholders = new Set(text.match(PLACEHOLDER) ?? []);
+    if (entries.length !== placeholders.size) return undefined;
+    if (entries.some((entry) => entry.owner !== undefined || entry.forgotten === true))
+      return undefined;
+    return {
+      text,
+      values: entries.map(({ placeholder, value, kind }) => ({ placeholder, value, kind })),
+    };
+  }
+
+  /**
+   * A carried fact as this assistant keeps it: each value protected in its vault, so the model
+   * here only sees placeholders of its own. Undefined when a placeholder came without its value.
+   */
+  private async protectFact(fact: CarriedFact): Promise<string | undefined> {
+    const own = new Set(fact.values.map(({ placeholder }) => placeholder));
+    if ((fact.text.match(PLACEHOLDER) ?? []).some((placeholder) => !own.has(placeholder)))
+      return undefined;
+    const nudge = this.nudge();
+    let text = fact.text;
+    for (const { placeholder, value, kind } of fact.values) {
+      if (!/^⟦[A-Z]+\d+⟧$/.test(placeholder) || !/^[A-Z]+$/.test(kind) || value === "")
+        return undefined;
+      text = text.split(placeholder).join(await nudge.protect(value, kind));
+    }
+    text = nudge.redact(text);
+    await nudge.saveVault();
+    return text;
+  }
+
+  /**
+   * Signs `claim` and sends it, encrypted, to `place`'s inbox. True when it took it, "gone" when
+   * it doesn't know who it is about, false when it failed otherwise.
+   */
+  private async send(place: Place, keys: Keys, claim: unknown): Promise<boolean | "gone"> {
     try {
-      const response = await this.fetch(endpoint(home, "/key"));
+      const response = await this.fetch(endpoint(place, "/inbox"), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ message: seal(this.signingKey, keys.encryptionKey, claim) }),
+      });
+      if (response.ok) return true;
+      if (response.status === 404) return "gone";
+      this.report(new Error(`${place.server} answered ${response.status}`));
+    } catch (error) {
+      this.report(error);
+    }
+    return false;
+  }
+
+  private async dropMemberships(playerId: string, gone: Place[], context: Context): Promise<void> {
+    if (gone.length === 0) return;
+    await this.commit((state) => {
+      state.memberships[playerId] = (state.memberships[playerId] ?? []).filter(
+        (membership) => !gone.some((place) => samePlace(place, membership)),
+      );
+    }, context);
+  }
+
+  /** Every room the player is in may show their own facts. */
+  private async memoryChanged(playerId: string, context: Context): Promise<void> {
+    const nudge = this.nudge();
+    for (const room of await nudge.rooms.list(context, playerId))
+      nudge.changes.emit({ kind: "memory", roomId: room.id });
+    nudge.changes.emit({ kind: "player-memory", playerId });
+  }
+
+  /** The keys `place` publishes, if it answers for itself. */
+  private async keysOf(place: Place): Promise<Keys | undefined> {
+    try {
+      const response = await this.fetch(endpoint(place, "/key"));
       if (!response.ok) return undefined;
       const body: unknown = await response.json();
-      if (!Value.Check(KeyResponse, body)) return undefined;
-      return samePlace(normalize(body), home) ? body.key : undefined;
+      if (!Value.Check(KeysBody, body) || !samePlace(trimmedPlace(body), placeOf(place)))
+        return undefined;
+      return { signingKey: body.signingKey, encryptionKey: body.encryptionKey };
     } catch (error) {
       this.report(error);
       return undefined;
     }
   }
 
-  private nudge(): Nudge {
-    return this.host.assistant();
+  private nextSignedAt(): number {
+    this.signedAt = Math.max(this.host.now(), this.signedAt + 1);
+    return this.signedAt;
   }
 
-  private context(): Context {
-    // Pushes run on their own, after the change that started them was answered.
-    return BACKGROUND_CONTEXT;
+  private nudge(): Nudge {
+    return this.host.assistant();
   }
 
   private async state(context: Context): Promise<FederationState> {
@@ -528,8 +859,26 @@ async function read<S extends TSchema>(request: Request, schema: S): Promise<Sta
   return body;
 }
 
-function normalize(place: Place): Place {
-  return { server: place.server.replace(/\/+$/, ""), assistant: place.assistant };
+function trimmed(server: string): string {
+  return server.replace(/\/+$/, "");
+}
+
+function trimmedPlace(place: Place): Place {
+  return { server: trimmed(place.server), assistant: place.assistant };
+}
+
+function placeOf(place: Place): Place {
+  return { server: place.server, assistant: place.assistant };
+}
+
+/** A membership as its player sees it: without the keys. */
+function shown(membership: Membership) {
+  return {
+    server: membership.server,
+    assistant: membership.assistant,
+    since: membership.since,
+    carryMemory: membership.carry,
+  };
 }
 
 /** The URL of the federation route `path` of the assistant at `place`. */
@@ -546,4 +895,5 @@ function toInvite(invite: Invite) {
     expiresAt: invite.expiresAt,
   };
 }
+
 export default federationExtension();
