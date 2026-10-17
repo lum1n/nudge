@@ -23,6 +23,11 @@
           "rooms": ["personal", "shared"]
         },
         {
+          "$comment": "Notifications of answers and approvals, to browsers through Web Push. preview: \"room\" (the default) names only the room; \"text\" adds the start of the message. subject: how push services reach you, a mailto: or https: address. For the apps add \"apns\": { \"keyFile\", \"keyId\", \"teamId\", \"bundleId\" } and \"fcm\": { \"serviceAccountFile\" }; key files are read from the directory nudge runs in, or give absolute paths.",
+          "from": "./extensions/push",
+          "settings": { "preview": "room", "subject": "mailto:you@example.com" }
+        },
+        {
           "$comment": "Optional: finds people's names and street addresses the regular detectors miss, with name lists and rules on the host. extraNames adds your own.",
           "from": "./extensions/ner",
           "settings": { "extraNames": ["Tiril", "Bestemor Gunn"] }
@@ -87,10 +92,5 @@
     "dir": "backups",
     "everyHours": 24,
     "keep": 14
-  },
-  "push": {
-    "$comment": "Browser notifications from nudge serve. preview: \"room\" (the default) names only the room; \"text\" adds the start of the message. subject: how push services reach you, a mailto: or https: address; default the --public-url when it is HTTPS.",
-    "preview": "room",
-    "subject": "mailto:you@example.com"
   }
 }

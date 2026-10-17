@@ -73,6 +73,7 @@ export {
   type RoomEventListener,
   RoomEvents,
 } from "./room-events.ts";
+export { Presence } from "./presence.ts";
 export { describeRoom, formatHour } from "./extensions/builtin.ts";
 export {
   defineNudgeExtension,

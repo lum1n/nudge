@@ -6,19 +6,17 @@ import {
   randomBytes,
   verify,
 } from "node:crypto";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
 import { createNudge, type Nudge, requestApproval } from "@nudge/core";
+import { type RunningServer, serveNudge } from "@nudge/server";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import {
-  generateVapidKeys,
-  type PushMessage,
-  type RunningServer,
-  serveNudge,
-} from "../src/index.ts";
-import { PushDoc } from "../src/push/pushes.ts";
-import { encryptPayload, vapidAuthorization } from "../src/push/web-push.ts";
+import { generateVapidKeys, PushDoc, type PushMessage, pushExtension } from "../src/index.ts";
+import { encryptPayload, vapidAuthorization } from "../src/web-push.ts";
 
 const context = BACKGROUND_CONTEXT;
 
@@ -103,6 +101,50 @@ describe("web push", () => {
     ).toBe(true);
   });
 
+  it("shares one key pair among the assistants beside one database directory", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nudge-vapid-"));
+    const open = (name: string) =>
+      createNudge(
+        {
+          name,
+          database: join(dir, `${name}.sqlite`),
+          models: createModels(),
+          model: { provider: "none", modelId: "none" },
+          extensions: [pushExtension()],
+        },
+        context,
+      );
+    const robin = await open("robin");
+    const wren = await open("wren");
+    try {
+      const server = await serveNudge({
+        assistants: new Map([
+          ["robin", robin],
+          ["wren", wren],
+        ]),
+        port: 0,
+      });
+      try {
+        const keyOf = async (nudge: Nudge, name: string) => {
+          const { token } = await nudge.players.invite("Ann", context);
+          const response = await fetch(`${server.url}/v1/a/${name}/ext/push/web`, {
+            headers: { authorization: `Bearer ${token}` },
+          });
+          return ((await response.json()) as { publicKey: string }).publicKey;
+        };
+        const key = await keyOf(robin, "robin");
+        expect(await keyOf(wren, "wren")).toBe(key);
+        const file = JSON.parse(readFileSync(join(dir, "push-vapid.json"), "utf8"));
+        expect(file.publicKey).toBe(key);
+      } finally {
+        await server.close();
+      }
+    } finally {
+      await robin.close(context);
+      await wren.close(context);
+    }
+  });
+
   describe("through the server", () => {
     let nudge: Nudge;
     let server: RunningServer;
@@ -111,6 +153,8 @@ describe("web push", () => {
     /** What the fake push service got, by endpoint; endpoints in `gone` answer 410. */
     let received: { endpoint: string; body: Buffer; headers: Headers }[];
     let gone: Set<string>;
+    /** A fake push service that records what it got. */
+    let pushService: typeof fetch;
 
     const call = async (method: string, path: string, token: string, body?: unknown) => {
       const response = await fetch(`${server.url}/v1/a/robin${path}`, {
@@ -139,10 +183,17 @@ describe("web push", () => {
       models.setProvider(faux.provider);
       nudge = await createNudge(
         {
+          name: "robin",
           database: ":memory:",
           models,
           model: { provider: faux.provider.id, modelId: faux.getModel().id },
           displayName: "Robin",
+          extensions: [
+            {
+              extension: pushExtension({ fetch: (input, init) => pushService(input, init) }),
+              settings: { preview: "text", subject: "mailto:owner@nudge.example" },
+            },
+          ],
         },
         context,
       );
@@ -152,7 +203,7 @@ describe("web push", () => {
       await nudge.rooms.createShared({ id: "trip", name: "Trip", members: ["ann", "bo"] }, context);
       received = [];
       gone = new Set();
-      const pushService: typeof fetch = async (input, init) => {
+      pushService = async (input, init) => {
         const endpoint = String(input);
         received.push({
           endpoint,
@@ -161,16 +212,7 @@ describe("web push", () => {
         });
         return new Response(null, { status: gone.has(endpoint) ? 410 : 201 });
       };
-      server = await serveNudge({
-        assistants: new Map([["robin", nudge]]),
-        port: 0,
-        push: {
-          vapid: generateVapidKeys(),
-          preview: true,
-          subject: "mailto:owner@nudge.example",
-          fetch: pushService,
-        },
-      });
+      server = await serveNudge({ assistants: new Map([["robin", nudge]]), port: 0 });
     });
 
     afterEach(async () => {
@@ -179,14 +221,14 @@ describe("web push", () => {
     });
 
     it("pushes a room's answers to its members' browsers only", async () => {
-      const key = await call("GET", "/push", tokens.Ann!);
+      const key = await call("GET", "/ext/push/web", tokens.Ann!);
       expect(key.json.publicKey).toMatch(/^[\w-]{87}$/);
       const ann = browser("https://push.example/ann");
       const bo = browser("https://push.example/bo");
       const cy = browser("https://push.example/cy");
-      expect((await call("POST", "/push", tokens.Ann!, ann.subscription)).status).toBe(204);
-      expect((await call("POST", "/push", tokens.Bo!, bo.subscription)).status).toBe(204);
-      expect((await call("POST", "/push", tokens.Cy!, cy.subscription)).status).toBe(204);
+      expect((await call("POST", "/ext/push/web", tokens.Ann!, ann.subscription)).status).toBe(204);
+      expect((await call("POST", "/ext/push/web", tokens.Bo!, bo.subscription)).status).toBe(204);
+      expect((await call("POST", "/ext/push/web", tokens.Cy!, cy.subscription)).status).toBe(204);
       // The server POSTs to the endpoint, so only a push service on a public name will do.
       for (const endpoint of [
         "http://push.example/x",
@@ -194,7 +236,8 @@ describe("web push", () => {
         "https://router.lan/x",
       ])
         expect(
-          (await call("POST", "/push", tokens.Cy!, { ...cy.subscription, endpoint })).status,
+          (await call("POST", "/ext/push/web", tokens.Cy!, { ...cy.subscription, endpoint }))
+            .status,
         ).toBe(400);
 
       faux.setResponses([fauxAssistantMessage("The train leaves at 09:12.")]);
@@ -225,8 +268,8 @@ describe("web push", () => {
     it("leaves out players who turned a kind of push off in their profile", async () => {
       const ann = browser("https://push.example/ann");
       const bo = browser("https://push.example/bo");
-      await call("POST", "/push", tokens.Ann!, ann.subscription);
-      await call("POST", "/push", tokens.Bo!, bo.subscription);
+      await call("POST", "/ext/push/web", tokens.Ann!, ann.subscription);
+      await call("POST", "/ext/push/web", tokens.Bo!, bo.subscription);
       const off = await call("PATCH", "/me/profile", tokens.Bo!, {
         notifications: { answers: false },
       });
@@ -256,10 +299,10 @@ describe("web push", () => {
 
     it("swaps a subscription the browser replaced, given the old one's auth secret", async () => {
       const old = browser("https://push.example/old");
-      await call("POST", "/push", tokens.Ann!, old.subscription);
+      await call("POST", "/ext/push/web", tokens.Ann!, old.subscription);
       const fresh = browser("https://push.example/new");
       const renew = (auth: string, endpoint = old.subscription.endpoint) =>
-        fetch(`${server.url}/v1/a/robin/push/renew`, {
+        fetch(`${server.url}/v1/a/robin/ext/push/web/renew`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ old: { endpoint, auth }, subscription: fresh.subscription }),
@@ -269,7 +312,7 @@ describe("web push", () => {
       expect(await renew(old.subscription.keys.auth, "https://push.example/other")).toBe(404);
       expect(await renew(old.subscription.keys.auth)).toBe(204);
       const doc = await nudge.harness.snapshot(PushDoc, "ann", context);
-      expect(doc?.subscriptions.map((s) => s.endpoint)).toEqual(["https://push.example/new"]);
+      expect(doc?.subscriptions?.map((s) => s.endpoint)).toEqual(["https://push.example/new"]);
       // It is gone now, so the old secret works only once.
       expect(await renew(old.subscription.keys.auth)).toBe(404);
 
@@ -283,8 +326,8 @@ describe("web push", () => {
     it("pushes approvals, and forgets browsers that left or whose token was revoked", async () => {
       const ann = browser("https://push.example/ann");
       const bo = browser("https://push.example/bo");
-      await call("POST", "/push", tokens.Ann!, ann.subscription);
-      await call("POST", "/push", tokens.Bo!, bo.subscription);
+      await call("POST", "/ext/push/web", tokens.Ann!, ann.subscription);
+      await call("POST", "/ext/push/web", tokens.Bo!, bo.subscription);
       gone.add(ann.subscription.endpoint);
       const bos = await nudge.players.authenticate(tokens.Bo!, context);
       await nudge.players.revoke(bos!.clientId, context);

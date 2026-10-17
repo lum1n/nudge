@@ -69,26 +69,9 @@ export class Hubs {
     return viewer;
   }
 
-  /** Sockets that have a room open, by player and room. */
-  private readonly open = new Map<string, number>();
-
   /** Counts a socket that has the room open for the player, until the returned function is called. */
   opened(playerId: string, roomId: string): () => void {
-    const key = `${playerId}\0${roomId}`;
-    this.open.set(key, (this.open.get(key) ?? 0) + 1);
-    let closed = false;
-    return () => {
-      if (closed) return;
-      closed = true;
-      const left = (this.open.get(key) ?? 1) - 1;
-      if (left === 0) this.open.delete(key);
-      else this.open.set(key, left);
-    };
-  }
-
-  /** Whether the player has the room open on a socket, so a push to their devices can wait. */
-  isOpen(playerId: string, roomId: string): boolean {
-    return this.open.has(`${playerId}\0${roomId}`);
+    return this.nudge.presence.opened(playerId, roomId);
   }
 
   /** `undefined` when the room does not exist. Whether the player may use it is the caller's check. */

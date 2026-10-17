@@ -1,4 +1,4 @@
-// Nudge's service worker: shows the pushes the server sends (see packages/server/src/push).
+// Nudge's service worker: shows the pushes the server sends (see extensions/push).
 // It caches nothing; the app needs the server anyway.
 
 self.addEventListener("install", () => self.skipWaiting());
@@ -64,7 +64,7 @@ async function renew(old, current) {
   // Each assistant answers 404 unless one of its players had the old subscription.
   await Promise.all(
     assistants.map(({ name }) =>
-      fetch(`/v1/a/${encodeURIComponent(name)}/push/renew`, {
+      fetch(`/v1/a/${encodeURIComponent(name)}/ext/push/web/renew`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body,

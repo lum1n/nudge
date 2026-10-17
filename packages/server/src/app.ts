@@ -21,8 +21,6 @@ export type AppOptions = {
   readonly timing?: V1Options["timing"];
   /** The server's address as clients reach it, for pairing links; default each request's origin. */
   readonly publicUrl?: string;
-  /** Web Push to browsers that subscribe; none without. */
-  readonly push?: V1Options["push"];
   /** Setting up extensions from the web UI, such as in the config file; none without. */
   readonly extensionSettings?: V1Options["extensionSettings"];
 };
@@ -48,7 +46,6 @@ export function createApp(options: AppOptions): Hono {
       report,
       timing: options.timing,
       publicUrl: options.publicUrl,
-      push: options.push,
       extensionSettings: options.extensionSettings,
     }),
   );

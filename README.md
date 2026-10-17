@@ -23,6 +23,7 @@ An extendable, multiplayer personal assistant that keeps personal data away from
 - `@nudge/ext-mcp`: gives the assistant the tools of MCP servers (`extensions/mcp`).
 - `@nudge/ext-codemode`: lets the model run short scripts that call the room's tools (`extensions/codemode`).
 - `@nudge/ext-federation`: lets people from other assistants join, with their home vouching for them (`extensions/federation`).
+- `@nudge/ext-push`: notifications of answers and approvals, through Web Push, APNs and FCM (`extensions/push`).
 
 ## Use
 
@@ -97,12 +98,18 @@ Sign in at `/login` with a token, the link `nudge invite` prints (`/login#token=
 
 A room page shows the same conversation the CLI and the API see, live, for everyone in it: each message with who sent it, the assistant's answer streaming in with its tool calls, and fired nudges, rendered as markdown. Send a follow-up or steer while it's still answering — it queues the same way a second CLI client's would — or stop it; "Load earlier" fetches older history past what first loaded. A room's Memory, Nudges and approval panels list, add, forget, cancel and decide the same things `/memory`, `/nudges` and `/approve` do in the terminal, and update live whoever made the change. The web UI talks [protocol v1](docs/protocol/v1.md) through `@nudge/client`, like the native apps will. "Open my room" and "New shared room" on the room list open the same rooms `nudge chat me` and `nudge room` do.
 
-Notifications: "Turn on" under Notifications on the room list subscribes the browser to Web Push. Then answers, fired nudges and approvals in that player's rooms arrive as notifications, except for a room that is open in a visible tab. They need HTTPS, or `localhost`, and on an iPhone the site added to the home screen. Pushes are encrypted for the browser, so Google's, Mozilla's or Apple's push service only relays them. By default a notification says only which room has news; `"push": { "preview": "text" }` in `nudge.json` adds the start of the text. `nudge serve` makes the server's push keys on first start (`push-vapid.json` beside the first assistant's database); losing them means browsers must turn notifications on again. When a browser renews its subscription by itself, the service worker hands the new one to the server without asking you.
-
-The iOS, macOS and Android apps (`apps/apple`, `apps/android`) get the same notifications through APNs and FCM. The server sends them directly, so it needs credentials for them in `nudge.json` (paths relative to it):
+Notifications come from the extension `extensions/push`, on each assistant that should send them:
 
 ```json
-"push": {
+{ "from": "./extensions/push", "settings": { "preview": "room", "subject": "mailto:you@example.com" } }
+```
+
+"Turn on" under Notifications on the room list subscribes the browser to Web Push. Then answers, fired nudges and approvals in that player's rooms arrive as notifications, except for a room that is open in a visible tab. They need HTTPS, or `localhost`, and on an iPhone the site added to the home screen. Pushes are encrypted for the browser, so Google's, Mozilla's or Apple's push service only relays them. By default a notification says only which room has news; `"preview": "text"` adds the start of the text. The extension makes the server's push keys on first start, in `push-vapid.json` beside the database, shared by the assistants whose databases are there, since a browser has one subscription for the whole site; losing them means browsers must turn notifications on again. A room where someone turns the extension off with `/extensions` sends no pushes. When a browser renews its subscription by itself, the service worker hands the new one to the server without asking you.
+
+The iOS, macOS and Android apps (`apps/apple`, `apps/android`) get the same notifications through APNs and FCM. The server sends them directly, so the extension needs credentials for them in its settings (paths absolute, or from the directory nudge runs in):
+
+```json
+"settings": {
   "apns": { "keyFile": "apns-key.p8", "keyId": "ABC123DEFG", "teamId": "XYZ987TEAM", "bundleId": "app.nudge.dev" },
   "fcm": { "serviceAccountFile": "firebase-service-account.json" }
 }

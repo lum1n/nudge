@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { networkInterfaces } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -10,18 +10,10 @@ import {
   loadConfig,
   loadExtensions,
   type Nudge,
-  type NudgeConfig,
   openAssistant,
   saveExtensionSetups,
 } from "@nudge/core";
-import {
-  type ExtensionSettings,
-  generateVapidKeys,
-  type PushesOptions,
-  serveNudge,
-  type ServiceAccount,
-  type VapidKeys,
-} from "@nudge/server";
+import { type ExtensionSettings, serveNudge } from "@nudge/server";
 import { UsageError } from "../errors.ts";
 import { scheduleBackups } from "./backup.ts";
 import { hostOptions, reloadOnHangup } from "../host.ts";
@@ -88,7 +80,6 @@ export async function serve(options: ServeOptions): Promise<void> {
       assistants.set(assistant.name, nudge);
     }
     const web = await webRoot(options.web);
-    const database = config.assistants[0]?.database;
     const server = await serveNudge({
       assistants,
       port: options.port,
@@ -96,16 +87,6 @@ export async function serve(options: ServeOptions): Promise<void> {
       web,
       publicUrl: options.publicUrl,
       extensionSettings: configExtensions(options.config, assistants, (line) => console.log(line)),
-      ...(database === undefined || database === ":memory:"
-        ? {}
-        : {
-            push: {
-              vapid: await vapidKeys(join(dirname(database), "push-vapid.json")),
-              subject: pushSubject(config.push?.subject, options.publicUrl),
-              preview: config.push?.preview === "text",
-              ...(await nativePush(options.config, config.push)),
-            },
-          }),
     });
     for (const line of startupLines(server.url, options.host, [...assistants.keys()], web))
       console.log(line);
@@ -165,67 +146,6 @@ function configExtensions(
       return save;
     },
   };
-}
-
-/** APNs and FCM credentials named in the config, read from their files. */
-async function nativePush(
-  configPath: string,
-  push: NudgeConfig["push"],
-): Promise<Pick<PushesOptions, "apns" | "fcm">> {
-  const read = async (file: string, what: string) => {
-    try {
-      return await readFile(resolve(dirname(configPath), file), "utf8");
-    } catch (error) {
-      throw new ConfigError(`push.${what}: can't read ${file}: ${(error as Error).message}`);
-    }
-  };
-  const apns = push?.apns;
-  const fcm = push?.fcm;
-  let serviceAccount: ServiceAccount | undefined;
-  if (fcm !== undefined) {
-    try {
-      serviceAccount = JSON.parse(await read(fcm.serviceAccountFile, "fcm.serviceAccountFile"));
-    } catch (error) {
-      if (error instanceof ConfigError) throw error;
-      throw new ConfigError(`push.fcm.serviceAccountFile is not JSON`);
-    }
-  }
-  return {
-    ...(apns === undefined
-      ? {}
-      : {
-          apns: {
-            key: await read(apns.keyFile, "apns.keyFile"),
-            keyId: apns.keyId,
-            teamId: apns.teamId,
-            bundleId: apns.bundleId ?? "app.nudge.dev",
-          },
-        }),
-    ...(serviceAccount === undefined ? {} : { fcm: { serviceAccount } }),
-  };
-}
-
-/** The server's VAPID keys, made on first start; browsers' subscriptions are bound to them. */
-async function vapidKeys(file: string): Promise<VapidKeys> {
-  try {
-    return JSON.parse(await readFile(file, "utf8")) as VapidKeys;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-  }
-  const keys = generateVapidKeys();
-  await mkdir(dirname(file), { recursive: true });
-  await writeFile(file, JSON.stringify(keys, null, 2), { mode: 0o600, flag: "wx" });
-  return keys;
-}
-
-/**
- * Who push services can reach about this server: `push.subject` in the config, else an HTTPS
- * public URL. Apple refuses local addresses, so never `localhost`.
- */
-function pushSubject(subject: string | undefined, publicUrl: string | undefined): string {
-  if (subject !== undefined) return subject;
-  if (publicUrl?.startsWith("https://")) return publicUrl;
-  return "https://github.com/lum1n/nudge";
 }
 
 async function webRoot(option: string | undefined): Promise<string | undefined> {

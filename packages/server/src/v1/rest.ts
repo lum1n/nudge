@@ -25,8 +25,6 @@ import {
   CreateRoomRequest,
   DecideRequest,
   decodeCursor,
-  DeviceRequest,
-  type DevicesResponse,
   type ExtensionSetup,
   type ExtensionSetupsResponse,
   encodeCursor,
@@ -48,9 +46,6 @@ import {
   type PlayerSettingsResponse,
   type Profile,
   type ProtectResponse,
-  type PushKeyResponse,
-  PushRenewRequest,
-  PushSubscribeRequest,
   RememberRequest,
   RenameRoomRequest,
   SaveExtensionSetupsRequest,
@@ -79,7 +74,6 @@ import { type Context as HonoContext, Hono, type MiddlewareHandler } from "hono"
 import { bodyLimit } from "hono/body-limit";
 import type { Static, TSchema } from "typebox";
 import { Value } from "typebox/value";
-import { BadSubscription, type Pushes } from "../push/pushes.ts";
 import type { Hubs } from "./hub.ts";
 
 const context = BACKGROUND_CONTEXT;
@@ -87,8 +81,6 @@ const context = BACKGROUND_CONTEXT;
 export type RestOptions = {
   readonly assistants: ReadonlyMap<string, Nudge>;
   readonly hubsOf: (nudge: Nudge) => Hubs;
-  /** Web Push for the assistant; undefined when the server sends none. */
-  readonly pushesOf?: (nudge: Nudge) => Pushes | undefined;
   /** The server's address as clients reach it, for pairing links; default the request's origin. */
   readonly publicUrl?: string;
   /** Setting up extensions from a client; the admin's settings routes answer 404 without. */
@@ -191,26 +183,6 @@ export function restRoutes(options: RestOptions): Hono {
     } satisfies PairResponse);
   });
 
-  const pushes = (c: HonoContext<Env>): Pushes => {
-    const found = options.pushesOf?.(c.var.nudge);
-    if (found === undefined) throw new HttpError(404, "This server sends no pushes");
-    return found;
-  };
-
-  // Also before it: a service worker has no token. The old subscription's auth secret stands in.
-  api.post("/push/renew", async (c) => {
-    const body = await readBody(c, PushRenewRequest);
-    let renewed: boolean;
-    try {
-      renewed = await pushes(c).renew(body.old, body.subscription);
-    } catch (error) {
-      if (error instanceof BadSubscription) throw new HttpError(400, error.message);
-      throw error;
-    }
-    if (!renewed) throw new HttpError(404, "No such subscription");
-    return c.body(null, 204);
-  });
-
   // Also before it: each route says whether it needs a token.
   const extensionRoute = async (c: HonoContext<Env>) => {
     const name = c.req.param("extension") ?? "";
@@ -220,10 +192,12 @@ export function restRoutes(options: RestOptions): Hono {
     if (found === undefined) throw new HttpError(404, "Not found");
     const { route, params } = found;
     let player: CorePlayer | undefined;
+    let clientId: string | undefined;
     let isAdmin = false;
     if (route.auth !== "none") {
       await authenticate(c, async () => {});
       player = c.var.credential.player;
+      clientId = c.var.credential.clientId;
       isAdmin = await c.var.nudge.players.isAdmin(player.id, context);
       if (route.auth === "admin" && !isAdmin) throw new HttpError(403, "Only admins may do that");
     }
@@ -236,7 +210,7 @@ export function restRoutes(options: RestOptions): Hono {
       },
     })(c, async () => {
       response = await route.handle(c.req.raw, {
-        ...(player === undefined ? {} : { player }),
+        ...(player === undefined ? {} : { player, clientId }),
         admin: isAdmin,
         params,
         context,
@@ -367,48 +341,6 @@ export function restRoutes(options: RestOptions): Hono {
           }
         : {}),
     } satisfies UsageResponse);
-  });
-
-  api.get("/push", (c) => c.json({ publicKey: pushes(c).publicKey } satisfies PushKeyResponse));
-
-  api.post("/push", async (c) => {
-    const body = await readBody(c, PushSubscribeRequest);
-    const { player, clientId } = c.var.credential;
-    try {
-      await pushes(c).subscribe(player.id, clientId, body);
-    } catch (error) {
-      if (error instanceof BadSubscription) throw new HttpError(400, error.message);
-      throw error;
-    }
-    return c.body(null, 204);
-  });
-
-  api.delete("/push", async (c) => {
-    const endpoint = c.req.query("endpoint");
-    if (endpoint === undefined) throw new HttpError(400, "Which endpoint? ?endpoint=…");
-    if (!(await pushes(c).unsubscribe(c.var.credential.player.id, endpoint)))
-      throw new HttpError(404, "No such subscription");
-    return c.body(null, 204);
-  });
-
-  api.get("/devices", (c) => c.json(pushes(c).platforms satisfies DevicesResponse));
-
-  api.post("/devices", async (c) => {
-    const body = await readBody(c, DeviceRequest);
-    const { player, clientId } = c.var.credential;
-    try {
-      await pushes(c).register(player.id, clientId, body);
-    } catch (error) {
-      if (error instanceof BadSubscription) throw new HttpError(400, error.message);
-      throw error;
-    }
-    return c.body(null, 204);
-  });
-
-  api.delete("/devices/:token", async (c) => {
-    if (!(await pushes(c).unregister(c.var.credential.player.id, c.req.param("token"))))
-      throw new HttpError(404, "No such device");
-    return c.body(null, 204);
   });
 
   api.post("/rooms", async (c) => {

@@ -55,6 +55,7 @@ import { VaultDoc } from "./privacy/vault-doc.ts";
 import { openDatabaseStorage } from "./encrypted-storage.ts";
 import { lockDatabase } from "./storage-lock.ts";
 import { type RoomEvent, RoomEvents } from "./room-events.ts";
+import { Presence } from "./presence.ts";
 import { type Budget, BudgetReached, Spending, type SpendWarning, usd } from "./spending.ts";
 import { FIRE_ENTRY, type FireEntryData } from "./nudges/timer-task.ts";
 
@@ -151,6 +152,8 @@ export class Nudge {
   readonly events: RoomEvents;
   /** Model spend by month, room and player, and the budget it is held to. */
   readonly spending: Spending;
+  /** Which players have which rooms open on the host's sockets. */
+  readonly presence = new Presence();
   private readonly timeZone: string;
   private readonly models: RedactingModels;
   private readonly now: () => number;

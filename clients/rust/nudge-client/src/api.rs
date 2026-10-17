@@ -321,18 +321,18 @@ impl Api {
 
     /// Which native pushes the server sends; 404 when it sends none.
     pub async fn push_platforms(&self) -> Result<DevicesResponse, ApiError> {
-        self.request(Method::GET, &["devices"], &[], NO_BODY).await
+        self.request(Method::GET, &["ext", "push", "devices"], &[], NO_BODY).await
     }
 
     /// Has the server push to this device when one of the player's rooms has news and they don't
     /// have it open. Registering again with the same token replaces the old one.
     pub async fn register_device(&self, device: &DeviceRequest) -> Result<(), ApiError> {
-        self.request_empty(Method::POST, &["devices"], &[], Some(device))
+        self.request_empty(Method::POST, &["ext", "push", "devices"], &[], Some(device))
             .await
     }
 
     pub async fn unregister_device(&self, token: &str) -> Result<(), ApiError> {
-        self.request_empty(Method::DELETE, &["devices", token], &[], NO_BODY)
+        self.request_empty(Method::DELETE, &["ext", "push", "devices", token], &[], NO_BODY)
             .await
     }
 

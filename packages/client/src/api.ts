@@ -201,16 +201,16 @@ export class Api {
 
   /** The server's VAPID public key; a 404 when the server sends no pushes. */
   async pushKey(): Promise<string> {
-    return (await this.request<PushKeyResponse>("GET", "/push")).publicKey;
+    return (await this.request<PushKeyResponse>("GET", "/ext/push/web")).publicKey;
   }
 
   /** Has the server push answers, approvals and nudges in the caller's rooms to this browser. */
   subscribePush(subscription: PushSubscribeRequest): Promise<void> {
-    return this.request("POST", "/push", subscription);
+    return this.request("POST", "/ext/push/web", subscription);
   }
 
   unsubscribePush(endpoint: string): Promise<void> {
-    return this.request("DELETE", `/push?endpoint=${encodeURIComponent(endpoint)}`);
+    return this.request("DELETE", `/ext/push/web?endpoint=${encodeURIComponent(endpoint)}`);
   }
 
   decide(room: string, approval: string, approve: boolean): Promise<Approval> {

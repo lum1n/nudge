@@ -2,8 +2,8 @@ import { timingSafeEqual } from "node:crypto";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { defineDocFamily } from "@earendil-works/pi-durable";
 import { DirectoryDoc, type Nudge, type RoomEvent } from "@nudge/core";
-import { Apns, type ApnsEnvironment, type ApnsOptions } from "./apns.ts";
-import { Fcm, type FcmOptions } from "./fcm.ts";
+import type { Apns, ApnsEnvironment } from "./apns.ts";
+import type { Fcm } from "./fcm.ts";
 import { type PushOptions, type PushTarget, sendPush } from "./web-push.ts";
 
 const context = BACKGROUND_CONTEXT;
@@ -60,21 +60,10 @@ export type PushMessage = {
 export type PushesOptions = PushOptions & {
   /** With a preview, a notification has the start of the answer or approval; default only which room has news. */
   readonly preview?: boolean;
-  /** Native pushes to the iOS and macOS apps; none without. */
-  readonly apns?: ApnsOptions;
-  /** Native pushes to the Android app; none without. */
-  readonly fcm?: FcmOptions;
 };
 
-/** The native push services a server sends through, shared by its assistants. */
+/** The native push services the assistant sends through; none without. */
 export type NativeSenders = { readonly apns?: Apns; readonly fcm?: Fcm };
-
-export function nativeSenders(options: PushesOptions): NativeSenders {
-  return {
-    apns: options.apns === undefined ? undefined : new Apns(options.apns),
-    fcm: options.fcm === undefined ? undefined : new Fcm(options.fcm),
-  };
-}
 
 /** What a device registers with. */
 export type DeviceTarget = {
@@ -94,22 +83,14 @@ export class BadSubscription extends Error {
  * device, and get the same through APNs or FCM unless the player has the room open on a socket.
  */
 export class Pushes {
-  private readonly stop: () => void;
-
   constructor(
-    private readonly nudge: Nudge,
+    private readonly nudge: () => Nudge,
     /** The assistant's URL name, for links. */
     private readonly name: string,
     private readonly options: PushesOptions,
     private readonly report: (error: unknown) => void,
     private readonly native: NativeSenders = {},
-    /** Whether the player has the room open on a socket right now. */
-    private readonly watching: (playerId: string, roomId: string) => boolean = () => false,
-  ) {
-    this.stop = nudge.events.subscribe((event) => {
-      this.notify(event).catch(report);
-    });
-  }
+  ) {}
 
   get publicKey(): string {
     return this.options.vapid.publicKey;
@@ -117,7 +98,7 @@ export class Pushes {
 
   async subscribe(playerId: string, clientId: string, target: PushTarget): Promise<void> {
     checkTarget(target);
-    await this.nudge.harness.commit(async (tx) => {
+    await this.nudge().harness.commit(async (tx) => {
       const doc = await tx.doc(PushDoc, playerId, null);
       const kept = doc.subscriptions.filter((s) => s.endpoint !== target.endpoint);
       kept.push({
@@ -133,7 +114,7 @@ export class Pushes {
 
   /** False when the player had no such subscription. */
   async unsubscribe(playerId: string, endpoint: string): Promise<boolean> {
-    return this.nudge.harness.commit(async (tx) => {
+    return this.nudge().harness.commit(async (tx) => {
       const doc = await tx.doc(PushDoc, playerId, null);
       const before = doc.subscriptions.length;
       doc.subscriptions = doc.subscriptions.filter((s) => s.endpoint !== endpoint);
@@ -148,11 +129,11 @@ export class Pushes {
    */
   async renew(old: { endpoint: string; auth: string }, target: PushTarget): Promise<boolean> {
     checkTarget(target);
-    const directory = await this.nudge.harness.snapshot(DirectoryDoc, context);
+    const directory = await this.nudge().harness.snapshot(DirectoryDoc, context);
     for (const playerId of Object.keys(directory?.players ?? {})) {
-      const seen = await this.nudge.harness.snapshot(PushDoc, playerId, context);
+      const seen = await this.nudge().harness.snapshot(PushDoc, playerId, context);
       if (!seen?.subscriptions.some((s) => s.endpoint === old.endpoint)) continue;
-      const renewed = await this.nudge.harness.commit(async (tx) => {
+      const renewed = await this.nudge().harness.commit(async (tx) => {
         const doc = await tx.doc(PushDoc, playerId, null);
         const found = doc.subscriptions.find(
           (s) => s.endpoint === old.endpoint && sameSecret(s.auth, old.auth),
@@ -187,7 +168,7 @@ export class Pushes {
       throw new BadSubscription(`This server sends no ${device.platform.toUpperCase()} pushes`);
     if (device.platform === "apns" && !/^[0-9a-f]{16,200}$/i.test(device.token))
       throw new BadSubscription("An APNs device token is hex");
-    await this.nudge.harness.commit(async (tx) => {
+    await this.nudge().harness.commit(async (tx) => {
       const doc = await tx.doc(PushDoc, playerId, null);
       // A device token moves with the device: whoever registers it last gets its pushes.
       const kept = (doc.devices ?? []).filter((d) => d.token !== device.token);
@@ -204,7 +185,7 @@ export class Pushes {
 
   /** False when the player had no such device. */
   async unregister(playerId: string, token: string): Promise<boolean> {
-    return this.nudge.harness.commit(async (tx) => {
+    return this.nudge().harness.commit(async (tx) => {
       const doc = await tx.doc(PushDoc, playerId, null);
       const before = doc.devices?.length ?? 0;
       doc.devices = (doc.devices ?? []).filter((d) => d.token !== token);
@@ -213,15 +194,17 @@ export class Pushes {
   }
 
   close(): void {
-    this.stop();
+    this.native.apns?.close();
   }
 
-  private async notify(event: RoomEvent): Promise<void> {
-    const directory = await this.nudge.harness.snapshot(DirectoryDoc, context);
+  /** Passes the event on to the room's members; one that fails is reported, not thrown. */
+  async notify(event: RoomEvent): Promise<void> {
+    const nudge = this.nudge();
+    const directory = await nudge.harness.snapshot(DirectoryDoc, context);
     const clients = new Set(Object.values(directory?.tokens ?? {}).map((t) => t.clientId));
     const privateTo =
       event.type === "answer" ? event.privateTo?.playerId : event.approval.privateTo?.playerId;
-    const members = (await this.nudge.rooms.members(event.roomId, context)).filter(
+    const members = (await nudge.rooms.members(event.roomId, context)).filter(
       (player) => privateTo === undefined || player.id === privateTo,
     );
     await Promise.all(
@@ -229,9 +212,9 @@ export class Pushes {
         // Each member's preview shows only what they may see.
         const message = await this.message(event, player.id);
         if (message === undefined) return;
-        const { notifications } = (await this.nudge.profiles.get(player.id, context)) ?? {};
+        const { notifications } = (await nudge.profiles.get(player.id, context)) ?? {};
         if (notifications?.[message.kind === "answer" ? "answers" : "approvals"] === false) return;
-        const doc = await this.nudge.harness.snapshot(PushDoc, player.id, context);
+        const doc = await nudge.harness.snapshot(PushDoc, player.id, context);
         const gone: string[] = [];
         await Promise.all(
           (doc?.subscriptions ?? []).map(async (subscription) => {
@@ -249,7 +232,7 @@ export class Pushes {
           }),
         );
         for (const endpoint of gone) await this.unsubscribe(player.id, endpoint);
-        if (this.watching(player.id, event.roomId)) return;
+        if (nudge.presence.isOpen(player.id, event.roomId)) return;
         const lost: string[] = [];
         await Promise.all(
           (doc?.devices ?? []).map(async (device) => {
@@ -293,11 +276,12 @@ export class Pushes {
   }
 
   private async message(event: RoomEvent, playerId: string): Promise<PushMessage | undefined> {
-    const show = (text: string) => this.nudge.showTo(playerId, text);
-    const room = await this.nudge.rooms.get(event.roomId, context);
+    const nudge = this.nudge();
+    const show = (text: string) => nudge.showTo(playerId, text);
+    const room = await nudge.rooms.get(event.roomId, context);
     if (room === undefined) return undefined;
     const base = {
-      title: `${this.nudge.displayName} · ${room.name}`,
+      title: `${nudge.displayName} · ${room.name}`,
       url: `/${encodeURIComponent(this.name)}/${encodeURIComponent(room.id)}`,
       tag: `${this.name}/${room.id}`,
       roomId: room.id,
@@ -313,7 +297,7 @@ export class Pushes {
       };
     if (event.status === "stopped") return undefined;
     if (event.status === "failed")
-      return { ...base, kind: "answer", body: `${this.nudge.displayName} couldn't answer` };
+      return { ...base, kind: "answer", body: `${nudge.displayName} couldn't answer` };
     if (event.text === "") return undefined;
     return { ...base, kind: "answer", body: preview ? clip(show(event.text)) : "New message" };
   }

@@ -105,6 +105,8 @@ export type RouteAuth = "player" | "admin" | "none";
 export type RouteCaller = {
   /** Absent for routes with `auth: "none"`. */
   readonly player?: Player;
+  /** The client whose token called; absent with the player. */
+  readonly clientId?: string;
   /** Whether the player may use the admin API; false without a player. */
   readonly admin: boolean;
   /** The path's `:name` parts, decoded. */

@@ -1,13 +1,16 @@
 import { createPublicKey, generateKeyPairSync, verify } from "node:crypto";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createServer, type Http2Server, type IncomingHttpHeaders } from "node:http2";
 import type { AddressInfo } from "node:net";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
 import { createNudge, type Nudge } from "@nudge/core";
+import { type RunningServer, serveNudge } from "@nudge/server";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { Apns, Fcm, generateVapidKeys, type RunningServer, serveNudge } from "../src/index.ts";
-import { PushDoc } from "../src/push/pushes.ts";
+import { Apns, Fcm, PushDoc, pushExtension } from "../src/index.ts";
 
 const context = BACKGROUND_CONTEXT;
 
@@ -224,16 +227,28 @@ describe("native push through the server", () => {
     return { status: response.status, json: text === "" ? undefined : JSON.parse(text) };
   };
 
-  beforeEach(async () => {
+  /** An assistant with the push extension and these settings, served. */
+  const start = async (settings: Record<string, unknown>) => {
     faux = fauxProvider();
     const models = createModels();
     models.setProvider(faux.provider);
     nudge = await createNudge(
       {
+        name: "robin",
         database: ":memory:",
         models,
         model: { provider: faux.provider.id, modelId: faux.getModel().id },
         displayName: "Robin",
+        extensions: [
+          {
+            extension: pushExtension({
+              fetch: fcm.fetch,
+              apnsOrigins: apns.origins,
+              fcmOrigin: "https://fcm.example",
+            }),
+            settings: { subject: "mailto:owner@nudge.example", ...settings },
+          },
+        ],
       },
       context,
     );
@@ -241,23 +256,20 @@ describe("native push through the server", () => {
     for (const name of ["Ann", "Bo", "Cy"])
       tokens[name] = (await nudge.players.invite(name, context)).token;
     await nudge.rooms.createShared({ id: "trip", name: "Trip", members: ["ann", "bo"] }, context);
+    server = await serveNudge({ assistants: new Map([["robin", nudge]]), port: 0 });
+  };
+
+  beforeEach(async () => {
     apns = await fakeApns();
     fcm = fakeFcm();
-    server = await serveNudge({
-      assistants: new Map([["robin", nudge]]),
-      port: 0,
-      push: {
-        vapid: generateVapidKeys(),
-        subject: "mailto:owner@nudge.example",
-        apns: {
-          key: apnsKey(),
-          keyId: "KEY123",
-          teamId: "TEAM456",
-          bundleId: "app.nudge.dev",
-          origins: apns.origins,
-        },
-        fcm: { serviceAccount: serviceAccount(), origin: "https://fcm.example", fetch: fcm.fetch },
-      },
+    const dir = mkdtempSync(join(tmpdir(), "nudge-push-"));
+    const keyFile = join(dir, "AuthKey.p8");
+    const serviceAccountFile = join(dir, "service-account.json");
+    writeFileSync(keyFile, apnsKey());
+    writeFileSync(serviceAccountFile, JSON.stringify(serviceAccount()));
+    await start({
+      apns: { keyFile, keyId: "KEY123", teamId: "TEAM456", bundleId: "app.nudge.dev" },
+      fcm: { serviceAccountFile },
     });
   });
 
@@ -268,11 +280,14 @@ describe("native push through the server", () => {
   });
 
   it("registers devices and pushes a room's answers to its members' devices", async () => {
-    expect((await call("GET", "/devices", tokens.Ann!)).json).toEqual({ apns: true, fcm: true });
+    expect((await call("GET", "/ext/push/devices", tokens.Ann!)).json).toEqual({
+      apns: true,
+      fcm: true,
+    });
     const ann = "a1".repeat(32);
     expect(
       (
-        await call("POST", "/devices", tokens.Ann!, {
+        await call("POST", "/ext/push/devices", tokens.Ann!, {
           platform: "apns",
           token: ann,
           environment: "sandbox",
@@ -280,16 +295,19 @@ describe("native push through the server", () => {
       ).status,
     ).toBe(204);
     expect(
-      (await call("POST", "/devices", tokens.Bo!, { platform: "fcm", token: "bo-phone" })).status,
+      (await call("POST", "/ext/push/devices", tokens.Bo!, { platform: "fcm", token: "bo-phone" }))
+        .status,
     ).toBe(204);
     expect(
-      (await call("POST", "/devices", tokens.Cy!, { platform: "fcm", token: "cy-phone" })).status,
+      (await call("POST", "/ext/push/devices", tokens.Cy!, { platform: "fcm", token: "cy-phone" }))
+        .status,
     ).toBe(204);
     expect(
-      (await call("POST", "/devices", tokens.Cy!, { platform: "apns", token: "nope" })).status,
+      (await call("POST", "/ext/push/devices", tokens.Cy!, { platform: "apns", token: "nope" }))
+        .status,
     ).toBe(400);
     expect(
-      (await call("POST", "/devices", tokens.Cy!, { platform: "web", token: "x" })).status,
+      (await call("POST", "/ext/push/devices", tokens.Cy!, { platform: "web", token: "x" })).status,
     ).toBe(400);
 
     faux.setResponses([fauxAssistantMessage("The train leaves at 09:12.")]);
@@ -314,13 +332,13 @@ describe("native push through the server", () => {
       kind: "answer",
     });
 
-    expect((await call("DELETE", `/devices/${ann}`, tokens.Ann!)).status).toBe(204);
-    expect((await call("DELETE", `/devices/${ann}`, tokens.Ann!)).status).toBe(404);
+    expect((await call("DELETE", `/ext/push/devices/${ann}`, tokens.Ann!)).status).toBe(204);
+    expect((await call("DELETE", `/ext/push/devices/${ann}`, tokens.Ann!)).status).toBe(404);
   });
 
   it("skips devices of players with the room open, and forgets gone devices", async () => {
-    await call("POST", "/devices", tokens.Ann!, { platform: "fcm", token: "ann-phone" });
-    await call("POST", "/devices", tokens.Bo!, { platform: "fcm", token: "bo-phone" });
+    await call("POST", "/ext/push/devices", tokens.Ann!, { platform: "fcm", token: "ann-phone" });
+    await call("POST", "/ext/push/devices", tokens.Bo!, { platform: "fcm", token: "bo-phone" });
     fcm.gone.add("bo-phone");
 
     // Ann has the room open in the app.
@@ -352,13 +370,16 @@ describe("native push through the server", () => {
 
   it("refuses devices for a platform the server doesn't push to", async () => {
     await server.close();
-    server = await serveNudge({
-      assistants: new Map([["robin", nudge]]),
-      port: 0,
-      push: { vapid: generateVapidKeys(), subject: "mailto:owner@nudge.example" },
+    await nudge.close(context);
+    await start({});
+    expect((await call("GET", "/ext/push/devices", tokens.Ann!)).json).toEqual({
+      apns: false,
+      fcm: false,
     });
-    expect((await call("GET", "/devices", tokens.Ann!)).json).toEqual({ apns: false, fcm: false });
-    const refused = await call("POST", "/devices", tokens.Ann!, { platform: "fcm", token: "x" });
+    const refused = await call("POST", "/ext/push/devices", tokens.Ann!, {
+      platform: "fcm",
+      token: "x",
+    });
     expect(refused.status).toBe(400);
     expect(refused.json.error).toMatch(/FCM/);
   });

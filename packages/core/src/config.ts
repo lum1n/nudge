@@ -68,32 +68,6 @@ const AssistantSchema = Type.Object({
   ),
 });
 
-/** Notifications `nudge serve` pushes to browsers that turn them on. */
-const PushSchema = Type.Object({
-  /** `room` (the default) says only which room has news; `text` adds the start of it. */
-  preview: Type.Optional(Type.Union([Type.Literal("room"), Type.Literal("text")])),
-  /** A `mailto:` or `https:` address push services can reach the server's owner at. */
-  subject: Type.Optional(Type.String({ pattern: "^(mailto|https):" })),
-  /** Pushes to the iOS and macOS apps, with an APNs key from the Apple Developer account. */
-  apns: Type.Optional(
-    Type.Object({
-      /** The `.p8` key file, relative to the config file. */
-      keyFile: Type.String({ minLength: 1 }),
-      keyId: Type.String({ minLength: 1 }),
-      teamId: Type.String({ minLength: 1 }),
-      /** The app's bundle id; default `app.nudge.dev`. */
-      bundleId: Type.Optional(Type.String({ minLength: 1 })),
-    }),
-  ),
-  /** Pushes to the Android app, with a Firebase project's service account. */
-  fcm: Type.Optional(
-    Type.Object({
-      /** The service account's JSON key file, relative to the config file. */
-      serviceAccountFile: Type.String({ minLength: 1 }),
-    }),
-  ),
-});
-
 /** Encrypted backups `nudge serve` makes on its own; `nudge backup` makes one at any time. */
 const BackupSchema = Type.Object({
   /** Where backups go, relative to the config file: a disk, a mounted share, a synced folder. */
@@ -109,7 +83,6 @@ const BackupSchema = Type.Object({
 export const NudgeConfigSchema = Type.Object({
   assistants: Type.Array(AssistantSchema, { minItems: 1 }),
   providers: Type.Optional(Type.Array(LocalProviderSchema)),
-  push: Type.Optional(PushSchema),
   backup: Type.Optional(BackupSchema),
 });
 
@@ -129,6 +102,10 @@ export class ConfigError extends Error {
 
 /** Parses and validates a config; relative database paths resolve against `baseDir`. */
 export function parseConfig(value: unknown, baseDir: string): NudgeConfig {
+  if (typeof value === "object" && value !== null && "push" in value)
+    throw new ConfigError(
+      'Pushes are an extension now: remove "push" and add { "from": "./extensions/push", "settings": { … } } to each assistant\'s extensions, with what "push" had (preview, subject, apns, fcm). Its key files are read from the directory nudge runs in, or give them as absolute paths.',
+    );
   if (!Value.Check(NudgeConfigSchema, value)) {
     const problems = [...Value.Errors(NudgeConfigSchema, value)]
       .slice(0, 5)
