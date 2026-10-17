@@ -489,6 +489,18 @@ impl Api {
 
     // Admin routes, for players with the admin flag.
 
+    /// Gives a player the admin flag, or with `false` takes it; the first player keeps it.
+    pub async fn set_admin(&self, player_id: &str, admin: bool) -> Result<AdminPlayer, ApiError> {
+        let body = SetAdminRequest { admin };
+        self.request(
+            Method::PUT,
+            &["admin", "players", player_id, "admin"],
+            &[],
+            Some(&body),
+        )
+        .await
+    }
+
     pub async fn create_player(&self, display_name: &str) -> Result<Player, ApiError> {
         let body = CreatePlayerRequest {
             display_name: display_name.to_owned(),

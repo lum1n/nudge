@@ -93,6 +93,8 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
     var newFact by remember { mutableStateOf("") }
     var problem by remember { mutableStateOf<String?>(null) }
     var confirmSignOut by remember { mutableStateOf(false) }
+    var servers by remember { mutableStateOf<ServersPage?>(null) }
+    val owned by model.servers.owned.collectAsStateWithLifecycle()
     val notificationsOn = NotificationManagerCompat.from(LocalContext.current).areNotificationsEnabled()
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     // The assistant whose extensions or invites are open: home, or one joined from there.
@@ -132,6 +134,23 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
     invitesOf?.let { at ->
         BackHandler { invitesOf = null }
         InvitesScreen(at.client, at.account.assistantName, close = { invitesOf = null })
+        return
+    }
+    servers?.let { screen ->
+        BackHandler { servers = null }
+        when (screen) {
+            is ServersPage.List -> ServersScreen(
+                model, memberships?.address,
+                exe = { servers = ServersPage.Exe },
+                close = { servers = null },
+            )
+            is ServersPage.Exe -> ExeScreen(
+                model,
+                close = { servers = ServersPage.List },
+                ready = { servers = ServersPage.Setup(it) },
+            )
+            is ServersPage.Setup -> SetupScreen(model, screen.start, close = { servers = ServersPage.List })
+        }
         return
     }
     if (profile) {
@@ -189,6 +208,24 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                         ) { Text(session.account.server) }
                     },
                 ),
+            )
+
+            group(
+                "Servers",
+                listOf { shapes ->
+                    SegmentedListItem(
+                        onClick = { servers = ServersPage.List },
+                        shapes = shapes,
+                        leadingContent = { Icon(Icons.Outlined.Dns, null) },
+                        supportingContent = {
+                            Text(
+                                if (owned.isEmpty()) "Make your own on exe.dev, and assistants on it"
+                                else "Yours: their assistants, model keys and updates",
+                            )
+                        },
+                        trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) },
+                    ) { Text(if (owned.isEmpty()) "Servers" else "Servers (${owned.size})") }
+                },
             )
 
             memberships?.let { joined ->
@@ -471,3 +508,10 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
 
 private fun dollars(value: Double): String =
     NumberFormat.getCurrencyInstance().apply { currency = Currency.getInstance("USD") }.format(value)
+
+/** The servers pages over Settings: the list, making one on exe.dev, and setting it up. */
+private sealed interface ServersPage {
+    data object List : ServersPage
+    data object Exe : ServersPage
+    data class Setup(val start: SetupStart) : ServersPage
+}

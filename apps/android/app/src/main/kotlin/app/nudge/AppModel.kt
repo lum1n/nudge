@@ -27,13 +27,17 @@ import nudge.ffi.ConnectionStatus
 import nudge.ffi.DeviceKey
 import nudge.ffi.DevicePlatform
 import nudge.ffi.MeInfo
+import nudge.ffi.MadeAssistant
 import nudge.ffi.Membership
 import nudge.ffi.Memberships
+import nudge.ffi.NewAssistant
 import nudge.ffi.NudgeClient
 import nudge.ffi.NudgeException
 import nudge.ffi.PushPayload
 import nudge.ffi.PushPlatforms
 import nudge.ffi.RoomListUpdate
+import nudge.ffi.SetupChoices
+import nudge.ffi.SetupResult
 import nudge.ffi.listAssistants
 import nudge.ffi.newDeviceKey
 import nudge.ffi.registerWithRelay
@@ -100,6 +104,9 @@ class AppModel(private val context: Context) {
     /** Why the app signed out on its own, for the sign-in screen. */
     val signedOutBecause = MutableStateFlow<String?>(null)
 
+    /** The servers this device owns, and the exe.dev token it makes new ones with. */
+    val servers = Servers(preferences)
+
     /** Whether the app is on screen; pushes for the open room aren't shown then. */
     @Volatile var foreground = false
         private set
@@ -165,6 +172,79 @@ class AppModel(private val context: Context) {
         signedOutBecause.value = null
         start(account, client)
     }
+
+    /**
+     * Sets a server up with what the wizard asked (ADR 11), and signs in: to its new assistant as
+     * the person's home, and to the server as its owner.
+     */
+    suspend fun setUp(server: String, choices: SetupChoices) {
+        val done = nudge.ffi.setUp(server, choices, "nudge-android", "android")
+        servers.remember(server, done.serverToken)
+        val home = mutableSession.value
+        if (home != null) return joinFromHome(home, server, done)
+        val account = Account(server, done.assistant, choices.displayName ?: done.assistant)
+        tokens(account).set(done.token)
+        preferences.edit()
+            .putString("server", account.server)
+            .putString("assistant", account.assistant)
+            .putString("assistantName", account.assistantName)
+            .apply()
+        signedOutBecause.value = null
+        start(account)
+    }
+
+    /**
+     * A server set up while signed in at home: its first assistant is joined from home rather
+     * than made a second home. Setup made a player there for the person, the first and so the
+     * admin; with its token the app invites the home's address, joins, makes that guest an admin
+     * and an owner of the server, and signs the setup player's token out.
+     */
+    private suspend fun joinFromHome(home: Session, server: String, done: SetupResult) {
+        val address = mutableMemberships.value?.address
+            ?: throw IllegalStateException("Your home has no federation, so it can't join the new assistant.")
+        val setupAccount = Account(server, done.assistant, done.assistant)
+        val setupTokens = PreferencesTokens(preferences, "setup:${setupAccount.key}")
+        setupTokens.set(done.token)
+        val setup = NudgeClient(config(setupAccount).copy(cachePath = null), setupTokens)
+        try {
+            setup.invite(address)
+            join(JoinLink(server, done.assistant))
+            val place = mutablePlaces.value.first { it.account.isAt(server, done.assistant) }
+            val guest = place.client.me().player.id
+            setup.setAdmin(guest, true)
+            servers.client(server).addOwner(done.assistant, guest)
+            runCatching { setup.signOut() }
+        } finally {
+            setupTokens.set(null)
+            setup.close()
+        }
+    }
+
+    /**
+     * Makes an assistant on a server this device owns. One that is "for me" is joined from home
+     * at once, so its rooms show beside the home's and the person is its first admin.
+     */
+    suspend fun createAssistant(server: String, new: NewAssistant): MadeAssistant {
+        val made = servers.client(server).createAssistant(new)
+        made.joinLink?.let { JoinLink.parse(it) }?.let { join(it) }
+        return made
+    }
+
+    /** Signs in to the home's server as its owner, when the player is one; quietly not otherwise. */
+    private suspend fun signInAsOwner(home: Session) {
+        if (home.account.server in servers.owned.value) return
+        val token = tokens(home.account).get() ?: return
+        try {
+            servers.client(home.account.server).signIn(home.account.assistant, token)
+            // The client kept the token; remember the server.
+            servers.remember(home.account.server, serverToken(home.account.server) ?: return)
+        } catch (_: NudgeException) {
+            // Not an owner, or an older server without the server API.
+        }
+    }
+
+    private fun serverToken(server: String) =
+        PreferencesTokens(preferences, "serverToken:${server.trimEnd('/')}").get()
 
     /** Forgets the tokens, the device's push registrations and the cached views, everywhere. */
     suspend fun signOut(because: String? = null) {
@@ -277,6 +357,7 @@ class AppModel(private val context: Context) {
             FirebaseMessaging.getInstance().register()
         }
         scope.launch { syncPlaces() }
+        scope.launch { signInAsOwner(session) }
     }
 
     /** A client of `account`, connected, its player and pushes asked for. */

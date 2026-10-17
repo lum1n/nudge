@@ -26,15 +26,35 @@ import app.nudge.explain
 import kotlinx.coroutines.launch
 import nudge.ffi.ConnectionStatus
 
-/** Sign-in until there is an account; then the rooms. */
+/** What a device without an account shows: signing in, setting a server up, or making one. */
+private sealed interface SignedOut {
+    data object SignIn : SignedOut
+    data class Setup(val start: SetupStart) : SignedOut
+    data object Exe : SignedOut
+}
+
+/** Sign-in, or setting a server up, until there is an account; then the rooms. */
 @Composable
 fun NudgeApp(model: AppModel, askForNotifications: () -> Unit) {
     val session by model.session.collectAsStateWithLifecycle()
+    var signedOut by remember { mutableStateOf<SignedOut>(SignedOut.SignIn) }
     val current = session
-    if (current == null) {
-        SignInScreen(model, askForNotifications)
-    } else {
+    if (current != null) {
         SignedIn(model, current)
+        return
+    }
+    when (val screen = signedOut) {
+        SignedOut.SignIn -> SignInScreen(
+            model, askForNotifications,
+            setUp = { signedOut = SignedOut.Setup(SetupStart()) },
+            exe = { signedOut = SignedOut.Exe },
+        )
+        is SignedOut.Setup -> SetupScreen(model, screen.start, close = { signedOut = SignedOut.SignIn })
+        SignedOut.Exe -> ExeScreen(
+            model,
+            close = { signedOut = SignedOut.SignIn },
+            ready = { signedOut = SignedOut.Setup(it) },
+        )
     }
 }
 

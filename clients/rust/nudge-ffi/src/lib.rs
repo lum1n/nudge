@@ -5,6 +5,7 @@
 //! at most about 30 times a second, so a streaming answer costs one `Set` per update.
 
 mod diff;
+mod server;
 mod types;
 
 use std::future::Future;
@@ -17,6 +18,7 @@ use tokio::runtime::Runtime;
 use tokio::task::AbortHandle;
 
 pub use diff::Change;
+pub use server::*;
 pub use types::*;
 
 uniffi::setup_scaffolding!();
@@ -897,6 +899,14 @@ impl NudgeClient {
     }
 
     // Admin commands, for players with the admin flag.
+
+    /// Gives a player the admin flag, or with `false` takes it; returns whether they have it now.
+    pub async fn set_admin(&self, player_id: String, admin: bool) -> Result<bool, NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.set_admin(&player_id, admin).await })
+            .await?
+            .admin)
+    }
 
     pub async fn create_player(&self, display_name: String) -> Result<Player, NudgeError> {
         let api = self.client.api().clone();

@@ -1,0 +1,667 @@
+//! The server's own API, setup, and making servers on exe.dev (ADR 11), for the apps.
+
+use std::sync::Arc;
+use std::time::Duration;
+
+use nudge_client::protocol as p;
+use nudge_client::{ExeError, ServerApi};
+
+use crate::{ForeignTokens, NudgeError, Player, TokenStore, run};
+
+impl From<ExeError> for NudgeError {
+    fn from(error: ExeError) -> Self {
+        let detail = error.to_string();
+        match error {
+            ExeError::Token(_) => NudgeError::Status {
+                status: 401,
+                detail,
+            },
+            ExeError::Command(_) => NudgeError::Status {
+                status: 422,
+                detail,
+            },
+            ExeError::Status { status, .. } => NudgeError::Status { status, detail },
+            ExeError::Network(_) | ExeError::NotUp(_) => NudgeError::Network { detail },
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct ModelChoice {
+    pub provider: String,
+    pub model_id: String,
+}
+
+/// Monthly limits on model spend, in US dollars; `warn_at` is a share between 0 and 1.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct AssistantBudget {
+    pub monthly_usd: Option<f64>,
+    pub per_player_usd: Option<f64>,
+    pub warn_at: Option<f64>,
+}
+
+/// An assistant's settings, as the owner edits them; saved whole.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct AssistantSettings {
+    pub display_name: String,
+    pub model: ModelChoice,
+    pub time_zone: Option<String>,
+    pub instructions: Option<String>,
+    pub budget: Option<AssistantBudget>,
+}
+
+/// One of the server's assistants.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct ServerAssistant {
+    /// In its URLs and its people's addresses; it never changes.
+    pub name: String,
+    pub settings: AssistantSettings,
+    /// False when it is in the config but failed to open.
+    pub running: bool,
+}
+
+/// Who a new assistant is for.
+#[derive(Clone, Debug, PartialEq, uniffi::Enum)]
+pub enum AssistantFor {
+    /// The owner, who joins it from home with their address.
+    Me { address: String },
+    /// Someone whose home it is, with their pairing code to give them.
+    SomeonesHome { display_name: String },
+}
+
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct NewAssistant {
+    /// Lower-case letters, digits and dashes; part of every address, so it can't change.
+    pub name: String,
+    pub settings: AssistantSettings,
+    pub made_for: AssistantFor,
+}
+
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct FirstPlayerPairing {
+    pub code: String,
+    /// `nudge://pair?server=…&assistant=…&code=…`, for a QR code.
+    pub link: String,
+    pub expires_at: f64,
+    pub player_id: String,
+}
+
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct MadeAssistant {
+    pub assistant: ServerAssistant,
+    /// For someone's home: their pairing code.
+    pub pairing: Option<FirstPlayerPairing>,
+    /// For the owner: `nudge://join?…`, which the app follows to join from home.
+    pub join_link: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, uniffi::Enum)]
+pub enum KeySource {
+    /// The server's environment, which wins.
+    Env,
+    Server,
+    Assistant,
+    None,
+}
+
+/// Where a provider's key comes from; the key itself is never shown.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct ProviderKey {
+    pub provider: String,
+    pub source: KeySource,
+    /// For `Env`: which variables.
+    pub variables: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct ServerOwner {
+    pub id: String,
+    pub assistant: String,
+    pub player_id: String,
+    pub added_at: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct UpdateState {
+    pub current: String,
+    pub automatic: bool,
+    pub available: Option<String>,
+    pub checked_at: Option<f64>,
+    pub error: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct ServerInfo {
+    pub version: String,
+    pub owner: ServerOwner,
+    pub assistants: Vec<ServerAssistant>,
+    pub updates: Option<UpdateState>,
+}
+
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct SetupModel {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct SetupProvider {
+    pub id: String,
+    pub name: String,
+    pub models: Vec<SetupModel>,
+    pub recommended: String,
+}
+
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct SetupLocalServer {
+    pub id: String,
+    pub name: String,
+    pub base_url: String,
+    pub models: Vec<String>,
+}
+
+/// What a server in setup mode offers; `open` is false once it is set up.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct SetupInfo {
+    pub open: bool,
+    pub providers: Vec<SetupProvider>,
+    pub local: Vec<SetupLocalServer>,
+}
+
+/// What the setup wizard asks.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct SetupChoices {
+    pub code: String,
+    pub assistant_name: String,
+    pub display_name: Option<String>,
+    pub model: ModelChoice,
+    /// The provider's key; `None` with `local`.
+    pub key: Option<String>,
+    /// The id of a found local model server.
+    pub local: Option<String>,
+    /// The person setting it up: its first player and admin, and the server's owner.
+    pub your_name: String,
+    /// The address the app reached the server at.
+    pub public_url: Option<String>,
+    pub backups: bool,
+}
+
+/// The tokens are shown only here: the player's for the assistant, the owner's for the server.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct SetupResult {
+    pub assistant: String,
+    pub player: Player,
+    pub token: String,
+    pub client_id: String,
+    pub server_token: String,
+    pub owner: ServerOwner,
+}
+
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct ExeVm {
+    pub name: String,
+    /// Such as `https://robin.exe.xyz`.
+    pub url: String,
+}
+
+/// A server made on exe.dev, waiting to be set up with `code`.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct LaunchedServer {
+    pub vm: ExeVm,
+    pub code: String,
+}
+
+impl From<p::ModelChoice> for ModelChoice {
+    fn from(m: p::ModelChoice) -> Self {
+        ModelChoice {
+            provider: m.provider,
+            model_id: m.model_id,
+        }
+    }
+}
+
+impl From<ModelChoice> for p::ModelChoice {
+    fn from(m: ModelChoice) -> Self {
+        p::ModelChoice {
+            provider: m.provider,
+            model_id: m.model_id,
+        }
+    }
+}
+
+impl From<p::AssistantBudget> for AssistantBudget {
+    fn from(b: p::AssistantBudget) -> Self {
+        AssistantBudget {
+            monthly_usd: b.monthly_usd,
+            per_player_usd: b.per_player_usd,
+            warn_at: b.warn_at,
+        }
+    }
+}
+
+impl From<AssistantBudget> for p::AssistantBudget {
+    fn from(b: AssistantBudget) -> Self {
+        p::AssistantBudget {
+            monthly_usd: b.monthly_usd,
+            per_player_usd: b.per_player_usd,
+            warn_at: b.warn_at,
+        }
+    }
+}
+
+impl From<p::ServerAssistant> for ServerAssistant {
+    fn from(a: p::ServerAssistant) -> Self {
+        ServerAssistant {
+            name: a.name,
+            settings: AssistantSettings {
+                display_name: a.display_name,
+                model: a.model.into(),
+                time_zone: a.time_zone,
+                instructions: a.instructions,
+                budget: a.budget.map(Into::into),
+            },
+            running: a.running,
+        }
+    }
+}
+
+impl From<p::ServerOwner> for ServerOwner {
+    fn from(o: p::ServerOwner) -> Self {
+        ServerOwner {
+            id: o.id,
+            assistant: o.assistant,
+            player_id: o.player_id,
+            added_at: o.added_at,
+        }
+    }
+}
+
+impl From<p::UpdateState> for UpdateState {
+    fn from(u: p::UpdateState) -> Self {
+        UpdateState {
+            current: u.current,
+            automatic: u.automatic,
+            available: u.available,
+            checked_at: u.checked_at,
+            error: u.error,
+        }
+    }
+}
+
+impl From<p::ProviderKey> for ProviderKey {
+    fn from(k: p::ProviderKey) -> Self {
+        ProviderKey {
+            provider: k.provider,
+            source: match k.source {
+                p::KeySource::Env => KeySource::Env,
+                p::KeySource::Server => KeySource::Server,
+                p::KeySource::Assistant => KeySource::Assistant,
+                p::KeySource::None => KeySource::None,
+            },
+            variables: k.variables.unwrap_or_default(),
+        }
+    }
+}
+
+fn client_info(client_name: &str, platform: &str) -> p::ClientInfo {
+    p::ClientInfo {
+        name: client_name.to_owned(),
+        platform: platform.to_owned(),
+    }
+}
+
+/// The server's own API, signed in as one of its owners with a server token in `tokens`.
+#[derive(uniffi::Object)]
+pub struct ServerClient {
+    api: ServerApi,
+    info: p::ClientInfo,
+}
+
+#[uniffi::export]
+impl ServerClient {
+    /// `server` is its address; `client_name` and `platform` say what this app is, as for
+    /// `NudgeClient`.
+    #[uniffi::constructor]
+    pub fn new(
+        server: String,
+        tokens: Arc<dyn TokenStore>,
+        client_name: String,
+        platform: String,
+    ) -> Result<Arc<Self>, NudgeError> {
+        Ok(Arc::new(ServerClient {
+            api: ServerApi::new(&server, Arc::new(ForeignTokens(tokens)))?,
+            info: client_info(&client_name, &platform),
+        }))
+    }
+
+    /// Trades the player token of an owner, on `assistant`, for a server token, and stores it.
+    pub async fn sign_in(
+        &self,
+        assistant: String,
+        player_token: String,
+    ) -> Result<ServerOwner, NudgeError> {
+        let (api, info) = (self.api.clone(), self.info.clone());
+        let session =
+            run(async move { api.sign_in(&assistant, &player_token, info).await }).await?;
+        Ok(session.owner.into())
+    }
+
+    pub async fn sign_out(&self) -> Result<(), NudgeError> {
+        let api = self.api.clone();
+        Ok(run(async move { api.sign_out().await }).await?)
+    }
+
+    pub async fn info(&self) -> Result<ServerInfo, NudgeError> {
+        let api = self.api.clone();
+        let info = run(async move { api.info().await }).await?;
+        Ok(ServerInfo {
+            version: info.version,
+            owner: info.owner.into(),
+            assistants: info.assistants.into_iter().map(Into::into).collect(),
+            updates: info.updates.map(Into::into),
+        })
+    }
+
+    pub async fn assistants(&self) -> Result<Vec<ServerAssistant>, NudgeError> {
+        let api = self.api.clone();
+        let assistants = run(async move { api.assistants().await }).await?;
+        Ok(assistants.into_iter().map(Into::into).collect())
+    }
+
+    /// For the owner, with their address: they then join it from home with `join_link`. For
+    /// someone's home: their pairing code.
+    pub async fn create_assistant(&self, new: NewAssistant) -> Result<MadeAssistant, NudgeError> {
+        let settings = new.settings;
+        let (first_player, invite) = match new.made_for {
+            AssistantFor::Me { address } => (None, Some(address)),
+            AssistantFor::SomeonesHome { display_name } => {
+                (Some(p::FirstPlayer { display_name }), None)
+            }
+        };
+        let body = p::CreateAssistantRequest {
+            name: new.name,
+            display_name: Some(settings.display_name),
+            model: Some(settings.model.into()),
+            time_zone: settings.time_zone,
+            instructions: settings.instructions,
+            budget: settings.budget.map(Into::into),
+            first_player,
+            invite,
+        };
+        let api = self.api.clone();
+        let made = run(async move { api.create_assistant(&body).await }).await?;
+        Ok(MadeAssistant {
+            assistant: made.assistant.into(),
+            pairing: made.pairing.map(|pairing| FirstPlayerPairing {
+                code: pairing.code,
+                link: pairing.link,
+                expires_at: pairing.expires_at,
+                player_id: pairing.player_id,
+            }),
+            join_link: made.join_link,
+        })
+    }
+
+    /// Saves the settings whole; the assistant reopens with them.
+    pub async fn update_assistant(
+        &self,
+        name: String,
+        settings: AssistantSettings,
+    ) -> Result<ServerAssistant, NudgeError> {
+        let change = p::UpdateAssistantRequest {
+            display_name: Some(Some(settings.display_name)),
+            model: Some(Some(settings.model.into())),
+            time_zone: Some(settings.time_zone),
+            instructions: Some(settings.instructions),
+            budget: Some(settings.budget.map(Into::into)),
+        };
+        let api = self.api.clone();
+        Ok(
+            run(async move { api.update_assistant(&name, &change).await })
+                .await?
+                .into(),
+        )
+    }
+
+    /// Deletes it for good, after a backup the server keeps for a while; returns its name.
+    pub async fn delete_assistant(&self, name: String) -> Result<String, NudgeError> {
+        let api = self.api.clone();
+        Ok(run(async move { api.delete_assistant(&name).await }).await?)
+    }
+
+    pub async fn keys(&self, assistant: Option<String>) -> Result<Vec<ProviderKey>, NudgeError> {
+        let api = self.api.clone();
+        let keys = run(async move { api.keys(assistant.as_deref()).await }).await?;
+        Ok(keys.into_iter().map(Into::into).collect())
+    }
+
+    /// Kept once a tiny request with it worked; a 400 has the provider's answer.
+    pub async fn set_key(
+        &self,
+        provider: String,
+        key: String,
+        assistant: Option<String>,
+    ) -> Result<ProviderKey, NudgeError> {
+        let body = p::SetProviderKeyRequest {
+            key,
+            assistant,
+            test: None,
+        };
+        let api = self.api.clone();
+        Ok(run(async move { api.set_key(&provider, &body).await })
+            .await?
+            .into())
+    }
+
+    pub async fn delete_key(
+        &self,
+        provider: String,
+        assistant: Option<String>,
+    ) -> Result<(), NudgeError> {
+        let api = self.api.clone();
+        Ok(run(async move { api.delete_key(&provider, assistant.as_deref()).await }).await?)
+    }
+
+    pub async fn owners(&self) -> Result<Vec<ServerOwner>, NudgeError> {
+        let api = self.api.clone();
+        let owners = run(async move { api.owners().await }).await?;
+        Ok(owners.into_iter().map(Into::into).collect())
+    }
+
+    pub async fn add_owner(
+        &self,
+        assistant: String,
+        player_id: String,
+    ) -> Result<ServerOwner, NudgeError> {
+        let api = self.api.clone();
+        Ok(
+            run(async move { api.add_owner(&assistant, &player_id).await })
+                .await?
+                .into(),
+        )
+    }
+
+    pub async fn remove_owner(&self, id: String) -> Result<(), NudgeError> {
+        let api = self.api.clone();
+        Ok(run(async move { api.remove_owner(&id).await }).await?)
+    }
+
+    pub async fn check_updates(&self) -> Result<UpdateState, NudgeError> {
+        let api = self.api.clone();
+        Ok(run(async move { api.check_updates().await }).await?.into())
+    }
+
+    pub async fn set_updates(&self, automatic: bool) -> Result<UpdateState, NudgeError> {
+        let api = self.api.clone();
+        Ok(run(async move { api.set_updates(automatic).await })
+            .await?
+            .into())
+    }
+
+    /// The recovery kit as the text of a file to save away from the server.
+    pub async fn recovery_kit(&self, passphrase: String) -> Result<String, NudgeError> {
+        let api = self.api.clone();
+        Ok(run(async move { api.recovery_kit(&passphrase).await }).await?)
+    }
+}
+
+/// Whether `server` waits to be set up, and what it offers; needs no token.
+#[uniffi::export]
+pub async fn setup_info(server: String) -> Result<SetupInfo, NudgeError> {
+    let info = run(async move { nudge_client::setup_info(&server).await }).await?;
+    Ok(SetupInfo {
+        open: info.open,
+        providers: info
+            .providers
+            .into_iter()
+            .map(|provider| SetupProvider {
+                id: provider.id,
+                name: provider.name,
+                models: provider
+                    .models
+                    .into_iter()
+                    .map(|model| SetupModel {
+                        id: model.id,
+                        name: model.name,
+                    })
+                    .collect(),
+                recommended: provider.recommended,
+            })
+            .collect(),
+        local: info
+            .local
+            .into_iter()
+            .map(|server| SetupLocalServer {
+                id: server.id,
+                name: server.name,
+                base_url: server.base_url,
+                models: server.models,
+            })
+            .collect(),
+    })
+}
+
+/// Whether `code` is the setup code: 401 when it isn't, which counts against a few tries.
+#[uniffi::export]
+pub async fn check_setup_code(server: String, code: String) -> Result<(), NudgeError> {
+    Ok(run(async move { nudge_client::check_setup_code(&server, &code).await }).await?)
+}
+
+/// Tries a provider's key with one tiny request: 400 with the provider's answer when it fails.
+#[uniffi::export]
+pub async fn check_setup_key(
+    server: String,
+    code: String,
+    provider: String,
+    key: String,
+) -> Result<(), NudgeError> {
+    let body = p::SetupKeyRequest {
+        code,
+        provider,
+        key,
+    };
+    Ok(run(async move { nudge_client::check_setup_key(&server, &body).await }).await?)
+}
+
+/// Sets the server up. Keep `token` as the player's on the new assistant, and `server_token` as
+/// the owner's for `ServerClient`.
+#[uniffi::export]
+pub async fn set_up(
+    server: String,
+    choices: SetupChoices,
+    client_name: String,
+    platform: String,
+) -> Result<SetupResult, NudgeError> {
+    let body = p::SetupRequest {
+        code: choices.code,
+        client: client_info(&client_name, &platform),
+        assistant: p::SetupAssistant {
+            name: choices.assistant_name,
+            display_name: choices.display_name,
+        },
+        model: choices.model.into(),
+        key: choices.key,
+        local: choices.local,
+        you: p::SetupPerson {
+            display_name: choices.your_name,
+        },
+        public_url: choices.public_url,
+        backups: Some(choices.backups),
+    };
+    let done = run(async move { nudge_client::set_up(&server, &body).await }).await?;
+    Ok(SetupResult {
+        assistant: done.assistant,
+        player: done.player.into(),
+        token: done.token,
+        client_id: done.client_id,
+        server_token: done.server_token,
+        owner: done.owner.into(),
+    })
+}
+
+/// exe.dev with the person's API token, which the app keeps in its keychain and never sends to a
+/// Nudge server.
+#[derive(uniffi::Object)]
+pub struct ExeClient {
+    exe: nudge_client::ExeDev,
+}
+
+#[uniffi::export]
+impl ExeClient {
+    #[uniffi::constructor]
+    pub fn new(token: String) -> Arc<Self> {
+        Arc::new(ExeClient {
+            exe: nudge_client::ExeDev::new(&token),
+        })
+    }
+
+    /// Checks the token: what exe.dev says about whose it is, as JSON.
+    pub async fn whoami(&self) -> Result<String, NudgeError> {
+        let exe = self.exe.clone();
+        Ok(run(async move { exe.whoami().await }).await?.to_string())
+    }
+
+    pub async fn list(&self) -> Result<Vec<ExeVm>, NudgeError> {
+        let exe = self.exe.clone();
+        let vms = run(async move { exe.list().await }).await?;
+        Ok(vms
+            .into_iter()
+            .map(|vm| ExeVm {
+                name: vm.name,
+                url: vm.url,
+            })
+            .collect())
+    }
+
+    /// Makes a VM named `name` running Nudge, and waits up to `wait_seconds` until it can be set
+    /// up with the returned code.
+    pub async fn launch_server(
+        &self,
+        name: String,
+        wait_seconds: u32,
+    ) -> Result<LaunchedServer, NudgeError> {
+        let exe = self.exe.clone();
+        let wait = Duration::from_secs(wait_seconds.into());
+        let launched = run(async move { exe.launch_server(&name, wait).await }).await?;
+        Ok(LaunchedServer {
+            vm: ExeVm {
+                name: launched.vm.name,
+                url: launched.vm.url,
+            },
+            code: launched.code,
+        })
+    }
+
+    /// Removes the VM and everything on it.
+    pub async fn delete(&self, name: String) -> Result<(), NudgeError> {
+        let exe = self.exe.clone();
+        Ok(run(async move { exe.delete(&name).await }).await?)
+    }
+}
+
+/// The command a person runs once to give the app an exe.dev token: limited to what making and
+/// removing Nudge servers needs, for a year.
+#[uniffi::export]
+pub fn exe_token_command() -> String {
+    "ssh exe.dev ssh-key generate-api-key --exp=365d --cmds=whoami,ls,new,rm,share".to_owned()
+}

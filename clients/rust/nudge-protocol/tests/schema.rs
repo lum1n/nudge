@@ -796,6 +796,15 @@ fn server_and_setup_bodies_match_the_schema() {
         player_id: "ann".into(),
         added_at: 1.0,
     };
+    check(
+        "AdminPlayer",
+        &AdminPlayer {
+            id: "bo".into(),
+            display_name: "Bo".into(),
+            admin: true,
+        },
+    );
+    check("SetAdminRequest", &SetAdminRequest { admin: true });
     check("ModelChoice", &model);
     check("AssistantBudget", &budget);
     check("ServerAssistant", &assistant);

@@ -1101,6 +1101,20 @@ pub struct InvitesResponse {
     pub invites: Vec<Invite>,
 }
 
+/// A player as an admin sees them: whether they may use the admin routes.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdminPlayer {
+    pub id: String,
+    pub display_name: String,
+    pub admin: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SetAdminRequest {
+    pub admin: bool,
+}
+
 // The server's own API, under `/v1/server` (ADR 11): for its owners, not an assistant's admins.
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

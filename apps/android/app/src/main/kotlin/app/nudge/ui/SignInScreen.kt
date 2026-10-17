@@ -25,6 +25,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -58,7 +59,7 @@ import nudge.ffi.listAssistants
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun SignInScreen(model: AppModel, askForNotifications: () -> Unit) {
+fun SignInScreen(model: AppModel, askForNotifications: () -> Unit, setUp: () -> Unit, exe: () -> Unit) {
     val scope = rememberCoroutineScope()
     val link by model.pendingLink.collectAsStateWithLifecycle()
     val signedOutBecause by model.signedOutBecause.collectAsStateWithLifecycle()
@@ -70,7 +71,7 @@ fun SignInScreen(model: AppModel, askForNotifications: () -> Unit) {
     var problem by remember { mutableStateOf<String?>(null) }
 
     suspend fun findAssistants(): List<Assistant> {
-        val address = normalized(server)
+        val address = normalizedAddress(server)
         if (address.isEmpty()) return emptyList()
         busy = true
         try {
@@ -92,7 +93,7 @@ fun SignInScreen(model: AppModel, askForNotifications: () -> Unit) {
         val chosen = found.firstOrNull { it.name == assistant } ?: return@launch
         busy = true
         try {
-            model.signIn(normalized(server), chosen, code.trim())
+            model.signIn(normalizedAddress(server), chosen, code.trim())
             askForNotifications()
         } catch (error: Exception) {
             problem = explain(error)
@@ -203,6 +204,13 @@ fun SignInScreen(model: AppModel, askForNotifications: () -> Unit) {
                         Text("Sign in", style = ButtonDefaults.textStyleFor(ButtonDefaults.MediumContainerHeight))
                     }
                 }
+                Text(
+                    "No server yet?",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(top = 16.dp),
+                )
+                OutlinedButton(onClick = exe, modifier = Modifier.fillMaxWidth()) { Text("Make one on exe.dev") }
+                OutlinedButton(onClick = setUp, modifier = Modifier.fillMaxWidth()) { Text("Set up one I started") }
             }
         }
     }
@@ -212,7 +220,7 @@ fun SignInScreen(model: AppModel, askForNotifications: () -> Unit) {
  * `nudge.example` → `https://nudge.example`, `192.168.1.10:8787` → `http://192.168.1.10:8787` (a
  * server on the local network rarely has a certificate), and no trailing slash.
  */
-private fun normalized(text: String): String {
+internal fun normalizedAddress(text: String): String {
     var address = text.trim()
     if (address.isEmpty()) return address
     if ("://" !in address) address = (if (isLocal(address)) "http://" else "https://") + address
