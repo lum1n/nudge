@@ -1,0 +1,414 @@
+// A small AT-SPI client over D-Bus: reads the accessibility tree of the apps on one display and
+// acts on it. Spec: https://gitlab.gnome.org/GNOME/at-spi2-core (xml/*.xml).
+import dbus from "@particle/dbus-next";
+
+const { Message } = dbus;
+type Bus = ReturnType<typeof dbus.sessionBus>;
+
+const REGISTRY = "org.a11y.atspi.Registry";
+const ROOT = "/org/a11y/atspi/accessible/root";
+const DEC = "/org/a11y/atspi/registry/deviceeventcontroller";
+const ACCESSIBLE = "org.a11y.atspi.Accessible";
+const PROPERTIES = "org.freedesktop.DBus.Properties";
+const CALL_TIMEOUT_MS = 3_000;
+
+/** An accessible object: the app's bus name and the object's path on it. */
+export interface Address {
+  bus: string;
+  path: string;
+}
+
+/** AT-SPI states (`AtspiStateType`), by bit. */
+const STATES = [
+  "invalid",
+  "active",
+  "armed",
+  "busy",
+  "checked",
+  "collapsed",
+  "defunct",
+  "editable",
+  "enabled",
+  "expandable",
+  "expanded",
+  "focusable",
+  "focused",
+  "has-tooltip",
+  "horizontal",
+  "iconified",
+  "modal",
+  "multi-line",
+  "multiselectable",
+  "opaque",
+  "pressed",
+  "resizable",
+  "selectable",
+  "selected",
+  "sensitive",
+  "showing",
+  "single-line",
+  "stale",
+  "transient",
+  "vertical",
+  "visible",
+  "manages-descendants",
+  "indeterminate",
+  "required",
+  "truncated",
+  "animated",
+  "invalid-entry",
+  "supports-autocompletion",
+  "selectable-text",
+  "is-default",
+  "visited",
+  "checkable",
+  "has-popup",
+  "read-only",
+] as const;
+export type State = (typeof STATES)[number];
+
+/** What one accessible says about itself, without its children's details. */
+export interface Info {
+  address: Address;
+  role: string;
+  name: string;
+  description: string;
+  states: Set<State>;
+  interfaces: Set<string>;
+  childCount: number;
+  /** The text of a text object (fields, documents, some labels), when it has the Text interface. */
+  text?: string;
+  /** The current value of a slider, spin button or progress bar. */
+  value?: number;
+  /** Columns of a table, which lists its cells row by row. */
+  columns?: number;
+}
+
+/** Keyboard modifiers as X modifier bits, for locking around a key. */
+const MODIFIERS: Record<string, number> = {
+  shift: 1,
+  ctrl: 4,
+  control: 4,
+  alt: 8,
+  super: 64,
+  meta: 64,
+};
+
+/** Key names the agent may use, as X keysyms. Single characters map to their own keysym. */
+const KEYSYMS: Record<string, number> = {
+  enter: 0xff0d,
+  return: 0xff0d,
+  tab: 0xff09,
+  escape: 0xff1b,
+  esc: 0xff1b,
+  backspace: 0xff08,
+  delete: 0xffff,
+  space: 0x20,
+  home: 0xff50,
+  end: 0xff57,
+  left: 0xff51,
+  up: 0xff52,
+  right: 0xff53,
+  down: 0xff54,
+  pageup: 0xff55,
+  pagedown: 0xff56,
+  insert: 0xff63,
+  menu: 0xff67,
+  ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`f${i + 1}`, 0xffbe + i])),
+};
+
+/** The keysym and modifier mask for a combo like `ctrl+shift+s` or `Enter`. */
+export function parseKeys(combo: string): { keysym: number; modifiers: number } {
+  const parts = combo
+    .split("+")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const key = parts.pop();
+  if (!key) throw new Error(`No key in "${combo}".`);
+  let modifiers = 0;
+  for (const part of parts) {
+    const bit = MODIFIERS[part.toLowerCase()];
+    if (bit === undefined) throw new Error(`Unknown modifier "${part}" in "${combo}".`);
+    modifiers |= bit;
+  }
+  const named = KEYSYMS[key.toLowerCase()];
+  if (named !== undefined) return { keysym: named, modifiers };
+  if ([...key].length !== 1) throw new Error(`Unknown key "${key}" in "${combo}".`);
+  const code = key.codePointAt(0)!;
+  // Latin-1 keysyms are the code points; others are 0x01000000 + the code point.
+  const keysym =
+    code < 0x100 ? (modifiers ? key.toLowerCase().codePointAt(0)! : code) : 0x01000000 + code;
+  return { keysym, modifiers };
+}
+
+export class Atspi {
+  private readonly bus: Bus;
+  private readonly session: Bus;
+
+  private constructor(bus: Bus, session: Bus) {
+    this.bus = bus;
+    this.session = session;
+  }
+
+  /**
+   * Connects to the accessibility bus of the session at `sessionAddress`, starting it if needed,
+   * and tells toolkits that assistive technology is on (Qt and Chromium wait for that).
+   */
+  static async connect(sessionAddress: string): Promise<Atspi> {
+    const session = dbus.sessionBus({ busAddress: sessionAddress });
+    try {
+      const [address] = (await call(
+        session,
+        "org.a11y.Bus",
+        "/org/a11y/bus",
+        "org.a11y.Bus",
+        "GetAddress",
+      )) as [string];
+      await call(session, "org.a11y.Bus", "/org/a11y/bus", PROPERTIES, "Set", "ssv", [
+        "org.a11y.Status",
+        "IsEnabled",
+        new dbus.Variant("b", true),
+      ]);
+      return new Atspi(dbus.sessionBus({ busAddress: address }), session);
+    } catch (error) {
+      session.disconnect();
+      throw error;
+    }
+  }
+
+  close(): void {
+    this.bus.disconnect();
+    this.session.disconnect();
+  }
+
+  /** The desktop: its children are the apps on the bus. */
+  get root(): Address {
+    return { bus: REGISTRY, path: ROOT };
+  }
+
+  async info(address: Address): Promise<Info> {
+    const [[role = ""], [props = {}], [state = []], [interfaces = []]] = (await Promise.all([
+      this.call(address, ACCESSIBLE, "GetRoleName"),
+      this.call(address, PROPERTIES, "GetAll", "s", [ACCESSIBLE]),
+      this.call(address, ACCESSIBLE, "GetState"),
+      this.call(address, ACCESSIBLE, "GetInterfaces"),
+    ])) as [[string?], [Record<string, { value: unknown }>?], [number[]?], [string[]?]];
+    const info: Info = {
+      address,
+      role: role,
+      name: String(props.Name?.value ?? ""),
+      description: String(props.Description?.value ?? ""),
+      states: states(state),
+      interfaces: new Set(interfaces),
+      childCount: Number(props.ChildCount?.value ?? 0),
+    };
+    // Fields are often named by a label beside them, linked as LABELLED_BY (2).
+    if (!info.name && interfaces.some((i) => /EditableText|Action|Selection/.test(i)))
+      info.name = await this.labelOf(address).catch(() => "");
+    if (info.interfaces.has("org.a11y.atspi.Text")) {
+      const [text] = (await this.call(
+        address,
+        "org.a11y.atspi.Text",
+        "GetText",
+        "ii",
+        [0, -1],
+      )) as [string];
+      info.text = text;
+    }
+    if (info.interfaces.has("org.a11y.atspi.Value")) {
+      info.value = Number(await this.property(address, "org.a11y.atspi.Value", "CurrentValue"));
+    }
+    if (info.interfaces.has("org.a11y.atspi.Table")) {
+      info.columns = Number(
+        await this.property(address, "org.a11y.atspi.Table", "NColumns").catch(() => 0),
+      );
+    }
+    return info;
+  }
+
+  /** The object's parent, or undefined at the top. */
+  async parent(address: Address): Promise<Address | undefined> {
+    const [bus, path] = (await this.property(address, ACCESSIBLE, "Parent")) as [string, string];
+    if (!bus || path === "/org/a11y/atspi/null") return undefined;
+    return { bus, path };
+  }
+
+  private async labelOf(address: Address): Promise<string> {
+    const [relations] = (await this.call(address, ACCESSIBLE, "GetRelationSet")) as [
+      [number, [string, string][]][],
+    ];
+    const labels = relations.filter(([type]) => type === 2).flatMap(([, targets]) => targets);
+    const names = await Promise.all(
+      labels.map(([bus, path]) => this.property({ bus, path }, ACCESSIBLE, "Name").then(String)),
+    );
+    return names.join(" ").trim();
+  }
+
+  /**
+   * The first `limit` children of an object. Containers that manage their descendants, such as a
+   * spreadsheet's table, may have millions; only the first ones are asked for.
+   */
+  async children(address: Address, count: number, limit: number): Promise<Address[]> {
+    if (count <= limit) {
+      const [children] = (await this.call(address, ACCESSIBLE, "GetChildren")) as [
+        [string, string][],
+      ];
+      return children.map(([bus, path]) => ({ bus, path }));
+    }
+    const picked = (await Promise.all(
+      Array.from({ length: limit }, (_, i) =>
+        this.call(address, ACCESSIBLE, "GetChildAtIndex", "i", [i]),
+      ),
+    )) as [[string, string]][];
+    return picked.map(([[bus, path]]) => ({ bus, path }));
+  }
+
+  /** The names of the actions an object offers, such as `click`, `activate` or `toggle`. */
+  async actions(address: Address): Promise<string[]> {
+    const [actions] = (await this.call(address, "org.a11y.atspi.Action", "GetActions")) as [
+      [string, string, string][],
+    ];
+    // GTK names them "Click" and "Press", Qt "Press", others lower case.
+    return actions.map(([name]) => name.toLowerCase());
+  }
+
+  async doAction(address: Address, index: number): Promise<boolean> {
+    const [done] = (await this.call(address, "org.a11y.atspi.Action", "DoAction", "i", [
+      index,
+    ])) as [boolean];
+    return done;
+  }
+
+  async setText(address: Address, text: string): Promise<boolean> {
+    const [done] = (await this.call(
+      address,
+      "org.a11y.atspi.EditableText",
+      "SetTextContents",
+      "s",
+      [text],
+    )) as [boolean];
+    return done;
+  }
+
+  async grabFocus(address: Address): Promise<boolean> {
+    const [done] = (await this.call(address, "org.a11y.atspi.Component", "GrabFocus")) as [boolean];
+    return done;
+  }
+
+  /** Selects the `index`th child of a list, tab list or combo box. */
+  async selectChild(address: Address, index: number): Promise<boolean> {
+    const [done] = (await this.call(address, "org.a11y.atspi.Selection", "SelectChild", "i", [
+      index,
+    ])) as [boolean];
+    return done;
+  }
+
+  /** Where an object is on the screen: x, y, width, height. */
+  async extents(address: Address): Promise<[number, number, number, number]> {
+    const [box] = (await this.call(
+      address,
+      "org.a11y.atspi.Component",
+      "GetExtents",
+      "u",
+      [0],
+    )) as [[number, number, number, number]];
+    return box;
+  }
+
+  /** Presses a key combo, like `ctrl+s`, into whatever has the keyboard focus. */
+  async key(combo: string): Promise<void> {
+    const { keysym, modifiers } = parseKeys(combo);
+    if (modifiers) await this.keyboard(modifiers, "", 5);
+    try {
+      await this.keyboard(keysym, "", 3);
+    } finally {
+      if (modifiers) await this.keyboard(modifiers, "", 6);
+    }
+  }
+
+  /** Types a string into whatever has the keyboard focus. */
+  async typeString(text: string): Promise<void> {
+    await this.keyboard(0, text, 4);
+  }
+
+  /** A mouse event at screen coordinates: `b1c` clicks, `b1d` double-clicks, `abs` only moves. */
+  async mouse(x: number, y: number, event: string): Promise<void> {
+    await this.call(
+      { bus: REGISTRY, path: DEC },
+      "org.a11y.atspi.DeviceEventController",
+      "GenerateMouseEvent",
+      "iis",
+      [Math.round(x), Math.round(y), event],
+    );
+  }
+
+  private async keyboard(keycode: number, keystring: string, type: number): Promise<void> {
+    await this.call(
+      { bus: REGISTRY, path: DEC },
+      "org.a11y.atspi.DeviceEventController",
+      "GenerateKeyboardEvent",
+      "isu",
+      [keycode, keystring, type],
+    );
+  }
+
+  private async property(address: Address, iface: string, name: string): Promise<unknown> {
+    const [variant] = (await this.call(address, PROPERTIES, "Get", "ss", [iface, name])) as [
+      { value: unknown },
+    ];
+    return variant.value;
+  }
+
+  private call(
+    address: Address,
+    iface: string,
+    member: string,
+    signature?: string,
+    body?: unknown[],
+  ) {
+    return call(this.bus, address.bus, address.path, iface, member, signature, body);
+  }
+}
+
+async function call(
+  bus: Bus,
+  destination: string,
+  path: string,
+  iface: string,
+  member: string,
+  signature?: string,
+  body?: unknown[],
+): Promise<unknown[]> {
+  const sent = bus.call(
+    new Message({
+      destination,
+      path,
+      interface: iface,
+      member,
+      ...(signature ? { signature, body: body ?? [] } : {}),
+    }),
+  );
+  // An app stuck in a modal loop, or gone, may never answer.
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${member} on ${destination}${path} timed out`)),
+      CALL_TIMEOUT_MS,
+    );
+  });
+  try {
+    const reply = await Promise.race([sent, timeout]);
+    return (reply?.body ?? []) as unknown[];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function states([low = 0, high = 0]: number[]): Set<State> {
+  const set = new Set<State>();
+  STATES.forEach((name, bit) => {
+    const word = bit < 32 ? low : high;
+    if ((word >>> (bit % 32)) & 1) set.add(name);
+  });
+  return set;
+}
