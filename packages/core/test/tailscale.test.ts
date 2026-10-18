@@ -156,6 +156,37 @@ describe("Tailscale", () => {
     expect(tailscale?.proxy).toBeUndefined();
   });
 
+  it("answers at once while it installs, and the state follows", async () => {
+    let release = () => {};
+    const slow = new Promise<void>((resolve) => (release = resolve));
+    const ts = (tailscale = new Tailscale({
+      dir: join(dir, "server", "tailscale"),
+      hostname: () => "nudge-robin",
+      arch: "x64",
+      fetch: async (input, init) => {
+        await slow;
+        return fetcher(input, init);
+      },
+      answerWithinMs: 50,
+    }));
+    expect(await ts.connect()).toEqual({ state: "starting" });
+    release();
+    let state = await ts.state();
+    for (let i = 0; i < 100 && state.state === "starting"; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      state = await ts.state();
+    }
+    expect(state).toEqual({ state: "needs-login", authUrl: "https://login.tailscale.com/a/x" });
+  });
+
+  it("says why when it can't start", async () => {
+    const ts = make();
+    served.delete("https://pkgs.tailscale.com/stable/?mode=json");
+    const state = await ts.connect();
+    expect(state.state).toBe("error");
+    expect(state.error).toMatch(/answered 404/);
+  });
+
   it("refuses a download that isn't the one Tailscale published", async () => {
     served.set(
       "https://pkgs.tailscale.com/stable/tailscale_1.2.3_amd64.tgz.sha256",

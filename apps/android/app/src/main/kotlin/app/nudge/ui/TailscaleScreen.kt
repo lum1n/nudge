@@ -55,18 +55,24 @@ fun TailscaleCard(model: AppModel, server: String, changed: (TailscaleState) -> 
     var disconnecting by remember { mutableStateOf(false) }
     // Why the server can't run Tailscale, when it answered that it can't.
     var unsupported by remember(server) { mutableStateOf<String?>(null) }
+    // Tapped Connect: Tailscale's page opens once the server has its login link.
+    var opening by remember { mutableStateOf(false) }
     val waiting = state?.state.let {
         it == TailscaleStatus.STARTING || it == TailscaleStatus.NEEDS_LOGIN || it == TailscaleStatus.NEEDS_APPROVAL
     }
 
+    fun open(url: String) = context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+
     fun show(next: TailscaleState) {
         unsupported = null
         state = next
+        if (opening && next.state != TailscaleStatus.STARTING) {
+            opening = false
+            if (next.state == TailscaleStatus.NEEDS_LOGIN) next.authUrl?.let { open(it) }
+        }
         problem = null
         changed(next)
     }
-
-    fun open(url: String) = context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
 
     fun act(action: suspend () -> TailscaleState) = scope.launch {
         busy = true
@@ -154,10 +160,9 @@ fun TailscaleCard(model: AppModel, server: String, changed: (TailscaleState) -> 
         return
     }
     val current = state
-    fun connect() = act {
-        client.connectTailscale(null).also { next ->
-            if (next.state == TailscaleStatus.NEEDS_LOGIN) next.authUrl?.let { open(it) }
-        }
+    fun connect() {
+        opening = true
+        act { client.connectTailscale(null) }
     }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Section("Tailscale")

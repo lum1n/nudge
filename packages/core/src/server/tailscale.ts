@@ -78,7 +78,8 @@ export type TailscaleOptions = {
   readonly run?: (bin: string, args: string[], timeoutMs: number) => Promise<string>;
   /** Starts `tailscaled`; tests pass a fake. */
   readonly daemon?: (bin: string, args: string[]) => ChildProcess;
-  readonly now?: () => number;
+  /** How long `connect` waits before it answers with the state so far; 5 s. */
+  readonly answerWithinMs?: number;
 };
 
 const ARCHES: Record<string, string> = { x64: "amd64", arm64: "arm64" };
@@ -146,46 +147,55 @@ export class Tailscale {
 
   async state(): Promise<TailscaleState> {
     if (!this.enabled) return { state: "off" };
-    if (this.error !== undefined && this.child === undefined)
-      return { state: "error", error: this.error };
-    if (this.child === undefined) return { state: "starting" };
+    if (this.child === undefined)
+      return this.error === undefined
+        ? { state: "starting" }
+        : { state: "error", error: this.error };
+    let state: TailscaleState;
     try {
-      return stateOfStatus(JSON.parse(await this.cli(["status", "--json"])));
+      state = stateOfStatus(JSON.parse(await this.cli(["status", "--json"], 10_000)));
     } catch (error) {
-      return { state: "starting", error: (error as Error).message };
+      return this.error === undefined
+        ? { state: "starting", error: (error as Error).message }
+        : { state: "error", error: this.error };
     }
+    // `up` gave up, such as when the tailnet's servers can't be reached.
+    return state.state === "starting" && this.error !== undefined
+      ? { state: "error", error: this.error }
+      : state;
   }
 
   /**
-   * Joins the tailnet: with `authKey` at once, else with a login URL someone approves, which
-   * the state shows while it waits. Installs and starts `tailscaled` first, if need be.
+   * Joins the tailnet: with `authKey` at once, else with a login URL someone approves. Installing
+   * and starting `tailscaled` can take a while, so this answers after a few seconds at most, with
+   * the state so far; `state()` follows, with the login URL once there is one, or why it failed.
    */
   async connect(authKey?: string): Promise<TailscaleState> {
     await mkdir(this.options.dir, { recursive: true, mode: 0o700 });
     await writeFile(this.enabledFile, "");
     this.error = undefined;
-    try {
-      await this.ensureDaemon();
-    } catch (error) {
-      this.error = (error as Error).message;
-      return { state: "error", error: this.error };
-    }
+    const work = this.bringUp(authKey).catch((error: Error) => {
+      this.error = error.message;
+    });
+    await Promise.race([work, delay(this.options.answerWithinMs ?? 5_000)]);
+    return this.state();
+  }
+
+  private async bringUp(authKey: string | undefined): Promise<void> {
+    await this.ensureDaemon();
     const current = await this.state();
-    if (current.state === "connected" && authKey === undefined) return current;
+    if (current.state === "connected" && authKey === undefined) return;
     const args = ["up", `--hostname=${this.options.hostname()}`, "--accept-dns=false"];
     if (authKey !== undefined) args.push(`--auth-key=${authKey}`);
     // `up` waits until the login is approved, so it runs on while the state shows the URL.
     void this.cli(args, 10 * 60_000).catch((error: Error) => {
-      if (this.child !== undefined) this.error = lastLine(error.message);
+      if (this.child !== undefined) this.error = this.withLog(lastLine(error.message));
     });
-    const deadline = (this.options.now ?? Date.now)() + 15_000;
-    while ((this.options.now ?? Date.now)() < deadline) {
-      const state = await this.state();
-      if (state.state !== "starting") return state;
-      if (this.error !== undefined) return { state: "error", error: this.error };
+    // Until it has a login URL or is in, so a quick answer has them.
+    for (let tries = 0; tries < 20 && this.error === undefined; tries++) {
+      if ((await this.state()).state !== "starting") return;
       await delay(500);
     }
-    return this.state();
   }
 
   /** Leaves the tailnet and stops `tailscaled`; the binaries stay for next time. */
@@ -235,7 +245,7 @@ export class Tailscale {
       if (this.child !== child) return;
       this.child = undefined;
       this.proxyPort = undefined;
-      this.error = `tailscaled stopped (${why}): ${this.log.at(-1) ?? ""}`.trim();
+      this.error = this.withLog(`tailscaled stopped (${why})`);
       this.say(this.error);
     };
     child.once("exit", (code) => stopped(String(code ?? "signal")));
@@ -254,12 +264,18 @@ export class Tailscale {
         if (tries >= 40) {
           this.stop();
           throw new TailscaleError(
-            `tailscaled didn't answer: ${lastLine((error as Error).message)}`,
+            this.withLog(`tailscaled didn't answer: ${lastLine((error as Error).message)}`),
           );
         }
         await delay(250);
       }
     }
+  }
+
+  /** `message`, with the last lines `tailscaled` logged, which usually say why. */
+  private withLog(message: string): string {
+    const last = this.log.slice(-3).join(" / ");
+    return last === "" ? message : `${message}. tailscaled: ${last}`;
   }
 
   private cli(args: string[], timeoutMs = 30_000): Promise<string> {

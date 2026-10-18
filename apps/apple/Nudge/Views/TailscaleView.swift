@@ -17,6 +17,8 @@ struct TailscaleSection: View {
     @State private var disconnecting = false
     /// Why the server can't run Tailscale, when it answered that it can't.
     @State private var unsupported: String?
+    /// Tapped Connect: Tailscale's page opens once the server has its login link.
+    @State private var opening = false
 
     var body: some View {
         // Always one section, so the task below runs: on a view with nothing in it, it wouldn't.
@@ -97,11 +99,8 @@ struct TailscaleSection: View {
     private func connect(_ title: String) -> some View {
         Button(title, systemImage: "network") {
             Task {
-                await act {
-                    let next = try await model.servers.client(server).connectTailscale(authKey: nil)
-                    if next.state == .needsLogin, let url = next.authUrl.flatMap(URL.init(string:)) { openURL(url) }
-                    return next
-                }
+                opening = true
+                await act { try await model.servers.client(server).connectTailscale(authKey: nil) }
             }
         }
         .disabled(busy)
@@ -148,6 +147,10 @@ struct TailscaleSection: View {
     private func show(_ next: TailscaleState) {
         unsupported = nil
         state = next
+        if opening, next.state != .starting {
+            opening = false
+            if next.state == .needsLogin, let url = next.authUrl.flatMap(URL.init(string:)) { openURL(url) }
+        }
         problem = nil
         changed(next)
     }
