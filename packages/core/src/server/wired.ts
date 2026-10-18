@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { hostname } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { Duplex } from "node:stream";
 import { Agent, type Dispatcher } from "undici";
 
@@ -95,20 +95,25 @@ export type WiredOptions = {
 };
 
 /**
- * Loads `@wired/node` from `NUDGE_WIRED_MODULE` (a path), or as an installed package. Wired is
- * optional: a release without it serves as before.
+ * Loads `@wired/node`: from `NUDGE_WIRED_MODULE` (a path) when set, else the copy a release ships
+ * in `wired-node/`, else an installed package. Wired is optional: without it, the server serves
+ * as before.
  */
 export async function loadWired(): Promise<WiredModule | undefined> {
   const from = process.env.NUDGE_WIRED_MODULE;
-  try {
-    const module = (await import(from !== undefined && from !== "" ? from : "@wired/node")) as {
-      default?: WiredModule;
-    } & Partial<WiredModule>;
-    const wired = (module.default ?? module) as WiredModule;
-    return typeof wired.Node?.anchor === "function" ? wired : undefined;
-  } catch {
-    return undefined;
+  // A release has Node in node/bin and Wired in wired-node/.
+  const bundled = join(dirname(process.execPath), "..", "..", "wired-node", "index.js");
+  const candidates = from ? [from] : [...(existsSync(bundled) ? [bundled] : []), "@wired/node"];
+  for (const candidate of candidates) {
+    try {
+      const module = (await import(candidate)) as { default?: WiredModule } & Partial<WiredModule>;
+      const wired = (module.default ?? module) as WiredModule;
+      if (typeof wired.Node?.anchor === "function") return wired;
+    } catch {
+      // Not there, or not loadable on this platform: try the next.
+    }
   }
+  return undefined;
 }
 
 /**
@@ -122,6 +127,11 @@ export class ServerWired {
   private loaded = false;
   /** Where this server's relay is reached, as its launcher said (`NUDGE_WIRED_RELAY_URL`). */
   private givenRelayUrl: string | undefined;
+  /**
+   * Where this server's relay listens, from just before it starts: a server joins *through* its
+   * own relay, so the front must forward before the join is done.
+   */
+  private servingAt: string | undefined;
   private node: WiredNode | undefined;
   private agent: Agent | undefined;
   private exposed: { close(): void } | undefined;
@@ -175,13 +185,24 @@ export class ServerWired {
   }
 
   /**
-   * Forwards `/relay` and `/ping` on the server's own port to its relay, when it serves one:
-   * on a platform with one HTTPS port, such as exe.dev, the relay shares it.
+   * Forwards `/relay` and `/ping` on the server's own port to its relay while it serves one: on a
+   * platform with one HTTPS port, such as exe.dev, the relay shares it. Undefined without Wired.
    */
   relayFront(): RelayFront | undefined {
-    if (this.module === undefined || this.relayUrl() === undefined) return undefined;
-    if (!existsSync(this.roleFile) && !process.env.NUDGE_WIRED_INVITE) return undefined;
-    return this.module.relayProxy(this.relayBind);
+    const module = this.module;
+    if (module === undefined) return undefined;
+    let proxy: { addr: string; front: RelayFront } | undefined;
+    const current = (): RelayFront | undefined => {
+      const addr = this.servingAt;
+      if (addr === undefined) return undefined;
+      if (proxy?.addr !== addr) proxy = { addr, front: module.relayProxy(addr) };
+      return proxy.front;
+    };
+    return {
+      matches: (req) => current()?.matches(req) ?? false,
+      request: (req, res) => current()?.request(req, res),
+      upgrade: (req, socket, head) => current()?.upgrade(req, socket, head),
+    };
   }
 
   /**
@@ -207,6 +228,25 @@ export class ServerWired {
     if (this.node !== undefined) return this.state();
     await mkdir(this.options.dir, { recursive: true, mode: 0o700 });
     await writeFile(this.roleFile, "root\n");
+    await this.start(name, apiAddr).catch(() => {});
+    return this.state();
+  }
+
+  /**
+   * Joins the network `invite` is for, as a member, serving a relay at this server's public HTTPS
+   * address (or `relayUrl`) when it has one. The root must have listed that relay first.
+   */
+  async join(invite: string, name: string, apiAddr: string, relayUrl?: string): Promise<WiredState> {
+    if (!(await this.load())) return this.state();
+    if (this.node !== undefined) throw new WiredError("This server is already in a Wired network");
+    if (!/^wired1[a-z0-9]+$/.test(invite.trim())) throw new WiredError("That isn't a Wired invite");
+    await mkdir(this.options.dir, { recursive: true, mode: 0o700 });
+    await writeFile(this.inviteFile, invite.trim(), { mode: 0o600 });
+    if (relayUrl) {
+      this.givenRelayUrl = relayUrl;
+      await writeFile(this.relayUrlFile, `${relayUrl}\n`);
+    }
+    await writeFile(this.roleFile, "member\n");
     await this.start(name, apiAddr).catch(() => {});
     return this.state();
   }
@@ -240,6 +280,7 @@ export class ServerWired {
       const stateDir = join(this.options.dir, "state");
       const relayUrl = this.relayUrl();
       const relay = relayUrl === undefined ? {} : { relayUrl, relayBind: this.relayBind };
+      this.servingAt = relayUrl === undefined ? undefined : this.relayBind;
       this.node =
         role === "root"
           ? await module.Node.anchor({ name, stateDir, port: 0, noRelay: relayUrl === undefined, ...relay })
@@ -261,6 +302,7 @@ export class ServerWired {
       this.exposed = node.expose("nudge", apiAddr);
       this.say(`Wired: ${role === "root" ? "holding" : "joined"} the network as ${name}`);
     } catch (error) {
+      this.servingAt = undefined;
       this.error = (error as Error).message;
       this.say(`Wired didn't start: ${this.error}`);
       throw error;
@@ -290,6 +332,7 @@ export class ServerWired {
 
   /** Leaves the network for now; it is joined again on the next start. */
   async stop(): Promise<void> {
+    this.servingAt = undefined;
     this.exposed?.close();
     await this.agent?.close();
     await this.node?.close();

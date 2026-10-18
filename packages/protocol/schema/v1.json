@@ -6644,6 +6644,22 @@
         }
       }
     },
+    "WiredJoinRequest": {
+      "type": "object",
+      "required": [
+        "invite"
+      ],
+      "properties": {
+        "invite": {
+          "type": "string",
+          "pattern": "^wired1[a-z0-9]+$"
+        },
+        "relayUrl": {
+          "type": "string",
+          "pattern": "^https://"
+        }
+      }
+    },
     "WiredRelayRequest": {
       "type": "object",
       "required": [

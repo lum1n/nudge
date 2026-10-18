@@ -45,7 +45,7 @@ struct ServersView: View {
     }
 }
 
-/// One server: its updates, its assistants, the model keys set on it, its Tailscale, and its
+/// One server: its updates, its assistants, the model keys set on it, its Tailscale and Wired, and its
 /// recovery kit; removing it, for one made on exe.dev.
 private struct ServerView: View {
     @Environment(AppModel.self) private var model
@@ -89,6 +89,7 @@ private struct ServerView: View {
                     }
                 }
                 TailscaleSection(server: server)
+                WiredSection(server: server)
                 Section("Model keys") {
                     ForEach(keys, id: \.provider) { key in
                         Button {

@@ -39,6 +39,17 @@ final class Servers {
         save()
     }
 
+    /// The owned server that holds a Wired network (other than `except`), if any: the home that
+    /// new servers join.
+    func wiredRoot(except: String? = nil) async -> String? {
+        for server in owned where server != except {
+            if let client = try? client(server), let state = try? await client.wired(), state.state == .root {
+                return server
+            }
+        }
+        return nil
+    }
+
     /// The exe.dev token the person pasted, to make and remove servers with.
     var exeToken: String? {
         get { KeychainTokens(service: "nudge-exe", account: "exe.dev").get() }

@@ -260,3 +260,58 @@ async fn makes_a_server_on_exe_dev_and_sets_it_up_from_the_app() {
     exe.delete("robin").await.unwrap();
     let _ = std::fs::remove_dir_all(&home);
 }
+
+/// A new server joining home's Wired network as it starts: home is asked to list the relay the
+/// new server will serve at its exe.dev address, and the VM gets the invite and that address.
+/// No real server comes up here, so the launch ends waiting for setup.
+#[tokio::test]
+async fn a_wired_server_gets_homes_invite_at_launch() {
+    let commands = Arc::new(Mutex::new(Vec::<String>::new()));
+    let exe_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let exe_url = format!("http://{}", exe_listener.local_addr().unwrap());
+    {
+        let commands = commands.clone();
+        serve_http(exe_listener, move |_, body| {
+            commands.lock().unwrap().push(body);
+            Box::pin(async {
+                (
+                    200,
+                    r#"{"vm_name":"robin","https_url":"http://127.0.0.1:9"}"#.to_owned(),
+                )
+            })
+        });
+    }
+    let asked = Arc::new(Mutex::new(Vec::<(String, String)>::new()));
+    let home_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let home_url = format!("http://{}", home_listener.local_addr().unwrap());
+    {
+        let asked = asked.clone();
+        serve_http(home_listener, move |request, body| {
+            asked.lock().unwrap().push((request, body));
+            Box::pin(async { (200, r#"{"invite":"wired1abc23"}"#.to_owned()) })
+        });
+    }
+
+    let home = ServerApi::new(
+        &home_url,
+        Arc::new(MemoryTokens::new(Some("nudge_server_x".into()))),
+    )
+    .unwrap();
+    let exe = ExeDev::with_base(&exe_url, "exe1.token").unwrap();
+    let launched = exe
+        .launch_wired_server("robin", Duration::from_millis(200), &home)
+        .await;
+    assert!(matches!(launched, Err(ExeError::NotUp(_))), "{launched:?}");
+
+    let asked = asked.lock().unwrap();
+    assert_eq!(asked[0].0, "POST /v1/server/wired/relays");
+    assert_eq!(asked[0].1, r#"{"url":"https://robin.exe.xyz"}"#);
+    let commands = commands.lock().unwrap();
+    assert!(
+        commands[0].ends_with(
+            " --env NUDGE_WIRED_INVITE=wired1abc23 --env NUDGE_WIRED_RELAY_URL=https://robin.exe.xyz"
+        ),
+        "{}",
+        commands[0]
+    );
+}

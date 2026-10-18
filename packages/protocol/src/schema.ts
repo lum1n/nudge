@@ -1005,6 +1005,16 @@ export type WiredState = Static<typeof WiredState>;
 export const WiredRelayRequest = Type.Object({ url: Type.String({ pattern: "^https://" }) });
 export type WiredRelayRequest = Static<typeof WiredRelayRequest>;
 
+/**
+ * Joins the network `invite` is for. The server serves a relay at its public HTTPS address, or
+ * `relayUrl`, which the root must have listed first (`POST /server/wired/relays` there).
+ */
+export const WiredJoinRequest = Type.Object({
+  invite: Type.String({ pattern: "^wired1[a-z0-9]+$" }),
+  relayUrl: Type.Optional(Type.String({ pattern: "^https://" })),
+});
+export type WiredJoinRequest = Static<typeof WiredJoinRequest>;
+
 /** The invite the new server joins with, in `NUDGE_WIRED_INVITE`. It is a credential. */
 export const WiredRelayResponse = Type.Object({ invite: Type.String() });
 export type WiredRelayResponse = Static<typeof WiredRelayResponse>;
@@ -1204,6 +1214,7 @@ export const SCHEMAS = {
   TailscaleState,
   TailscaleConnectRequest,
   WiredState,
+  WiredJoinRequest,
   WiredRelayRequest,
   WiredRelayResponse,
   ServerInfoResponse,

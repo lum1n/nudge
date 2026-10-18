@@ -67,19 +67,25 @@ pub struct ExeDev {
     base: Url,
     token: String,
     http: reqwest::Client,
+    /// Where the newest release is named; none in tests, which then use the stable image.
+    manifest: Option<&'static str>,
 }
 
 impl ExeDev {
     pub fn new(token: &str) -> Self {
-        Self::with_base("https://exe.dev", token).expect("exe.dev's address parses")
+        let mut exe = Self::with_base("https://exe.dev", token).expect("exe.dev's address parses");
+        exe.manifest = Some(RELEASE_MANIFEST);
+        exe
     }
 
-    /// Another address than exe.dev's, for tests.
+    /// Another address than exe.dev's, for tests. It doesn't look the newest release up, so new
+    /// servers get the stable image.
     pub fn with_base(base: &str, token: &str) -> Result<Self, ApiError> {
         Ok(ExeDev {
             base: Url::parse(base).map_err(|_| ApiError::Address(base.to_owned()))?,
             token: token.trim().to_owned(),
             http: reqwest::Client::new(),
+            manifest: None,
         })
     }
 
@@ -197,7 +203,7 @@ impl ExeDev {
         let version = async {
             let response = self
                 .http
-                .get(RELEASE_MANIFEST)
+                .get(self.manifest?)
                 .timeout(Duration::from_secs(10))
                 .send()
                 .await

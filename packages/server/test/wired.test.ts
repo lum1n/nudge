@@ -93,6 +93,38 @@ describe.skipIf(wired === undefined)("Wired between servers", () => {
     expect(again.state().state).toBe("member");
   }, 60_000);
 
+  it("a running server joins later, and serves its relay without a restart", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "nudge-wired-"));
+    cleanup.push(() => rm(dir, { recursive: true, force: true }));
+    const home = new ServerWired({ dir: join(dir, "home"), publicUrl: () => undefined });
+    const homeApi = await serveNudge({ assistants: new Map(), port: 0 });
+    cleanup.push(() => homeApi.close(), () => home.stop());
+    await home.enableRoot("home", addr(homeApi));
+
+    // Already running, with Wired available but off: its front forwards nothing yet.
+    const port = await freePort();
+    const relayUrl = `http://127.0.0.1:${port}`;
+    const robin = new ServerWired({
+      dir: join(dir, "robin"),
+      publicUrl: () => relayUrl,
+      relayBind: `127.0.0.1:${await freePort()}`,
+    });
+    await robin.load();
+    const front = robin.relayFront();
+    expect(front?.matches({ url: "/relay" })).toBe(false);
+    const robinApi = await serveNudge({ assistants: new Map(), port, ...(front ? { relay: front } : {}) });
+    cleanup.push(() => robinApi.close(), () => robin.stop());
+
+    // As `nudge wired add` at home, then `nudge wired join` on robin.
+    const invite = await home.addRelay(relayUrl);
+    const state = await robin.join(invite, "robin", addr(robinApi));
+    expect(state).toMatchObject({ state: "member", relay: relayUrl });
+    expect(front?.matches({ url: "/relay" })).toBe(true);
+    const answer = await fetch("http://nudge.robin.wired/v1/nothing", { dispatcher: home.dispatcher() });
+    expect(answer.status).toBe(404);
+    await expect(robin.join(invite, "robin", addr(robinApi))).rejects.toThrow(/already/);
+  }, 60_000);
+
   it("only the root adds relays", async () => {
     const dir = await mkdtemp(join(tmpdir(), "nudge-wired-"));
     cleanup.push(() => rm(dir, { recursive: true, force: true }));

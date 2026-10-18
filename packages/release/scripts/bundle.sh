@@ -6,6 +6,7 @@
 #     app/        @nudge/release deployed with its production dependencies
 #     bin/        nudge-server (the launcher) and nudge
 #     tailscale/  Tailscale's static build, for the server's own Tailscale
+#     wired-node/ Wired's Node binding (github.com/lum1n/wired), for the server's own Wired
 #     chromium.json  where the release's Chromium is, and its sha256, with NUDGE_RELEASE_URL set
 #     VERSION
 #
@@ -67,6 +68,21 @@ echo "$(curl -fsSL "$packages/$tailscale.sha256")  $tailscale" | (cd "$out" && s
 mkdir "$work/tailscale"
 tar -xzf "$out/$tailscale" -C "$work/tailscale" --strip-components=1 --wildcards '*/tailscale' '*/tailscaled'
 rm "$out/$tailscale"
+
+# Wired's Node binding, from its release, checked against hashes pinned here: a new Wired comes
+# in by changing these, not by whatever its latest release is.
+wired_version=0.1.0
+case $arch in
+  x64) wired_sha256=7ec645cfa5eb201e28db06bf9d84a8bc5f817e9f2c034c88fcade2d6172e8791 ;;
+  arm64) wired_sha256=799d446b2ea680d093e39ea41165f00195671f76c78712624653bc3f0d979ec5 ;;
+esac
+wired=wired-node-$wired_version-linux-$arch.tar.gz
+curl -fsSL "https://github.com/lum1n/wired/releases/download/v$wired_version/$wired" -o "$out/$wired"
+echo "$wired_sha256  $wired" | (cd "$out" && sha256sum -c -)
+tar -xzf "$out/$wired" -C "$work"
+rm "$out/$wired"
+"$work/node/bin/node" -e 'if (typeof require(process.argv[1]).Node.anchor !== "function") process.exit(1)' \
+  "$work/wired-node/index.js"
 
 # Chromium, from Google's storage, can take hours to download on a server, as on exe.dev, where it
 # comes at about 30 KB/s; from the release on GitHub, seconds.

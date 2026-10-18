@@ -225,6 +225,21 @@ impl ServerApi {
         self.request(Method::POST, &["wired"], &[], NO_BODY).await
     }
 
+    /// Joins the network `invite` is for, serving a relay at the server's public HTTPS address (or
+    /// `relay_url`), which the root must have listed first (`add_wired_relay` there).
+    pub async fn join_wired(
+        &self,
+        invite: &str,
+        relay_url: Option<&str>,
+    ) -> Result<WiredState, ApiError> {
+        let body = WiredJoinRequest {
+            invite: invite.to_owned(),
+            relay_url: relay_url.map(str::to_owned),
+        };
+        self.request(Method::POST, &["wired", "join"], &[], Some(&body))
+            .await
+    }
+
     /// On the root: lists the relay a new server will serve at `url` (its public HTTPS address),
     /// so the network can reach it before it joins, and answers with the invite it joins with.
     pub async fn add_wired_relay(&self, url: &str) -> Result<String, ApiError> {

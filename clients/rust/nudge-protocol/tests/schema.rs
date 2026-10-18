@@ -964,6 +964,13 @@ fn server_and_setup_bodies_match_the_schema() {
         },
     );
     check(
+        "WiredJoinRequest",
+        &WiredJoinRequest {
+            invite: "wired1abc".into(),
+            relay_url: Some("https://robin.exe.xyz".into()),
+        },
+    );
+    check(
         "WiredRelayResponse",
         &WiredRelayResponse {
             invite: "wired1abc".into(),

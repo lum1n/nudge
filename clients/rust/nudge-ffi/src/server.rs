@@ -156,6 +156,41 @@ pub struct TailscaleState {
     pub error: Option<String>,
 }
 
+/// How far the server's Wired is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum WiredStatus {
+    Off,
+    /// This release has no Wired.
+    Unavailable,
+    Starting,
+    /// This server holds the network.
+    Root,
+    /// It joined one.
+    Member,
+    Error,
+}
+
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct WiredMember {
+    pub name: String,
+    /// Whether it holds the network.
+    pub anchor: bool,
+}
+
+/// The server's Wired: an encrypted network between Nudge servers that needs no open port at
+/// home. Other servers reach this one's API at `http://nudge.<name>.wired`.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct WiredState {
+    pub state: WiredStatus,
+    pub name: Option<String>,
+    pub members: Vec<WiredMember>,
+    /// The network's relays: public addresses every server reaches the others through.
+    pub relays: Vec<String>,
+    /// The relay this server serves, at its public address.
+    pub relay: Option<String>,
+    pub error: Option<String>,
+}
+
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
 pub struct ServerInfo {
     pub version: String,
@@ -336,6 +371,34 @@ impl From<p::TailscaleState> for TailscaleState {
             name: t.name,
             addresses: t.addresses.unwrap_or_default(),
             error: t.error,
+        }
+    }
+}
+
+impl From<p::WiredState> for WiredState {
+    fn from(w: p::WiredState) -> Self {
+        WiredState {
+            state: match w.state {
+                p::WiredStatus::Off => WiredStatus::Off,
+                p::WiredStatus::Unavailable => WiredStatus::Unavailable,
+                p::WiredStatus::Starting => WiredStatus::Starting,
+                p::WiredStatus::Root => WiredStatus::Root,
+                p::WiredStatus::Member => WiredStatus::Member,
+                p::WiredStatus::Error => WiredStatus::Error,
+            },
+            name: w.name,
+            members: w
+                .members
+                .unwrap_or_default()
+                .into_iter()
+                .map(|m| WiredMember {
+                    name: m.name,
+                    anchor: m.anchor,
+                })
+                .collect(),
+            relays: w.relays.unwrap_or_default(),
+            relay: w.relay,
+            error: w.error,
         }
     }
 }
@@ -586,6 +649,50 @@ impl ServerClient {
             .into())
     }
 
+    /// The server's Wired; fails with 404 on a server that wasn't given one.
+    pub async fn wired(&self) -> Result<WiredState, NudgeError> {
+        let api = self.api.clone();
+        Ok(run(async move { api.wired().await }).await?.into())
+    }
+
+    /// Makes the server the root of its own Wired network, as a home server is.
+    pub async fn enable_wired(&self) -> Result<WiredState, NudgeError> {
+        let api = self.api.clone();
+        Ok(run(async move { api.enable_wired().await }).await?.into())
+    }
+
+    /// On the root: lists the relay another server will serve at `url`, its public HTTPS address,
+    /// and answers with the invite it joins with (`join_wired` there). The invite is a credential.
+    pub async fn add_wired_relay(&self, url: String) -> Result<String, NudgeError> {
+        let api = self.api.clone();
+        Ok(run(async move { api.add_wired_relay(&url).await }).await?)
+    }
+
+    /// Joins the network `invite` is for, serving a relay at the server's public HTTPS address.
+    pub async fn join_wired(&self, invite: String) -> Result<WiredState, NudgeError> {
+        let api = self.api.clone();
+        Ok(run(async move { api.join_wired(&invite, None).await })
+            .await?
+            .into())
+    }
+
+    /// Puts `other`, a server with a public HTTPS address, in this server's Wired network: this
+    /// one (the root) lists `other`'s relay, and `other` joins with the invite. The invite never
+    /// leaves this call.
+    pub async fn connect_wired(
+        &self,
+        other: Arc<ServerClient>,
+        other_url: String,
+    ) -> Result<WiredState, NudgeError> {
+        let (home, other) = (self.api.clone(), other.api.clone());
+        Ok(run(async move {
+            let invite = home.add_wired_relay(&other_url).await?;
+            other.join_wired(&invite, None).await
+        })
+        .await?
+        .into())
+    }
+
     /// The recovery kit as the text of a file to save away from the server.
     pub async fn recovery_kit(&self, passphrase: String) -> Result<String, NudgeError> {
         let api = self.api.clone();
@@ -752,6 +859,29 @@ impl ExeClient {
         let exe = self.exe.clone();
         let wait = Duration::from_secs(wait_seconds.into());
         let launched = run(async move { exe.launch_server(&name, wait).await }).await?;
+        Ok(LaunchedServer {
+            vm: ExeVm {
+                name: launched.vm.name,
+                url: launched.vm.url,
+            },
+            code: launched.code,
+        })
+    }
+
+    /// Like `launch_server`, and the new server joins `home`'s Wired network as it starts: home
+    /// lists the relay it will serve at its exe.dev address, and passes it the invite. `home`
+    /// must hold the network (`enable_wired`).
+    pub async fn launch_wired_server(
+        &self,
+        name: String,
+        wait_seconds: u32,
+        home: Arc<ServerClient>,
+    ) -> Result<LaunchedServer, NudgeError> {
+        let exe = self.exe.clone();
+        let wait = Duration::from_secs(wait_seconds.into());
+        let home = home.api.clone();
+        let launched =
+            run(async move { exe.launch_wired_server(&name, wait, &home).await }).await?;
         Ok(LaunchedServer {
             vm: ExeVm {
                 name: launched.vm.name,

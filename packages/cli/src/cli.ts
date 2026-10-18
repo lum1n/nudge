@@ -20,6 +20,7 @@ import { db } from "./commands/db.ts";
 import { doctor } from "./commands/doctor.ts";
 import { kit, setup } from "./commands/setup.ts";
 import { owner } from "./commands/owner.ts";
+import { wired } from "./commands/wired.ts";
 import { serve } from "./commands/serve.ts";
 import { UsageError } from "./errors.ts";
 
@@ -62,6 +63,10 @@ Commands:
   owner [list|add <player>|remove <id>|token <player>]
                      The server's owners, who create, change and delete assistants and
                      set model keys over /v1/server; token prints one for an owner
+  wired [status|on|add <url>|join <invite>]
+                     The server's Wired, a network between Nudge servers with no open port at
+                     home: on (at home), add a server's https address there for its invite,
+                     then join with it on that server (--url, --token: an owner's)
   reload             Read the config again in the running server: new assistants open,
                      removed ones close, changed ones reopen, extensions reinstall
   doctor             Check Node, config, storage and model credentials;
@@ -236,6 +241,14 @@ async function main(argv: string[]): Promise<number> {
       return 0;
     case "owner":
       await owner({ ...admin, verb: argument, id: rest[0] });
+      return 0;
+    case "wired":
+      await wired({
+        ...(values.url === undefined ? {} : { url: values.url }),
+        ...(values.token === undefined ? {} : { token: values.token }),
+        ...(argument === undefined ? {} : { verb: argument }),
+        ...(rest[0] === undefined ? {} : { arg: rest[0] }),
+      });
       return 0;
     case "reload":
       return (await reload(admin)) ? 0 : 1;

@@ -187,6 +187,7 @@ export async function serve(options: ServeOptions): Promise<number> {
   const tailscale = serverTailscale(configPath, publicUrl, say);
   const wired = new ServerWired({ dir: join(dirname(configPath), "server", "wired"), publicUrl, say });
   await wired.load();
+  const relayFront = wired.relayFront();
   routeOutgoing(
     () => tailscale?.proxy,
     () => wired.dispatcher(),
@@ -224,6 +225,10 @@ export async function serve(options: ServeOptions): Promise<number> {
           return wired.enableRoot(serverWiredName(publicUrl()), apiAddr);
         },
         addRelay: (url) => wired.addRelay(url),
+        join: async (invite, relayUrl) => {
+          if (apiAddr === undefined) throw new Error("The server isn't listening yet");
+          return wired.join(invite, serverWiredName(publicUrl()), apiAddr, relayUrl);
+        },
       },
     };
     // A server made from the app gets its code, and how long it waits, in the environment.
@@ -264,7 +269,7 @@ export async function serve(options: ServeOptions): Promise<number> {
       publicUrl,
       trustProxy: () => options.trustProxy === true || config?.server?.trustProxy === true,
       server: control,
-      ...(wired.relayFront() === undefined ? {} : { relay: wired.relayFront() }),
+      ...(relayFront === undefined ? {} : { relay: relayFront }),
       ...(setup === undefined ? {} : { setup }),
       extensionSettings: {
         list: (assistant) => assistants.extensionSetups(assistant),

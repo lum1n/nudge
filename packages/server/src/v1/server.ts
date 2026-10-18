@@ -37,6 +37,7 @@ import {
   SetProviderKeyRequest,
   SetUpdatesRequest,
   TailscaleConnectRequest,
+  WiredJoinRequest,
   WiredRelayRequest,
   type WiredRelayResponse,
   type WiredState,
@@ -77,6 +78,8 @@ export type WiredControl = {
   enable(): Promise<WiredState>;
   /** On the root: lists a new server's relay and answers with the invite it joins with. */
   addRelay(url: string): Promise<string>;
+  /** Joins the network an invite is for, serving a relay at the public address or `relayUrl`. */
+  join(invite: string, relayUrl?: string): Promise<WiredState>;
 };
 
 /** What owners see of and do with the server's Tailscale. */
@@ -186,6 +189,11 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
   app.get("/wired", (c) => c.json(wired().state() satisfies WiredState));
 
   app.post("/wired", async (c) => c.json((await wired().enable()) satisfies WiredState));
+
+  app.post("/wired/join", async (c) => {
+    const { invite, relayUrl } = await readJson(c, WiredJoinRequest);
+    return c.json((await guard(() => wired().join(invite, relayUrl))) satisfies WiredState);
+  });
 
   app.post("/wired/relays", async (c) => {
     const { url } = await readJson(c, WiredRelayRequest);

@@ -1430,6 +1430,16 @@ pub struct WiredRelayRequest {
     pub url: String,
 }
 
+/// Joins the network `invite` is for. The server serves a relay at its public HTTPS address, or
+/// `relay_url`, which the root must have listed first.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WiredJoinRequest {
+    pub invite: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relay_url: Option<String>,
+}
+
 /// The invite the new server joins with, in `NUDGE_WIRED_INVITE`. It is a credential.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct WiredRelayResponse {

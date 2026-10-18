@@ -21,6 +21,9 @@ struct ExeView: View {
     @State private var launched: SetupStart?
     /// Whether the token came from signing in here, or one kept from before.
     @State private var signedIn = false
+    /// The owned server holding a Wired network, which the new server joins as it starts.
+    @State private var wiredHome: String?
+    @State private var joinWired = true
     private let command = exeTokenCommand()
 
     private var vmName: String { slugOf(name).isEmpty ? "nudge" : slugOf(name) }
@@ -70,6 +73,13 @@ struct ExeView: View {
             } footer: {
                 Text("Its address will be https://\(vmName).exe.xyz")
             }
+            if let wiredHome {
+                Section {
+                    Toggle("Join \(URL(string: wiredHome)?.host() ?? wiredHome)'s Wired network", isOn: $joinWired)
+                } footer: {
+                    Text("Then it and your home reach each other, with no port open at home.")
+                }
+            }
             if let progress {
                 Section {
                     HStack {
@@ -103,6 +113,7 @@ struct ExeView: View {
                 signedIn = true
             }
         }
+        .task { wiredHome = await model.servers.wiredRoot() }
     }
 
     private func launch() async {
@@ -118,7 +129,13 @@ struct ExeView: View {
             _ = try await exe.whoami()
             model.servers.exeToken = token.trimmed
             progress = "Making the server, then waiting for it to start. This takes a minute or two."
-            let server = try await exe.launchServer(name: vmName, waitSeconds: 300)
+            let server: LaunchedServer
+            if joinWired, let wiredHome {
+                server = try await exe.launchWiredServer(
+                    name: vmName, waitSeconds: 300, home: try model.servers.client(wiredHome))
+            } else {
+                server = try await exe.launchServer(name: vmName, waitSeconds: 300)
+            }
             launched = SetupStart(server: server.vm.url, code: server.code)
         } catch {
             problem = explain(error)
