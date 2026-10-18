@@ -56,6 +56,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.nudge.Dictation
 import app.nudge.Session
 import app.nudge.explain
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -79,6 +80,7 @@ import nudge.ffi.SyncStatus
 fun RoomScreen(
     session: Session,
     roomId: String,
+    dictation: Dictation,
     back: (() -> Unit)?,
     lists: () -> Unit,
     info: () -> Unit,
@@ -99,6 +101,7 @@ fun RoomScreen(
     var secret by remember(roomId) { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
     var showActivity by remember(roomId) { mutableStateOf(false) }
+    var dictating by remember(roomId) { mutableStateOf(false) }
 
     fun attempt(action: suspend () -> Unit) = scope.launch {
         try {
@@ -123,7 +126,14 @@ fun RoomScreen(
                     state?.live?.status?.let { LiveStatus(it) }
                     Composer(
                         draft = draft,
-                        onDraft = { draft = it },
+                        onDraft = {
+                            // Typing takes over from dictation; what it heard stays in the field.
+                            if (dictating) {
+                                dictating = false
+                                dictation.cancel()
+                            }
+                            draft = it
+                        },
                         running = state?.live?.running == true,
                         // Only in a shared room is there anyone to keep a message from.
                         secret = if (state?.room?.kind == RoomKind.PERSONAL) null else secret,
@@ -131,6 +141,10 @@ fun RoomScreen(
                         send = {
                             val text = draft.trim()
                             if (text.isNotEmpty()) {
+                                if (dictating) {
+                                    dictating = false
+                                    dictation.cancel()
+                                }
                                 draft = ""
                                 val private = secret && state?.room?.kind != RoomKind.PERSONAL
                                 // A refused message stays pending, marked failed, with Retry and Dismiss.
@@ -138,6 +152,15 @@ fun RoomScreen(
                             }
                         },
                         stop = { attempt { client.abort(roomId) } },
+                        mic = {
+                            DictationButton(
+                                dictation, roomId, draft,
+                                onDraft = { draft = it },
+                                dictating = dictating,
+                                onDictating = { dictating = it },
+                                problem = { problem = it },
+                            )
+                        },
                     )
                 }
             }
@@ -310,6 +333,7 @@ private fun Composer(
     onSecret: (Boolean) -> Unit,
     send: () -> Unit,
     stop: () -> Unit,
+    mic: @Composable () -> Unit,
 ) {
     Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
         Row(
@@ -334,6 +358,7 @@ private fun Composer(
                 value = draft,
                 onValueChange = onDraft,
                 placeholder = { Text(if (secret == true) "Private message" else "Message") },
+                trailingIcon = mic,
                 maxLines = 6,
                 shape = MaterialTheme.shapes.extraLarge,
                 colors = TextFieldDefaults.colors(

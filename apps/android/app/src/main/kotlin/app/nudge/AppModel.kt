@@ -122,6 +122,9 @@ class AppModel(private val context: Context) {
     /** The servers this device owns, and the exe.dev token it makes new ones with. */
     val servers = Servers(preferences)
 
+    /** Speech to text for the composer, and the player's speech languages on this device. */
+    val dictation = Dictation(context, preferences)
+
     /** Whether the app is on screen; pushes for the open room aren't shown then. */
     @Volatile var foreground = false
         private set

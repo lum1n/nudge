@@ -21,6 +21,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.PersonAdd
@@ -62,6 +63,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.nudge.AppModel
 import app.nudge.BuildConfig
+import app.nudge.Dictation
 import app.nudge.Session
 import app.nudge.explain
 import java.text.NumberFormat
@@ -85,6 +87,8 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
     val memberships by model.memberships.collectAsStateWithLifecycle()
     var leaving by remember { mutableStateOf<Membership?>(null) }
     var profile by rememberSaveable { mutableStateOf(false) }
+    var speech by rememberSaveable { mutableStateOf(false) }
+    val speechLanguages by model.dictation.languages.collectAsStateWithLifecycle()
     val client = session.client
     var memory by remember { mutableStateOf<PlayerMemory?>(null) }
     var hidden by remember { mutableStateOf<List<PrivateValue>?>(null) }
@@ -151,6 +155,11 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
             )
             is ServersPage.Setup -> SetupScreen(model, screen.start, close = { servers = ServersPage.List })
         }
+        return
+    }
+    if (speech) {
+        BackHandler { speech = false }
+        SpeechScreen(model.dictation, close = { speech = false })
         return
     }
     if (profile) {
@@ -423,6 +432,19 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                     },
                 )
             }
+
+            group(
+                "Speech",
+                listOf { shapes ->
+                    SegmentedListItem(
+                        onClick = { speech = true },
+                        shapes = shapes,
+                        leadingContent = { Icon(Icons.Outlined.Mic, null) },
+                        supportingContent = { Text(speechLanguages.joinToString { Dictation.displayName(it) }) },
+                        trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) },
+                    ) { Text("Languages you speak") }
+                },
+            )
 
             group(
                 "Notifications",

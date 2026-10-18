@@ -163,7 +163,7 @@ private fun SignedIn(model: AppModel, session: Session) {
                     EmptyRoom()
                 } else {
                     RoomScreen(
-                        at, room.room,
+                        at, room.room, model.dictation,
                         back = if (listVisible) null else ({ scope.launch { navigator.navigateBack() } }),
                         lists = { open(Destination.of(room, Extra.LISTS)) },
                         info = { open(Destination.of(room, Extra.INFO)) },
