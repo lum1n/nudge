@@ -163,6 +163,11 @@ struct SettingsView: View {
                         }
                     }
                 }
+                Section("Speech") {
+                    NavigationLink { SpeechView() } label: {
+                        LabeledContent("Dictation", value: model.speech.ready ? model.speech.model?.name ?? "" : "Not downloaded")
+                    }
+                }
                 Section {
                     LabeledContent("Notifications", value: notificationsText)
                     if notifications == .notDetermined {

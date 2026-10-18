@@ -204,7 +204,8 @@ struct RoomView: View {
 }
 
 /// The message field and Send, or Stop while the assistant answers and the field is empty; the
-/// button morphs between the two.
+/// button morphs between the two. The mic in the field dictates: what the player says goes after
+/// what they typed, written out on this device.
 struct Composer: View {
     @Binding var draft: String
     let running: Bool
@@ -212,8 +213,17 @@ struct Composer: View {
     var secret: Binding<Bool>?
     let send: (String) -> Void
     let stop: () -> Void
+    @Environment(AppModel.self) private var model
     @FocusState private var focused: Bool
     @Namespace private var glass
+    @State private var dictation = Dictation()
+    /// Whether the field shows a dictation: typing takes over from it.
+    @State private var dictating = false
+    /// The draft when dictation started, and the draft it wrote last.
+    @State private var before = ""
+    @State private var written = ""
+    @State private var offerDownload = false
+    @State private var problem: String?
 
     private var empty: Bool { draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
@@ -229,21 +239,25 @@ struct Composer: View {
                 .controlSize(.large)
                 .accessibilityLabel(secret.wrappedValue ? "Private: only you see it and the answer" : "Send privately")
             }
-            TextField(secret?.wrappedValue == true ? "Private message" : "Message", text: $draft, axis: .vertical)
-                .lineLimit(1...8)
-                .textFieldStyle(.plain)
-                .focused($focused)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 11)
-                .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 22))
-                #if os(macOS)
-                .onKeyPress(.return, phases: .down) { press in
-                    // Return sends; Shift-Return starts a new line.
-                    if press.modifiers.contains(.shift) { return .ignored }
-                    send(draft)
-                    return .handled
-                }
-                #endif
+            HStack(alignment: .bottom, spacing: 4) {
+                TextField(secret?.wrappedValue == true ? "Private message" : "Message", text: $draft, axis: .vertical)
+                    .lineLimit(1...8)
+                    .textFieldStyle(.plain)
+                    .focused($focused)
+                    .padding(.vertical, 11)
+                    #if os(macOS)
+                    .onKeyPress(.return, phases: .down) { press in
+                        // Return sends; Shift-Return starts a new line.
+                        if press.modifiers.contains(.shift) { return .ignored }
+                        submit()
+                        return .handled
+                    }
+                    #endif
+                mic.padding(.bottom, 5)
+            }
+            .padding(.leading, 16)
+            .padding(.trailing, 6)
+            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 22))
             if running && draft.isEmpty {
                 Button(action: stop) {
                     Image(systemName: "stop.fill").frame(width: 24, height: 24)
@@ -256,7 +270,7 @@ struct Composer: View {
                 .accessibilityLabel("Stop")
                 .keyboardShortcut(".", modifiers: .command)
             } else {
-                Button { send(draft) } label: {
+                Button(action: submit) {
                     Image(systemName: "arrow.up").fontWeight(.semibold).frame(width: 24, height: 24)
                 }
                 .buttonStyle(.glassProminent)
@@ -268,6 +282,119 @@ struct Composer: View {
             }
         }
         .animation(.smooth, value: running && draft.isEmpty)
+        .onChange(of: dictation.text) { _, heard in
+            if dictating { write(heard) }
+        }
+        .onChange(of: dictation.phase) { _, phase in
+            // Done: the last words, which may come with it.
+            if phase == .idle, dictating {
+                write(dictation.text)
+                dictating = false
+            }
+        }
+        .onChange(of: draft) { _, now in
+            // Typed into, or sent: the dictation stops, and what it heard stays.
+            if dictating, now != written {
+                dictating = false
+                dictation.cancel()
+            }
+        }
+        .onDisappear { dictation.cancel() }
+        .confirmationDialog("Dictate on this device?", isPresented: $offerDownload, titleVisibility: .visible) {
+            Button("Download \(megabytes(model.speech.model?.bytes ?? 0))") {
+                Task {
+                    await model.speech.download(model.speech.modelId)
+                    if model.speech.ready { dictate() } else { problem = model.speech.problem }
+                }
+            }
+        } message: {
+            Text("Nudge writes out what you say on this device, so your voice never leaves it. It needs a speech model for that (\(model.speech.model?.name ?? "")), downloaded once. Settings has others.")
+        }
+        .alert("Dictation stopped", isPresented: Binding(get: { problem != nil }, set: { if !$0 { problem = nil } })) {
+            Button("OK") { problem = nil }
+        } message: {
+            Text(problem ?? "")
+        }
+    }
+
+    /// The mic, its download's progress, or the dictation going on with the language it hears.
+    @ViewBuilder private var mic: some View {
+        let speech = model.speech
+        if let progress = speech.downloading[speech.modelId] {
+            ProgressView(value: progress)
+                .progressViewStyle(.circular)
+                .controlSize(.small)
+                .frame(width: 30, height: 30)
+                .accessibilityLabel("Downloading the speech model")
+        } else {
+            HStack(spacing: 2) {
+                if dictation.phase == .listening, let language = dictation.language {
+                    Text(language.uppercased())
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .transition(.opacity)
+                }
+                Button(action: tapMic) {
+                    switch dictation.phase {
+                    case .idle:
+                        Image(systemName: "mic")
+                    case .loading, .finishing:
+                        ProgressView().controlSize(.small)
+                    case .listening:
+                        Image(systemName: "mic.fill")
+                            .foregroundStyle(.red)
+                            .scaleEffect(1 + 0.25 * CGFloat(dictation.level))
+                            .animation(.easeOut(duration: 0.1), value: dictation.level)
+                    }
+                }
+                .buttonStyle(.plain)
+                .frame(width: 30, height: 30)
+                .contentShape(.rect)
+                .accessibilityLabel(dictation.phase == .idle ? "Dictate" : "Stop dictating")
+            }
+        }
+    }
+
+    private func tapMic() {
+        switch dictation.phase {
+        case .idle:
+            if model.speech.ready { dictate() } else { offerDownload = true }
+        case .loading, .listening:
+            dictation.stop()
+        case .finishing:
+            break
+        }
+    }
+
+    private func dictate() {
+        before = draft
+        written = draft
+        dictating = true
+        Task {
+            do {
+                try await dictation.start(model.speech)
+            } catch {
+                dictating = false
+                problem = error.localizedDescription
+            }
+        }
+    }
+
+    /// Puts what was heard after what was typed before the dictation.
+    private func write(_ heard: String) {
+        let text = [before.trimmingCharacters(in: .whitespacesAndNewlines), heard]
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        written = text
+        draft = text
+    }
+
+    private func submit() {
+        if dictating {
+            dictating = false
+            dictation.cancel()
+        }
+        send(draft)
     }
 }
 

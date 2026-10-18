@@ -34,6 +34,7 @@ xcodegen_version="$(xcodegen --version | grep -Eo '[0-9]+(\.[0-9]+)+' | head -1)
 
 if [[ "$rust" == yes ]]; then
   command -v rustup >/dev/null || fail "No rustup: the Apple targets come from rustup (https://rustup.rs)"
+  command -v cmake >/dev/null || fail "No CMake: whisper.cpp, which dictation runs on, builds with it: brew install cmake"
   # The targets below go into rustup's toolchain; a cargo or rustc from elsewhere on the PATH,
   # such as Homebrew's, would build without them. So rustup's own go first.
   toolchain="$(dirname "$(rustup which rustc)")"

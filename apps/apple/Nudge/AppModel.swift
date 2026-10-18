@@ -86,6 +86,8 @@ final class AppModel {
     var signedOutBecause: String?
     /// The servers this device owns, and the exe.dev token it makes new ones with.
     let servers = Servers()
+    /// Speech to text for the composer, on this device.
+    let speech = Speech()
 
     var account: Account? { session?.account }
     var client: NudgeClient? { session?.client }
