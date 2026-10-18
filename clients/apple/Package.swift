@@ -12,7 +12,11 @@ let ffi: Target = .systemLibrary(name: "NudgeFFIC", path: "Sources/NudgeFFIC")
 let linkLibrary: [LinkerSetting] = [.unsafeFlags(["-L", library, "-Xlinker", "-rpath", "-Xlinker", library])]
 #else
 let ffi: Target = .binaryTarget(name: "NudgeFFIC", path: "NudgeFFIC.xcframework")
-let linkLibrary: [LinkerSetting] = [.linkedFramework("SystemConfiguration")]
+// What the static library's C and C++ need: whisper.cpp (speech to text) runs on Accelerate and Metal.
+let linkLibrary: [LinkerSetting] = [
+    .linkedFramework("SystemConfiguration"), .linkedFramework("Accelerate"), .linkedFramework("Metal"),
+    .linkedFramework("MetalKit"), .linkedFramework("Foundation"), .linkedLibrary("c++"),
+]
 #endif
 
 let package = Package(

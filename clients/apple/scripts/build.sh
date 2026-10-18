@@ -7,7 +7,8 @@ here="$(cd "$(dirname "$0")/.." && pwd)"
 rust="$here/../rust"
 cd "$rust"
 
-cargo build -p nudge-ffi
+# With speech to text on the device (whisper.cpp); on Apple's GPUs, through Metal, in the apps.
+cargo build -p nudge-ffi --features speech
 case "$(uname)" in
   Darwin) host="target/debug/libnudge_ffi.dylib" ;;
   *) host="target/debug/libnudge_ffi.so" ;;
@@ -36,8 +37,12 @@ targets=(aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios aarch64-apple-
 # Match apps/apple/project.yml, so rustc and the C in crates like aws-lc-sys build for the same
 # OS versions; otherwise rustc links for iOS 10 and misses symbols the C expects.
 export IPHONEOS_DEPLOYMENT_TARGET=26.0 MACOSX_DEPLOYMENT_TARGET=26.0
+# whisper.cpp: built for the target's CPU, not this Mac's (the x86_64 slices are built on arm64),
+# and with the bindings whisper-rs-sys ships, the same for every 64-bit Apple target, rather than
+# generated with a libclang Xcode doesn't put where bindgen looks.
+export GGML_NATIVE=OFF WHISPER_DONT_GENERATE_BINDINGS=1
 for target in "${targets[@]}"; do
-  cargo build --release -p nudge-ffi --target "$target"
+  cargo build --release -p nudge-ffi --features metal --target "$target"
 done
 lib() { echo "target/$1/release/libnudge_ffi.a"; }
 mkdir -p "$out/sim" "$out/macos" "$out/headers"

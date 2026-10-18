@@ -6,6 +6,8 @@
 
 mod diff;
 mod server;
+#[cfg(feature = "speech")]
+mod speech;
 mod types;
 
 use std::future::Future;
@@ -19,6 +21,8 @@ use tokio::task::AbortHandle;
 
 pub use diff::Change;
 pub use server::*;
+#[cfg(feature = "speech")]
+pub use speech::*;
 pub use types::*;
 
 uniffi::setup_scaffolding!();

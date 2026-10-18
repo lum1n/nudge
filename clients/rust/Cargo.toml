@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["nudge-protocol", "nudge-client", "nudge-ffi"]
+members = ["nudge-protocol", "nudge-client", "nudge-ffi", "nudge-speech"]
 
 [workspace.package]
 version = "0.0.0"
@@ -11,6 +11,7 @@ publish = false
 [workspace.dependencies]
 nudge-protocol = { path = "nudge-protocol" }
 nudge-client = { path = "nudge-client" }
+nudge-speech = { path = "nudge-speech" }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.154", features = ["preserve_order"] }
 thiserror = "2.0.21"

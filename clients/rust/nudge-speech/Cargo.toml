@@ -1,0 +1,20 @@
+[package]
+name = "nudge-speech"
+description = "Speech to text on the device, with whisper.cpp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+whisper-rs = "0.16.0"
+reqwest.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+
+[features]
+# whisper.cpp on Apple's GPUs.
+metal = ["whisper-rs/metal"]
+
+[dev-dependencies]
+tokio.workspace = true

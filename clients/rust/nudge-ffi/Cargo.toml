@@ -17,9 +17,13 @@ required-features = ["cli"]
 
 [features]
 cli = ["uniffi/cli"]
+# Speech to text on the device, with whisper.cpp (`nudge-speech`); `metal` for Apple's GPUs.
+speech = ["dep:nudge-speech"]
+metal = ["speech", "nudge-speech/metal"]
 
 [dependencies]
 nudge-client.workspace = true
+nudge-speech = { workspace = true, optional = true }
 serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
