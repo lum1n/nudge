@@ -69,18 +69,8 @@ mkdir "$work/tailscale"
 tar -xzf "$out/$tailscale" -C "$work/tailscale" --strip-components=1 --wildcards '*/tailscale' '*/tailscaled'
 rm "$out/$tailscale"
 
-# Wired's Node binding, from its release, checked against hashes pinned here: a new Wired comes
-# in by changing these, not by whatever its latest release is.
-wired_version=0.1.1
-case $arch in
-  x64) wired_sha256=3599a07e84ddbcfee85186dc7c4619ff8cfd9b9a260b10f41f558a0025af460d ;;
-  arm64) wired_sha256=20909e3b906e1b89adf62950de3c3190d77d10bf259c89e78d1ea2f98aa88446 ;;
-esac
-wired=wired-node-$wired_version-linux-$arch.tar.gz
-curl -fsSL "https://github.com/lum1n/wired/releases/download/v$wired_version/$wired" -o "$out/$wired"
-echo "$wired_sha256  $wired" | (cd "$out" && sha256sum -c -)
-tar -xzf "$out/$wired" -C "$work"
-rm "$out/$wired"
+# Wired's Node binding, from its release at the version and hashes wired.sh pins.
+"$root/packages/release/scripts/wired.sh" "$work" "linux-$arch"
 "$work/node/bin/node" -e 'if (typeof require(process.argv[1]).Node.anchor !== "function") process.exit(1)' \
   "$work/wired-node/index.js"
 

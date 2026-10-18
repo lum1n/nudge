@@ -96,14 +96,18 @@ export type WiredOptions = {
 
 /**
  * Loads `@wired/node`: from `NUDGE_WIRED_MODULE` (a path) when set, else the copy a release ships
- * in `wired-node/`, else an installed package. Wired is optional: without it, the server serves
+ * in `wired-node/`, else a checkout's `.wired-node/` (`pnpm wired:fetch`), else an installed package. Wired is optional: without it, the server serves
  * as before.
  */
 export async function loadWired(): Promise<WiredModule | undefined> {
   const from = process.env.NUDGE_WIRED_MODULE;
-  // A release has Node in node/bin and Wired in wired-node/.
+  // A release has Node in node/bin and Wired in wired-node/; a checkout has it in .wired-node/ once
+  // `pnpm wired:fetch` put it there (from packages/core/src/server or dist/server).
   const bundled = join(dirname(process.execPath), "..", "..", "wired-node", "index.js");
-  const candidates = from ? [from] : [...(existsSync(bundled) ? [bundled] : []), "@wired/node"];
+  const checkout = join(import.meta.dirname, "..", "..", "..", "..", ".wired-node", "index.js");
+  const candidates = from
+    ? [from]
+    : [...[bundled, checkout].filter((path) => existsSync(path)), "@wired/node"];
   for (const candidate of candidates) {
     try {
       const module = (await import(candidate)) as { default?: WiredModule } & Partial<WiredModule>;
@@ -340,10 +344,19 @@ export class ServerWired {
     this.agent = undefined;
   }
 
-  /** Leaves for good: forgets the role, keys and invite. */
+  /**
+   * Turns Wired off here: forgets the role, the invite and any network it held. Its key stays, so
+   * joining again later is the same server under its name, which a network still has registered
+   * to that key.
+   */
   async forget(): Promise<void> {
+    await this.starting?.catch(() => {});
     await this.stop();
-    await rm(this.options.dir, { recursive: true, force: true });
+    this.error = undefined;
+    this.givenRelayUrl = undefined;
+    for (const file of [this.roleFile, this.inviteFile, this.relayUrlFile])
+      await rm(file, { force: true });
+    await rm(join(this.options.dir, "state", "anchor"), { recursive: true, force: true });
   }
 }
 

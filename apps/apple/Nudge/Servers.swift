@@ -40,12 +40,13 @@ final class Servers {
     }
 
     /// The owned server that holds a Wired network (other than `except`), if any: the home that
-    /// new servers join.
-    func wiredRoot(except: String? = nil) async -> String? {
+    /// new servers join. With `holding`, only one whose network has that member.
+    func wiredRoot(except: String? = nil, holding member: String? = nil) async -> String? {
         for server in owned where server != except {
-            if let client = try? client(server), let state = try? await client.wired(), state.state == .root {
-                return server
-            }
+            guard let client = try? client(server), let state = try? await client.wired(), state.state == .root
+            else { continue }
+            if let member, !state.members.contains(where: { $0.name == member }) { continue }
+            return server
         }
         return nil
     }

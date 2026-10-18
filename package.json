@@ -9,7 +9,8 @@
     "lint": "oxlint .",
     "format": "oxfmt .",
     "check": "pnpm typecheck && pnpm lint && pnpm test",
-    "nudge": "node packages/cli/dist/main.js"
+    "nudge": "node packages/cli/dist/main.js",
+    "wired:fetch": "sh packages/release/scripts/wired.sh"
   },
   "devDependencies": {
     "@types/node": "^22.19.0",

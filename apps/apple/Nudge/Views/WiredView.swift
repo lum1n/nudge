@@ -15,6 +15,9 @@ struct WiredSection: View {
     @State private var problem: String?
     /// Why the server can't run Wired, when it answered that it can't.
     @State private var unsupported: String?
+    @State private var turningOff = false
+    /// The Wired name to make the home's address, while asking.
+    @State private var usingAddress: String?
 
     var body: some View {
         // Always one section, so the task below runs: on a view with nothing in it, it wouldn't.
@@ -41,6 +44,29 @@ struct WiredSection: View {
         } footer: {
             Text("Your servers reach each other over Wired, encrypted, with no port open at home: home holds the network, and servers with a public address join it.")
         }
+        .alert("Turn off Wired here?", isPresented: $turningOff) {
+            Button("Turn off", role: .destructive) {
+                Task { await act { try await model.servers.client(server).disableWired() } }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(state?.state == .root
+                ? "Your servers stop reaching each other through this network."
+                : "This server leaves the network, and stops reaching your other servers through it.")
+        }
+        .alert(
+            "Use http://nudge.\(usingAddress ?? "").wired as your home's address?",
+            isPresented: Binding(get: { usingAddress != nil }, set: { if !$0 { usingAddress = nil } })
+        ) {
+            Button("Use it") {
+                if let name = usingAddress {
+                    Task { await perform { try await model.useWiredAddress(name: name) } }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Your other servers then reach your home over Wired, without Tailscale. Your home's address is who it is to other assistants: the ones you joined from home have to be joined again.")
+        }
         .task(id: state?.state == .starting) {
             await read()
             while state?.state == .starting, !Task.isCancelled {
@@ -58,6 +84,7 @@ struct WiredSection: View {
         case .off, .error:
             if state.state == .error {
                 Text(state.error ?? "Wired stopped.").foregroundStyle(.secondary)
+                Button("Turn off Wired", role: .destructive) { turningOff = true }.disabled(busy)
             }
             if let root, isPublic {
                 Button("Join \(host(root))'s network", systemImage: "point.3.connected.trianglepath.dotted") {
@@ -100,8 +127,19 @@ struct WiredSection: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
+                if isHome, model.homeReach != .wired {
+                    Button("Use as your home's address", systemImage: "house") { usingAddress = name }
+                        .disabled(busy)
+                }
             }
+            Button("Turn off Wired", role: .destructive) { turningOff = true }.disabled(busy)
         }
+    }
+
+    /// Whether this server is where the person's home is.
+    private var isHome: Bool {
+        guard let home = model.account?.server else { return false }
+        return home.trimmingCharacters(in: ["/"]) == server.trimmingCharacters(in: ["/"])
     }
 
     private func read() async {
@@ -145,6 +183,17 @@ struct WiredSection: View {
         defer { busy = false }
         do {
             show(try await action())
+        } catch {
+            problem = explain(error)
+        }
+    }
+
+    private func perform(_ action: () async throws -> Void) async {
+        busy = true
+        defer { busy = false }
+        do {
+            try await action()
+            problem = nil
         } catch {
             problem = explain(error)
         }

@@ -220,6 +220,11 @@ impl ServerApi {
         self.request(Method::GET, &["wired"], &[], NO_BODY).await
     }
 
+    /// Takes the server out of Wired: it leaves the network, or stops holding it, and forgets it.
+    pub async fn disable_wired(&self) -> Result<WiredState, ApiError> {
+        self.request(Method::DELETE, &["wired"], &[], NO_BODY).await
+    }
+
     /// Makes the server the root of its own Wired network.
     pub async fn enable_wired(&self) -> Result<WiredState, ApiError> {
         self.request(Method::POST, &["wired"], &[], NO_BODY).await
@@ -342,12 +347,14 @@ pub async fn set_up(server: &str, body: &SetupRequest) -> Result<SetupResponse, 
 }
 
 /// Who can reach a server at its address: anyone (`Public`), only the same tailnet (`Tailnet`:
-/// `*.ts.net`, 100.64.0.0/10, fd7a:115c:a1e0::/48), or only the same network (`Private`: this
-/// computer, a LAN address or a local name). Another server reaches a tailnet one only through
-/// its own Tailscale, and a private one not at all.
+/// `*.ts.net`, 100.64.0.0/10, fd7a:115c:a1e0::/48), only the same Wired network (`Wired`:
+/// `<service>.<name>.wired`), or only the same network (`Private`: this computer, a LAN address
+/// or a local name). Another server reaches a tailnet one only through its own Tailscale, a Wired
+/// one only once it is in that network, and a private one not at all.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Reach {
     Public,
+    Wired,
     Tailnet,
     Private,
 }
@@ -361,6 +368,8 @@ pub fn reach(server: &str) -> Reach {
             let name = name.to_ascii_lowercase();
             if name.ends_with(".ts.net") {
                 Reach::Tailnet
+            } else if name.ends_with(".wired") {
+                Reach::Wired
             } else if !name.contains('.')
                 || [".local", ".lan", ".home.arpa", ".internal", ".localhost"]
                     .iter()
@@ -411,6 +420,7 @@ mod tests {
         assert_eq!(reach("http://100.63.0.1:8787"), Reach::Public);
         assert_eq!(reach("https://robin.exe.xyz"), Reach::Public);
         assert_eq!(reach("https://ts.net.example.com"), Reach::Public);
+        assert_eq!(reach("http://nudge.box.wired"), Reach::Wired);
         assert_eq!(reach("not a url"), Reach::Private);
     }
 }

@@ -123,6 +123,13 @@ describe.skipIf(wired === undefined)("Wired between servers", () => {
     const answer = await fetch("http://nudge.robin.wired/v1/nothing", { dispatcher: home.dispatcher() });
     expect(answer.status).toBe(404);
     await expect(robin.join(invite, "robin", addr(robinApi))).rejects.toThrow(/already/);
+
+    // Turning it off leaves the network, stops the relay, and lets the server join again.
+    await robin.forget();
+    expect(robin.state()).toEqual({ state: "off" });
+    expect(front?.matches({ url: "/relay" })).toBe(false);
+    const again = await robin.join(await home.addRelay(relayUrl), "robin", addr(robinApi));
+    expect(again, JSON.stringify(again)).toMatchObject({ state: "member" });
   }, 60_000);
 
   it("only the root adds relays", async () => {

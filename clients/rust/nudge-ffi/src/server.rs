@@ -655,6 +655,12 @@ impl ServerClient {
         Ok(run(async move { api.wired().await }).await?.into())
     }
 
+    /// Takes the server out of Wired: it leaves the network, or stops holding it.
+    pub async fn disable_wired(&self) -> Result<WiredState, NudgeError> {
+        let api = self.api.clone();
+        Ok(run(async move { api.disable_wired().await }).await?.into())
+    }
+
     /// Makes the server the root of its own Wired network, as a home server is.
     pub async fn enable_wired(&self) -> Result<WiredState, NudgeError> {
         let api = self.api.clone();
@@ -708,6 +714,8 @@ pub enum Reach {
     Public,
     /// Only the same tailnet: another server needs its own Tailscale connected.
     Tailnet,
+    /// Only the same Wired network (`nudge.<name>.wired`): another server has to join it.
+    Wired,
     /// Only the same network, such as a LAN address: no other server.
     Private,
 }
@@ -718,6 +726,7 @@ pub fn reach(server: String) -> Reach {
     match nudge_client::reach(&server) {
         nudge_client::Reach::Public => Reach::Public,
         nudge_client::Reach::Tailnet => Reach::Tailnet,
+        nudge_client::Reach::Wired => Reach::Wired,
         nudge_client::Reach::Private => Reach::Private,
     }
 }

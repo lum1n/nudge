@@ -225,6 +225,10 @@ export async function serve(options: ServeOptions): Promise<number> {
           return wired.enableRoot(serverWiredName(publicUrl()), apiAddr);
         },
         addRelay: (url) => wired.addRelay(url),
+        disable: async () => {
+          await wired.forget();
+          return wired.state();
+        },
         join: async (invite, relayUrl) => {
           if (apiAddr === undefined) throw new Error("The server isn't listening yet");
           return wired.join(invite, serverWiredName(publicUrl()), apiAddr, relayUrl);
