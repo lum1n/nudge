@@ -23,7 +23,8 @@ export type PlayerHome = {
 };
 
 const ID = /^[a-z0-9][a-z0-9-]*$/;
-const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
+/** Hosts reached over plain HTTP: this computer, and Wired, which encrypts on its own. */
+const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\]|[a-z0-9-]+\.[a-z0-9-]+\.wired)(:\d+)?$/i;
 
 /**
  * How people write where someone lives: `vegard@nudge.example.com/robin`, their id at home, then
@@ -36,7 +37,7 @@ export function addressOf(home: PlayerHome): string {
 
 /**
  * The home an address names; undefined when it isn't one. The server is HTTPS, except on this
- * computer, and `http://` or `https://` may be written out.
+ * computer and over Wired (`nudge.robin.wired`), and `http://` or `https://` may be written out.
  */
 export function parseAddress(address: string): PlayerHome | undefined {
   const match = /^([^@\s]+)@(\S+)\/([^/\s]+)$/.exec(address.trim());

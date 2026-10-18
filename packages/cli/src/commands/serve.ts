@@ -22,7 +22,9 @@ import {
   serverOwnersFile,
   SetupCodes,
   Tailscale,
-  routeTailnet,
+  routeOutgoing,
+  ServerWired,
+  serverWiredName,
   testProviderKey,
   Updates,
   writeRawConfig,
@@ -183,6 +185,14 @@ export async function serve(options: ServeOptions): Promise<number> {
   );
   const publicUrl = () => options.publicUrl ?? config?.server?.publicUrl;
   const tailscale = serverTailscale(configPath, publicUrl, say);
+  const wired = new ServerWired({ dir: join(dirname(configPath), "server", "wired"), publicUrl, say });
+  await wired.load();
+  routeOutgoing(
+    () => tailscale?.proxy,
+    () => wired.dispatcher(),
+  );
+  // Where the network reaches this server's API; known once it listens.
+  let apiAddr: string | undefined;
   try {
     // A new server's image can be older than the newest release, as when a platform keeps an
     // image it pulled before: it updates before setup, so it is set up on the newest one.
@@ -207,6 +217,14 @@ export async function serve(options: ServeOptions): Promise<number> {
       backupKey: theBackupKey,
       ...(updates === undefined ? {} : { updates: updates.control }),
       ...(tailscale === undefined ? {} : { tailscale }),
+      wired: {
+        state: () => wired.state(),
+        enable: async () => {
+          if (apiAddr === undefined) throw new Error("The server isn't listening yet");
+          return wired.enableRoot(serverWiredName(publicUrl()), apiAddr);
+        },
+        addRelay: (url) => wired.addRelay(url),
+      },
     };
     // A server made from the app gets its code, and how long it waits, in the environment.
     const code = process.env.NUDGE_SETUP_CODE || newSetupCode();
@@ -246,12 +264,15 @@ export async function serve(options: ServeOptions): Promise<number> {
       publicUrl,
       trustProxy: () => options.trustProxy === true || config?.server?.trustProxy === true,
       server: control,
+      ...(wired.relayFront() === undefined ? {} : { relay: wired.relayFront() }),
       ...(setup === undefined ? {} : { setup }),
       extensionSettings: {
         list: (assistant) => assistants.extensionSetups(assistant),
         save: (assistant, extensions) => assistants.saveExtensionSetups(assistant, extensions),
       },
     });
+    apiAddr = loopbackOf(server.url);
+    await wired.resume(serverWiredName(publicUrl()), apiAddr);
     const lines =
       codes === undefined
         ? startupLines(server.url, options.host, [...assistants.running.keys()], web)
@@ -268,6 +289,7 @@ export async function serve(options: ServeOptions): Promise<number> {
     stopUpdates();
     stopBackups();
     tailscale?.stop();
+    await wired.stop();
     console.log(restarting ? "Restarting into the new release…" : "Stopping…");
     await server.close();
   } finally {
@@ -278,7 +300,7 @@ export async function serve(options: ServeOptions): Promise<number> {
 
 /**
  * The server's own Tailscale, on Linux, where Tailscale's static builds run: started again if an
- * owner connected it before, and carrying this process's requests to tailnet addresses. It is
+ * owner connected it before; `routeOutgoing` sends requests to tailnet addresses through it. It is
  * named for the server's address, such as `nudge-robin` for `https://robin.exe.xyz`.
  */
 function serverTailscale(
@@ -297,7 +319,6 @@ function serverTailscale(
     },
     say,
   });
-  routeTailnet(() => tailscale.proxy);
   void tailscale.resume();
   return tailscale;
 }
@@ -426,4 +447,11 @@ async function exists(path: string): Promise<boolean> {
     () => true,
     () => false,
   );
+}
+
+/** `host:port` of a listening URL, with an any-address host made loopback, for connecting to. */
+function loopbackOf(url: string): string {
+  const { hostname, port } = new URL(url);
+  const host = hostname === "0.0.0.0" ? "127.0.0.1" : hostname === "[::]" ? "[::1]" : hostname;
+  return `${host}:${port}`;
 }

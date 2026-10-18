@@ -1384,6 +1384,58 @@ pub struct TailscaleConnectRequest {
     pub auth_key: Option<String>,
 }
 
+/// How far the server's Wired is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum WiredStatus {
+    Off,
+    /// This release has no Wired.
+    Unavailable,
+    Starting,
+    /// This server holds the network.
+    Root,
+    /// It joined one.
+    Member,
+    Error,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WiredMember {
+    pub name: String,
+    pub anchor: bool,
+}
+
+/// The server's Wired: an encrypted network between Nudge servers that needs no open port at
+/// home. Other servers reach this one's API at `http://nudge.<name>.wired`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WiredState {
+    pub state: WiredStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub members: Option<Vec<WiredMember>>,
+    /// The network's relays: public addresses every server reaches the others through.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relays: Option<Vec<String>>,
+    /// The relay this server serves, at its public address.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relay: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+/// A relay a new server will serve, such as `https://robin.exe.xyz`, added before it joins.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WiredRelayRequest {
+    pub url: String,
+}
+
+/// The invite the new server joins with, in `NUDGE_WIRED_INVITE`. It is a credential.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WiredRelayResponse {
+    pub invite: String,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ServerInfoResponse {
     pub version: String,

@@ -974,6 +974,41 @@ export type TailscaleState = Static<typeof TailscaleState>;
 export const TailscaleConnectRequest = Type.Object({ authKey: Type.Optional(Type.String()) });
 export type TailscaleConnectRequest = Static<typeof TailscaleConnectRequest>;
 
+/**
+ * The server's Wired: an encrypted network between Nudge servers that needs no open port at
+ * home. Other servers reach this one's API at `http://nudge.<name>.wired`.
+ */
+export const WiredState = Type.Object({
+  /**
+   * `unavailable`: this release has no Wired; `root`: this server holds the network; `member`:
+   * it joined one.
+   */
+  state: Type.Union([
+    Type.Literal("off"),
+    Type.Literal("unavailable"),
+    Type.Literal("starting"),
+    Type.Literal("root"),
+    Type.Literal("member"),
+    Type.Literal("error"),
+  ]),
+  name: Type.Optional(Type.String()),
+  members: Type.Optional(Type.Array(Type.Object({ name: Type.String(), anchor: Type.Boolean() }))),
+  /** The network's relays: public addresses of servers every server reaches the others through. */
+  relays: Type.Optional(Type.Array(Type.String())),
+  /** The relay this server serves, at its public address. */
+  relay: Type.Optional(Type.String()),
+  error: Type.Optional(Type.String()),
+});
+export type WiredState = Static<typeof WiredState>;
+
+/** A relay a new server will serve, such as `https://robin.exe.xyz`, added before it joins. */
+export const WiredRelayRequest = Type.Object({ url: Type.String({ pattern: "^https://" }) });
+export type WiredRelayRequest = Static<typeof WiredRelayRequest>;
+
+/** The invite the new server joins with, in `NUDGE_WIRED_INVITE`. It is a credential. */
+export const WiredRelayResponse = Type.Object({ invite: Type.String() });
+export type WiredRelayResponse = Static<typeof WiredRelayResponse>;
+
 export const ServerInfoResponse = Type.Object({
   version: Type.String(),
   /** The owner whose token asked. */
@@ -1168,6 +1203,9 @@ export const SCHEMAS = {
   SetUpdatesRequest,
   TailscaleState,
   TailscaleConnectRequest,
+  WiredState,
+  WiredRelayRequest,
+  WiredRelayResponse,
   ServerInfoResponse,
   SetupProvider,
   SetupLocalServer,

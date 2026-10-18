@@ -215,6 +215,28 @@ impl ServerApi {
             .await
     }
 
+    /// The server's Wired; 404 on a server that wasn't given one.
+    pub async fn wired(&self) -> Result<WiredState, ApiError> {
+        self.request(Method::GET, &["wired"], &[], NO_BODY).await
+    }
+
+    /// Makes the server the root of its own Wired network.
+    pub async fn enable_wired(&self) -> Result<WiredState, ApiError> {
+        self.request(Method::POST, &["wired"], &[], NO_BODY).await
+    }
+
+    /// On the root: lists the relay a new server will serve at `url` (its public HTTPS address),
+    /// so the network can reach it before it joins, and answers with the invite it joins with.
+    pub async fn add_wired_relay(&self, url: &str) -> Result<String, ApiError> {
+        let body = WiredRelayRequest {
+            url: url.to_owned(),
+        };
+        let answer: WiredRelayResponse = self
+            .request(Method::POST, &["wired", "relays"], &[], Some(&body))
+            .await?;
+        Ok(answer.invite)
+    }
+
     /// The backup key, sealed with `passphrase`, as a file to keep away from the server.
     pub async fn recovery_kit(&self, passphrase: &str) -> Result<String, ApiError> {
         let body = RecoveryKitRequest {

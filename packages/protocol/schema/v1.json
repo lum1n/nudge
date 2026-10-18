@@ -6575,6 +6575,98 @@
         }
       }
     },
+    "WiredState": {
+      "type": "object",
+      "required": [
+        "state"
+      ],
+      "properties": {
+        "state": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "off"
+            },
+            {
+              "type": "string",
+              "const": "unavailable"
+            },
+            {
+              "type": "string",
+              "const": "starting"
+            },
+            {
+              "type": "string",
+              "const": "root"
+            },
+            {
+              "type": "string",
+              "const": "member"
+            },
+            {
+              "type": "string",
+              "const": "error"
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "anchor"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "anchor": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "relays": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "relay": {
+          "type": "string"
+        },
+        "error": {
+          "type": "string"
+        }
+      }
+    },
+    "WiredRelayRequest": {
+      "type": "object",
+      "required": [
+        "url"
+      ],
+      "properties": {
+        "url": {
+          "type": "string",
+          "pattern": "^https://"
+        }
+      }
+    },
+    "WiredRelayResponse": {
+      "type": "object",
+      "required": [
+        "invite"
+      ],
+      "properties": {
+        "invite": {
+          "type": "string"
+        }
+      }
+    },
     "ServerInfoResponse": {
       "type": "object",
       "required": [

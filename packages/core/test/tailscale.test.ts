@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getGlobalDispatcher, setGlobalDispatcher } from "undici";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { isTailnetHost, routeTailnet, stateOfStatus, Tailscale } from "../src/index.ts";
+import { isTailnetHost, routeOutgoing, stateOfStatus, Tailscale } from "../src/index.ts";
 
 describe("tailnet hosts", () => {
   it("are MagicDNS names and the addresses Tailscale hands out", () => {
@@ -215,7 +215,7 @@ describe("Tailscale", () => {
   });
 });
 
-describe("routeTailnet", () => {
+describe("routeOutgoing", () => {
   const servers: Server[] = [];
   const before = getGlobalDispatcher();
 
@@ -248,7 +248,7 @@ describe("routeTailnet", () => {
     });
     const proxy = await listen(proxyServer);
     let on = true;
-    routeTailnet(() => (on ? `http://127.0.0.1:${proxy}` : undefined));
+    routeOutgoing(() => (on ? `http://127.0.0.1:${proxy}` : undefined));
 
     const viaTailnet = await fetch("http://100.64.0.1:8787/v1/key");
     expect(await viaTailnet.text()).toBe("target /v1/key");

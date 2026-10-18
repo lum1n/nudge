@@ -41,6 +41,9 @@ pub enum ExeError {
     /// The new server didn't come up in time.
     #[error("The new server didn't answer: {0}")]
     NotUp(String),
+    /// The home server couldn't add the new server to its Wired network.
+    #[error("Home's Wired: {0}")]
+    Wired(String),
 }
 
 /// A VM on exe.dev, as far as Nudge needs it.
@@ -132,11 +135,48 @@ impl ExeDev {
         name: &str,
         wait: Duration,
     ) -> Result<LaunchedServer, ExeError> {
+        self.launch(name, wait, "").await
+    }
+
+    /// Like `launch_server`, and the new server joins `home`'s Wired network: home lists the
+    /// relay it will serve at its exe.dev address and hands over the invite, so the two reach
+    /// each other with no port open at home. `home` must hold the network (`enable_wired`).
+    pub async fn launch_wired_server(
+        &self,
+        name: &str,
+        wait: Duration,
+        home: &crate::server::ServerApi,
+    ) -> Result<LaunchedServer, ExeError> {
+        let url = format!("https://{name}.exe.xyz");
+        let invite = home
+            .add_wired_relay(&url)
+            .await
+            .map_err(|e| ExeError::Wired(e.to_string()))?;
+        // Both are plain [a-z0-9:/.-]: no quoting needed in exe.dev's command.
+        if !invite.chars().all(|c| c.is_ascii_alphanumeric()) {
+            return Err(ExeError::Wired(
+                "it gave an invite this can't pass on".into(),
+            ));
+        }
+        self.launch(
+            name,
+            wait,
+            &format!(" --env NUDGE_WIRED_INVITE={invite} --env NUDGE_WIRED_RELAY_URL={url}"),
+        )
+        .await
+    }
+
+    async fn launch(
+        &self,
+        name: &str,
+        wait: Duration,
+        extra_env: &str,
+    ) -> Result<LaunchedServer, ExeError> {
         let code = new_setup_code();
         let image = self.newest_image().await;
         let answer = self
             .exec(&format!(
-                "new --json --name {name} --image {image} --env NUDGE_SETUP_CODE={code} --env NUDGE_SETUP_MINUTES={SETUP_MINUTES}"
+                "new --json --name {name} --image {image} --env NUDGE_SETUP_CODE={code} --env NUDGE_SETUP_MINUTES={SETUP_MINUTES}{extra_env}"
             ))
             .await?;
         let vm = vm_of(&answer).unwrap_or_else(|| ExeVm {

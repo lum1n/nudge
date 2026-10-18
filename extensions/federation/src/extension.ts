@@ -8,6 +8,7 @@ import {
   type ExtensionHost,
   type ExtensionRoute,
   InvalidProfile,
+  isWiredHost,
   MAX_FACTS,
   type Nudge,
   parseAddress,
@@ -387,8 +388,9 @@ class Federation {
    */
   private async assert(playerId: string, audience: Place, context: Context): Promise<Response> {
     if (samePlace(audience, this.self)) return problem(400, "That is this assistant");
-    // This server writes to it later; plain HTTP only between local test servers.
-    if (!audience.server.startsWith("https://") && this.self.server.startsWith("https://"))
+    // This server writes to it later: over HTTPS, or Wired, which encrypts on its own. Plain
+    // HTTP otherwise only between local test servers.
+    if (!secureServer(audience.server) && secureServer(this.self.server))
       return problem(400, "Other assistants are reached over HTTPS");
     const profile = await this.nudge().profiles.get(playerId, context);
     if (profile === undefined) return problem(404, "No such player");
@@ -1183,3 +1185,13 @@ function toInvite(invite: Invite): ShownInvite {
 }
 
 export default federationExtension();
+
+/** Whether a server's address is reached encrypted: HTTPS, or Wired (`*.wired`). */
+function secureServer(server: string): boolean {
+  if (server.startsWith("https://")) return true;
+  try {
+    return isWiredHost(new URL(server).hostname);
+  } catch {
+    return false;
+  }
+}

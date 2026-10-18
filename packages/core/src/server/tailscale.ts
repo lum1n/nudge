@@ -6,6 +6,7 @@ import { createServer } from "node:net";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { Agent, Dispatcher, ProxyAgent, setGlobalDispatcher } from "undici";
+import { isWiredHost } from "./wired.ts";
 
 /** What the server API shows of the server's own Tailscale. */
 export type TailscaleState = {
@@ -93,7 +94,7 @@ const ARCHES: Record<string, string> = { x64: "amd64", arm64: "arm64" };
  * The server's own Tailscale (ADR 11), so it can reach assistants that are only in its owner's
  * tailnet. It runs `tailscaled` in userspace mode, which needs no root or TUN device, as the
  * server's own user; Tailscale's static build is downloaded the first time. Outgoing requests
- * to tailnet addresses go through its HTTP proxy (`routeTailnet`), the rest as before. Once
+ * to tailnet addresses go through its HTTP proxy (`routeOutgoing`), the rest as before. Once
  * connected it stays so across restarts, until an owner disconnects it.
  */
 export class Tailscale {
@@ -352,19 +353,24 @@ export class Tailscale {
 }
 
 /**
- * Sends this process's requests to tailnet addresses through `proxy()` while it gives one, and
- * the rest as before; `fetch` everywhere in the process, extensions' included, goes through it.
+ * Routes this process's requests: to `*.wired` hosts over `wired()` (the server's Wired), to
+ * tailnet addresses through `tailnetProxy()` while it gives one, and the rest as before. `fetch`
+ * everywhere in the process, extensions' included, goes through it.
  */
-export function routeTailnet(proxy: () => string | undefined): void {
-  setGlobalDispatcher(new TailnetDispatcher(new Agent(), proxy));
+export function routeOutgoing(
+  tailnetProxy: () => string | undefined,
+  wired: () => Dispatcher | undefined = () => undefined,
+): void {
+  setGlobalDispatcher(new OutgoingDispatcher(new Agent(), tailnetProxy, wired));
 }
 
-class TailnetDispatcher extends Dispatcher {
+class OutgoingDispatcher extends Dispatcher {
   private agent: { url: string; dispatcher: ProxyAgent } | undefined;
 
   constructor(
     private readonly direct: Dispatcher,
     private readonly proxy: () => string | undefined,
+    private readonly wired: () => Dispatcher | undefined,
   ) {
     super();
   }
@@ -382,10 +388,11 @@ class TailnetDispatcher extends Dispatcher {
   }
 
   private pick(origin: Dispatcher.DispatchOptions["origin"]): Dispatcher {
-    const url = this.proxy();
-    if (url === undefined || origin === undefined) return this.direct;
+    if (origin === undefined) return this.direct;
     const host = (typeof origin === "string" ? new URL(origin) : origin).hostname;
-    if (!isTailnetHost(host)) return this.direct;
+    if (isWiredHost(host)) return this.wired() ?? this.direct;
+    const url = this.proxy();
+    if (url === undefined || !isTailnetHost(host)) return this.direct;
     if (this.agent?.url !== url) {
       void this.agent?.dispatcher.close();
       this.agent = { url, dispatcher: new ProxyAgent(url) };

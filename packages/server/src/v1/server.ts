@@ -15,6 +15,7 @@ import {
   type ServerOwner,
   type ServerOwners,
   type TailscaleState,
+  WiredError,
 } from "@nudge/core";
 import {
   AddOwnerRequest,
@@ -36,6 +37,9 @@ import {
   SetProviderKeyRequest,
   SetUpdatesRequest,
   TailscaleConnectRequest,
+  WiredRelayRequest,
+  type WiredRelayResponse,
+  type WiredState,
   type UpdateState,
   UpdateAssistantRequest,
 } from "@nudge/protocol";
@@ -62,6 +66,17 @@ export type ServerControl = {
   readonly updates?: UpdateControl;
   /** The server's own Tailscale, on Linux; absent elsewhere. */
   readonly tailscale?: TailscaleControl;
+  /** The server's Wired; absent where the server wasn't given one. */
+  readonly wired?: WiredControl;
+};
+
+/** What owners see of and do with the server's Wired. */
+export type WiredControl = {
+  state(): WiredState;
+  /** Makes this server the network's root. */
+  enable(): Promise<WiredState>;
+  /** On the root: lists a new server's relay and answers with the invite it joins with. */
+  addRelay(url: string): Promise<string>;
 };
 
 /** What owners see of and do with the server's Tailscale. */
@@ -162,6 +177,21 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
   });
 
   app.delete("/tailscale", async (c) => c.json(await tailscale().disconnect()));
+
+  const wired = () => {
+    if (control.wired === undefined) throw new HttpError(404, "This server has no Wired");
+    return control.wired;
+  };
+
+  app.get("/wired", (c) => c.json(wired().state() satisfies WiredState));
+
+  app.post("/wired", async (c) => c.json((await wired().enable()) satisfies WiredState));
+
+  app.post("/wired/relays", async (c) => {
+    const { url } = await readJson(c, WiredRelayRequest);
+    const invite = await guard(() => wired().addRelay(url));
+    return c.json({ invite } satisfies WiredRelayResponse);
+  });
 
   app.delete("/session", (c) => {
     control.owners.revoke(c.var.clientId);
@@ -368,6 +398,7 @@ async function guard<T>(work: () => Promise<T>): Promise<T> {
     if (error instanceof AssistantExists) throw new HttpError(409, error.message);
     if (error instanceof AssistantNotFound) throw new HttpError(404, error.message);
     if (error instanceof ConfigError) throw new HttpError(400, error.message);
+    if (error instanceof WiredError) throw new HttpError(409, error.message);
     throw error;
   }
 }

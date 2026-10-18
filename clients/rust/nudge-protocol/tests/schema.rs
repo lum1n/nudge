@@ -944,6 +944,32 @@ fn server_and_setup_bodies_match_the_schema() {
         },
     );
     check(
+        "WiredState",
+        &WiredState {
+            state: WiredStatus::Root,
+            name: Some("home".into()),
+            members: Some(vec![WiredMember {
+                name: "robin".into(),
+                anchor: false,
+            }]),
+            relays: Some(vec!["https://robin.exe.xyz".into()]),
+            relay: Some("https://home.example.com".into()),
+            error: Some("x".into()),
+        },
+    );
+    check(
+        "WiredRelayRequest",
+        &WiredRelayRequest {
+            url: "https://robin.exe.xyz".into(),
+        },
+    );
+    check(
+        "WiredRelayResponse",
+        &WiredRelayResponse {
+            invite: "wired1abc".into(),
+        },
+    );
+    check(
         "ServerInfoResponse",
         &ServerInfoResponse {
             version: "0.1.0".into(),

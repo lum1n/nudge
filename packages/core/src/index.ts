@@ -91,13 +91,24 @@ export {
 } from "./server/updates.ts";
 export {
   isTailnetHost,
-  routeTailnet,
+  routeOutgoing,
   stateOfStatus,
   Tailscale,
   TailscaleError,
   type TailscaleOptions,
   type TailscaleState,
 } from "./server/tailscale.ts";
+export {
+  isWiredHost,
+  loadWired,
+  type RelayFront,
+  ServerWired,
+  serverWiredName,
+  WiredError,
+  type WiredModule,
+  type WiredOptions,
+  type WiredState,
+} from "./server/wired.ts";
 export {
   completeSetup,
   detectLocalServers,

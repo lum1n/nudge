@@ -21,7 +21,9 @@ impl From<ExeError> for NudgeError {
                 detail,
             },
             ExeError::Status { status, .. } => NudgeError::Status { status, detail },
-            ExeError::Network(_) | ExeError::NotUp(_) => NudgeError::Network { detail },
+            ExeError::Network(_) | ExeError::NotUp(_) | ExeError::Wired(_) => {
+                NudgeError::Network { detail }
+            }
         }
     }
 }
