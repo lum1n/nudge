@@ -1,7 +1,9 @@
 import { type ChildProcess, execFile, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
+import { mkdir, open, readFile, readdir, rename, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { delimiter, dirname, join } from "node:path";
+import { basename, delimiter, dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { chromium, type BrowserContext, type Locator, type Page, type Request } from "patchright";
 import type { SavedLogin } from "./logins.ts";
@@ -571,13 +573,24 @@ async function labelFor(locator: Locator): Promise<Locator | "self" | undefined>
 let installing: Promise<void> | undefined;
 
 /**
- * Chromium, downloaded the first time it is needed, as `patchright install chromium` does: into
- * `~/.cache/ms-playwright`, or `PLAYWRIGHT_BROWSERS_PATH`. A server's release carries the extension
- * but not the browser, which is large; the system libraries it needs come with the server's image.
+ * Chromium, downloaded the first time it is needed, into `~/.cache/ms-playwright`, or
+ * `PLAYWRIGHT_BROWSERS_PATH`: the build a server's release names, else as `patchright install
+ * chromium` does. A server's release carries the extension but not the browser, which is large;
+ * the system libraries it needs come with the server's image.
  */
 export function ensureChromium(): Promise<void> {
   if (existsSync(chromium.executablePath())) return Promise.resolve();
   installing ??= (async () => {
+    // Google's storage, where patchright gets it, is slow from some hosts: from exe.dev it would
+    // take hours. The release's own copy comes from GitHub.
+    let fromRelease: string | undefined;
+    try {
+      const pointer = join(dirname(process.execPath), "..", "..", "chromium.json");
+      if (existsSync(pointer)) await chromiumFrom(pointer);
+      if (existsSync(chromium.executablePath())) return;
+    } catch (error) {
+      fromRelease = (error as Error).message;
+    }
     const cli = join(
       dirname(createRequire(import.meta.url).resolve("patchright/package.json")),
       "cli.js",
@@ -588,14 +601,73 @@ export function ensureChromium(): Promise<void> {
         maxBuffer: 16 << 20,
       });
     } catch (error) {
+      // The cause is an `Error:` line, such as a refused connection, beside two that only say it
+      // failed.
+      const { message, stdout = "" } = error as Error & { stdout?: string };
+      const lines = `${stdout}\n${message}`.split("\n").map((line) => line.trim());
+      const why =
+        lines
+          .find(
+            (line) =>
+              line.startsWith("Error: ") &&
+              !/^Error: (Failed to download|Download failure)/.test(line),
+          )
+          ?.slice(7) ??
+        lines.findLast((line) => line.length > 1) ??
+        "";
       throw new Error(
-        `Could not download Chromium: ${(error as Error).message.split("\n").at(-2) ?? ""}`.trim(),
+        `Could not download Chromium: ${fromRelease === undefined ? why : `${fromRelease}; then ${why}`}`,
       );
     }
   })().finally(() => {
     installing = undefined;
   });
   return installing;
+}
+
+/**
+ * Unpacks the Chromium the release names in `pointer` (`{ url, sha256 }`, as patchright lays out
+ * its browsers) where patchright looks for it, once the download has that sha256.
+ */
+async function chromiumFrom(pointer: string): Promise<void> {
+  const { url, sha256 } = JSON.parse(await readFile(pointer, "utf8")) as {
+    url: string;
+    sha256: string;
+  };
+  // Such as ~/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome.
+  let browser = chromium.executablePath();
+  while (!/^chromium-\d+$/.test(basename(browser)) && dirname(browser) !== browser)
+    browser = dirname(browser);
+  const browsers = dirname(browser);
+  const unpacking = join(browsers, `.unpacking-${process.pid}`);
+  await rm(unpacking, { recursive: true, force: true });
+  await mkdir(unpacking, { recursive: true });
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(10 * 60_000) });
+    if (!response.ok || response.body === null)
+      throw new Error(`The release's Chromium answered ${response.status}`);
+    const archive = join(unpacking, "chromium.tar.gz");
+    const hash = createHash("sha256");
+    const file = await open(archive, "w");
+    try {
+      for await (const chunk of response.body) {
+        hash.update(chunk);
+        await file.write(chunk);
+      }
+    } finally {
+      await file.close();
+    }
+    if (hash.digest("hex") !== sha256)
+      throw new Error("The release's Chromium isn't the one the release names");
+    await promisify(execFile)("tar", ["-xzf", archive, "-C", unpacking]);
+    await rm(archive);
+    for (const name of await readdir(unpacking)) {
+      await rm(join(browsers, name), { recursive: true, force: true });
+      await rename(join(unpacking, name), join(browsers, name));
+    }
+  } finally {
+    await rm(unpacking, { recursive: true, force: true });
+  }
 }
 
 /**

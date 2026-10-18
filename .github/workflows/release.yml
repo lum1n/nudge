@@ -1,6 +1,7 @@
 # A Nudge server release (ADR 11), from a tag such as v0.2.0 (v0.3.0-beta.1 makes a pre-release,
 # which servers on the stable channel skip):
 #   - an archive per architecture, each built on its own machine (the SQLite module is native),
+#   - the Chromium the browser extension runs, per architecture, which the archive names,
 #   - manifest.json, signed with the NUDGE_RELEASE_KEY secret, that servers update from,
 #   - the image ghcr.io/<owner>/nudge, tagged with the version and, for a release, stable.
 name: release
@@ -31,10 +32,14 @@ jobs:
           node-version: 24
       - run: pnpm install --frozen-lockfile
       - run: packages/release/scripts/bundle.sh "${GITHUB_REF_NAME#v}"
+        env:
+          NUDGE_RELEASE_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}
       - uses: actions/upload-artifact@v4
         with:
           name: linux-${{ matrix.arch }}
-          path: dist/release/nudge-*-linux-${{ matrix.arch }}.tar.gz
+          path: |
+            dist/release/nudge-*-linux-${{ matrix.arch }}.tar.gz
+            dist/release/chromium-*-linux-${{ matrix.arch }}.tar.gz
 
   publish:
     needs: bundle
