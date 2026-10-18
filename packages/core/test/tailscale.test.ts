@@ -179,6 +179,22 @@ describe("Tailscale", () => {
     expect(state).toEqual({ state: "needs-login", authUrl: "https://login.tailscale.com/a/x" });
   });
 
+  it("runs the build its release ships with, without a download", async () => {
+    served.clear();
+    const ts = (tailscale = new Tailscale({
+      dir: join(dir, "server", "tailscale"),
+      hostname: () => "nudge-robin",
+      arch: "x64",
+      fetch: fetcher,
+      bundled: join(dir, "build", "tailscale_1.2.3_amd64"),
+    }));
+    expect(await ts.connect()).toEqual({
+      state: "needs-login",
+      authUrl: "https://login.tailscale.com/a/x",
+    });
+    expect(existsSync(join(dir, "server", "tailscale", "bin"))).toBe(false);
+  });
+
   it("says why when it can't start", async () => {
     const ts = make();
     served.delete("https://pkgs.tailscale.com/stable/?mode=json");

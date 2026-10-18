@@ -72,6 +72,11 @@ export type TailscaleOptions = {
   readonly hostname: () => string;
   /** Such as `x64`, as `process.arch` says. */
   readonly arch?: string;
+  /**
+   * Where the server's release keeps the `tailscale` and `tailscaled` it ships with; they are used
+   * instead of a download, which from some hosts is too slow to finish.
+   */
+  readonly bundled?: string;
   readonly fetch?: typeof fetch;
   readonly say?: (line: string) => void;
   /** Runs the `tailscale` CLI, answering what it printed; tests pass a fake. */
@@ -285,10 +290,18 @@ export class Tailscale {
   }
 
   /**
-   * The directory with `tailscale` and `tailscaled`: the newest stable build, downloaded and
-   * checked against the hash Tailscale publishes beside it, unless one is there already.
+   * The directory with `tailscale` and `tailscaled`: the release's own, else the newest stable
+   * build, downloaded and checked against the hash Tailscale publishes beside it, unless one is
+   * there already.
    */
   private async install(): Promise<string> {
+    const { bundled } = this.options;
+    if (
+      bundled !== undefined &&
+      existsSync(join(bundled, "tailscaled")) &&
+      existsSync(join(bundled, "tailscale"))
+    )
+      return bundled;
     const binDir = join(this.options.dir, "bin");
     if (existsSync(join(binDir, "tailscaled")) && existsSync(join(binDir, "tailscale")))
       return binDir;

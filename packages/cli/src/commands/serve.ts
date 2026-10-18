@@ -289,6 +289,8 @@ function serverTailscale(
   if (process.platform !== "linux") return undefined;
   const tailscale = new Tailscale({
     dir: join(dirname(configPath), "server", "tailscale"),
+    // A release has Node in node/bin and Tailscale in tailscale/.
+    bundled: join(dirname(process.execPath), "..", "..", "tailscale"),
     hostname: () => {
       const label = /^https?:\/\/([a-z0-9-]+)/i.exec(publicUrl() ?? "")?.[1];
       return label === undefined ? "nudge" : `nudge-${label.toLowerCase()}`;
