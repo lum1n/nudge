@@ -71,10 +71,10 @@ rm "$out/$tailscale"
 
 # Wired's Node binding, from its release, checked against hashes pinned here: a new Wired comes
 # in by changing these, not by whatever its latest release is.
-wired_version=0.1.0
+wired_version=0.1.1
 case $arch in
-  x64) wired_sha256=7ec645cfa5eb201e28db06bf9d84a8bc5f817e9f2c034c88fcade2d6172e8791 ;;
-  arm64) wired_sha256=799d446b2ea680d093e39ea41165f00195671f76c78712624653bc3f0d979ec5 ;;
+  x64) wired_sha256=3599a07e84ddbcfee85186dc7c4619ff8cfd9b9a260b10f41f558a0025af460d ;;
+  arm64) wired_sha256=20909e3b906e1b89adf62950de3c3190d77d10bf259c89e78d1ea2f98aa88446 ;;
 esac
 wired=wired-node-$wired_version-linux-$arch.tar.gz
 curl -fsSL "https://github.com/lum1n/wired/releases/download/v$wired_version/$wired" -o "$out/$wired"
