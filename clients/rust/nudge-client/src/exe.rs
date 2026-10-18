@@ -15,8 +15,12 @@ use url::Url;
 use crate::api::ApiError;
 use crate::server::setup_info;
 
-/// The image a new server runs: a Nudge release that updates itself after.
+/// The image a new server runs when the newest release can't be looked up: a Nudge release that
+/// updates itself after.
 pub const NUDGE_IMAGE: &str = "ghcr.io/lum1n/nudge:stable";
+/// Where the newest release is named, as servers find it.
+const RELEASE_MANIFEST: &str =
+    "https://github.com/lum1n/nudge/releases/latest/download/manifest.json";
 /// The port the image's server listens on, which exe.dev's proxy is pointed at.
 pub const NUDGE_PORT: u16 = 8787;
 /// How long a new server waits to be set up before it closes setup.
@@ -129,9 +133,10 @@ impl ExeDev {
         wait: Duration,
     ) -> Result<LaunchedServer, ExeError> {
         let code = new_setup_code();
+        let image = self.newest_image().await;
         let answer = self
             .exec(&format!(
-                "new --json --name {name} --image {NUDGE_IMAGE} --env NUDGE_SETUP_CODE={code} --env NUDGE_SETUP_MINUTES={SETUP_MINUTES}"
+                "new --json --name {name} --image {image} --env NUDGE_SETUP_CODE={code} --env NUDGE_SETUP_MINUTES={SETUP_MINUTES}"
             ))
             .await?;
         let vm = vm_of(&answer).unwrap_or_else(|| ExeVm {
@@ -143,6 +148,30 @@ impl ExeDev {
         self.exec(&format!("share set-public {}", vm.name)).await?;
         wait_for_setup(&vm.url, wait).await?;
         Ok(LaunchedServer { vm, code })
+    }
+
+    /// The newest release's own image, such as `ghcr.io/lum1n/nudge:0.3.1`: exe.dev keeps an image
+    /// it pulled by its tag, so `stable` could start a new server on an old release. The stable
+    /// image when the release can't be looked up.
+    async fn newest_image(&self) -> String {
+        let version = async {
+            let response = self
+                .http
+                .get(RELEASE_MANIFEST)
+                .timeout(Duration::from_secs(10))
+                .send()
+                .await
+                .ok()?;
+            let manifest: Value = response.error_for_status().ok()?.json().await.ok()?;
+            manifest.get("version")?.as_str().map(str::to_owned)
+        }
+        .await;
+        match version {
+            Some(version) if is_release_version(&version) => {
+                format!("ghcr.io/lum1n/nudge:{version}")
+            }
+            _ => NUDGE_IMAGE.to_owned(),
+        }
     }
 
     /// Removes the VM and everything on it. Back it up and delete its assistants first, so their
@@ -165,6 +194,15 @@ pub async fn wait_for_setup(server: &str, wait: Duration) -> Result<(), ExeError
             Err(_) => tokio::time::sleep(Duration::from_secs(2)).await,
         }
     }
+}
+
+/// A release's version as its image is tagged: `0.3.1`, numbers only.
+fn is_release_version(version: &str) -> bool {
+    let parts: Vec<&str> = version.split('.').collect();
+    parts.len() == 3
+        && parts
+            .iter()
+            .all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit()))
 }
 
 /// A setup code as servers make them: `XXXX-XXXX-XXXX` in Crockford's base 32.
@@ -228,6 +266,15 @@ mod tests {
             "https://robin.exe.xyz"
         );
         assert_eq!(vm_of(&json!({ "status": "running" })), None);
+    }
+
+    #[test]
+    fn tags_images_only_with_release_versions() {
+        assert!(is_release_version("0.3.1"));
+        assert!(is_release_version("10.20.30"));
+        assert!(!is_release_version("0.3.1-beta.1"));
+        assert!(!is_release_version("0.3"));
+        assert!(!is_release_version("0.3.1 --env X=1"));
     }
 
     #[test]

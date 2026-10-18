@@ -184,6 +184,9 @@ export async function serve(options: ServeOptions): Promise<number> {
   const publicUrl = () => options.publicUrl ?? config?.server?.publicUrl;
   const tailscale = serverTailscale(configPath, publicUrl, say);
   try {
+    // A new server's image can be older than the newest release, as when a platform keeps an
+    // image it pulled before: it updates before setup, so it is set up on the newest one.
+    if (config === undefined && (await updates?.installNewest())) return RESTART_EXIT_CODE;
     const web = await webRoot(options.web);
     const control: ServerControl = {
       assistants,
@@ -308,7 +311,14 @@ function selfUpdates(
   setAutomatic: (automatic: boolean) => Promise<void>,
   restart: () => void,
   say: (line: string) => void,
-): { control: UpdateControl; start(): () => void } | undefined {
+):
+  | {
+      control: UpdateControl;
+      start(): () => void;
+      /** Installs a newer release now, if there is one; true when the server should restart into it. */
+      installNewest(): Promise<boolean>;
+    }
+  | undefined {
   const releasesDir = process.env.NUDGE_RELEASES;
   const current = process.env.NUDGE_VERSION;
   if (releasesDir === undefined || current === undefined) return undefined;
@@ -344,6 +354,18 @@ function selfUpdates(
         await setAutomatic(on);
         return updates.state(automatic());
       },
+    },
+    installNewest: async () => {
+      const release = await updates.check();
+      if (release === undefined) return false;
+      try {
+        say(`Installing Nudge ${release.version} before setup…`);
+        await updates.install(release);
+        return true;
+      } catch (error) {
+        say(`Could not install ${release.version}: ${(error as Error).message}`);
+        return false;
+      }
     },
     start: () => {
       const delay = Number(process.env.NUDGE_UPDATE_DELAY ?? 600) * 1000;
