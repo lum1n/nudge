@@ -6,7 +6,11 @@
 #     app/        @nudge/release deployed with its production dependencies
 #     bin/        nudge-server (the launcher) and nudge
 #     tailscale/  Tailscale's static build, for the server's own Tailscale
+#     chromium.json  where the release's Chromium is, and its sha256, with NUDGE_RELEASE_URL set
 #     VERSION
+#
+#   dist/release/chromium-<version>-linux-<arch>.tar.gz, with NUDGE_RELEASE_URL set: the Chromium
+#     the browser extension runs, as patchright installs it, to publish at that address
 #
 # Run on each architecture (x64, arm64): the SQLite module is native, built for the bundled Node.
 #   packages/release/scripts/bundle.sh 0.1.0
@@ -46,8 +50,9 @@ pnpm -C "$root" install --frozen-lockfile >/dev/null
 # What only building needed.
 sqlite=$work/app/node_modules/better-sqlite3-multiple-ciphers
 rm -rf "$sqlite/deps" "$sqlite/src" "$sqlite/build/Release/obj.target" "$sqlite/build/deps"
-find "$work/app/node_modules" -type d \( -name test -o -name tests -o -name __tests__ \) -prune \
-  -exec rm -rf {} +
+# patchright's lib/mcp/test is code its CLI loads, which installs Chromium.
+find "$work/app/node_modules" -type d \( -name test -o -name tests -o -name __tests__ \) \
+  -not -path '*/node_modules/patchright/*' -prune -exec rm -rf {} +
 "$work/node/bin/node" -e 'require(process.argv[1])' "$sqlite"
 
 cp "$root/packages/release/bin/nudge-server" "$root/packages/release/bin/nudge" "$work/bin/"
@@ -62,6 +67,20 @@ echo "$(curl -fsSL "$packages/$tailscale.sha256")  $tailscale" | (cd "$out" && s
 mkdir "$work/tailscale"
 tar -xzf "$out/$tailscale" -C "$work/tailscale" --strip-components=1 --wildcards '*/tailscale' '*/tailscaled'
 rm "$out/$tailscale"
+
+# Chromium, from Google's storage, can take hours to download on a server, as on exe.dev, where it
+# comes at about 30 KB/s; from the release on GitHub, seconds.
+if [ -n "${NUDGE_RELEASE_URL:-}" ]; then
+  browsers=$out/browsers-$arch
+  chromium=chromium-$version-linux-$arch.tar.gz
+  rm -rf "$browsers" "$out/$chromium"
+  PLAYWRIGHT_BROWSERS_PATH=$browsers \
+    "$work/node/bin/node" "$work/app/node_modules/patchright/cli.js" install chromium
+  tar -C "$browsers" -czf "$out/$chromium" --exclude=./.links .
+  printf '{"url":"%s/%s","sha256":"%s"}\n' "${NUDGE_RELEASE_URL%/}" "$chromium" \
+    "$(sha256sum "$out/$chromium" | cut -d' ' -f1)" >"$work/chromium.json"
+  rm -rf "$browsers"
+fi
 
 echo "$version" >"$work/VERSION"
 tar -C "$out" -czf "$out/$name.tar.gz" "$name"
