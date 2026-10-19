@@ -72,7 +72,7 @@ export function desktopProblem(options: { sandbox?: boolean } = {}): string | un
   const missing = ["Xvfb", "dbus-daemon"].filter((program) => !onPath(program));
   if (!a11yBusConfig()) missing.push("AT-SPI bus config");
   if (missing.length)
-    return `This server has no ${missing.join(" or ")} for the desktop. Install xvfb, dbus and at-spi2-core.`;
+    return `This server has no ${missing.join(" or ")} for the desktop. Install xvfb, dbus and at-spi2-core (in Docker, use the stable-desktop image).`;
   if (options.sandbox) return sandboxProblem();
   return undefined;
 }
@@ -88,7 +88,7 @@ export function sandboxProblem(): string | undefined {
             stdio: "ignore",
             timeout: 5_000,
           }).status !== 0
-        ? "bubblewrap can't make a sandbox on this server: it needs user namespaces, which this system or container doesn't allow (Docker's default seccomp profile blocks them). Allow them, or turn \"sandbox\" off in the desktop extension's settings to run the apps without one."
+        ? "bubblewrap can't make a sandbox on this server: it needs user namespaces, which this system or container doesn't allow. In Docker, add the security_opt lines from Nudge's compose.yaml. Otherwise allow them, or turn \"sandbox\" off in the desktop extension's settings to run the apps without one."
         : undefined,
   };
   return sandboxChecked.problem;
