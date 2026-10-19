@@ -62,6 +62,9 @@ private struct ServerView: View {
     @State private var kit: String?
     @State private var removing = false
     @State private var confirm = ""
+    @State private var checking = false
+    /// What the last check for updates found.
+    @State private var updateNote: String?
 
     var body: some View {
         Form {
@@ -115,6 +118,13 @@ private struct ServerView: View {
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
+                        }
+                        Button(checking ? "Checking…" : "Check for updates now", systemImage: "arrow.down.circle") {
+                            Task { await checkUpdates() }
+                        }
+                        .disabled(checking)
+                        if let updateNote {
+                            Text(updateNote).font(.caption).foregroundStyle(.secondary)
                         }
                     }
                     Button { askingPassphrase = true } label: {
@@ -214,6 +224,21 @@ private struct ServerView: View {
         case .server: "Set here, for every assistant. Tap to change it."
         case .assistant: "Set for one assistant"
         case .none: "None yet. Tap to add your key."
+        }
+    }
+
+    /// Asks the server for a newer release now, rather than at its daily check: it installs it and
+    /// restarts into it when it updates automatically.
+    private func checkUpdates() async {
+        checking = true
+        defer { checking = false }
+        await act {
+            let state = try await model.servers.client(server).checkUpdates()
+            updateNote = state.error ?? state.available.map { version in
+                state.automatic
+                    ? "Installing \(version). The server restarts in a minute; come back then."
+                    : "\(version) is out. Turn on Update automatically to install it."
+            } ?? "No newer release yet."
         }
     }
 
