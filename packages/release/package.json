@@ -23,6 +23,7 @@
     "@nudge/ext-search": "workspace:*",
     "@nudge/ext-signal": "workspace:*",
     "@nudge/ext-telegram": "workspace:*",
+    "@nudge/ext-terminal": "workspace:*",
     "@nudge/ext-watches": "workspace:*"
   }
 }

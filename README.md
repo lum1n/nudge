@@ -21,6 +21,7 @@ An extendable, multiplayer personal assistant that keeps personal data away from
 - `@nudge/ext-hello`: a sample extension (`extensions/hello`).
 - `@nudge/ext-browser`: lets the assistant use the web (`extensions/browser`).
 - `@nudge/ext-desktop`: lets the assistant use desktop apps on Linux (`extensions/desktop`).
+- `@nudge/ext-terminal`: lets the assistant run shell commands in a sandboxed workspace (`extensions/terminal`).
 - `@nudge/ext-mcp`: gives the assistant the tools of MCP servers (`extensions/mcp`).
 - `@nudge/ext-codemode`: lets the model run short scripts that call the room's tools (`extensions/codemode`).
 - `@nudge/ext-federation`: lets people from other assistants join, with their home vouching for them (`extensions/federation`).
@@ -270,6 +271,25 @@ An entry's `rooms` lists the kinds of room it is on in by default (`"lobby"`, `"
 - Tried with GNOME Text Editor (GTK 4), LibreOffice Writer and Calc, Dolphin (Qt 6) and Firefox. LibreOffice has to run on its Qt backend, as above: on its GTK 3 backend it aborts when its windows are read. A spreadsheet reads as the cells on the screen that hold something; the agent moves around with the Name Box. Dolphin's inline rename field is invisible to it (it can still press F2 and type).
 - The apps run in a bubblewrap sandbox (`sandbox`, on by default): they see the system's programs and libraries read-only, their desktop's home, display and buses, and nothing else of the machine: no other homes, not Nudge's data or config, and none of Nudge's environment (its keys). They keep the network. `readable` lists more directories they may read, such as where an app is unpacked outside `/usr` and `/opt`. The sandbox needs `bwrap` and user namespaces. Docker allows them only with seccomp, AppArmor and its masked `/proc` paths loosened (`security_opt` in [`packages/release/compose.yaml`](packages/release/compose.yaml), with the `stable-desktop` image); the other way is `sandbox` off, which runs the apps as the user Nudge runs as, able to read whatever it can, its data and keys included. `nudge doctor` says whether the sandbox works.
 - `pnpm -C extensions/desktop eval -- --model anthropic/claude-haiku-5-5` runs a set of tasks in these apps (open and read files, write and save, count and rename files, read a page, and one that must stop to ask before deleting), each on a fresh desktop and home, and checks the answers and the files left behind (sandboxed, with the directory of `--apps`' file readable; `--no-sandbox` turns that off); otherwise it works as the browser eval, with its leak check, writing to `extensions/desktop/.eval/`. `--apps apps.json` says how to start apps that are installed elsewhere, as `{ "calc": ["env", "SAL_USE_VCLPLUGIN=qt6", "/opt/libreoffice/program/soffice", "--calc"] }`.
+
+### Use the terminal
+
+`extensions/terminal` gives the model a `run_command` tool: a bash command, run in a terminal of the room's own, for command-line tools such as `pandoc`, `ffmpeg`, `jq`, `git` or a quick Python script.
+
+```json
+{ "from": "./extensions/terminal", "settings": { "network": false, "timeoutSeconds": 60 } }
+```
+
+- Every command runs in a bubblewrap sandbox. It sees the system's programs and libraries read-only, the room's workspace at `/workspace` (on the server `<database>.extensions/terminal/workspaces/conversation-<id>`, kept between commands), an empty `/tmp`, and nothing else of the machine: not your home, not Nudge's data or config, and none of Nudge's environment (its keys). It has its own processes, hostname and IPC. A command stops after `timeoutSeconds` (default 60, at most 600), and gets at most 512 processes and 1 GB per file it writes. The model gets the start and end of the output, past 30 000 characters, redacted like any tool's.
+- It has no network unless `"network": true`. Then commands reach what the server reaches: the internet, and also the local network and services on this machine, which the sandbox doesn't filter.
+- Each command is read before it runs, through pipes, `&&`, `$(…)`, `sh -c`, `xargs`, `find -exec` and wrappers like `env` or `timeout`:
+  - Common tools that read, search, convert, build and fetch run at once.
+  - Commands that delete files (`rm`, `find -delete`, `git clean`, `git reset --hard`), send data (`curl -d`, `curl -X POST`, `git push`, `ssh`, `scp`, mail), run a script of the workspace, run a program not on the list, or that it can't read for sure (a program named by a variable, `sh` reading its input) wait for someone in the room to approve that exact command, as an approval like any other. Approving it runs it, and the room hears the output.
+  - `sudo`, `su`, `mount`, `docker`, `systemctl` and the like never run.
+- `allow`, `ask` and `deny` add program names to those lists and override them; a program in `allow` runs however it is called.
+- The reading covers shell commands, not the code a program runs: `python3 -c '…'` or a Node script can delete workspace files or, with the network, send them without asking. The sandbox is what keeps commands from the rest of the machine.
+- `readable` lists more directories commands may read, such as where a tool is installed outside `/usr` and `/opt`.
+- It needs `bwrap`, `bash` and user namespaces, like the desktop's sandbox; in Docker, the `security_opt` lines in [`packages/release/compose.yaml`](packages/release/compose.yaml). Without them it runs nothing, and `nudge doctor` says why.
 
 ### MCP servers
 

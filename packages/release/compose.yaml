@@ -3,9 +3,10 @@
 services:
   nudge:
     image: ghcr.io/lum1n/nudge:stable
-    # For the desktop extension (apps the assistant uses on a virtual desktop), the image with its
-    # apps and services instead, and the lines below. It runs the apps in a bubblewrap sandbox,
-    # which keeps them from Nudge's data, and Docker allows that only with these three loosened:
+    # For the terminal extension (shell commands) and the desktop extension (apps on a virtual
+    # desktop), the security_opt lines below; for the desktop, also the image with its apps and
+    # services. Both run in a bubblewrap sandbox, which keeps them from Nudge's data, and Docker
+    # allows that only with these three loosened:
     # seccomp (unshare, mount), AppArmor (mount) and the masked /proc paths (bubblewrap mounts a
     # /proc of the sandbox's own). The container still runs as an unprivileged user without added
     # capabilities. `docker compose exec nudge nudge doctor` says whether the sandbox works.
