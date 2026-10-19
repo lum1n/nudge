@@ -15,7 +15,8 @@
     }
   },
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "eval": "node eval/run.ts"
   },
   "dependencies": {
     "@earendil-works/pi-ai": "1.2.0",

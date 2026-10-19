@@ -165,6 +165,83 @@ describe("the desktop snapshot", () => {
   it("says when no window is open", () => {
     expect(renderDesktop([]).text).toMatch(/No windows are open/);
   });
+
+  it("puts a dialog open inside its window first, as libadwaita shows them", () => {
+    const window = node("frame", "Editor", {
+      children: [
+        node("text", "", { actionable: true, states: ["editable"], text: "Hei" }),
+        node("dialog", "Preferences", { children: [button("Close")] }),
+      ],
+    });
+    const text = renderDesktop([{ app: "editor", node: window }]).text;
+    expect(text).toMatch(/^OPEN DIALOGS.*\n- dialog "Preferences" .*\n {2}- button "Close"/);
+    expect(text.indexOf('frame "Editor"')).toBeGreaterThan(text.indexOf('dialog "Preferences"'));
+  });
+
+  it("leaves out what Qt and Firefox say that says nothing", () => {
+    const window = node("frame", "Files", {
+      children: [
+        // An empty section with an action, a separator, a closed combo box's options.
+        node("section", "", { actionable: true }),
+        node("separator", "", { actionable: true }),
+        node("combo box", "Zoom", {
+          actionable: true,
+          text: "100%",
+          children: [node("list", "", { children: [node("list item", "200%")] })],
+        }),
+        // A value on a menu item says nothing; on a slider it does.
+        node("menu item", "Open", { actionable: true, value: 0 }),
+        node("slider", "Volume", { actionable: true, value: 40 }),
+        // A control that only wraps one of its name, as GTK 4's menu buttons do.
+        node("push button", "Main Menu", {
+          children: [node("toggle button", "Main Menu", { actionable: true })],
+        }),
+      ],
+    });
+    const empty = node("alert", "");
+    const text = renderDesktop([
+      { app: "files", node: window },
+      { app: "files", node: empty },
+    ]).text;
+    expect(text).not.toMatch(/section|separator|200%|OPEN DIALOGS/);
+    expect(text).toMatch(/combobox "Zoom" \[e\d+\]: 100%$/m);
+    expect(text).toMatch(/menuitem "Open" \[e\d+\]$/m);
+    expect(text).toMatch(/slider "Volume" \[value=40\]/);
+    expect(text).not.toMatch(/button "Main Menu"/);
+    expect(text).toMatch(/switch "Main Menu" \[e\d+\]/);
+  });
+
+  it("puts a table's rows on a line each, from a browser's rows or Qt's tree items", () => {
+    const cell = (name: string) => node("table cell", name);
+    const html = node("table", "", {
+      columns: 2,
+      children: [
+        node("table row", "", { children: [cell("Vare"), cell("Pris")] }),
+        node("table row", "", { children: [cell("Kaffe"), cell("89 kr")] }),
+      ],
+    });
+    const item = (name: string) => node("tree item", name, { actionable: true });
+    const tree = node("tree", "Files", {
+      columns: 2,
+      children: [item("budsjett.csv"), item("91 bytes"), item("notat.txt"), item("12 bytes")],
+    });
+    const window = node("frame", "Lists", { children: [html, tree] });
+    const text = renderDesktop([{ app: "x", node: window }]).text;
+    expect(text).toMatch(/row "Vare · Pris"/);
+    expect(text).toMatch(/row "Kaffe · 89 kr"/);
+    expect(text).toMatch(/row "budsjett\.csv · 91 bytes" \[e\d+\]/);
+    expect(text).toMatch(/row "notat\.txt · 12 bytes" \[e\d+\]/);
+  });
+
+  it("says a menu is open when its items sit inside wrappers (GTK 4) or it pops up (Qt)", () => {
+    const items = [node("menu item", "Reset", { actionable: true })];
+    const gtk4 = node("frame", "Counter", {
+      children: [node("menu", "Main Menu", { children: [node("panel", "", { children: items })] })],
+    });
+    const qt = node("popup menu", "Dolphin", { children: items });
+    expect(renderDesktop([{ app: "c", node: gtk4 }]).text).toMatch(/^A MENU IS OPEN/);
+    expect(renderDesktop([{ app: "d", node: qt }]).text).toMatch(/^A MENU IS OPEN/);
+  });
 });
 
 describe("key combos", () => {

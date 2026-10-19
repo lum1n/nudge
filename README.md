@@ -251,7 +251,12 @@ An entry's `rooms` lists the kinds of room it is on in by default (`"lobby"`, `"
 ```json
 {
   "from": "./extensions/desktop",
-  "settings": { "apps": { "writer": ["libreoffice", "--writer"], "editor": ["gnome-text-editor"] } }
+  "settings": {
+    "apps": {
+      "writer": ["env", "SAL_USE_VCLPLUGIN=qt6", "libreoffice", "--writer"],
+      "editor": ["gnome-text-editor"]
+    }
+  }
 }
 ```
 
@@ -261,6 +266,9 @@ An entry's `rooms` lists the kinds of room it is on in by default (`"lobby"`, `"
 - Each room gets its own virtual display (`Xvfb`), session bus and accessibility bus, so nothing reaches your own desktop. The apps' home, with their settings and files, is `<database>.extensions/desktop/homes/conversation-<id>` and stays between tasks; the desktop and its apps close after `idleMinutes` (default 10), and when Nudge stops. The server needs `Xvfb`, `dbus-daemon` and `at-spi2-core`, and GTK, Qt or Chromium-based apps.
 - It does not send, delete, pay, publish or save over a file on its own. It gets everything ready, stops, and asks the room to approve the exact step, as for the browser; approving it carries on on the same desktop.
 - While `use_desktop` runs, the chat and the terminal show what it is doing (`Clicking "Save"…`).
+- Tried with GNOME Text Editor (GTK 4), LibreOffice Writer and Calc, Dolphin (Qt 6) and Firefox. LibreOffice has to run on its Qt backend, as above: on its GTK 3 backend it aborts when its windows are read. A spreadsheet reads as the cells on the screen that hold something; the agent moves around with the Name Box. Dolphin's inline rename field is invisible to it (it can still press F2 and type).
+- The apps run as the user Nudge runs as, and their file dialogs can browse whatever that user can read; give the desktop to rooms you trust, or run Nudge as a user of its own.
+- `pnpm -C extensions/desktop eval -- --model anthropic/claude-haiku-5-5` runs a set of tasks in these apps (open and read files, write and save, count and rename files, read a page, and one that must stop to ask before deleting), each on a fresh desktop and home, and checks the answers and the files left behind; otherwise it works as the browser eval, with its leak check, writing to `extensions/desktop/.eval/`. `--apps apps.json` says how to start apps that are installed elsewhere, as `{ "calc": ["env", "SAL_USE_VCLPLUGIN=qt6", "/opt/libreoffice/program/soffice", "--calc"] }`.
 
 ### MCP servers
 

@@ -36,6 +36,8 @@ export interface DesktopSnapshot {
 /** AT-SPI role names, shortened to what models know from the web. */
 const ROLES: Record<string, string> = {
   "push button": "button",
+  "button with drop down": "button",
+  "button menu": "button",
   "check box": "checkbox",
   "radio button": "radio",
   "combo box": "combobox",
@@ -61,6 +63,7 @@ const ROLES: Record<string, string> = {
   "scroll bar": "scrollbar",
   "toggle button": "switch",
   entry: "textbox",
+  "text box": "textbox",
   "password text": "password",
   label: "text",
   static: "text",
@@ -72,6 +75,11 @@ const ROLES: Record<string, string> = {
 /** Containers that say nothing themselves; unnamed ones are left out and their children lifted. */
 const WRAPPERS = new Set([
   "filler",
+  "generic",
+  "splitter",
+  "space",
+  "group",
+  "tab panel",
   "panel",
   "scroll pane",
   "viewport",
@@ -91,9 +99,10 @@ const WRAPPERS = new Set([
 ]);
 const DIALOGS = new Set(["dialog", "alert", "file chooser", "color chooser", "font chooser"]);
 /** The scrollbars, separators and images that only add noise. */
-const SKIPPED = new Set(["scroll bar", "separator", "image", "icon", "ruler"]);
+const SKIPPED = new Set(["scroll bar", "separator", "image", "icon", "ruler", "graphic"]);
 /** Roles that get a ref even without actions of their own: the pointer can click them. */
 const CLICKABLE = new Set([
+  "button",
   "textbox",
   "tab",
   "listitem",
@@ -105,6 +114,8 @@ const CLICKABLE = new Set([
   "menu",
   "link",
 ]);
+/** Roles whose value says something; Qt gives menu items and buttons one too. */
+const VALUED = new Set(["slider", "spinbutton", "progressbar", "scrollbar", "level bar", "dial"]);
 /** Most children shown per node; the rest are counted, and `find` still searches them. */
 const SHOWN_CHILDREN = 60;
 const MAX_TEXT = 4_000;
@@ -131,7 +142,8 @@ function attrs(node: DesktopNode, role: string): string[] {
   if (s.has("required")) out.push("required");
   if (s.has("invalid-entry")) out.push("invalid");
   if (s.has("modal")) out.push("modal");
-  if (node.value !== undefined && Number.isFinite(node.value)) out.push(`value=${node.value}`);
+  if (node.value !== undefined && Number.isFinite(node.value) && VALUED.has(role))
+    out.push(`value=${node.value}`);
   return out;
 }
 
@@ -163,10 +175,14 @@ function indentText(text: string): string {
 
 /** Leaves the noise out, and lifts the children of unnamed wrappers into their parent. */
 function simplify(node: DesktopNode): DesktopNode[] {
-  if (SKIPPED.has(node.role) && !node.actionable) return [];
+  if (node.role === "separator" || (SKIPPED.has(node.role) && !node.actionable)) return [];
   // Labels that only repeat a name already shown: the parent's (a button's inner label) or a
   // sibling control's (a field's label, which names the field).
-  const lifted = node.children.flatMap(simplify);
+  // Qt says a closed combo box's options are showing; desktop_select finds them anyway.
+  const closedCombo = node.role === "combo box" && !node.states.has("expanded");
+  const lifted = node.children
+    .filter((child) => !(closedCombo && (child.role === "list" || child.role === "menu")))
+    .flatMap(simplify);
   const named = new Set(
     [node.name, ...lifted.filter((c) => c.actionable).map((c) => c.name)].filter(Boolean),
   );
@@ -179,10 +195,23 @@ function simplify(node: DesktopNode): DesktopNode[] {
         !textOf(child, "text")
       ),
   );
+  // A control that only wraps one of the same name (GTK 4's menu buttons) is that control.
+  if (!node.actionable && children.length === 1 && children[0]!.name === node.name && node.name)
+    return children;
   const quiet = !node.name && !node.actionable && !textOf(node, roleOf(node));
   if (quiet && (WRAPPERS.has(node.role) || roleOf(node) === "text") && !node.unread)
     return children;
+  // An empty wrapper says nothing even when it has an action (Firefox gives most of them one).
+  if (WRAPPERS.has(node.role) && !node.name && !children.length && !textOf(node, roleOf(node)))
+    return [];
   return [{ ...node, children }];
+}
+
+/** What a cell shows: its own name or text, else its parts' (GTK 4 nests a cell's widgets as cells). */
+function cellText(cell: DesktopNode): string {
+  const own = cell.name || textOf(cell, roleOf(cell)) || "";
+  if (own || !cell.children.length) return own;
+  return [...new Set(cell.children.map(cellText).filter(Boolean))].join(" ");
 }
 
 /** A table's cells as rows: one line per row, its cells' text in order, the first cell's ref. */
@@ -190,7 +219,19 @@ function tableRows(table: DesktopNode): DesktopNode[] {
   const columns = table.columns ?? 0;
   const headers = table.children.filter((c) => /header/.test(roleOf(c)));
   const cells = table.children.filter((c) => !headers.includes(c));
-  if (columns < 2 || cells.some((c) => c.children.length) || cells.length % columns)
+  // Browsers list rows of cells instead: each row on a line of its own.
+  if (cells.length && cells.every((c) => roleOf(c) === "row"))
+    return table.children.map((row) =>
+      roleOf(row) === "row"
+        ? { ...row, name: row.children.map(cellText).join(" · "), children: [] }
+        : row,
+    );
+  // Qt's trees list each row's columns as tree items.
+  if (
+    columns < 2 ||
+    cells.length % columns ||
+    !cells.every((c) => /^(cell|treeitem)$/.test(roleOf(c)))
+  )
     return table.children;
   const rows: DesktopNode[] = [];
   if (headers.length)
@@ -206,7 +247,7 @@ function tableRows(table: DesktopNode): DesktopNode[] {
     const states = new Set(row[0]!.states);
     rows.push({
       role: "row",
-      name: row.map((c) => c.name || c.text || "").join(" · "),
+      name: row.map(cellText).join(" · "),
       states,
       actionable: true,
       ...(row[0]!.ref ? { ref: row[0]!.ref } : {}),
@@ -231,6 +272,25 @@ function render(nodes: readonly DesktopNode[], depth: number, out: string[], cap
     );
 }
 
+/**
+ * A window and the dialogs open inside it, apart: libadwaita shows its dialogs within their
+ * window, and they belong first, like those in windows of their own.
+ */
+function liftDialogs(window: DesktopWindow): DesktopWindow[] {
+  const inner: DesktopWindow[] = [];
+  const strip = (node: DesktopNode): DesktopNode => ({
+    ...node,
+    children: node.children.flatMap((child) => {
+      if (!DIALOGS.has(child.role)) return [strip(child)];
+      inner.push({ app: window.app, node: strip(child) });
+      return [];
+    }),
+  });
+  const outer = { ...window, node: strip(window.node) };
+  // Firefox keeps an empty alert around for its notifications.
+  return [outer, ...inner].filter((w) => w.node.name || w.node.children.length);
+}
+
 function isDialog(window: DesktopWindow): boolean {
   return DIALOGS.has(window.node.role) || window.node.states.has("modal");
 }
@@ -247,8 +307,13 @@ function windowLines(window: DesktopWindow, cap: boolean): string[] {
 
 /** Whether a menu is open: one with items on the screen, which takes the keys and clicks. */
 function menuOpen(node: DesktopNode): boolean {
-  if (node.role === "menu" && node.children.some((c) => /menu item/.test(c.role))) return true;
+  if (/^(popup )?menu$/.test(node.role) && hasMenuItem(node)) return true;
   return node.children.some(menuOpen);
+}
+
+/** Whether a menu item is under a node, as GTK 4 puts them, inside wrappers. */
+function hasMenuItem(node: DesktopNode): boolean {
+  return node.children.some((c) => /menu item/.test(c.role) || hasMenuItem(c));
 }
 
 /** The windows as text: open dialogs first, then the active window, then the rest; paged to `budget` characters. */
@@ -257,6 +322,7 @@ export function renderDesktop(
   options: { budget?: number; page?: number } = {},
 ): DesktopSnapshot {
   const budget = options.budget ?? 24_000;
+  windows = windows.flatMap(liftDialogs);
   const dialogs = windows.filter(isDialog);
   const others = windows
     .filter((w) => !isDialog(w))

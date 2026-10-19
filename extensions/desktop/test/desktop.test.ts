@@ -8,6 +8,7 @@ import { ActionError, DesktopSession } from "../src/session.ts";
 
 const run = process.env.NUDGE_DESKTOP_TESTS === "1";
 const app = new URL("./fixtures/notes.py", import.meta.url).pathname;
+const app4 = new URL("./fixtures/counter4.py", import.meta.url).pathname;
 
 /** The ref on the first line of the snapshot that matches. */
 function refOf(snapshot: string, pattern: RegExp): string {
@@ -159,5 +160,52 @@ describe.runIf(run)("a desktop with a GTK app", () => {
     await desktop.settle();
     [a, b] = await frames();
     expect([pinned(a!.block), pinned(b!.block)]).toEqual([!before[0], !before[1]]);
+  }, 30_000);
+});
+
+describe.runIf(run)("a desktop with a GTK 4 app", () => {
+  let desktop: DesktopSession;
+  let dir: string;
+
+  beforeAll(async () => {
+    dir = mkdtempSync(join(tmpdir(), "nudge-desktop-test-"));
+    desktop = await DesktopSession.open({
+      homeDir: join(dir, "home"),
+      apps: { counter: ["python3", app4] },
+    });
+    expect(await desktop.launch("counter")).toBe("Started counter.");
+    await desktop.settle();
+  }, 30_000);
+
+  afterAll(async () => {
+    await desktop?.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("reads the window without GTK 4's wrappers", async () => {
+    const text = await desktop.observe();
+    expect(text).toMatch(/^- window "Counter" \[e\d+\] \(python3\)/);
+    expect(text).toMatch(/text "Clicks: 0"/);
+    expect(text).not.toMatch(/generic|group/);
+    expect(text.split("\n").length).toBeLessThan(10);
+  });
+
+  it("clicks in the header bar, which GTK 4 places from the window's shadow", async () => {
+    const text = await desktop.observe();
+    await desktop.click(refOf(text, /button "Add"/));
+    await desktop.click(refOf(text, /button "Add"/));
+    await desktop.settle();
+    expect(await desktop.observe()).toMatch(/text "Clicks: 2"/);
+  }, 30_000);
+
+  it("opens a popover menu, with its items named, and picks one", async () => {
+    await desktop.click(refOf(await desktop.observe(), /switch "Main Menu"/));
+    await desktop.settle();
+    const text = await desktop.observe();
+    expect(text).toMatch(/^A MENU IS OPEN/);
+    expect(text).toMatch(/menuitem "Do nothing" \[disabled\]/);
+    await desktop.click(refOf(text, /menuitem "Reset count"/));
+    await desktop.settle();
+    expect(await desktop.observe()).toMatch(/text "Clicks: 0"/);
   }, 30_000);
 });

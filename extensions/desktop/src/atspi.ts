@@ -9,6 +9,8 @@ const REGISTRY = "org.a11y.atspi.Registry";
 const ROOT = "/org/a11y/atspi/accessible/root";
 const DEC = "/org/a11y/atspi/registry/deviceeventcontroller";
 const ACCESSIBLE = "org.a11y.atspi.Accessible";
+const ACTION = "org.a11y.atspi.Action";
+const TABLE = "org.a11y.atspi.Table";
 const PROPERTIES = "org.freedesktop.DBus.Properties";
 const CALL_TIMEOUT_MS = 3_000;
 
@@ -181,6 +183,67 @@ export class Atspi {
     this.session.disconnect();
   }
 
+  /**
+   * Hears the apps' object and window events: `event` like `object:state-changed:showing`, the
+   * object it is about, and its first detail. Apps only send the events someone registered for.
+   */
+  async onEvents(
+    events: readonly string[],
+    listener: (event: string, source: Address, detail: number) => void,
+  ): Promise<void> {
+    // object:… events come on Event.Object, window:… on Event.Window.
+    const kinds = new Set(events.map((e) => e.split(":")[0]!));
+    for (const kind of kinds)
+      await call(
+        this.bus,
+        "org.freedesktop.DBus",
+        "/org/freedesktop/DBus",
+        "org.freedesktop.DBus",
+        "AddMatch",
+        "s",
+        [
+          `type='signal',interface='org.a11y.atspi.Event.${kind[0]!.toUpperCase()}${kind.slice(1)}'`,
+        ],
+      );
+    for (const event of events) {
+      // Newer registries also take the properties to cache and the app; older ones the event alone.
+      await call(
+        this.bus,
+        REGISTRY,
+        "/org/a11y/atspi/registry",
+        "org.a11y.atspi.Registry",
+        "RegisterEvent",
+        "sass",
+        [event, [], ""],
+      ).catch(() =>
+        call(
+          this.bus,
+          REGISTRY,
+          "/org/a11y/atspi/registry",
+          "org.a11y.atspi.Registry",
+          "RegisterEvent",
+          "s",
+          [event],
+        ),
+      );
+    }
+    this.bus.on("message", (message: InstanceType<typeof Message>) => {
+      const iface = message.interface ?? "";
+      if (!iface.startsWith("org.a11y.atspi.Event.") || !message.sender || !message.path) return;
+      const kind = iface.slice("org.a11y.atspi.Event.".length).toLowerCase();
+      const member = String(message.member ?? "").replace(
+        /[A-Z]/g,
+        (c, i) => `${i ? "-" : ""}${c.toLowerCase()}`,
+      );
+      const [minor, detail] = (message.body ?? []) as [string?, number?];
+      listener(
+        `${kind}:${member}${minor ? `:${minor}` : ""}`,
+        { bus: message.sender, path: message.path },
+        Number(detail ?? 0),
+      );
+    });
+  }
+
   /** The desktop: its children are the apps on the bus. */
   get root(): Address {
     return { bus: REGISTRY, path: ROOT };
@@ -189,10 +252,10 @@ export class Atspi {
   async info(address: Address): Promise<Info> {
     const [[role = ""], [props = {}], [state = []], [interfaces = []]] = (await Promise.all([
       this.call(address, ACCESSIBLE, "GetRoleName"),
-      this.call(address, PROPERTIES, "GetAll", "s", [ACCESSIBLE]),
+      this.allProperties(address),
       this.call(address, ACCESSIBLE, "GetState"),
       this.call(address, ACCESSIBLE, "GetInterfaces"),
-    ])) as [[string?], [Record<string, { value: unknown }>?], [number[]?], [string[]?]];
+    ])) as unknown as [[string?], [Record<string, { value: unknown }>?], [number[]?], [string[]?]];
     const info: Info = {
       address,
       role: role,
@@ -202,8 +265,14 @@ export class Atspi {
       interfaces: new Set(interfaces),
       childCount: Number(props.ChildCount?.value ?? 0),
     };
+    // GTK 4 gives most of its containers an Action interface without a single action.
+    if (
+      info.interfaces.has(ACTION) &&
+      Number(await this.property(address, ACTION, "NActions").catch(() => 1)) === 0
+    )
+      info.interfaces.delete(ACTION);
     // Fields are often named by a label beside them, linked as LABELLED_BY (2).
-    if (!info.name && interfaces.some((i) => /EditableText|Action|Selection/.test(i)))
+    if (!info.name && [...info.interfaces].some((i) => /EditableText|Action|Selection/.test(i)))
       info.name = await this.labelOf(address).catch(() => "");
     // A combo box is named by the option it shows; its label says what it is for.
     else if (role === "combo box") {
@@ -231,6 +300,29 @@ export class Atspi {
     return info;
   }
 
+  /** The Accessible properties, one by one where GetAll isn't answered (Qt). */
+  private async allProperties(address: Address): Promise<[Record<string, { value: unknown }>]> {
+    try {
+      return (await this.call(address, PROPERTIES, "GetAll", "s", [ACCESSIBLE])) as [
+        Record<string, { value: unknown }>,
+      ];
+    } catch {
+      const names = ["Name", "Description", "ChildCount"];
+      const values = await Promise.all(
+        names.map((name) => this.property(address, ACCESSIBLE, name).catch(() => undefined)),
+      );
+      return [Object.fromEntries(names.map((name, i) => [name, { value: values[i] }]))];
+    }
+  }
+
+  /** The name of the app an object belongs to. */
+  async appName(address: Address): Promise<string> {
+    const [[bus, path]] = (await this.call(address, ACCESSIBLE, "GetApplication")) as [
+      [string, string],
+    ];
+    return String(await this.property({ bus, path }, ACCESSIBLE, "Name"));
+  }
+
   /** The object's parent, or undefined at the top. */
   async parent(address: Address): Promise<Address | undefined> {
     const [bus, path] = (await this.property(address, ACCESSIBLE, "Parent")) as [string, string];
@@ -243,8 +335,20 @@ export class Atspi {
       [number, [string, string][]][],
     ];
     const labels = relations.filter(([type]) => type === 2).flatMap(([, targets]) => targets);
+    // GTK 4 labels some controls with a nameless object that only has the text.
     const names = await Promise.all(
-      labels.map(([bus, path]) => this.property({ bus, path }, ACCESSIBLE, "Name").then(String)),
+      labels.map(async ([bus, path]) => {
+        const name = String(await this.property({ bus, path }, ACCESSIBLE, "Name"));
+        if (name) return name;
+        const [text] = (await this.call(
+          { bus, path },
+          "org.a11y.atspi.Text",
+          "GetText",
+          "ii",
+          [0, -1],
+        ).catch(() => [""])) as [string];
+        return text;
+      }),
     );
     return names.join(" ").trim();
   }
@@ -270,7 +374,7 @@ export class Atspi {
 
   /** The names of the actions an object offers, such as `click`, `activate` or `toggle`. */
   async actions(address: Address): Promise<string[]> {
-    const [actions] = (await this.call(address, "org.a11y.atspi.Action", "GetActions")) as [
+    const [actions] = (await this.call(address, ACTION, "GetActions")) as [
       [string, string, string][],
     ];
     // GTK names them "Click" and "Press", Qt "Press", others lower case.
@@ -278,9 +382,7 @@ export class Atspi {
   }
 
   async doAction(address: Address, index: number): Promise<boolean> {
-    const [done] = (await this.call(address, "org.a11y.atspi.Action", "DoAction", "i", [
-      index,
-    ])) as [boolean];
+    const [done] = (await this.call(address, ACTION, "DoAction", "i", [index])) as [boolean];
     return done;
   }
 
@@ -300,6 +402,45 @@ export class Atspi {
     return done;
   }
 
+  /** A table's size in rows and columns. */
+  async tableSize(address: Address): Promise<{ rows: number; columns: number }> {
+    const [rows, columns] = await Promise.all(
+      ["NRows", "NColumns"].map((name) => this.property(address, TABLE, name).then(Number)),
+    );
+    return { rows: rows!, columns: columns! };
+  }
+
+  /** The cell of a table at a row and column. */
+  async cellAt(address: Address, row: number, column: number): Promise<Address> {
+    const [[bus, path]] = (await this.call(address, TABLE, "GetAccessibleAt", "ii", [
+      row,
+      column,
+    ])) as [[string, string]];
+    return { bus, path };
+  }
+
+  /** The row and column of a table's cell. */
+  async cellPosition(table: Address, cell: Address): Promise<{ row: number; column: number }> {
+    const [index] = (await this.call(cell, ACCESSIBLE, "GetIndexInParent")) as [number];
+    const [[row], [column]] = (await Promise.all([
+      this.call(table, TABLE, "GetRowAtIndex", "i", [index]),
+      this.call(table, TABLE, "GetColumnAtIndex", "i", [index]),
+    ])) as [[number], [number]];
+    return { row, column };
+  }
+
+  /** The child of an object at a point on the screen. */
+  async childAtPoint(address: Address, x: number, y: number): Promise<Address | undefined> {
+    const [[bus, path]] = (await this.call(
+      address,
+      "org.a11y.atspi.Component",
+      "GetAccessibleAtPoint",
+      "iiu",
+      [Math.round(x), Math.round(y), 0],
+    )) as [[string, string]];
+    return path === "/org/a11y/atspi/null" ? undefined : { bus, path };
+  }
+
   /** Selects the `index`th child of a list, tab list or combo box. */
   async selectChild(address: Address, index: number): Promise<boolean> {
     const [done] = (await this.call(address, "org.a11y.atspi.Selection", "SelectChild", "i", [
@@ -309,14 +450,10 @@ export class Atspi {
   }
 
   /** Where an object is on the screen: x, y, width, height. */
-  async extents(address: Address): Promise<[number, number, number, number]> {
-    const [box] = (await this.call(
-      address,
-      "org.a11y.atspi.Component",
-      "GetExtents",
-      "u",
-      [0],
-    )) as [[number, number, number, number]];
+  async extents(address: Address, coords: 0 | 1 = 0): Promise<[number, number, number, number]> {
+    const [box] = (await this.call(address, "org.a11y.atspi.Component", "GetExtents", "u", [
+      coords,
+    ])) as [[number, number, number, number]];
     return box;
   }
 

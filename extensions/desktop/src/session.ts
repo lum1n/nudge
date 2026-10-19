@@ -1,6 +1,6 @@
 // A desktop of its own: a virtual display, a session bus and an accessibility bus, with the apps
 // the settings allow, read and driven through AT-SPI. Nothing reaches the person's real session.
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import {
   appendFileSync,
   existsSync,
@@ -29,8 +29,13 @@ export interface DesktopOptions {
 export class ActionError extends Error {}
 
 const WINDOWS = new Set(["frame", "window", "dialog", "alert", "file chooser"]);
+/** Objects shown outside any window the apps list: Qt's popup menus. */
+const POPUPS = new Set(["menu", "popup menu", "window"]);
 /** Most children read per node, and most nodes per observation. */
 const CHILD_LIMIT = 300;
+/** Most rows and columns of a spreadsheet read, from its top left corner on the screen. */
+const GRID_ROWS = 60;
+const GRID_COLUMNS = 26;
 const NODE_LIMIT = 5_000;
 /** Actions tried first when clicking, in order; else the first one the object has. */
 const CLICKS = ["click", "press", "activate", "toggle", "jump", "open"];
@@ -70,7 +75,7 @@ export function sweepDesktops(dir = tmpdir()): number {
         } catch {}
       }
     }
-    rmSync(runtimeDir, { recursive: true, force: true });
+    removeRuntimeDir(runtimeDir);
     swept++;
   }
   return swept;
@@ -87,6 +92,13 @@ export class DesktopSession {
   private readonly launched = new Map<number, { name: string; child: ChildProcess }>();
   /** The open modal dialogs, as of the last read. */
   private modals = new Set<string>();
+  /**
+   * Objects that said they were shown, by address: Qt leaves its popup menus out of the app's
+   * windows, and they are found this way.
+   */
+  private readonly shown = new Map<string, Address>();
+  /** The objects the last read reached. */
+  private seen = new Set<string>();
   options: DesktopOptions;
   readonly display: string;
   readonly atspi: Atspi;
@@ -132,10 +144,24 @@ export class DesktopSession {
         XDG_CACHE_HOME: join(options.homeDir, ".cache"),
       };
       // The person's own session must not leak in: apps go to this display and these buses only.
-      delete base.WAYLAND_DISPLAY;
-      delete base.DBUS_SESSION_BUS_ADDRESS;
-      delete base.NO_AT_BRIDGE;
-      delete base.AT_SPI_BUS_ADDRESS;
+      for (const name of [
+        "WAYLAND_DISPLAY",
+        "DBUS_SESSION_BUS_ADDRESS",
+        "NO_AT_BRIDGE",
+        "AT_SPI_BUS_ADDRESS",
+        "XAUTHORITY",
+        // The person's session manager and desktop: apps would register with the one and pick
+        // their toolkit by the other.
+        "SESSION_MANAGER",
+        "XDG_CURRENT_DESKTOP",
+        "XDG_SESSION_DESKTOP",
+        "XDG_SESSION_TYPE",
+        "DESKTOP_SESSION",
+        "KDE_FULL_SESSION",
+        "KDE_SESSION_VERSION",
+        "GNOME_DESKTOP_SESSION_ID",
+      ])
+        delete base[name];
       const bus = await startSessionBus(base, runtimeDir);
       processes.push(bus.process);
       record(runtimeDir, bus.process);
@@ -149,9 +175,18 @@ export class DesktopSession {
         QT_LINUX_ACCESSIBILITY_ALWAYS_ON: "1",
         ACCESSIBILITY_ENABLED: "1",
         GTK_A11Y: "atspi",
+        // Dialogs from the apps themselves, not the host's portals: those open on the host's
+        // terms, and the document portal mounts a file system of its own.
+        GDK_DEBUG: "no-portals",
+        GTK_USE_PORTAL: "0",
+        QT_NO_XDG_DESKTOP_PORTAL: "1",
       };
       const atspi = await Atspi.connect(bus.address);
-      return new DesktopSession(options, xvfb.display, env, atspi, runtimeDir, processes);
+      const session = new DesktopSession(options, xvfb.display, env, atspi, runtimeDir, processes);
+      await atspi.onEvents(["object:state-changed:showing"], (event, address, detail) => {
+        if (event === "object:state-changed:showing" && detail === 1) session.noteShown(address);
+      });
+      return session;
     } catch (error) {
       for (const child of processes) kill(child);
       rmSync(runtimeDir, { recursive: true, force: true });
@@ -161,7 +196,11 @@ export class DesktopSession {
 
   async close(): Promise<void> {
     this.atspi.close();
+    const children = [...[...this.launched.values()].map((l) => l.child), ...this.processes];
     this.kill();
+    // Services the bus started can still be writing into the runtime dir as they go.
+    await Promise.race([Promise.all(children.map(exited)), sleep(2_000)]);
+    removeRuntimeDir(this.runtimeDir);
   }
 
   /** Stops the apps, the buses and the display at once, for a process on its way out. */
@@ -170,7 +209,7 @@ export class DesktopSession {
     this.launched.clear();
     for (const child of this.processes.reverse()) kill(child);
     this.processes.length = 0;
-    rmSync(this.runtimeDir, { recursive: true, force: true });
+    removeRuntimeDir(this.runtimeDir);
   }
 
   /** Starts an app from the settings and waits for its first window. */
@@ -200,12 +239,12 @@ export class DesktopSession {
     child.once("exit", () => {
       if (child.pid !== undefined) this.launched.delete(child.pid);
     });
-    const before = (await this.read()).length;
+    const before = await this.windowCount();
     for (let i = 0; i < 100; i++) {
       await Promise.race([sleep(150), failed]);
       if (child.exitCode !== null && !this.launched.size)
         throw new ActionError(`${name} exited at once (code ${child.exitCode}).`);
-      if ((await this.read()).length > before) return `Started ${name}.`;
+      if ((await this.windowCount()) > before) return `Started ${name}.`;
     }
     return `Started ${name}, but no window of it has appeared yet.`;
   }
@@ -255,8 +294,12 @@ export class DesktopSession {
   async click(ref: string, options: { double?: boolean } = {}): Promise<string> {
     const { address, info } = await this.resolve(ref);
     const label = describe(info, ref);
+    // A menu bar's menus open by their own action: LibreOffice's Qt menu bar says they are a
+    // menu bar's height lower than they are. Opening a menu can't block in the app's handler.
+    if (!options.double && (await this.inMenuBar(address)) && (await this.doClickAction(address)))
+      return `Clicked ${label}.`;
     const box = info.interfaces.has("org.a11y.atspi.Component")
-      ? await this.atspi.extents(address).catch(() => undefined)
+      ? await this.screenBox(address).catch(() => undefined)
       : undefined;
     if (box && this.onScreen(box)) {
       await this.checkNotBlocked(address, label);
@@ -264,23 +307,11 @@ export class DesktopSession {
       const [cx, cy] = [x + width / 2, y + height / 2];
       await this.raiseIfCovered(this.refFor(address), cx, cy);
       if (options.double) await this.atspi.mouse(cx, cy, "b1d");
-      else {
-        // Moved there first, then pressed and released apart: GTK menus ignore an instant click.
-        await this.atspi.mouse(cx, cy, "abs");
-        await sleep(30);
-        await this.atspi.mouse(cx, cy, "b1p");
-        await sleep(50);
-        await this.atspi.mouse(cx, cy, "b1r");
-      }
+      else await this.pointerClick(cx, cy);
       return `${options.double ? "Double-clicked" : "Clicked"} ${label}.`;
     }
-    if (info.interfaces.has("org.a11y.atspi.Action")) {
-      const actions = await this.atspi.actions(address);
-      const index =
-        CLICKS.map((name) => actions.indexOf(name)).find((i) => i >= 0) ??
-        (actions.length ? 0 : -1);
-      if (index >= 0 && (await this.atspi.doAction(address, index))) return `Clicked ${label}.`;
-    }
+    if (info.interfaces.has("org.a11y.atspi.Action") && (await this.doClickAction(address)))
+      return `Clicked ${label}.`;
     throw new ActionError(`${label} can't be clicked: it is not on the screen and has no action.`);
   }
 
@@ -294,11 +325,11 @@ export class DesktopSession {
     } else {
       if (!info.interfaces.has("org.a11y.atspi.Component"))
         throw new ActionError(`${label} is not a text field.`);
-      await this.focus(address);
+      await this.focusField(address, label);
       await this.atspi.typeString(text);
     }
     if (options.submit) {
-      await this.focus(address);
+      await this.focusField(address, label);
       await this.atspi.key("Enter");
       return `Typed into ${label} and pressed Enter.`;
     }
@@ -346,6 +377,25 @@ export class DesktopSession {
     }
   }
 
+  /**
+   * How many windows are on the screen, without reading into them: LibreOffice aborts when its
+   * window is read while it is still being built.
+   */
+  private async windowCount(): Promise<number> {
+    const atspi = this.atspi;
+    const root = await atspi.info(atspi.root);
+    let count = 0;
+    for (const app of await atspi.children(atspi.root, root.childCount, CHILD_LIMIT)) {
+      const info = await atspi.info(app).catch(() => undefined);
+      if (!info) continue;
+      for (const top of await atspi.children(app, info.childCount, CHILD_LIMIT).catch(() => [])) {
+        const window = await atspi.info(top).catch(() => undefined);
+        if (window && WINDOWS.has(window.role) && window.states.has("showing")) count++;
+      }
+    }
+    return count;
+  }
+
   /** The apps' visible windows, read from the accessibility bus. */
   async read(): Promise<DesktopWindow[]> {
     const atspi = this.atspi;
@@ -355,24 +405,45 @@ export class DesktopSession {
     const windows: DesktopWindow[] = [];
     const tops: Address[] = [];
     const modals = new Set<string>();
+    this.seen = new Set();
     for (const appAddress of apps) {
       const app = await atspi.info(appAddress).catch(() => undefined);
       if (!app) continue;
-      for (const address of await atspi.children(appAddress, app.childCount, CHILD_LIMIT)) {
+      // An app can leave the bus between the listing and its windows, such as a launcher.
+      const appWindows = await atspi
+        .children(appAddress, app.childCount, CHILD_LIMIT)
+        .catch(() => [] as Address[]);
+      for (const address of appWindows) {
         const info = await atspi.info(address).catch(() => undefined);
         if (!info || !WINDOWS.has(info.role) || !info.states.has("showing")) continue;
-        const node = await this.readNode(info, () => budget-- > 0, address);
+        const node = await this.readNode(info, () => budget-- > 0, address).catch(() => undefined);
+        if (!node) continue;
         windows.push({ app: app.name, node });
         tops.push(address);
         if (info.states.has("modal")) modals.add(`${address.bus}${address.path}`);
       }
+    }
+    for await (const { info, app } of this.popups()) {
+      const node = await this.readNode(info, () => budget-- > 0, info.address).catch(
+        () => undefined,
+      );
+      if (!node) continue;
+      windows.push({ app, node });
+      tops.push(info.address);
     }
     this.modals = modals;
     this.windows = tops;
     return windows;
   }
 
-  private async readNode(info: Info, more: () => boolean, window: Address): Promise<DesktopNode> {
+  private async readNode(
+    info: Info,
+    more: () => boolean,
+    window: Address,
+    /** A menu bar's menus: their items are read when they open, as popups or windows. */
+    shallow = false,
+  ): Promise<DesktopNode> {
+    this.seen.add(`${info.address.bus}${info.address.path}`);
     const node: DesktopNode = {
       role: info.role,
       name: info.name,
@@ -388,6 +459,10 @@ export class DesktopSession {
     if (info.columns) node.columns = info.columns;
     this.labels.set(node.ref!, `${roleOf(node)}${node.name ? ` "${node.name}"` : ""}`);
     this.windowOf.set(node.ref!, window);
+    if (shallow) return node;
+    // A spreadsheet has more cells than can be read: the ones on the screen with something in them.
+    if (info.columns && info.childCount > CHILD_LIMIT && info.states.has("manages-descendants"))
+      return this.readGrid(info, node, more, window);
     const limit = Math.min(CHILD_LIMIT, info.childCount);
     if (limit < info.childCount) node.unread = info.childCount - limit;
     const addresses = info.childCount
@@ -403,9 +478,113 @@ export class DesktopSession {
         node.unread = (node.unread ?? 0) + 1;
         continue;
       }
-      node.children.push(await this.readNode(child, more, window));
+      // Qt says a closed menu's items are showing; an open one is selected (GTK) or expanded.
+      const closed =
+        info.role === "menu bar" && !child.states.has("selected") && !child.states.has("expanded");
+      node.children.push(await this.readNode(child, more, window, closed));
     }
     return node;
+  }
+
+  /**
+   * The cells of a big table that are on the screen and not empty, from the one at its top left
+   * corner, as rows of cells: a spreadsheet has billions, most of them empty and out of view.
+   */
+  private async readGrid(
+    info: Info,
+    node: DesktopNode,
+    more: () => boolean,
+    window: Address,
+  ): Promise<DesktopNode> {
+    const atspi = this.atspi;
+    const size = await atspi.tableSize(info.address);
+    const [x, y] = await atspi.extents(info.address);
+    const corner = await atspi.childAtPoint(info.address, x + 2, y + 2).catch(() => undefined);
+    const start = corner
+      ? await atspi.cellPosition(info.address, corner).catch(() => ({ row: 0, column: 0 }))
+      : { row: 0, column: 0 };
+    delete node.columns;
+    let empty = 0;
+    for (let row = start.row; row < Math.min(size.rows, start.row + GRID_ROWS); row++) {
+      const cells = await Promise.all(
+        Array.from({ length: Math.min(GRID_COLUMNS, size.columns - start.column) }, (_, i) =>
+          atspi
+            .cellAt(info.address, row, start.column + i)
+            .then((cell) => atspi.info(cell))
+            .catch(() => undefined),
+        ),
+      );
+      const shown = cells.filter((cell) => cell?.states.has("showing"));
+      // Past the bottom of the view.
+      if (!shown.length) break;
+      for (const cell of shown) {
+        if (!cell!.text?.trim()) {
+          empty++;
+          continue;
+        }
+        if (!more()) break;
+        node.children.push(await this.readNode(cell!, more, window));
+      }
+    }
+    if (!node.children.length && empty) node.text = `${empty} empty cells on the screen`;
+    return node;
+  }
+
+  /** Does an element's own click, press or first action, if it has one. */
+  private async doClickAction(address: Address): Promise<boolean> {
+    const actions = await this.atspi.actions(address).catch(() => [] as string[]);
+    const index =
+      CLICKS.map((name) => actions.indexOf(name)).find((i) => i >= 0) ?? (actions.length ? 0 : -1);
+    return index >= 0 && this.atspi.doAction(address, index).catch(() => false);
+  }
+
+  /** Whether an element is a menu of a menu bar. */
+  private async inMenuBar(address: Address): Promise<boolean> {
+    const parent = await this.atspi.parent(address).catch(() => undefined);
+    if (!parent) return false;
+    return (await this.atspi.info(parent).catch(() => undefined))?.role === "menu bar";
+  }
+
+  /** Notes an object that was shown, for `popups`. */
+  noteShown(address: Address): void {
+    const key = `${address.bus}${address.path}`;
+    this.shown.delete(key);
+    this.shown.set(key, address);
+    // Most are buttons and labels coming into view; the oldest go first.
+    if (this.shown.size > 500) this.shown.delete(this.shown.keys().next().value!);
+  }
+
+  /**
+   * Menus on the screen that the read of the apps' windows didn't reach, with their app's name;
+   * one at a time, as a submenu is reached through the menu before it.
+   */
+  private async *popups(): AsyncGenerator<{ info: Info; app: string }> {
+    for (const [key, address] of this.shown) {
+      if (this.seen.has(key)) continue;
+      const info = await this.atspi.info(address).catch(() => undefined);
+      // Shown again later, it says so again.
+      if (!info || !POPUPS.has(info.role) || !info.states.has("showing")) {
+        this.shown.delete(key);
+        continue;
+      }
+      yield { info, app: await this.atspi.appName(address).catch(() => "") };
+    }
+  }
+
+  /**
+   * Where an element is on the screen. GTK 4 doesn't know where its windows are and says 0,0 for
+   * everything, but knows where an element is in its window: that, from the window's corner. Its
+   * window coordinates start outside the window, at the shadow, so the window's own are taken off.
+   */
+  private async screenBox(address: Address): Promise<[number, number, number, number]> {
+    const box = await this.atspi.extents(address);
+    if (box[0] !== 0 || box[1] !== 0) return box;
+    const [x, y] = await this.atspi.extents(address, 1).catch(() => box);
+    const window = this.windowOf.get(this.refFor(address));
+    if ((x === 0 && y === 0) || !window) return box;
+    const [wx, wy] = await this.atspi.extents(window).catch(() => [0, 0]);
+    const [ox, oy] = await this.atspi.extents(window, 1).catch(() => [0, 0]);
+    return [wx! + x - ox!, wy! + y - oy!, box[2], box[3]];
   }
 
   private onScreen([x, y, width, height]: readonly number[]): boolean {
@@ -488,9 +667,33 @@ export class DesktopSession {
     return { address, info };
   }
 
+  /**
+   * Gives a text field the keyboard focus with a click, as a person would: Qt doesn't give a field
+   * the keys when it is only asked to take the focus.
+   */
+  private async focusField(address: Address, label: string): Promise<void> {
+    const box = await this.screenBox(address).catch(() => undefined);
+    if (!box || !this.onScreen(box)) return this.focus(address);
+    await this.checkNotBlocked(address, label);
+    const [x, y, width, height] = box;
+    const [cx, cy] = [x + width / 2, y + height / 2];
+    await this.raiseIfCovered(this.refFor(address), cx, cy);
+    await this.pointerClick(cx, cy);
+    await this.atspi.grabFocus(address).catch(() => false);
+  }
+
+  /** Moves the pointer to a point, then presses and releases apart: GTK menus ignore an instant click. */
+  private async pointerClick(x: number, y: number): Promise<void> {
+    await this.atspi.mouse(x, y, "abs");
+    await sleep(30);
+    await this.atspi.mouse(x, y, "b1p");
+    await sleep(50);
+    await this.atspi.mouse(x, y, "b1r");
+  }
+
   /** Gives an element the keyboard focus, and puts the pointer over it, which X needs without a window manager. */
   private async focus(address: Address): Promise<void> {
-    const [x, y, width, height] = await this.atspi.extents(address).catch(() => [0, 0, 0, 0]);
+    const [x, y, width, height] = await this.screenBox(address).catch(() => [0, 0, 0, 0]);
     if (width > 0 && height > 0) await this.atspi.mouse(x + width / 2, y + height / 2, "abs");
     await this.atspi.grabFocus(address).catch(() => false);
   }
@@ -531,6 +734,39 @@ function onPath(program: string): boolean {
     .some((dir) => dir !== "" && existsSync(join(dir, program)));
 }
 
+function exited(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
+  return new Promise((resolve) => child.once("exit", () => resolve()));
+}
+
+/**
+ * Removes a desktop's runtime dir. The document portal, which the bus starts for apps, mounts a
+ * FUSE file system in it (`doc`) that can't be removed, nor even read once the portal is gone,
+ * until it is unmounted. Whatever can't go stays for `sweepDesktops`.
+ */
+function removeRuntimeDir(runtimeDir: string): void {
+  const mounts = readOr("/proc/self/mounts")
+    .split("\n")
+    // Mount points escape spaces as \040; runtime dirs have none.
+    .map((line) => line.split(" ")[1] ?? "")
+    .filter((point) => point.startsWith(`${runtimeDir}/`));
+  for (const point of mounts) {
+    for (const program of ["fusermount3", "fusermount"]) {
+      if (spawnSync(program, ["-u", "-z", point], { stdio: "ignore" }).status === 0) break;
+    }
+  }
+  try {
+    rmSync(runtimeDir, { recursive: true, force: true });
+  } catch {}
+}
+
+/** Stops a child when this process exits, unless it is gone by then. */
+function killOnExit(child: ChildProcess): void {
+  const stop = () => kill(child);
+  process.once("exit", stop);
+  child.once("exit", () => process.off("exit", stop));
+}
+
 function kill(child: ChildProcess): void {
   if (child.exitCode !== null || child.pid === undefined) return;
   try {
@@ -561,7 +797,7 @@ async function startXvfb(size: {
       await sleep(100);
     }
     if (existsSync(`/tmp/.X11-unix/X${n}`)) {
-      process.once("exit", () => kill(child));
+      killOnExit(child);
       return { display, process: child };
     }
     kill(child);
@@ -582,9 +818,10 @@ async function startSessionBus(
       "--print-address=1",
       `--address=unix:path=${join(runtimeDir, "bus")}`,
     ],
-    { env, stdio: ["ignore", "pipe", "ignore"], detached: true },
+    // Services it starts begin in its working dir: the desktop's home, not the server's.
+    { env, cwd: env.HOME, stdio: ["ignore", "pipe", "ignore"], detached: true },
   );
-  process.once("exit", () => kill(child));
+  killOnExit(child);
   const address = await new Promise<string>((resolve, reject) => {
     let out = "";
     const timer = setTimeout(() => reject(new Error("The desktop's D-Bus did not start.")), 5_000);

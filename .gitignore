@@ -6,6 +6,7 @@ data/
 *.sqlite
 *.sqlite-*
 extensions/browser/.eval/
+extensions/desktop/.eval/
 # Local config: holds passwords and keys. nudge.example.json is the committed example.
 /nudge.json
 *.log
