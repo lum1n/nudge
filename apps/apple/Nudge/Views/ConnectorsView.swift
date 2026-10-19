@@ -2,8 +2,8 @@ import Nudge
 import SwiftUI
 
 /// The APIs the room's assistant can call. People ask for one in the chat; here they set what
-/// only people set: API keys (the assistant never sees them), the local network, and the calls that
-/// only read.
+/// only people set: what it's for and whether it comes first, API keys (the assistant never sees
+/// them), the local network, and the calls that only read.
 struct ConnectorsView: View {
     let client: NudgeClient
     let roomId: String
@@ -56,7 +56,7 @@ struct ConnectorsView: View {
                         Text("No connectors yet.").foregroundStyle(.secondary)
                     }
                 } footer: {
-                    Text("APIs this room's assistant can call. Ask it in the chat to add one. API keys go here only: the assistant never sees them.")
+                    Text("APIs this room's assistant can call. Ask it in the chat to add one, and say what for. Turn on Always use first to have it try one before anything else for those tasks. API keys go here only: the assistant never sees them.")
                 }
                 ForEach(all) { connector in
                     ConnectorSection(connector: connector, panel: connectors, admin: state?.admin == true) {
@@ -78,11 +78,14 @@ private struct ConnectorSection: View {
     let remove: () -> Void
     @State private var key = ""
     @State private var readPaths = ""
+    @State private var useFor = ""
 
     var body: some View {
         Section {
             VStack(alignment: .leading, spacing: 4) {
-                Text(connector.useFor)
+                if connector.shared {
+                    Text(connector.alwaysFirst ? "Used first for: \(connector.useFor)" : connector.useFor)
+                }
                 Text("\(connector.id) · \(connector.baseUrl)").font(.caption).foregroundStyle(.secondary)
                 if !connector.notes.isEmpty {
                     Text("Learned: \(connector.notes)").font(.caption).foregroundStyle(.secondary)
@@ -91,6 +94,19 @@ private struct ConnectorSection: View {
             if connector.shared {
                 LabeledContent("Shared with every room", value: "")
             } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Use it for").font(.caption).foregroundStyle(.secondary)
+                    TextField("Bus and train departures", text: $useFor, axis: .vertical)
+                        .lineLimit(1...4)
+                        .onSubmit(saveUseFor)
+                    Button("Save", action: saveUseFor)
+                        .buttonStyle(.glass)
+                        .disabled(trimmedUseFor.isEmpty || trimmedUseFor == connector.useFor)
+                }
+                Toggle(isOn: Binding(get: { connector.alwaysFirst }, set: { panel.setAlwaysFirst($0, for: connector) })) {
+                    Text("Always use first")
+                    Text("Tried before browsing or answering from memory, for what it's for")
+                }
                 if let auth = connector.auth {
                     LabeledContent("API key (\(auth.placement) \(auth.name))", value: connector.hasKey ? "Set" : "Not set")
                     // Typed without being shown, and cleared once sent: the key never comes back.
@@ -132,8 +148,19 @@ private struct ConnectorSection: View {
         } header: {
             Text(connector.name)
         }
-        .onAppear { readPaths = connector.readPaths.joined(separator: "\n") }
+        .onAppear {
+            readPaths = connector.readPaths.joined(separator: "\n")
+            useFor = connector.useFor
+        }
         .onChange(of: connector.readPaths) { readPaths = connector.readPaths.joined(separator: "\n") }
+        .onChange(of: connector.useFor) { useFor = connector.useFor }
+    }
+
+    private var trimmedUseFor: String { useFor.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    private func saveUseFor() {
+        guard !trimmedUseFor.isEmpty, trimmedUseFor != connector.useFor else { return }
+        panel.setUseFor(trimmedUseFor, for: connector)
     }
 
     private func saveKey() {

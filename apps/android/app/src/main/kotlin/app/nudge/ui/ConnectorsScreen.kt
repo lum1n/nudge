@@ -58,8 +58,8 @@ import nudge.ffi.PanelStatus
 
 /**
  * The APIs the room's assistant can call. People ask for one in the chat; here they set what
- * only people set: API keys (the assistant never sees them), the local network, and the calls that
- * only read.
+ * only people set: what it's for and whether it comes first, API keys (the assistant never sees
+ * them), the local network, and the calls that only read.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -102,8 +102,9 @@ fun ConnectorsScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
                 ) {
                     item {
                         Text(
-                            "APIs this room's assistant can call. Ask it in the chat to add one. API keys go here only: " +
-                                "the assistant never sees them.",
+                            "APIs this room's assistant can call. Ask it in the chat to add one, and say what for. " +
+                                "Turn on Always use first to have it try one before anything else for those tasks. " +
+                                "API keys go here only: the assistant never sees them.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -143,6 +144,7 @@ fun ConnectorsScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
 private fun ConnectorCard(connector: Connector, panel: ObservedConnectors, admin: Boolean, remove: () -> Unit) {
     var key by remember(connector.id) { mutableStateOf("") }
     var readPaths by remember(connector.id, connector.readPaths) { mutableStateOf(connector.readPaths.joinToString("\n")) }
+    var useFor by remember(connector.id, connector.useFor) { mutableStateOf(connector.useFor) }
     var menu by remember { mutableStateOf(false) }
     Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -181,7 +183,7 @@ private fun ConnectorCard(connector: Connector, panel: ObservedConnectors, admin
                     }
                 }
             }
-            Text(connector.useFor)
+            if (connector.shared) Text(if (connector.alwaysFirst) "Used first for: ${connector.useFor}" else connector.useFor)
             if (connector.notes.isNotBlank()) {
                 Text(
                     "Learned: ${connector.notes}",
@@ -190,6 +192,33 @@ private fun ConnectorCard(connector: Connector, panel: ObservedConnectors, admin
                 )
             }
             if (connector.shared) return@Column
+
+            OutlinedTextField(
+                value = useFor,
+                onValueChange = { useFor = it },
+                label = { Text("Use it for") },
+                shape = MaterialTheme.shapes.large,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            FilledTonalButton(
+                onClick = { panel.setUseFor(connector, useFor.trim()) },
+                enabled = useFor.isNotBlank() && useFor.trim() != connector.useFor,
+                shapes = ButtonDefaults.shapes(),
+            ) { Text("Save") }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Always use first")
+                    Text(
+                        "Tried before browsing or answering from memory, for what it's for",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = connector.alwaysFirst,
+                    onCheckedChange = { panel.setAlwaysFirst(connector, it) },
+                )
+            }
 
             connector.auth?.let { auth ->
                 Text(

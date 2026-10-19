@@ -6,6 +6,7 @@ export type PanelConnector = {
   name: string;
   baseUrl: string;
   useFor: string;
+  alwaysFirst?: boolean;
   docsUrl?: string;
   notes: string;
   auth?: { in: "header" | "query"; name: string; prefix?: string };
@@ -22,6 +23,8 @@ export type ConnectorsInput =
   | { type: "clearKey"; connector: string }
   | { type: "setPrivateNetwork"; connector: string; allow: boolean }
   | { type: "setReadPaths"; connector: string; readPaths: string[] }
+  | { type: "setUseFor"; connector: string; useFor: string }
+  | { type: "setAlwaysFirst"; connector: string; alwaysFirst: boolean }
   | { type: "remove"; connector: string };
 
 type ConnectorsFrame = { type: "connectors"; connectors: PanelConnector[] };

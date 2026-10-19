@@ -33,8 +33,9 @@ function Connectors() {
         </Link>
       </div>
       <p className="text-sm text-stone-600">
-        APIs this room's assistant can call. Ask it in the chat to add one. API keys go here only:
-        the assistant never sees them.
+        APIs this room's assistant can call. Ask it in the chat to add one, and say what for. Tick
+        "Always use it first" to have it try one before anything else for those tasks. API keys go
+        here only: the assistant never sees them.
       </p>
       {state.status === "closed" ? (
         <p className="text-red-700">
@@ -75,12 +76,19 @@ function ConnectorCard({
   const [key, setKey] = useState("");
   const [readPaths, setReadPaths] = useState(connector.readPaths.join("\n"));
   useEffect(() => setReadPaths(connector.readPaths.join("\n")), [connector.readPaths]);
+  const [useFor, setUseFor] = useState(connector.useFor);
+  useEffect(() => setUseFor(connector.useFor), [connector.useFor]);
 
   const saveKey = (event: FormEvent) => {
     event.preventDefault();
     if (key.trim() === "") return;
     socket.send({ type: "setKey", connector: id, value: key });
     setKey("");
+  };
+  const saveUseFor = (event: FormEvent) => {
+    event.preventDefault();
+    if (useFor.trim() === "") return;
+    socket.send({ type: "setUseFor", connector: id, useFor });
   };
   const saveReadPaths = (event: FormEvent) => {
     event.preventDefault();
@@ -111,12 +119,48 @@ function ConnectorCard({
           </button>
         )}
       </div>
-      <p className="text-sm text-stone-700">{connector.useFor}</p>
+      {connector.shared ? (
+        <p className="text-sm text-stone-700">
+          {connector.alwaysFirst ? "Used first for: " : null}
+          {connector.useFor}
+        </p>
+      ) : null}
       {connector.notes ? (
         <p className="text-xs text-stone-500">Learned: {connector.notes}</p>
       ) : null}
       {connector.shared ? null : (
         <>
+          <form onSubmit={saveUseFor} className="flex flex-col gap-1 text-sm">
+            <span className="text-stone-600">Use it for</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                value={useFor}
+                onChange={(event) => setUseFor(event.target.value)}
+                className="min-w-0 flex-1 rounded border border-stone-300 px-2 py-1"
+              />
+              <button
+                type="submit"
+                disabled={useFor.trim() === "" || useFor.trim() === connector.useFor}
+                className="rounded border border-stone-300 px-3 py-1 hover:bg-stone-100 disabled:opacity-50"
+              >
+                Save
+              </button>
+            </div>
+          </form>
+          <label className="flex items-center gap-2 text-sm text-stone-700">
+            <input
+              type="checkbox"
+              checked={connector.alwaysFirst === true}
+              onChange={(event) =>
+                socket.send({
+                  type: "setAlwaysFirst",
+                  connector: id,
+                  alwaysFirst: event.target.checked,
+                })
+              }
+            />
+            Always use it first for this, before browsing or answering from memory
+          </label>
           {connector.auth === undefined ? null : (
             <form onSubmit={saveKey} className="flex flex-wrap items-center gap-2 text-sm">
               <span className="text-stone-600">

@@ -243,6 +243,7 @@ export type Connector = {
   readonly name: string;
   readonly baseUrl: string;
   readonly useFor: string;
+  readonly alwaysFirst?: boolean;
   readonly auth?: { readonly in: string; readonly name: string };
   readonly allowPrivateNetwork: boolean;
   readonly readPaths: readonly string[];
@@ -252,6 +253,7 @@ export type Connector = {
 
 export function describeConnector(connector: Connector): string {
   const notes = [
+    connector.alwaysFirst ? "always first" : undefined,
     connector.shared ? "shared with every room" : undefined,
     connector.auth === undefined ? undefined : connector.hasKey ? "key set" : "no key yet",
     connector.allowPrivateNetwork ? "may reach the local network" : undefined,

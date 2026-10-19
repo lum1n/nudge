@@ -22,6 +22,11 @@ export type Connector = {
   baseUrl: string;
   /** What to use it for; shown to the model and used to prefer it over browsing. */
   useFor: string;
+  /**
+   * People asked for it to be tried first, before anything else, for what `useFor` says. Set by a
+   * person or with their approval, never by the model alone. Missing on connectors from before.
+   */
+  alwaysFirst?: boolean;
   docsUrl?: string;
   /** Sent on every call; never secret (those live in the extension's `secrets` store). */
   headers: Record<string, string>;
@@ -68,6 +73,7 @@ export type ConnectorDraft = {
   readonly name: string;
   readonly baseUrl: string;
   readonly useFor: string;
+  readonly alwaysFirst?: boolean;
   readonly docsUrl?: string;
   readonly headers?: Readonly<Record<string, string>>;
   readonly auth?: ConnectorAuth;
@@ -90,7 +96,7 @@ export async function addConnector(
   return connector;
 }
 
-/** Changes a room's own connector's `useFor`, `notes`, `docsUrl`, `baseUrl` or `readPaths`. */
+/** Changes a room's own connector's `useFor`, `alwaysFirst`, `notes`, `baseUrl` and the like. */
 export async function updateConnector(
   tx: Tx,
   roomId: string,
@@ -99,6 +105,7 @@ export async function updateConnector(
     Pick<
       Connector,
       | "useFor"
+      | "alwaysFirst"
       | "notes"
       | "docsUrl"
       | "baseUrl"
@@ -112,7 +119,9 @@ export async function updateConnector(
   const state = await tx.doc(ConnectorsDoc, roomId, null);
   const connector = state.connectors.find((c: Connector) => c.id === id);
   if (connector === undefined) throw new ConnectorNotFound(`No connector "${id}" in this room`);
-  Object.assign(connector, patch);
+  const useFor = patch.useFor?.trim();
+  if (useFor === "") throw new Error("Say what the connector is for");
+  Object.assign(connector, patch, useFor === undefined ? {} : { useFor });
   return copy(connector);
 }
 
@@ -188,6 +197,7 @@ function makeConnector(id: string, draft: ConnectorDraft, addedBy: string, now: 
     name,
     baseUrl,
     useFor,
+    alwaysFirst: draft.alwaysFirst === true,
     ...(draft.docsUrl === undefined ? {} : { docsUrl: draft.docsUrl }),
     headers: { ...draft.headers },
     ...(draft.auth === undefined ? {} : { auth: draft.auth }),
