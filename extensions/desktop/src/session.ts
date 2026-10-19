@@ -1,11 +1,21 @@
 // A desktop of its own: a virtual display, a session bus and an accessibility bus, with the apps
 // the settings allow, read and driven through AT-SPI. Nothing reaches the person's real session.
 import { type ChildProcess, spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
+import { basename, delimiter, join } from "node:path";
 import { type Address, Atspi, type Info } from "./atspi.ts";
-import { type DesktopNode, type DesktopWindow, renderDesktop } from "./snapshot.ts";
+import { type DesktopNode, type DesktopWindow, renderDesktop, roleOf } from "./snapshot.ts";
 
 export interface DesktopOptions {
   /** The apps the agent may start, by name: the program and its arguments. */
@@ -33,13 +43,51 @@ export function desktopProblem(): string | undefined {
   return undefined;
 }
 
+/** Runtime directories of desktops are named so; `sweepDesktops` finds the ones left behind. */
+const RUNTIME_PREFIX = "nudge-desktop-";
+
+/**
+ * Stops what desktops of processes that are gone left running, such as after a SIGKILL: their
+ * Xvfb, buses and apps run detached, in process groups of their own, recorded in their runtime dir.
+ */
+export function sweepDesktops(dir = tmpdir()): number {
+  let swept = 0;
+  for (const name of readdirSync(dir).filter((n) => n.startsWith(RUNTIME_PREFIX))) {
+    const runtimeDir = join(dir, name);
+    const owner = Number(readOr(join(runtimeDir, "owner")).trim() || NaN);
+    // One without an owner is from before owners were noted, or a moment old: gone after an hour.
+    const stale = Number.isInteger(owner)
+      ? !alive(owner)
+      : Date.now() - (statSync(runtimeDir, { throwIfNoEntry: false })?.mtimeMs ?? Date.now()) >
+        3_600_000;
+    if (!stale) continue;
+    for (const entry of readOr(join(runtimeDir, "groups")).split("\n").filter(Boolean)) {
+      const [pid, program] = entry.split(" ");
+      // A recycled pid belongs to someone else: only a group still led by the same program goes.
+      if (Number(pid) > 1 && program && commandOf(Number(pid)) === program) {
+        try {
+          process.kill(-Number(pid), "SIGTERM");
+        } catch {}
+      }
+    }
+    rmSync(runtimeDir, { recursive: true, force: true });
+    swept++;
+  }
+  return swept;
+}
+
 export class DesktopSession {
   private readonly refs = new Map<string, string>();
   private readonly addresses = new Map<string, Address>();
+  /** What each ref is, as of the last read, like `button "Save"`, for progress lines. */
+  private readonly labels = new Map<string, string>();
+  /** The window each ref is in, and the windows on the screen, as of the last read. */
+  private readonly windowOf = new Map<string, Address>();
+  private windows: Address[] = [];
   private readonly launched = new Map<number, { name: string; child: ChildProcess }>();
   /** The open modal dialogs, as of the last read. */
   private modals = new Set<string>();
-  readonly options: DesktopOptions;
+  options: DesktopOptions;
   readonly display: string;
   readonly atspi: Atspi;
   private readonly env: NodeJS.ProcessEnv;
@@ -65,11 +113,14 @@ export class DesktopSession {
   static async open(options: DesktopOptions): Promise<DesktopSession> {
     const problem = desktopProblem();
     if (problem) throw new Error(problem);
+    sweepDesktops();
     const processes: ChildProcess[] = [];
-    const runtimeDir = mkdtempSync(join(tmpdir(), "nudge-desktop-"));
+    const runtimeDir = mkdtempSync(join(tmpdir(), RUNTIME_PREFIX));
+    writeFileSync(join(runtimeDir, "owner"), `${process.pid}\n`);
     try {
       const xvfb = await startXvfb(options.size ?? { width: 1280, height: 800 });
       processes.push(xvfb.process);
+      record(runtimeDir, xvfb.process);
       mkdirSync(options.homeDir, { recursive: true });
       const base: NodeJS.ProcessEnv = {
         ...process.env,
@@ -87,6 +138,7 @@ export class DesktopSession {
       delete base.AT_SPI_BUS_ADDRESS;
       const bus = await startSessionBus(base, runtimeDir);
       processes.push(bus.process);
+      record(runtimeDir, bus.process);
       const env: NodeJS.ProcessEnv = {
         ...base,
         DBUS_SESSION_BUS_ADDRESS: bus.address,
@@ -108,10 +160,16 @@ export class DesktopSession {
   }
 
   async close(): Promise<void> {
+    this.atspi.close();
+    this.kill();
+  }
+
+  /** Stops the apps, the buses and the display at once, for a process on its way out. */
+  kill(): void {
     for (const { child } of this.launched.values()) kill(child);
     this.launched.clear();
-    this.atspi.close();
     for (const child of this.processes.reverse()) kill(child);
+    this.processes.length = 0;
     rmSync(this.runtimeDir, { recursive: true, force: true });
   }
 
@@ -138,6 +196,7 @@ export class DesktopSession {
     });
     failed.catch(() => {});
     if (child.pid !== undefined) this.launched.set(child.pid, { name, child });
+    record(this.runtimeDir, child);
     child.once("exit", () => {
       if (child.pid !== undefined) this.launched.delete(child.pid);
     });
@@ -167,6 +226,27 @@ export class DesktopSession {
     return shown.join("\n");
   }
 
+  /** What a ref is, as of the last read, like `button "Save" [e12]`; the ref itself if unknown. */
+  describe(ref: string): string {
+    const label = this.labels.get(ref);
+    return label === undefined ? ref : `${label} [${ref}]`;
+  }
+
+  /**
+   * Brings a window to the front and puts the pointer over it, so it gets the keys: there is no
+   * window manager, and X gives the keyboard to the window under the pointer.
+   */
+  async focusWindow(ref: string): Promise<string> {
+    const { address, info } = await this.resolve(ref);
+    const window = this.windowOf.get(this.refFor(address)) ?? address;
+    const itself = this.refFor(window) === this.refFor(address);
+    const top = itself ? info : await this.atspi.info(window);
+    await this.raise(window, itself ? undefined : address);
+    const [x, y, width, height] = await this.atspi.extents(window).catch(() => [0, 0, 0, 0]);
+    if (width > 0 && height > 0) await this.atspi.mouse(x + width / 2, y + height / 2, "abs");
+    return `Brought ${describe(top, this.refFor(window))} to the front.`;
+  }
+
   /**
    * Clicks an element with the pointer, as a person would, when it is on the screen; else with its
    * own click or press action. The pointer comes first because an action runs inside the app's
@@ -182,6 +262,7 @@ export class DesktopSession {
       await this.checkNotBlocked(address, label);
       const [x, y, width, height] = box;
       const [cx, cy] = [x + width / 2, y + height / 2];
+      await this.raiseIfCovered(this.refFor(address), cx, cy);
       if (options.double) await this.atspi.mouse(cx, cy, "b1d");
       else {
         // Moved there first, then pressed and released apart: GTK menus ignore an instant click.
@@ -272,6 +353,7 @@ export class DesktopSession {
     const apps = await atspi.children(atspi.root, root.childCount, CHILD_LIMIT);
     let budget = NODE_LIMIT;
     const windows: DesktopWindow[] = [];
+    const tops: Address[] = [];
     const modals = new Set<string>();
     for (const appAddress of apps) {
       const app = await atspi.info(appAddress).catch(() => undefined);
@@ -279,16 +361,18 @@ export class DesktopSession {
       for (const address of await atspi.children(appAddress, app.childCount, CHILD_LIMIT)) {
         const info = await atspi.info(address).catch(() => undefined);
         if (!info || !WINDOWS.has(info.role) || !info.states.has("showing")) continue;
-        const node = await this.readNode(info, () => budget-- > 0);
+        const node = await this.readNode(info, () => budget-- > 0, address);
         windows.push({ app: app.name, node });
+        tops.push(address);
         if (info.states.has("modal")) modals.add(`${address.bus}${address.path}`);
       }
     }
     this.modals = modals;
+    this.windows = tops;
     return windows;
   }
 
-  private async readNode(info: Info, more: () => boolean): Promise<DesktopNode> {
+  private async readNode(info: Info, more: () => boolean, window: Address): Promise<DesktopNode> {
     const node: DesktopNode = {
       role: info.role,
       name: info.name,
@@ -302,6 +386,8 @@ export class DesktopSession {
     if (info.text !== undefined) node.text = info.text;
     if (info.value !== undefined) node.value = info.value;
     if (info.columns) node.columns = info.columns;
+    this.labels.set(node.ref!, `${roleOf(node)}${node.name ? ` "${node.name}"` : ""}`);
+    this.windowOf.set(node.ref!, window);
     const limit = Math.min(CHILD_LIMIT, info.childCount);
     if (limit < info.childCount) node.unread = info.childCount - limit;
     const addresses = info.childCount
@@ -317,7 +403,7 @@ export class DesktopSession {
         node.unread = (node.unread ?? 0) + 1;
         continue;
       }
-      node.children.push(await this.readNode(child, more));
+      node.children.push(await this.readNode(child, more, window));
     }
     return node;
   }
@@ -326,6 +412,40 @@ export class DesktopSession {
     const size = this.options.size ?? { width: 1280, height: 800 };
     const [cx, cy] = [x! + width! / 2, y! + height! / 2];
     return width! > 0 && height! > 0 && cx >= 0 && cy >= 0 && cx < size.width && cy < size.height;
+  }
+
+  /**
+   * Raises the window an element is in when another window covers the point: windows without a
+   * window manager overlap where they open, and the click would land on the one on top.
+   */
+  private async raiseIfCovered(ref: string, x: number, y: number): Promise<void> {
+    const own = this.windowOf.get(ref);
+    if (!own) return;
+    const key = `${own.bus}${own.path}`;
+    for (const other of this.windows) {
+      if (`${other.bus}${other.path}` === key) continue;
+      const [ox, oy, w, h] = await this.atspi.extents(other).catch(() => [0, 0, 0, 0]);
+      if (x >= ox && y >= oy && x < ox + w && y < oy + h) {
+        await this.raise(own, this.addresses.get(ref));
+        return;
+      }
+    }
+  }
+
+  /**
+   * Raises a window. A window doesn't take the focus itself, but a control in it does, and its
+   * toolkit presents the window then (GTK raises it): `element` if it can, else the first that can.
+   */
+  private async raise(window: Address, element?: Address): Promise<void> {
+    const focus = (address: Address) => this.atspi.grabFocus(address).catch(() => false);
+    if (!(element && (await focus(element)))) {
+      const focusable = await this.findDescendant(
+        window,
+        (info) => info.states.has("focusable") && info.states.has("showing"),
+      ).catch(() => undefined);
+      if (!(focusable && (await focus(focusable.info.address)))) await focus(window);
+    }
+    await sleep(100);
   }
 
   /** Refuses a click behind an open modal dialog, which would land on the dialog or nowhere. */
@@ -402,7 +522,7 @@ export class DesktopSession {
 }
 
 function describe(info: Info, ref: string): string {
-  return `${info.role}${info.name ? ` "${info.name}"` : ""} [${ref}]`;
+  return `${roleOf(info)}${info.name ? ` "${info.name}"` : ""} [${ref}]`;
 }
 
 function onPath(program: string): boolean {
@@ -490,4 +610,34 @@ async function startSessionBus(
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Notes a process group a desktop started, for `sweepDesktops`: its leader's pid and program. */
+function record(runtimeDir: string, child: ChildProcess): void {
+  if (child.pid === undefined) return;
+  const program = commandOf(child.pid);
+  if (program) appendFileSync(join(runtimeDir, "groups"), `${child.pid} ${program}\n`);
+}
+
+/** The program a process runs, by its first argument's base name, if it is there (Linux). */
+function commandOf(pid: number): string | undefined {
+  const argv0 = readOr(`/proc/${pid}/cmdline`).split("\0")[0];
+  return argv0 ? basename(argv0) : undefined;
+}
+
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+function readOr(path: string): string {
+  try {
+    return readFileSync(path, "utf8");
+  } catch {
+    return "";
+  }
 }

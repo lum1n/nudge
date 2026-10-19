@@ -205,6 +205,11 @@ export class Atspi {
     // Fields are often named by a label beside them, linked as LABELLED_BY (2).
     if (!info.name && interfaces.some((i) => /EditableText|Action|Selection/.test(i)))
       info.name = await this.labelOf(address).catch(() => "");
+    // A combo box is named by the option it shows; its label says what it is for.
+    else if (role === "combo box") {
+      const label = await this.labelOf(address).catch(() => "");
+      if (label && label !== info.name) [info.name, info.text] = [label, info.name];
+    }
     if (info.interfaces.has("org.a11y.atspi.Text")) {
       const [text] = (await this.call(
         address,

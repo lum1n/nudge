@@ -42,7 +42,9 @@ describe.runIf(run)("a desktop with a GTK app", () => {
     const text = await desktop.observe();
     expect(text).toMatch(/^- frame "Notes" \(notes\.py\)/);
     expect(text).toMatch(/textbox "Title" \[e\d+\]/);
-    expect(text).toMatch(/combobox "Work" \[e\d+\]/);
+    // A combo box goes by its label, with the option it shows as its text.
+    expect(text).toMatch(/combobox "Category" \[e\d+\]: Work$/m);
+    expect(text).not.toMatch(/text "Category"/);
     expect(text).toMatch(/checkbox "Pinned" \[e\d+\]/);
     expect(text).not.toContain("menuitem"); // a closed menu isn't on the screen
   });
@@ -51,7 +53,7 @@ describe.runIf(run)("a desktop with a GTK app", () => {
     let text = await desktop.observe();
     await desktop.type(refOf(text, /textbox "Title"/), "Trip to Bodø");
     await desktop.type(refOf(text, /textbox "Body"/), "Line one\nLine two");
-    await desktop.select(refOf(text, /combobox "Work"/), "Travel");
+    await desktop.select(refOf(text, /combobox "Category"/), "Travel");
     await desktop.click(refOf(text, /checkbox "Pinned"/));
     await desktop.click(refOf(text, /button "Save"/));
     await desktop.settle();
@@ -60,7 +62,7 @@ describe.runIf(run)("a desktop with a GTK app", () => {
     expect(text.startsWith("OPEN DIALOGS")).toBe(true);
     expect(text).toContain('text "Save "Trip to Bodø"?"');
     expect(text).toMatch(/checkbox "Pinned" \[checked\]/);
-    expect(text).toMatch(/combobox "Travel"/);
+    expect(text).toMatch(/combobox "Category" \[e\d+\]: Travel/);
     // The window behind the dialog takes no clicks.
     await expect(desktop.click(refOf(text, /button "Save" /))).rejects.toThrow(
       /behind an open dialog/,
@@ -105,10 +107,15 @@ describe.runIf(run)("a desktop with a GTK app", () => {
     await desktop.click(refOf(text, /menu "File"/));
     await desktop.settle();
     text = await desktop.observe();
+    expect(text).toMatch(/^A MENU IS OPEN/);
+    expect(desktop.describe(refOf(text, /menuitem "Clear"/))).toMatch(
+      /^menuitem "Clear" \[e\d+\]$/,
+    );
     await desktop.click(refOf(text, /menuitem "Clear"/));
     await desktop.settle();
     text = await desktop.observe();
     expect(text).not.toContain("menuitem");
+    expect(text).not.toContain("A MENU IS OPEN");
     expect(text).toMatch(/textbox "Title" (\[focused\] )?\[e\d+\]$/m);
   }, 30_000);
 
@@ -121,5 +128,36 @@ describe.runIf(run)("a desktop with a GTK app", () => {
     await expect(desktop.select(refOf(text, /combobox/), "Mars")).rejects.toThrow(
       /no option "Mars"/,
     );
+  }, 30_000);
+
+  it("raises the window a click is for, when another one covers it", async () => {
+    // Without a window manager, a second window opens right on top of the first.
+    await desktop.launch("notes");
+    await desktop.settle();
+    const frames = () =>
+      desktop.observe().then((text) =>
+        text
+          .split(/^(?=- frame)/m)
+          .filter((block) => block.startsWith("- frame"))
+          .map((block) => ({ ref: refOf(block, /^- frame/), block }))
+          .sort((a, b) => Number(a.ref.slice(1)) - Number(b.ref.slice(1))),
+      );
+    const pinned = (block: string) => /checkbox "Pinned" \[checked\]/.test(block);
+    const [first, second] = await frames();
+    expect(second).toBeDefined();
+    const before = [pinned(first!.block), pinned(second!.block)];
+
+    await desktop.click(refOf(first!.block, /checkbox "Pinned"/));
+    await desktop.settle();
+    let [a, b] = await frames();
+    expect([pinned(a!.block), pinned(b!.block)]).toEqual([!before[0], before[1]]);
+
+    expect(await desktop.focusWindow(refOf(second!.block, /button "Save"/))).toBe(
+      `Brought frame "Notes" [${second!.ref}] to the front.`,
+    );
+    await desktop.click(refOf(second!.block, /checkbox "Pinned"/));
+    await desktop.settle();
+    [a, b] = await frames();
+    expect([pinned(a!.block), pinned(b!.block)]).toEqual([!before[0], !before[1]]);
   }, 30_000);
 });

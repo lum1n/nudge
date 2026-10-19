@@ -20,6 +20,7 @@ An extendable, multiplayer personal assistant that keeps personal data away from
 - `apps/android`: the Nudge app for Android (Compose, on `clients/android`).
 - `@nudge/ext-hello`: a sample extension (`extensions/hello`).
 - `@nudge/ext-browser`: lets the assistant use the web (`extensions/browser`).
+- `@nudge/ext-desktop`: lets the assistant use desktop apps on Linux (`extensions/desktop`).
 - `@nudge/ext-mcp`: gives the assistant the tools of MCP servers (`extensions/mcp`).
 - `@nudge/ext-codemode`: lets the model run short scripts that call the room's tools (`extensions/codemode`).
 - `@nudge/ext-federation`: lets people from other assistants join, with their home vouching for them (`extensions/federation`).
@@ -243,6 +244,24 @@ An entry's `rooms` lists the kinds of room it is on in by default (`"lobby"`, `"
 - Install its browser once with `pnpm -C extensions/browser exec patchright install chromium`.
 - `pnpm -C extensions/browser eval -- --model anthropic/claude-haiku-5-5,openai/gpt-5-mini` runs a set of everyday tasks against each model, twice each (`--runs 3` for more), through the same redaction as Nudge, after `pnpm build`. It writes each run's result, every request the providers got, and a summary table (answered, expected answer seen, steps, seconds, cost, leaks) to `extensions/browser/.eval/`. Some tasks carry made-up personal details; a leak is one of them reaching a request as it is, and makes the run exit with an error. Keys come only from your environment; without one for a model it stops before opening a browser.
 
+### Use desktop apps
+
+`extensions/desktop` gives the assistant a `use_desktop` tool, for apps with no better way in. The room's model hands it a task, and a desktop agent on its own model works the apps you list on a Linux desktop of the room's own:
+
+```json
+{
+  "from": "./extensions/desktop",
+  "settings": { "apps": { "writer": ["libreoffice", "--writer"], "editor": ["gnome-text-editor"] } }
+}
+```
+
+- Only the apps in `apps` can be started, by name: the program and its arguments. There is no shell.
+- The model never sees the screen. It reads the windows as text from their accessibility tree (AT-SPI), open menus and dialogs first, and acts on element refs, so any tool-calling model can drive it and every window passes through the same redaction as the rest of Nudge. Password fields always read `[hidden]`.
+- `model`, `reasoning`, `maxSteps` and `idleMinutes` work as for the browser; `model` defaults to `anthropic/claude-haiku-5-5`.
+- Each room gets its own virtual display (`Xvfb`), session bus and accessibility bus, so nothing reaches your own desktop. The apps' home, with their settings and files, is `<database>.extensions/desktop/homes/conversation-<id>` and stays between tasks; the desktop and its apps close after `idleMinutes` (default 10), and when Nudge stops. The server needs `Xvfb`, `dbus-daemon` and `at-spi2-core`, and GTK, Qt or Chromium-based apps.
+- It does not send, delete, pay, publish or save over a file on its own. It gets everything ready, stops, and asks the room to approve the exact step, as for the browser; approving it carries on on the same desktop.
+- While `use_desktop` runs, the chat and the terminal show what it is doing (`Clicking "Save"…`).
+
 ### MCP servers
 
 `extensions/mcp` gives the assistant the tools of [MCP](https://modelcontextprotocol.io) servers, started as programs or reached over HTTP:
@@ -452,6 +471,12 @@ The browser extension's tests on fixture pages (consent dialogs, hidden checkbox
 ```bash
 pnpm -C extensions/browser exec patchright install chromium
 NUDGE_BROWSER_TESTS=1 pnpm exec vitest run extensions/browser
+```
+
+The desktop extension's tests on a real GTK app need `Xvfb`, `dbus-daemon`, `at-spi2-core` and python-gobject with GTK 3, so they run only when asked too:
+
+```bash
+NUDGE_DESKTOP_TESTS=1 pnpm exec vitest run extensions/desktop
 ```
 
 The Rust client needs a Rust toolchain (edition 2024). Its tests start a server on a faux model with `node packages/server/scripts/faux-server.ts`, which runs the built packages, so `pnpm build` first:

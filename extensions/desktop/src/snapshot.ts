@@ -110,7 +110,7 @@ const SHOWN_CHILDREN = 60;
 const MAX_TEXT = 4_000;
 
 /** The role shown for a node. */
-export function roleOf(node: DesktopNode): string {
+export function roleOf(node: Pick<DesktopNode, "role" | "states">): string {
   if (node.role === "text") return node.states.has("editable") ? "textbox" : "text";
   return ROLES[node.role] ?? node.role;
 }
@@ -237,11 +237,18 @@ function isDialog(window: DesktopWindow): boolean {
 
 function windowLines(window: DesktopWindow, cap: boolean): string[] {
   const head = { ...window.node, children: [] };
+  const ref = head.ref && !line(head).endsWith(`[${head.ref}]`) ? ` [${head.ref}]` : "";
   const out = [
-    `- ${line(head)} (${window.app})${window.node.states.has("active") ? " [active]" : ""}:`,
+    `- ${line(head)} (${window.app})${window.node.states.has("active") ? " [active]" : ""}${ref}:`,
   ];
   render(window.node.children.flatMap(simplify), 1, out, cap);
   return out;
+}
+
+/** Whether a menu is open: one with items on the screen, which takes the keys and clicks. */
+function menuOpen(node: DesktopNode): boolean {
+  if (node.role === "menu" && node.children.some((c) => /menu item/.test(c.role))) return true;
+  return node.children.some(menuOpen);
 }
 
 /** The windows as text: open dialogs first, then the active window, then the rest; paged to `budget` characters. */
@@ -274,6 +281,11 @@ export function renderDesktop(
       ...dialogLines,
       "",
       "WINDOWS:",
+    );
+  if (windows.some((w) => menuOpen(w.node)))
+    parts.unshift(
+      "A MENU IS OPEN: it takes the keys and clicks until it closes. Pick one of its items, or press Escape to close it.",
+      "",
     );
   parts.push(...pages[page - 1]!);
   if (pages.length > 1)

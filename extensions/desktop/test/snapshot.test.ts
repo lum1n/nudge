@@ -39,7 +39,7 @@ describe("the desktop snapshot", () => {
     });
     expect(renderDesktop([{ app: "notes", node: window }]).text).toBe(
       [
-        '- frame "Notes" (notes) [active]:',
+        '- frame "Notes" (notes) [active] [e9]:',
         `  - textbox "Title" [${text.ref}]: Trip to Bodø`,
         `  - button "Save" [${window.children[0]!.children[1]!.ref}]`,
         '  - text "Nothing saved yet"',
@@ -59,13 +59,13 @@ describe("the desktop snapshot", () => {
     ]).text;
     expect(text.split("\n").slice(0, 6)).toEqual([
       "OPEN DIALOGS (they block their window; handle them first):",
-      '- alert "Question" [modal] (notes):',
+      '- alert "Question" [modal] (notes) [e15]:',
       '  - text "Save "Trip"?"',
       `  - button "Cancel" [${dialog.children[1]!.ref}]`,
       `  - button "Save note" [${dialog.children[2]!.ref}]`,
       "",
     ]);
-    expect(text).toContain('- frame "Notes" (notes):');
+    expect(text).toContain('- frame "Notes" (notes) [e11]:');
   });
 
   it("never shows what a password field holds", () => {
@@ -139,6 +139,27 @@ describe("the desktop snapshot", () => {
     expect(first.pages).toBeGreaterThan(1);
     expect(first.text).toContain("desktop_observe with page 2 reads on");
     expect(first.lines.some((l) => l.includes("Item 49"))).toBe(true);
+  });
+
+  it("says when a menu is open, which takes the keys and clicks", () => {
+    const menu = (open: boolean) =>
+      node("frame", "Notes", {
+        children: [
+          node("menu bar", "", {
+            actionable: true,
+            children: [
+              node("menu", "File", {
+                actionable: true,
+                children: open ? [node("menu item", "Quit", { actionable: true })] : [],
+              }),
+            ],
+          }),
+        ],
+      });
+    expect(renderDesktop([{ app: "notes", node: menu(true) }]).text).toMatch(
+      /^A MENU IS OPEN: .*press Escape to close it\.\n\n- frame "Notes"/,
+    );
+    expect(renderDesktop([{ app: "notes", node: menu(false) }]).text).not.toContain("MENU IS OPEN");
   });
 
   it("says when no window is open", () => {
