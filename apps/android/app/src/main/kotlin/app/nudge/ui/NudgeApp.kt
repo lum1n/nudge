@@ -60,7 +60,7 @@ fun NudgeApp(model: AppModel, askForNotifications: () -> Unit) {
 
 /**
  * What the detail and extra panes show: a room of one of the signed-in assistants, and in the
- * extra pane its lists, its details, its documents, its connectors or its browser.
+ * extra pane its lists, its details, its documents, its connectors, its browser or its desktop.
  */
 private data class Destination(val account: String, val room: String, val extra: Extra? = null) {
     val ref get() = RoomRef(account, room)
@@ -79,7 +79,7 @@ private data class Destination(val account: String, val room: String, val extra:
     }
 }
 
-private enum class Extra { LISTS, INFO, DOCUMENTS, CONNECTORS, BROWSER }
+private enum class Extra { LISTS, INFO, DOCUMENTS, CONNECTORS, BROWSER, DESKTOP }
 
 /**
  * The rooms beside the open room, the Android way: one pane on a phone, list and detail side by
@@ -186,10 +186,12 @@ private fun SignedIn(model: AppModel, session: Session) {
                             documents = { open(Destination.of(room, Extra.DOCUMENTS)) },
                             connectors = { open(Destination.of(room, Extra.CONNECTORS)) },
                             browser = { open(Destination.of(room, Extra.BROWSER)) },
+                            desktop = { open(Destination.of(room, Extra.DESKTOP)) },
                         )
                         Extra.DOCUMENTS -> DocumentsScreen(client, room.room, close)
                         Extra.CONNECTORS -> ConnectorsScreen(client, room.room, close)
                         Extra.BROWSER -> BrowserScreen(client, room.room, close)
+                        Extra.DESKTOP -> DesktopScreen(client, room.room, close)
                     }
                 }
             }
