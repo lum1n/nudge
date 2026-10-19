@@ -6,7 +6,7 @@
 #   wired.sh [<dir>] [<platform>]   (default: the checkout's root, and this machine's platform)
 set -eu
 
-version=0.1.3
+version=0.1.4
 here=$(cd "$(dirname "$0")" && pwd)
 dir=${1:-$here/../../..}
 platform=${2:-}
@@ -19,9 +19,9 @@ if [ -z "$platform" ]; then
   esac
 fi
 case $platform in
-  linux-x64) sha256=a4c8e8a70123954c4dc438b01430f5848d8a45ac5b37218aad35f982781c05e9 ;;
-  linux-arm64) sha256=07cb81072f0e13d50b2de85ceb328a12347706c18be1a02c64926eec685c8c67 ;;
-  darwin-arm64) sha256=40504aa6706c0946be76ef0caeb1199ac2c2f987f09ea1a2b5997433e4cd5644 ;;
+  linux-x64) sha256=0784cdc62d4b809c86dbdd3bb000b437c6cd6f6a0f516a366f9ca383a66a789c ;;
+  linux-arm64) sha256=89dca5844aa5acfb176e625331177789987ab595d4b2e2f178d6a843262855d4 ;;
+  darwin-arm64) sha256=070eecbf9f3a4199c71ad52f18edc4ee73d19d54d76db3c8419ccb235b40489f ;;
   *) echo "Wired has no build for $platform" >&2 && exit 1 ;;
 esac
 
