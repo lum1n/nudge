@@ -10,3 +10,5 @@ extensions/browser/.eval/
 /nudge.json
 *.log
 /.wired-node
+# The server data directory when serving from a checkout: keys, owners, Wired state.
+/server/
