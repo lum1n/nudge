@@ -30,6 +30,9 @@ export function serveNudge(options: ServeOptions): Promise<RunningServer> {
   const hostname = options.hostname ?? "127.0.0.1";
   return new Promise((resolve, reject) => {
     const relay = options.relay;
+    // Sockets handed to the relay: upgraded, so the HTTP server no longer tracks or closes them,
+    // and a peer's relay connection would hold `close` open for minutes.
+    const relaySockets = new Set<{ destroy(): void; once(event: "close", f: () => void): void }>();
     const server = serve(
       {
         fetch: app.fetch,
@@ -48,6 +51,9 @@ export function serveNudge(options: ServeOptions): Promise<RunningServer> {
                 const emit = http.emit.bind(http);
                 http.emit = ((event: string, ...args: unknown[]) => {
                   if (event === "upgrade" && relay.matches(args[0] as IncomingMessage)) {
+                    const socket = args[1] as { destroy(): void; once(event: "close", f: () => void): void };
+                    relaySockets.add(socket);
+                    socket.once("close", () => relaySockets.delete(socket));
                     relay.upgrade(args[0], args[1], args[2]);
                     return true;
                   }
@@ -64,6 +70,7 @@ export function serveNudge(options: ServeOptions): Promise<RunningServer> {
           close: () =>
             new Promise<void>((done) => {
               for (const client of wss.clients) client.terminate();
+              for (const socket of relaySockets) socket.destroy();
               wss.close();
               server.close(() => done());
               (server as { closeAllConnections?: () => void }).closeAllConnections?.();

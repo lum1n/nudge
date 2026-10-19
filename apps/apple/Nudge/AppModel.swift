@@ -255,6 +255,16 @@ final class AppModel {
                 throw ServerProblem.needsWired
             }
             _ = try await servers.client(root).connectWired(other: owner, otherUrl: server)
+            // It joins in the background, for up to two minutes while home reaches its relay.
+            for _ in 0..<75 {
+                let state = try await owner.wired()
+                if state.state == .member { return }
+                if state.state != .starting {
+                    throw NudgeError.Status(status: 502, detail: state.error ?? "The server didn't join home's Wired network.")
+                }
+                try await Task.sleep(for: .seconds(2))
+            }
+            throw NudgeError.Status(status: 504, detail: "The server is still joining home's Wired network. Try again in a minute.")
         default:
             break
         }

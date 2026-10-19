@@ -223,7 +223,8 @@ export class ServerWired {
       await writeFile(this.roleFile, "member\n");
     }
     if (!existsSync(this.roleFile)) return;
-    await this.start(name, apiAddr).catch(() => {});
+    // In the background: a first join can take a while, and serving mustn't wait for it.
+    void this.start(name, apiAddr).catch(() => {});
   }
 
   /** Makes this server the network's root. */
@@ -251,7 +252,9 @@ export class ServerWired {
       await writeFile(this.relayUrlFile, `${relayUrl}\n`);
     }
     await writeFile(this.roleFile, "member\n");
-    await this.start(name, apiAddr).catch(() => {});
+    // Joining can take a minute or two (Wired keeps trying while the root reaches this server's
+    // relay): answer "starting" now; the state says when it is in.
+    void this.start(name, apiAddr).catch(() => {});
     return this.state();
   }
 

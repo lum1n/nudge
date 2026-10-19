@@ -20,6 +20,11 @@ function freePort(): Promise<number> {
   });
 }
 
+/** Waits until `done`, at most 150 s (a first join retries for up to 2 minutes). */
+async function until(done: () => boolean): Promise<void> {
+  for (let i = 0; i < 1500 && !done(); i++) await new Promise((r) => setTimeout(r, 100));
+}
+
 function addr(server: RunningServer): string {
   return new URL(server.url).host;
 }
@@ -60,6 +65,7 @@ describe.skipIf(wired === undefined)("Wired between servers", () => {
     const robinApi = await serveNudge({ assistants: new Map(), port, ...(front ? { relay: front } : {}) });
     cleanup.push(() => robinApi.close(), () => robin.stop());
     await robin.resume("robin", addr(robinApi));
+    await until(() => robin.state().state !== "starting");
     expect(robin.state()).toMatchObject({ state: "member", name: "robin", relay: relayUrl });
 
     // Each reaches the other's API by name.
@@ -90,8 +96,9 @@ describe.skipIf(wired === undefined)("Wired between servers", () => {
     expect(again.relayFront()).toBeDefined();
     await again.resume("robin", addr(robinApi));
     cleanup.push(() => again.stop());
+    await until(() => again.state().state !== "starting");
     expect(again.state().state).toBe("member");
-  }, 60_000);
+  }, 200_000);
 
   it("a running server joins later, and serves its relay without a restart", async () => {
     const dir = await mkdtemp(join(tmpdir(), "nudge-wired-"));
@@ -117,8 +124,9 @@ describe.skipIf(wired === undefined)("Wired between servers", () => {
 
     // As `nudge wired add` at home, then `nudge wired join` on robin.
     const invite = await home.addRelay(relayUrl);
-    const state = await robin.join(invite, "robin", addr(robinApi));
-    expect(state).toMatchObject({ state: "member", relay: relayUrl });
+    expect((await robin.join(invite, "robin", addr(robinApi))).state).toBe("starting");
+    await until(() => robin.state().state !== "starting");
+    expect(robin.state()).toMatchObject({ state: "member", relay: relayUrl });
     expect(front?.matches({ url: "/relay" })).toBe(true);
     const answer = await fetch("http://nudge.robin.wired/v1/nothing", { dispatcher: home.dispatcher() });
     expect(answer.status).toBe(404);
@@ -128,9 +136,10 @@ describe.skipIf(wired === undefined)("Wired between servers", () => {
     await robin.forget();
     expect(robin.state()).toEqual({ state: "off" });
     expect(front?.matches({ url: "/relay" })).toBe(false);
-    const again = await robin.join(await home.addRelay(relayUrl), "robin", addr(robinApi));
-    expect(again, JSON.stringify(again)).toMatchObject({ state: "member" });
-  }, 60_000);
+    await robin.join(await home.addRelay(relayUrl), "robin", addr(robinApi));
+    await until(() => robin.state().state !== "starting");
+    expect(robin.state(), JSON.stringify(robin.state())).toMatchObject({ state: "member" });
+  }, 200_000);
 
   it("only the root adds relays", async () => {
     const dir = await mkdtemp(join(tmpdir(), "nudge-wired-"));
