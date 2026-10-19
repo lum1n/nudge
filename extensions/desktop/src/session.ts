@@ -259,12 +259,25 @@ export class DesktopSession {
   }
 
   async close(): Promise<void> {
+    await this.quitApps();
     this.atspi.close();
     const children = [...[...this.launched.values()].map((l) => l.child), ...this.processes];
     this.kill();
     // Services the bus started can still be writing into the runtime dir as they go.
     await Promise.race([Promise.all(children.map(exited)), sleep(2_000)]);
     removeRuntimeDir(this.runtimeDir);
+  }
+
+  /**
+   * Asks the apps to quit while their display and buses are still there, as at logging out, and
+   * waits a while for them: stopped together with the display, LibreOffice loses its settings and
+   * the next start finds a crash. What still runs after `timeoutMs` is stopped with the rest.
+   */
+  private async quitApps(timeoutMs = 5_000): Promise<void> {
+    const children = [...this.launched.values()].map((l) => l.child);
+    if (!children.length) return;
+    for (const child of children) quit(child);
+    await Promise.race([Promise.all(children.map(exited)), sleep(timeoutMs)]);
   }
 
   /** Stops the apps, the buses and the display at once, for a process on its way out. */
@@ -956,6 +969,34 @@ function kill(child: ChildProcess): void {
   } catch {
     child.kill();
   }
+}
+
+/**
+ * Asks an app to quit: SIGTERM to the processes of its group but the sandbox's. bubblewrap dies of
+ * a SIGTERM and takes the app down at once with it (`--die-with-parent`); it goes when the app does.
+ */
+function quit(child: ChildProcess): void {
+  if (child.exitCode !== null || child.pid === undefined) return;
+  const members = groupMembers(child.pid).filter((pid) => commandOf(pid) !== "bwrap");
+  if (!members.length) return kill(child);
+  for (const pid of members) {
+    try {
+      process.kill(pid, "SIGTERM");
+    } catch {}
+  }
+}
+
+/** The processes in a process group, from /proc (Linux). */
+function groupMembers(group: number): number[] {
+  const pids: number[] = [];
+  for (const name of readdirSync("/proc")) {
+    if (!/^\d+$/.test(name)) continue;
+    // The fields after the program's name, which is in parentheses and may hold anything.
+    const stat = readOr(`/proc/${name}/stat`);
+    const fields = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
+    if (Number(fields[2]) === group) pids.push(Number(name));
+  }
+  return pids;
 }
 
 /**

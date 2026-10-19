@@ -8,6 +8,8 @@ import type { DesktopSession } from "./session.ts";
 export type LiveInput =
   | { type: "click"; x: number; y: number; button?: "left" | "right" | "middle"; double?: boolean }
   | { type: "move"; x: number; y: number }
+  /** Pressed at `from`, moved to `to` and released there, with the left button: selecting, moving. */
+  | { type: "drag"; from: { x: number; y: number }; to: { x: number; y: number } }
   | { type: "wheel"; x: number; y: number; dx: number; dy: number }
   | { type: "key"; key: string }
   | { type: "text"; text: string }
@@ -44,6 +46,8 @@ export type LiveOutput =
 const FRAME_MS = 100;
 /** How often the window list is read again while the screen changes. */
 const WINDOWS_MS = 1_000;
+/** The moves a drag is replayed in, from where it was pressed to where it was released. */
+const DRAG_STEPS = 8;
 
 /**
  * A screen as Xvfb keeps it in its framebuffer file (XWD: a big-endian header, a colour map, then
@@ -270,6 +274,20 @@ export function startLiveView(
       }
       case "move":
         return atspi.mouse(input.x, input.y, "abs");
+      case "drag": {
+        const { from, to } = input;
+        await atspi.mouse(from.x, from.y, "abs");
+        await atspi.mouse(from.x, from.y, "b1p");
+        // In steps: toolkits start a drag once the pointer has moved a few pixels pressed.
+        for (let i = 1; i <= DRAG_STEPS; i++) {
+          await sleep(20);
+          const x = Math.round(from.x + ((to.x - from.x) * i) / DRAG_STEPS);
+          const y = Math.round(from.y + ((to.y - from.y) * i) / DRAG_STEPS);
+          await atspi.mouse(x, y, "abs");
+        }
+        await sleep(30);
+        return atspi.mouse(to.x, to.y, "b1r");
+      }
       case "wheel": {
         await atspi.mouse(input.x, input.y, "abs");
         // Buttons 4 and 5 scroll up and down, 6 and 7 left and right; a notch is about 100.

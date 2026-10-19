@@ -1,13 +1,15 @@
 # A small GTK 3 app for the desktop tests: a field, a text area, a combo box, a checkbox, a list
 # whose rows Delete removes, tabs, a menu, and a modal dialog before saving. It appends what it
-# saved to the file named as its argument, for the tests to check.
+# saved to the file named as its argument, for the tests to check. Asked to quit (SIGTERM), it
+# talks to the display a moment later and notes "quit" there, as an app saving its settings would.
+import signal
 import sys
 
 import gi
 
 gi.require_version("Gdk", "3.0")
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gdk, Gtk  # noqa: E402
+from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
 window = Gtk.Window(title="Notes")
 window.set_default_size(640, 480)
@@ -121,5 +123,20 @@ save.connect("clicked", on_save)
 clear_item.connect("activate", lambda _: (title.set_text(""), body.get_buffer().set_text("")))
 quit_item.connect("activate", lambda _: Gtk.main_quit())
 window.connect("destroy", Gtk.main_quit)
+
+
+def on_quit_later():
+    # Without the display GTK exits here, before noting anything.
+    Gdk.Display.get_default().sync()
+    if len(sys.argv) > 1:
+        with open(sys.argv[1], "a", encoding="utf-8") as out:
+            out.write("quit\n")
+    Gtk.main_quit()
+    return False
+
+
+GLib.unix_signal_add(
+    GLib.PRIORITY_DEFAULT, signal.SIGTERM, lambda: GLib.timeout_add(300, on_quit_later) and False
+)
 window.show_all()
 Gtk.main()

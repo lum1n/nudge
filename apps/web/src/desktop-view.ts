@@ -25,6 +25,7 @@ export type DesktopWindow = { ref: string; title: string; app: string };
 export type DesktopInput =
   | { type: "click"; x: number; y: number; button?: "left" | "right" | "middle"; double?: boolean }
   | { type: "move"; x: number; y: number }
+  | { type: "drag"; from: { x: number; y: number }; to: { x: number; y: number } }
   | { type: "wheel"; x: number; y: number; dx: number; dy: number }
   | { type: "key"; key: string }
   | { type: "text"; text: string }

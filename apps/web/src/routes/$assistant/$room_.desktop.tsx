@@ -80,9 +80,24 @@ function Live({ socket }: { socket: DesktopSocket }) {
       "block w-full rounded border border-stone-300 bg-black focus:outline-2 focus:outline-sky-600";
     element.appendChild(canvas);
     const at = (event: MouseEvent) => toScreen(canvas, event);
+    // A press moved more than a few pixels before its release is a drag, not a click.
+    let pressed: { x: number; y: number } | undefined;
+    let dragged = false;
+    const down = (event: MouseEvent) => {
+      if (event.button === 0) pressed = at(event);
+    };
+    const up = (event: MouseEvent) => {
+      const from = pressed;
+      pressed = undefined;
+      if (event.button !== 0 || from === undefined) return;
+      const to = at(event);
+      dragged = Math.hypot(to.x - from.x, to.y - from.y) > 4;
+      if (dragged) drive({ type: "drag", from, to });
+    };
     const click = (event: MouseEvent) => {
       canvas.focus();
-      drive({ type: "click", ...at(event) });
+      if (dragged) dragged = false;
+      else drive({ type: "click", ...at(event) });
     };
     const double = (event: MouseEvent) => drive({ type: "click", double: true, ...at(event) });
     const menu = (event: MouseEvent) => {
@@ -111,6 +126,8 @@ function Live({ socket }: { socket: DesktopSocket }) {
       const text = event.clipboardData?.getData("text");
       if (text) drive({ type: "text", text });
     };
+    canvas.addEventListener("mousedown", down);
+    canvas.addEventListener("mouseup", up);
     canvas.addEventListener("click", click);
     canvas.addEventListener("dblclick", double);
     canvas.addEventListener("contextmenu", menu);
@@ -119,6 +136,8 @@ function Live({ socket }: { socket: DesktopSocket }) {
     canvas.addEventListener("keydown", key);
     canvas.addEventListener("paste", paste);
     return () => {
+      canvas.removeEventListener("mousedown", down);
+      canvas.removeEventListener("mouseup", up);
       canvas.removeEventListener("click", click);
       canvas.removeEventListener("dblclick", double);
       canvas.removeEventListener("contextmenu", menu);

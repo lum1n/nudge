@@ -98,6 +98,7 @@ describe.runIf(run)("a sandboxed desktop, live", () => {
   let dir: string;
   let home: string;
   let secret: string;
+  let closed = false;
 
   beforeAll(async () => {
     dir = mkdtempSync(join(tmpdir(), "nudge-live-test-"));
@@ -107,7 +108,7 @@ describe.runIf(run)("a sandboxed desktop, live", () => {
     writeFileSync(join(secret, "key.txt"), "not for apps");
     process.env.NUDGE_TEST_SECRET = "hunter2";
     // What the app sees of the machine, written to its home before it starts.
-    const look = `ls "${secret}" > "$HOME/secret.txt" 2>&1; env > "$HOME/env.txt"; ls "${dir}" > "$HOME/dir.txt"; exec python3 "${fixtures}/notes.py" /dev/null`;
+    const look = `ls "${secret}" > "$HOME/secret.txt" 2>&1; env > "$HOME/env.txt"; ls "${dir}" > "$HOME/dir.txt"; exec python3 "${fixtures}/notes.py" "$HOME/saved.txt"`;
     desktop = await DesktopSession.open({
       homeDir: home,
       apps: { notes: ["sh", "-c", look] },
@@ -119,7 +120,7 @@ describe.runIf(run)("a sandboxed desktop, live", () => {
 
   afterAll(async () => {
     delete process.env.NUDGE_TEST_SECRET;
-    await desktop?.close();
+    if (!closed) await desktop?.close();
     rmSync(dir, { recursive: true, force: true });
   });
 
@@ -154,6 +155,16 @@ describe.runIf(run)("a sandboxed desktop, live", () => {
       expect(await desktop.observe()).toMatch(
         /textbox "Title" \[focused\] \[e\d+\]: From a person/,
       );
+
+      // Dragged across the field from its right end, the text is selected and typed over.
+      live.receive(
+        JSON.stringify({ type: "drag", from: { x: 600, y: 87 }, to: { x: 0, y: 87 } }),
+        (o) => errors.push(o),
+      );
+      live.receive(JSON.stringify({ type: "text", text: "Dragged" }), (o) => errors.push(o));
+      await desktop.settle();
+      expect(errors).toEqual([]);
+      expect(await desktop.observe()).toMatch(/textbox "Title" \[focused\] \[e\d+\]: Dragged$/m);
       await new Promise((resolve) => setTimeout(resolve, 300));
       const changed = sent.filter((output) => output.type === "frame");
       expect(changed.length).toBeGreaterThan(0);
@@ -161,5 +172,11 @@ describe.runIf(run)("a sandboxed desktop, live", () => {
     } finally {
       live.close();
     }
+  }, 30_000);
+
+  it("lets the apps quit before their display goes", async () => {
+    closed = true;
+    await desktop.close();
+    expect(readFileSync(join(home, "saved.txt"), "utf8")).toBe("quit\n");
   }, 30_000);
 });
