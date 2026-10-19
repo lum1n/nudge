@@ -92,11 +92,36 @@ describe.runIf(run)("a desktop with a GTK app", () => {
     await desktop.settle();
   }, 30_000);
 
+  it("deletes a list's items only with the user's approval, once", async () => {
+    let text = await desktop.observe();
+    await desktop.click(refOf(text, /tab "Saved"/));
+    await desktop.settle();
+    text = await desktop.observe();
+    await desktop.click(refOf(text, /row "Standup · Work"/));
+    await desktop.settle();
+    await expect(desktop.press("Delete")).rejects.toThrow(/Call desktop_confirm first/);
+    expect(await desktop.observe()).toContain('row "Standup · Work"');
+
+    const approval = { granted: true };
+    await desktop.press("Delete", undefined, approval);
+    await desktop.settle();
+    expect(approval.granted).toBe(false);
+    text = await desktop.observe();
+    expect(text).not.toContain("Standup");
+    await desktop.click(refOf(text, /row "Flights · Travel"/));
+    await desktop.settle();
+    await expect(desktop.press("Delete", undefined, approval)).rejects.toThrow(/desktop_confirm/);
+    await desktop.click(refOf(text, /tab "Write"/));
+    await desktop.settle();
+  }, 30_000);
+
   it("presses keys into a field", async () => {
     const text = await desktop.observe();
     const title = refOf(text, /textbox "Title"/);
     await desktop.press("ctrl+a", title);
     await desktop.press("BackSpace", title);
+    // Delete in a field deletes text: no approval needed.
+    await desktop.press("Delete", title);
     await desktop.press("shift+x", title);
     await desktop.press("y");
     await desktop.settle();

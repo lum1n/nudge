@@ -47,6 +47,30 @@ describe("the desktop snapshot", () => {
     );
   });
 
+  it("puts a field with the keyboard that no window shows first, with its ref", () => {
+    const main = node("frame", "Documents — Dolphin", {
+      states: ["active"],
+      children: [node("list item", "utkast.txt", { actionable: true, states: ["selected"] })],
+    });
+    const field = node("text", "", {
+      actionable: true,
+      states: ["editable", "focused"],
+      text: "utkast.txt",
+    });
+    const snapshot = renderDesktop([
+      { app: "dolphin", node: main },
+      { app: "dolphin", node: field, editing: true },
+    ]);
+    expect(snapshot.text.split("\n").slice(0, 5)).toEqual([
+      "THE KEYBOARD IS IN A FIELD the windows below leave out (like a file's name being renamed):",
+      `- textbox [focused] [${field.ref}]: utkast.txt (dolphin)`,
+      "Type into it by its ref; submit (Enter) commits it, Escape cancels.",
+      "",
+      `- frame "Documents — Dolphin" (dolphin) [active] [${main.ref}]:`,
+    ]);
+    expect(snapshot.lines[0]).toContain(`[${field.ref}]: utkast.txt`);
+  });
+
   it("puts open dialogs first", () => {
     const main = node("frame", "Notes", { children: [button("Save")] });
     const dialog = node("alert", "Question", {
@@ -59,13 +83,13 @@ describe("the desktop snapshot", () => {
     ]).text;
     expect(text.split("\n").slice(0, 6)).toEqual([
       "OPEN DIALOGS (they block their window; handle them first):",
-      '- alert "Question" [modal] (notes) [e15]:',
+      `- alert "Question" [modal] (notes) [${dialog.ref}]:`,
       '  - text "Save "Trip"?"',
       `  - button "Cancel" [${dialog.children[1]!.ref}]`,
       `  - button "Save note" [${dialog.children[2]!.ref}]`,
       "",
     ]);
-    expect(text).toContain('- frame "Notes" (notes) [e11]:');
+    expect(text).toContain(`- frame "Notes" (notes) [${main.ref}]:`);
   });
 
   it("never shows what a password field holds", () => {

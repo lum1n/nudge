@@ -23,6 +23,8 @@ export interface DesktopWindow {
   /** The app's name on the accessibility bus. */
   app: string;
   node: DesktopNode;
+  /** A field with the keyboard that its window leaves out of its tree, like Dolphin's rename field. */
+  editing?: boolean;
 }
 
 export interface DesktopSnapshot {
@@ -322,14 +324,16 @@ export function renderDesktop(
   options: { budget?: number; page?: number } = {},
 ): DesktopSnapshot {
   const budget = options.budget ?? 24_000;
-  windows = windows.flatMap(liftDialogs);
+  const editing = windows.filter((w) => w.editing);
+  windows = windows.filter((w) => !w.editing).flatMap(liftDialogs);
   const dialogs = windows.filter(isDialog);
   const others = windows
     .filter((w) => !isDialog(w))
     .sort((a, b) => Number(b.node.states.has("active")) - Number(a.node.states.has("active")));
   const dialogLines = dialogs.flatMap((w) => windowLines(w, true));
   const bodyLines = others.flatMap((w) => windowLines(w, true));
-  const lines = [...dialogs, ...others].flatMap((w) => windowLines(w, false));
+  const editingLines = editing.map((w) => `- ${line(w.node)} (${w.app})`);
+  const lines = [...editingLines, ...[...dialogs, ...others].flatMap((w) => windowLines(w, false))];
   if (!windows.length)
     return {
       text: "No windows are open. Use desktop_launch to start an app.",
@@ -347,6 +351,13 @@ export function renderDesktop(
       ...dialogLines,
       "",
       "WINDOWS:",
+    );
+  if (editingLines.length)
+    parts.unshift(
+      "THE KEYBOARD IS IN A FIELD the windows below leave out (like a file's name being renamed):",
+      ...editingLines,
+      "Type into it by its ref; submit (Enter) commits it, Escape cancels.",
+      "",
     );
   if (windows.some((w) => menuOpen(w.node)))
     parts.unshift(

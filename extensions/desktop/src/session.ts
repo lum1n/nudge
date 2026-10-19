@@ -28,7 +28,25 @@ export interface DesktopOptions {
 /** An action that could not be done, said so the agent can try something else. */
 export class ActionError extends Error {}
 
+/** The user's approval of one consequential action, from desktop_confirm; used up when taken. */
+export interface Approval {
+  granted: boolean;
+}
+
 const WINDOWS = new Set(["frame", "window", "dialog", "alert", "file chooser"]);
+/** What Delete deletes the selected items of, outside documents: file views, mailboxes, lists. */
+const ITEMS = new Set([
+  "list",
+  "list item",
+  "tree",
+  "tree item",
+  "tree table",
+  "table",
+  "table row",
+  "table cell",
+  "icon",
+  "layered pane",
+]);
 /** Objects shown outside any window the apps list: Qt's popup menus. */
 const POPUPS = new Set(["menu", "popup menu", "window"]);
 /** Most children read per node, and most nodes per observation. */
@@ -105,6 +123,8 @@ export class DesktopSession {
    * windows, and they are found this way.
    */
   private readonly shown = new Map<string, Address>();
+  /** What last said it got the keyboard. */
+  focused: Address | undefined;
   /** The objects the last read reached. */
   private seen = new Set<string>();
   options: DesktopOptions;
@@ -202,9 +222,14 @@ export class DesktopSession {
       };
       const atspi = await Atspi.connect(bus.address, a11y.address);
       const session = new DesktopSession(options, xvfb.display, env, atspi, runtimeDir, processes);
-      await atspi.onEvents(["object:state-changed:showing"], (event, address, detail) => {
-        if (event === "object:state-changed:showing" && detail === 1) session.noteShown(address);
-      });
+      await atspi.onEvents(
+        ["object:state-changed:showing", "object:state-changed:focused"],
+        (event, address, detail) => {
+          if (detail !== 1) return;
+          if (event === "object:state-changed:showing") session.noteShown(address);
+          if (event === "object:state-changed:focused") session.focused = address;
+        },
+      );
       return session;
     } catch (error) {
       for (const child of processes) kill(child);
@@ -355,9 +380,27 @@ export class DesktopSession {
     return `Typed into ${label}.`;
   }
 
-  /** Presses a key combo, into an element when given, else into whatever has the focus. */
-  async press(keys: string, ref?: string): Promise<string> {
-    if (ref) await this.focus((await this.resolve(ref)).address);
+  /**
+   * Presses a key combo, into an element when given, else into whatever has the focus. Delete on
+   * an item of a list or tree deletes what is selected, like files in a file manager or mail in
+   * a mailbox: that takes the user's approval, which it uses up. (In a document it only changes
+   * the document, and saving over a file asks.)
+   */
+  async press(keys: string, ref?: string, approval?: Approval): Promise<string> {
+    const target = ref ? await this.resolve(ref) : undefined;
+    if (/^(shift\s*\+\s*)?delete$/i.test(keys.trim())) {
+      const at =
+        target?.info ??
+        (this.focused && (await this.atspi.info(this.focused).catch(() => undefined)));
+      if (at && (await this.holdsItems(at))) {
+        if (!approval?.granted)
+          throw new ActionError(
+            `${keys} here deletes what is selected. Call desktop_confirm first, with what it deletes.`,
+          );
+        approval.granted = false;
+      }
+    }
+    if (target) await this.focus(target.address);
     try {
       await this.atspi.key(keys);
     } catch (error) {
@@ -450,9 +493,31 @@ export class DesktopSession {
       windows.push({ app, node });
       tops.push(info.address);
     }
+    const editing = await this.unseenField(tops, () => budget-- > 0);
+    if (editing) windows.push(editing);
     this.modals = modals;
     this.windows = tops;
     return windows;
+  }
+
+  /**
+   * The field that has the keyboard, when the read didn't reach it: some fields are in no
+   * window's children, like the one Dolphin renames a file in. Its window is its app's.
+   */
+  private async unseenField(
+    tops: readonly Address[],
+    more: () => boolean,
+  ): Promise<DesktopWindow | undefined> {
+    const focused = this.focused;
+    if (!focused || this.seen.has(`${focused.bus}${focused.path}`)) return undefined;
+    const info = await this.atspi.info(focused).catch(() => undefined);
+    if (!info?.states.has("editable") || !info.states.has("focused")) return undefined;
+    if (!info.states.has("showing")) return undefined;
+    const window = tops.find((top) => top.bus === focused.bus);
+    if (!window) return undefined;
+    const node = await this.readNode(info, more, window).catch(() => undefined);
+    const app = await this.atspi.appName(focused).catch(() => "");
+    return node && { app, node, editing: true };
   }
 
   private async readNode(
@@ -565,6 +630,21 @@ export class DesktopSession {
   }
 
   /** Notes an object that was shown, for `popups`. */
+  /**
+   * Whether Delete on this deletes items: it is a list, tree or table, or one of their items,
+   * outside a document. A spreadsheet's cells are in a document: Delete there clears them.
+   */
+  private async holdsItems(info: Info): Promise<boolean> {
+    if (!ITEMS.has(info.role)) return false;
+    let address: Address | undefined = info.address;
+    for (let depth = 0; address && depth < 12; depth++) {
+      address = await this.atspi.parent(address).catch(() => undefined);
+      const parent = address && (await this.atspi.info(address).catch(() => undefined));
+      if (parent?.role.startsWith("document")) return false;
+    }
+    return true;
+  }
+
   noteShown(address: Address): void {
     const key = `${address.bus}${address.path}`;
     this.shown.delete(key);

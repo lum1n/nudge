@@ -108,6 +108,8 @@ export async function runDesktopAgent(options: DesktopAgentOptions): Promise<Des
       ? options.task
       : `${options.task}\n\nYou stopped earlier to ask the user to approve this action, and they approved it: ${options.approved}\nThe desktop is where you left it. Do exactly that action, once, then finish the task. Anything else that needs approval still needs desktop_confirm.`;
   const messages: Message[] = [{ role: "user", content: task, timestamp: now() }];
+  // Lets the approved action through the harness's own checks, once.
+  const approval = { granted: options.approved !== undefined };
   const usage: Usage = {
     input: 0,
     output: 0,
@@ -175,6 +177,7 @@ export async function runDesktopAgent(options: DesktopAgentOptions): Promise<Des
           tool: call.name,
           text: progressLine(options.desktop, call),
         }),
+      approval,
     );
     for (const output of outputs) {
       result.actions++;

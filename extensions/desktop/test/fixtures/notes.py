@@ -1,12 +1,13 @@
-# A small GTK 3 app for the desktop tests: a field, a text area, a combo box, a checkbox, a list,
-# tabs, a menu, and a modal dialog before saving. It appends what it saved to the file named as its
-# argument, for the tests to check.
+# A small GTK 3 app for the desktop tests: a field, a text area, a combo box, a checkbox, a list
+# whose rows Delete removes, tabs, a menu, and a modal dialog before saving. It appends what it
+# saved to the file named as its argument, for the tests to check.
 import sys
 
 import gi
 
+gi.require_version("Gdk", "3.0")
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk  # noqa: E402
+from gi.repository import Gdk, Gtk  # noqa: E402
 
 window = Gtk.Window(title="Notes")
 window.set_default_size(640, 480)
@@ -69,6 +70,19 @@ saved.get_accessible().set_name("Saved notes")
 for i, heading in enumerate(("Title", "Category")):
     saved.append_column(Gtk.TreeViewColumn(heading, Gtk.CellRendererText(), text=i))
 tabs.append_page(saved, Gtk.Label(label="Saved"))
+
+
+def on_saved_key(_view, event):
+    # Delete removes the selected note, as a file manager deletes the selected file.
+    if Gdk.keyval_name(event.keyval) != "Delete":
+        return False
+    model, rows = saved.get_selection().get_selected_rows()
+    for row in reversed(rows):
+        model.remove(model.get_iter(row))
+    return True
+
+
+saved.connect("key-press-event", on_saved_key)
 
 
 def text_of_body():

@@ -1,5 +1,5 @@
 import { Type, type Static, type TSchema } from "typebox";
-import { ActionError, type DesktopSession } from "./session.ts";
+import { ActionError, type Approval, type DesktopSession } from "./session.ts";
 
 /** The part of a desktop session the tools use; tests pass a fake. */
 export type Desktop = Pick<
@@ -24,7 +24,8 @@ export interface DesktopTool<T extends TSchema = TSchema> {
   observes?: boolean;
   /** Ends the task: the user has to approve an action first. */
   ends?: Stop;
-  run(desktop: Desktop, args: Static<T>): Promise<string>;
+  /** `approval` is the user's, when this run was started again after desktop_confirm. */
+  run(desktop: Desktop, args: Static<T>, approval: Approval): Promise<string>;
 }
 
 /** Why a task stopped before its answer. */
@@ -69,7 +70,7 @@ export const desktopTools: DesktopTool[] = [
   tool({
     name: "desktop_type",
     description:
-      "Replace the text in a field by ref. Set submit to press Enter afterwards. Use \\n for new lines in a multi-line field.",
+      "Replace the text in a field by ref. Set submit to press Enter afterwards. Line breaks in text become new lines in a multi-line field.",
     parameters: Type.Object({
       ref: Ref,
       text: Type.String(),
@@ -88,7 +89,7 @@ export const desktopTools: DesktopTool[] = [
     description:
       'Press a key or combo, like "Enter", "Escape", "Down", "ctrl+s" or "ctrl+shift+z", into an element when given, else into the window under the pointer.',
     parameters: Type.Object({ keys: Type.String({ minLength: 1 }), ref: Type.Optional(Ref) }),
-    run: (d, a) => d.press(a.keys, a.ref),
+    run: (d, a, approval) => d.press(a.keys, a.ref, approval),
   }),
   tool({
     name: "desktop_focus_window",
@@ -182,6 +183,8 @@ export async function runBatch(
   calls: readonly ToolCallInput[],
   /** Hears each call just before it runs. */
   onCall?: (call: ToolCallInput) => void,
+  /** The user's approval this run carries, if any; see `Approval`. */
+  approval: Approval = { granted: false },
 ): Promise<ToolCallOutput[]> {
   const out: ToolCallOutput[] = [];
   let failed = false;
@@ -206,7 +209,7 @@ export async function runBatch(
     }
     try {
       onCall?.(call);
-      const text = await definition.run(desktop, call.arguments as never);
+      const text = await definition.run(desktop, call.arguments as never, approval);
       if (!definition.observes) await desktop.settle();
       out.push({
         id: call.id,
