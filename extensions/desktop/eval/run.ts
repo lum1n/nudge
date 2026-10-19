@@ -136,7 +136,8 @@ for (const { spec, providerId, model } of runs) {
       const label = `${task.id}#${n}`;
       const started = Date.now();
       const result = await runDesktopAgent({
-        models,
+        // As Nudge gives extensions: values put back in what the agent types.
+        models: models.withValues(),
         model,
         desktop,
         task: task.prompt,

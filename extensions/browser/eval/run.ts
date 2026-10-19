@@ -89,7 +89,8 @@ for (const { spec, providerId, model } of runs) {
       const label = `${task.id}#${n}`;
       const started = Date.now();
       const result = await runBrowserAgent({
-        models,
+        // As Nudge gives extensions: values put back in what the agent types.
+        models: models.withValues(),
         model,
         browser,
         task: task.prompt,
