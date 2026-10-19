@@ -661,6 +661,15 @@ impl ServerClient {
         Ok(run(async move { api.disable_wired().await }).await?.into())
     }
 
+    /// On the server that holds the network: removes the server called `name` from it, as when
+    /// that server was deleted, so a new one can take the name.
+    pub async fn remove_wired_member(&self, name: String) -> Result<WiredState, NudgeError> {
+        let api = self.api.clone();
+        Ok(run(async move { api.remove_wired_member(&name).await })
+            .await?
+            .into())
+    }
+
     /// Makes the server the root of its own Wired network, as a home server is.
     pub async fn enable_wired(&self) -> Result<WiredState, NudgeError> {
         let api = self.api.clone();

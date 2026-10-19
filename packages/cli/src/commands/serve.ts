@@ -225,6 +225,7 @@ export async function serve(options: ServeOptions): Promise<number> {
           return wired.enableRoot(serverWiredName(publicUrl()), apiAddr);
         },
         addRelay: (url) => wired.addRelay(url),
+        remove: (name) => wired.remove(name),
         disable: async () => {
           await wired.forget();
           return wired.state();

@@ -141,6 +141,55 @@ describe.skipIf(wired === undefined)("Wired between servers", () => {
     expect(robin.state(), JSON.stringify(robin.state())).toMatchObject({ state: "member" });
   }, 200_000);
 
+  it("a server that replaces a deleted one joins under its name once home removes the old one", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "nudge-wired-"));
+    cleanup.push(() => rm(dir, { recursive: true, force: true }));
+    const home = new ServerWired({ dir: join(dir, "home"), publicUrl: () => undefined });
+    const homeApi = await serveNudge({ assistants: new Map(), port: 0 });
+    cleanup.push(() => homeApi.close(), () => home.stop());
+    await home.enableRoot("home", addr(homeApi));
+
+    const port = await freePort();
+    const relayUrl = `http://127.0.0.1:${port}`;
+    const server = async (sub: string) => {
+      const wired = new ServerWired({
+        dir: join(dir, sub),
+        publicUrl: () => relayUrl,
+        relayBind: `127.0.0.1:${await freePort()}`,
+      });
+      await wired.load();
+      const front = wired.relayFront();
+      const api = await serveNudge({ assistants: new Map(), port, ...(front ? { relay: front } : {}) });
+      cleanup.push(() => api.close(), () => wired.stop());
+      return { wired, api };
+    };
+    const joined = async ({ wired, api }: Awaited<ReturnType<typeof server>>) => {
+      await wired.join(await home.addRelay(relayUrl), "robin", addr(api));
+      await until(() => wired.state().state !== "starting");
+      return wired.state();
+    };
+
+    // The first robin joins, then is deleted (gone, never told).
+    const first = await server("robin-1");
+    expect((await joined(first)).state).toBe("member");
+    await first.wired.stop();
+    await first.api.close();
+
+    // A new robin, with a new key, at the same address: the name is still the old one's.
+    const second = await server("robin-2");
+    expect(await joined(second)).toMatchObject({
+      state: "error",
+      error: expect.stringMatching(/already called robin/),
+    });
+
+    // Home removes the old robin, and the new one joins.
+    await expect(home.remove("home")).rejects.toThrow(/can't remove itself/);
+    await expect(home.remove("nobody")).rejects.toThrow(/No server called nobody/);
+    expect((await home.remove("robin")).members).toEqual([{ name: "home", anchor: true }]);
+    await second.wired.forget();
+    expect(await joined(second)).toMatchObject({ state: "member", name: "robin" });
+  }, 200_000);
+
   it("only the root adds relays", async () => {
     const dir = await mkdtemp(join(tmpdir(), "nudge-wired-"));
     cleanup.push(() => rm(dir, { recursive: true, force: true }));

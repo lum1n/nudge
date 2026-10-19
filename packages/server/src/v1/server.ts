@@ -80,6 +80,8 @@ export type WiredControl = {
   addRelay(url: string): Promise<string>;
   /** Joins the network an invite is for, serving a relay at the public address or `relayUrl`. */
   join(invite: string, relayUrl?: string): Promise<WiredState>;
+  /** On the root: removes a server from the network, freeing its name. */
+  remove(name: string): Promise<WiredState>;
   /** Leaves the network, or stops holding it, and forgets it. */
   disable(): Promise<WiredState>;
 };
@@ -204,6 +206,10 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
     const invite = await guard(() => wired().addRelay(url));
     return c.json({ invite } satisfies WiredRelayResponse);
   });
+
+  app.delete("/wired/members/:name", async (c) =>
+    c.json((await guard(() => wired().remove(c.req.param("name")))) satisfies WiredState),
+  );
 
   app.delete("/session", (c) => {
     control.owners.revoke(c.var.clientId);

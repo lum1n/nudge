@@ -257,6 +257,13 @@ impl ServerApi {
         Ok(answer.invite)
     }
 
+    /// On the root: removes the server called `name` from the network, as when it was deleted;
+    /// its key is refused from then on, and a new server can take the name.
+    pub async fn remove_wired_member(&self, name: &str) -> Result<WiredState, ApiError> {
+        self.request(Method::DELETE, &["wired", "members", name], &[], NO_BODY)
+            .await
+    }
+
     /// The backup key, sealed with `passphrase`, as a file to keep away from the server.
     pub async fn recovery_kit(&self, passphrase: &str) -> Result<String, ApiError> {
         let body = RecoveryKitRequest {

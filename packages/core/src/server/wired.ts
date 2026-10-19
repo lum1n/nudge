@@ -63,6 +63,8 @@ export type WiredNode = {
   relays(): { url: string }[];
   readonly servedRelay: { url: string; localAddr: string } | null;
   addRelay(url: string): void;
+  /** On the root: removes a node, denying its key; answers with the new invite. */
+  revoke(name: string): string;
   dial(target: string): Promise<Duplex>;
   expose(service: string, target: string): { close(): void };
   close(): Promise<void>;
@@ -271,6 +273,23 @@ export class ServerWired {
     return node.invite;
   }
 
+  /**
+   * On the root: removes the server called `name` from the network, as when it was deleted. Its
+   * key is refused from then on, and the name is free for a new server.
+   */
+  async remove(name: string): Promise<WiredState> {
+    await this.starting;
+    const node = this.node;
+    if (node === undefined || !node.isRoot)
+      throw new WiredError("Only the server that holds the network can remove servers from it");
+    if (name === node.name)
+      throw new WiredError("The server that holds the network can't remove itself");
+    if (!node.members().some((m) => m.name === name))
+      throw new WiredError(`No server called ${name} is in the network`);
+    node.revoke(name);
+    return this.state();
+  }
+
   private start(name: string, apiAddr: string): Promise<void> {
     this.starting ??= this.run(name, apiAddr).finally(() => {
       this.starting = undefined;
@@ -310,7 +329,10 @@ export class ServerWired {
       this.say(`Wired: ${role === "root" ? "holding" : "joined"} the network as ${name}`);
     } catch (error) {
       this.servingAt = undefined;
-      this.error = (error as Error).message;
+      const message = (error as Error).message;
+      this.error = /NameTaken/.test(message)
+        ? `Another server in the network is already called ${name}. If it's gone, remove it on the server that holds the network, then join again.`
+        : message;
       this.say(`Wired didn't start: ${this.error}`);
       throw error;
     }

@@ -312,12 +312,18 @@ final class AppModel {
     }
 
     /// Removes a server made on exe.dev, with everything on it: leaves its assistants joined from
-    /// home, deletes the VM, and forgets it here.
+    /// home, takes it out of home's Wired network, deletes the VM, and forgets it here.
     func removeExeServer(_ server: String) async throws {
         guard let token = servers.exeToken, let vm = exeVmName(server) else { throw ServerProblem.notOnExe }
         for membership in memberships?.memberships ?? []
         where membership.server.trimmingCharacters(in: ["/"]) == server.trimmingCharacters(in: ["/"]) {
             try? await leave(membership)
+        }
+        // Out of home's Wired network first, so a new server at this address can take its name.
+        if let state = try? await servers.client(server).wired(), state.state == .member, let name = state.name,
+            let root = await servers.wiredRoot(except: server, holding: name)
+        {
+            _ = try? await servers.client(root).removeWiredMember(name: name)
         }
         try await ExeClient(token: token).delete(name: vm)
         await servers.forget(server)

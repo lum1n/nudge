@@ -10,12 +10,13 @@ export type WiredCommandOptions = {
   readonly arg?: string;
 };
 
-const USAGE = "Usage: nudge wired [status|on|add <https-url>|join <invite>] --token <owner token>";
+const USAGE = "Usage: nudge wired [status|on|add <https-url>|join <invite>|remove <name>] --token <owner token>";
 
 /**
  * `nudge wired`: the server's Wired, an encrypted network between Nudge servers that needs no
  * open port at home. On home: `on`, then `add https://robin.exe.xyz` for each other server, which
  * prints the invite that server joins with: `nudge wired join <invite> --url https://robin.exe.xyz`.
+ * `remove <name>` on home takes a server that's gone out of the network, freeing its name.
  */
 export async function wired(options: WiredCommandOptions): Promise<void> {
   const base = new URL(options.url ?? "http://127.0.0.1:8787").origin;
@@ -54,6 +55,10 @@ export async function wired(options: WiredCommandOptions): Promise<void> {
       );
       return;
     }
+    case "remove":
+      if (options.arg === undefined) throw new UsageError(USAGE);
+      describe((await call("DELETE", `/members/${encodeURIComponent(options.arg)}`)) as WiredState);
+      return;
     case "join":
       if (options.arg === undefined) throw new UsageError(USAGE);
       describe((await call("POST", "/join", { invite: options.arg })) as WiredState);

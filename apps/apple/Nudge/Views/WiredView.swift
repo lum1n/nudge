@@ -18,6 +18,8 @@ struct WiredSection: View {
     @State private var turningOff = false
     /// The Wired name to make the home's address, while asking.
     @State private var usingAddress: String?
+    /// The member to remove from the network, while asking.
+    @State private var removing: String?
 
     var body: some View {
         // Always one section, so the task below runs: on a view with nothing in it, it wouldn't.
@@ -66,6 +68,19 @@ struct WiredSection: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Your other servers then reach your home over Wired, without Tailscale. Your home's address is who it is to other assistants: the ones you joined from home have to be joined again.")
+        }
+        .alert(
+            "Remove \(removing ?? "") from the network?",
+            isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })
+        ) {
+            Button("Remove", role: .destructive) {
+                if let name = removing {
+                    Task { await act { try await model.servers.client(server).removeWiredMember(name: name) } }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("It no longer reaches your servers over Wired, and can't join again with its key. A new server can then use the name.")
         }
         .task(id: state?.state == .starting) {
             await read()
@@ -116,6 +131,16 @@ struct WiredSection: View {
             .foregroundStyle(.green)
             ForEach(state.members.filter { $0.name != state.name }, id: \.name) { member in
                 Label(member.anchor ? "\(member.name) (holds it)" : member.name, systemImage: "server.rack")
+                    .swipeActions {
+                        if state.state == .root {
+                            Button("Remove", role: .destructive) { removing = member.name }
+                        }
+                    }
+            }
+            if state.state == .root, state.members.count > 1 {
+                Text("Swipe a server to remove it, as when it's gone: a new server can then take its name.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             if state.state == .root, state.relays.isEmpty {
                 Text("No server with a public address has joined yet: open one of them here and join this network.")
