@@ -180,6 +180,23 @@ describe("extensions", () => {
     await nudge.close(context);
   });
 
+  it("tells the model which extensions are on, also those turned on mid-conversation", async () => {
+    const { options, requests } = setup();
+    const nudge = await createNudge(options, context);
+    await say(nudge, "Roll a die");
+    expect(current(requests.at(-1)).prompt).not.toContain("Extensions on in this conversation");
+
+    await nudge.reloadExtensions([hello]);
+    await say(nudge, "Roll a die now");
+    const { prompt, tools } = current(requests.at(-1));
+    expect(tools).toContain("roll_dice");
+    expect(prompt).toContain(
+      "Extensions on in this conversation now:\n- hello: Greets in your words",
+    );
+    expect(prompt).toContain("not by what earlier replies said you could do");
+    await nudge.close(context);
+  });
+
   it("turns extensions on and off per room, with defaults per room kind", async () => {
     const { options, requests } = setup({ extensions: [{ extension: hello, rooms: ["shared"] }] });
     const nudge = await createNudge(options, context);

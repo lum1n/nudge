@@ -257,6 +257,8 @@ export class Nudge {
           nudges: () => whenOpen().nudges,
           changed: (change) => whenOpen().changes.emit(change),
           turn,
+          describe: (name) =>
+            whenOpen().installed.find(({ extension }) => extension.name === name)?.description,
         }),
         values,
       ),

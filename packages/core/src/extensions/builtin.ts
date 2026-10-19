@@ -25,6 +25,8 @@ export type BuiltinOptions = {
   readonly changed?: (change: Change) => void;
   /** The turn a conversation is in, for what shows only in private turns. */
   readonly turn: (conversationId: ConversationId, context: Context) => Promise<Turn>;
+  /** An installed extension's description, looked up at render time, so it follows a reload. */
+  readonly describe?: (extension: string) => string | undefined;
 };
 
 /**
@@ -54,10 +56,38 @@ export function createBuiltinExtension(options: BuiltinOptions): Extension {
         return describeRoom(directory, input.conversationId, profiles);
       }),
       memorySection(options.turn),
+      section("extensions", (input) =>
+        describeExtensions(
+          input.agent.extensions.map(({ name }) => name).filter((name) => name !== BUILTIN_NAME),
+          options.describe,
+        ),
+      ),
       // Rendered to the hour: a section that changes on every request defeats prompt caching.
       section("time", () => formatHour(options.now(), options.timeZone)),
     ],
   });
+}
+
+/**
+ * The extensions on in a conversation, said outright. Providers without mid-conversation system
+ * messages fold tool changes into one prompt, so the model can't tell that tools came after its
+ * earlier replies, and repeats what those said it couldn't do.
+ */
+export function describeExtensions(
+  names: readonly string[],
+  describe: (extension: string) => string | undefined = () => undefined,
+): string | undefined {
+  if (names.length === 0) return undefined;
+  const lines = names.map((name) => {
+    const description = describe(name);
+    return description === undefined ? `- ${name}` : `- ${name}: ${description}`;
+  });
+  return [
+    "Extensions on in this conversation now:",
+    ...lines,
+    "They can be turned on during a conversation: go by this list and the tools you have now, " +
+      "not by what earlier replies said you could do.",
+  ].join("\n");
 }
 
 export function formatHour(now: number, timeZone: string): string {
