@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import nudge.client.PreferencesTokens
 import nudge.ffi.ExeClient
 import nudge.ffi.ServerClient
+import nudge.ffi.WiredStatus
 import nudge.ffi.exeNewKey
 
 class Servers(private val preferences: SharedPreferences) {
@@ -37,6 +38,16 @@ class Servers(private val preferences: SharedPreferences) {
         mutableOwned.value -= server
         save()
     }
+
+    /**
+     * The owned server that holds a Wired network (other than [except]), if any: the home that
+     * new servers join. With [holding], only one whose network has that member.
+     */
+    suspend fun wiredRoot(except: String? = null, holding: String? = null): String? =
+        mutableOwned.value.filter { it != except }.firstOrNull { server ->
+            val state = runCatching { client(server).wired() }.getOrNull()
+            state != null && state.state == WiredStatus.ROOT && (holding == null || state.members.any { it.name == holding })
+        }
 
     /** The exe.dev token the person pasted, to make and remove servers with. */
     var exeToken: String?

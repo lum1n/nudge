@@ -9,6 +9,7 @@ import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,6 +45,7 @@ import nudge.ffi.Reach
 import nudge.ffi.RoomListUpdate
 import nudge.ffi.SetupChoices
 import nudge.ffi.TailscaleStatus
+import nudge.ffi.WiredStatus
 import nudge.ffi.listAssistants
 import nudge.ffi.newDeviceKey
 import nudge.ffi.reach
@@ -259,10 +261,22 @@ class AppModel(private val context: Context) {
      */
     suspend fun turnOnFederation() {
         val home = mutableSession.value ?: return
+        setHomeAddress(home.account.server.trimEnd('/'))
+    }
+
+    /**
+     * Moves the home's federation address to its Wired one, `http://nudge.<name>.wired`, which
+     * every server in its Wired network reaches, with no port open at home. The address is the
+     * home's identity: assistants joined from the old one have to be joined again.
+     */
+    suspend fun useWiredAddress(name: String) = setHomeAddress("http://nudge.$name.wired")
+
+    /** Sets the address other servers know the home by: federation's `server`, turned on. */
+    private suspend fun setHomeAddress(server: String) {
+        val home = mutableSession.value ?: return
         val setups = home.client.extensionSetups()
         val federation = setups.firstOrNull { it.from.endsWith("federation") }
             ?: throw ServerProblem(ServerProblem.Kind.NO_FEDERATION_EXTENSION)
-        val server = home.account.server.trimEnd('/')
         home.client.saveExtensionSetups(
             setups
                 .filter { it.configured || it.from == federation.from }
@@ -278,22 +292,74 @@ class AppModel(private val context: Context) {
         mutableHomeFederation.value = true
     }
 
+    /**
+     * The home's name in its Wired network, `box` for `nudge.box.wired`, when its address is a
+     * Wired one.
+     */
+    fun homeWiredName(): String? {
+        if (homeReach() != Reach.WIRED) return null
+        val address = mutableMemberships.value?.address ?: return null
+        val at = address.indexOf('@')
+        val slash = address.lastIndexOf('/')
+        if (at !in 0 until slash) return null
+        val server = address.substring(at + 1, slash)
+        val host = runCatching { java.net.URI(if ("://" in server) server else "http://$server").host }.getOrNull() ?: return null
+        val labels = host.split('.')
+        return if (labels.size == 3) labels[1] else null
+    }
+
+    /**
+     * Makes sure [server] reaches the home as other servers do: through its own Tailscale for a
+     * home only in a tailnet, or in the home's Wired network for a home on Wired, which this device
+     * puts it in when it owns the server holding that network.
+     */
+    private suspend fun ensureReachesHome(server: String) {
+        when (homeReach()) {
+            Reach.TAILNET ->
+                if (runCatching { servers.client(server).tailscale() }.getOrNull()?.state != TailscaleStatus.CONNECTED) {
+                    throw ServerProblem(ServerProblem.Kind.NEEDS_TAILSCALE)
+                }
+            Reach.WIRED -> {
+                val name = homeWiredName() ?: return
+                val owner = servers.client(server)
+                val state = runCatching { owner.wired() }.getOrNull()
+                if (state != null && (state.state == WiredStatus.ROOT || state.state == WiredStatus.MEMBER)) {
+                    if (state.members.any { it.name == name }) return
+                    throw ServerProblem(ServerProblem.Kind.WIRED_ELSEWHERE)
+                }
+                val root = servers.wiredRoot(except = server, holding = name)
+                    ?: throw ServerProblem(ServerProblem.Kind.NEEDS_WIRED)
+                servers.client(root).connectWired(owner, server)
+                // It joins in the background, for up to two minutes while home reaches its relay.
+                repeat(75) {
+                    val joining = owner.wired()
+                    if (joining.state == WiredStatus.MEMBER) return
+                    if (joining.state != WiredStatus.STARTING) {
+                        throw NudgeException.Status(502.toUShort(), joining.error ?: "The server didn't join home's Wired network.")
+                    }
+                    delay(2_000)
+                }
+                throw NudgeException.Status(504.toUShort(), "The server is still joining home's Wired network. Try again in a minute.")
+            }
+            else -> {}
+        }
+    }
+
     /** Whether this device is signed in to that assistant, as home or joined from it. */
     fun isSignedIn(server: String, assistant: String) = sessions().any { it.account.isAt(server, assistant) }
 
     /**
      * Joins an assistant on a server this device owns from home, as its owner: invites the home's
      * address, joins, and makes that guest an admin there and an owner of the server. A home only
-     * in a tailnet needs the server's own Tailscale connected first.
+     * in a tailnet needs the server's own Tailscale connected first; a home on Wired, the server in
+     * its network, which this does when it can.
      */
     suspend fun joinFromHome(server: String, assistant: String) {
         if (mutableSession.value == null) return
         homeProblem()?.let { throw ServerProblem(it) }
         val address = mutableMemberships.value?.address ?: throw ServerProblem(ServerProblem.Kind.NO_FEDERATION)
         val owner = servers.client(server)
-        if (homeReach() == Reach.TAILNET && runCatching { owner.tailscale() }.getOrNull()?.state != TailscaleStatus.CONNECTED) {
-            throw ServerProblem(ServerProblem.Kind.NEEDS_TAILSCALE)
-        }
+        ensureReachesHome(server)
         // At the address this device knows the server by, which the link may write otherwise.
         owner.invite(assistant, address)
         join(JoinLink(server, assistant))
@@ -312,11 +378,7 @@ class AppModel(private val context: Context) {
     suspend fun createAssistant(server: String, new: NewAssistant): MadeAssistant {
         if (new.madeFor is AssistantFor.Me) {
             homeProblem()?.let { throw ServerProblem(it) }
-            if (homeReach() == Reach.TAILNET &&
-                runCatching { servers.client(server).tailscale() }.getOrNull()?.state != TailscaleStatus.CONNECTED
-            ) {
-                throw ServerProblem(ServerProblem.Kind.NEEDS_TAILSCALE)
-            }
+            ensureReachesHome(server)
         }
         val made = servers.client(server).createAssistant(new)
         made.joinLink?.let { JoinLink.parse(it) }?.let { join(it) }
@@ -649,6 +711,14 @@ class ServerProblem(val kind: Kind) : Exception(kind.text) {
                 "Sign in to your home at its Tailscale or public address.",
         ),
         NEEDS_TAILSCALE("Your home is only in your tailnet, so this server has to join it first: under Settings → Servers, open the server and connect it under Tailscale."),
+        NEEDS_WIRED(
+            "Your home is on Wired, but none of your servers here holds its network. " +
+                "Open your home under Settings → Servers and hold a network there, then try again.",
+        ),
+        WIRED_ELSEWHERE(
+            "This server is in another Wired network. Turn Wired off on it under Settings → Servers, " +
+                "then try again: it joins your home's.",
+        ),
         NOT_JOINED("Joining the assistant from home didn't work."),
         NOT_ON_EXE("This server isn't one this device made on exe.dev."),
     }

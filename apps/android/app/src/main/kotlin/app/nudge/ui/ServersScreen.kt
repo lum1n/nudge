@@ -136,7 +136,7 @@ fun ServersScreen(model: AppModel, address: String?, exe: () -> Unit, close: () 
 }
 
 /**
- * One server: its updates, its assistants, the model keys set on it, its Tailscale, and its
+ * One server: its updates, its assistants, the model keys set on it, its Tailscale and Wired, and its
  * recovery kit; removing it, for one made on exe.dev.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -351,6 +351,7 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
                 },
             )
             item(key = "tailscale") { TailscaleCard(model, server) }
+            item(key = "wired") { WiredCard(model, server) }
             group(
                 "Model keys",
                 keys.map<ProviderKey, GroupRow> { key ->
