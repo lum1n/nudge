@@ -30,6 +30,7 @@
     "@earendil-works/pi-ai": "1.2.0",
     "@nudge/ext-browser": "workspace:*",
     "@nudge/ext-connectors": "workspace:*",
+    "@nudge/ext-desktop": "workspace:*",
     "@nudge/ext-documents": "workspace:*",
     "@nudge/ext-federation": "workspace:*",
     "@nudge/ext-lists": "workspace:*",

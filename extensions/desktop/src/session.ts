@@ -23,6 +23,12 @@ export interface DesktopOptions {
   /** The desktop's home: the apps' settings and files stay here between sessions. */
   homeDir: string;
   size?: { width: number; height: number };
+  /**
+   * Runs the apps in a bubblewrap sandbox: they see the system's programs and libraries read-only,
+   * the desktop's home and display, and nothing else of the machine (no other homes, no Nudge
+   * data). `readable` adds directories they may read, such as where an app is unpacked.
+   */
+  sandbox?: { readable?: readonly string[] };
 }
 
 /** An action that could not be done, said so the agent can try something else. */
@@ -58,13 +64,34 @@ const NODE_LIMIT = 5_000;
 /** Actions tried first when clicking, in order; else the first one the object has. */
 const CLICKS = ["click", "press", "activate", "toggle", "jump", "open"];
 
-/** Why a desktop can't start here, if it can't: it needs Xvfb, D-Bus and AT-SPI. */
-export function desktopProblem(): string | undefined {
+/**
+ * Why a desktop can't start here, if it can't: it needs Xvfb, D-Bus and AT-SPI, and bubblewrap
+ * when the apps run sandboxed.
+ */
+export function desktopProblem(options: { sandbox?: boolean } = {}): string | undefined {
   const missing = ["Xvfb", "dbus-daemon"].filter((program) => !onPath(program));
   if (!a11yBusConfig()) missing.push("AT-SPI bus config");
   if (missing.length)
     return `This server has no ${missing.join(" or ")} for the desktop. Install xvfb, dbus and at-spi2-core.`;
+  if (options.sandbox) return sandboxProblem();
   return undefined;
+}
+
+let sandboxChecked: { problem: string | undefined } | undefined;
+
+/** Why apps can't run in a bubblewrap sandbox here, if they can't; checked once. */
+export function sandboxProblem(): string | undefined {
+  sandboxChecked ??= {
+    problem: !onPath("bwrap")
+      ? "This server has no bubblewrap (bwrap) to run the desktop's apps sandboxed. Install bubblewrap, or turn \"sandbox\" off in the desktop extension's settings to run them without one."
+      : spawnSync("bwrap", ["--ro-bind", "/", "/", "--proc", "/proc", "--unshare-pid", "true"], {
+            stdio: "ignore",
+            timeout: 5_000,
+          }).status !== 0
+        ? "bubblewrap can't make a sandbox on this server: it needs user namespaces, which this system or container doesn't allow (Docker's default seccomp profile blocks them). Allow them, or turn \"sandbox\" off in the desktop extension's settings to run the apps without one."
+        : undefined,
+  };
+  return sandboxChecked.problem;
 }
 
 /** at-spi2-core's config for the accessibility bus, where at-spi-bus-launcher looks for it. */
@@ -73,6 +100,12 @@ function a11yBusConfig(): string | undefined {
     (path) => existsSync(path),
   );
 }
+
+/**
+ * What of Nudge's environment the desktop's buses and apps get: where programs are, the language
+ * and time zone. The person's session (display, buses, desktop) and Nudge's keys stay out.
+ */
+const PASSED_ENV = /^(PATH|LANG|LANGUAGE|LC_[A-Z_]+|TZ|USER|LOGNAME|SHELL)$/;
 
 /** Runtime directories of desktops are named so; `sweepDesktops` finds the ones left behind. */
 const RUNTIME_PREFIX = "nudge-desktop-";
@@ -129,6 +162,8 @@ export class DesktopSession {
   private seen = new Set<string>();
   options: DesktopOptions;
   readonly display: string;
+  /** The screen's pixels, as Xvfb keeps them in a file (XWD), for the live view. */
+  framebuffer = "";
   readonly atspi: Atspi;
   private readonly env: NodeJS.ProcessEnv;
   private readonly runtimeDir: string;
@@ -151,19 +186,22 @@ export class DesktopSession {
   }
 
   static async open(options: DesktopOptions): Promise<DesktopSession> {
-    const problem = desktopProblem();
+    const problem = desktopProblem({ sandbox: options.sandbox !== undefined });
     if (problem) throw new Error(problem);
     sweepDesktops();
     const processes: ChildProcess[] = [];
     const runtimeDir = mkdtempSync(join(tmpdir(), RUNTIME_PREFIX));
     writeFileSync(join(runtimeDir, "owner"), `${process.pid}\n`);
     try {
-      const xvfb = await startXvfb(options.size ?? { width: 1280, height: 800 });
+      const xvfb = await startXvfb(options.size ?? { width: 1280, height: 800 }, runtimeDir);
       processes.push(xvfb.process);
       record(runtimeDir, xvfb.process);
       mkdirSync(options.homeDir, { recursive: true });
       const base: NodeJS.ProcessEnv = {
-        ...process.env,
+        // Only what apps need of Nudge's own environment: not its keys and secrets.
+        ...Object.fromEntries(
+          Object.entries(process.env).filter(([name]) => PASSED_ENV.test(name)),
+        ),
         DISPLAY: xvfb.display,
         HOME: options.homeDir,
         XDG_RUNTIME_DIR: runtimeDir,
@@ -171,25 +209,6 @@ export class DesktopSession {
         XDG_DATA_HOME: join(options.homeDir, ".local", "share"),
         XDG_CACHE_HOME: join(options.homeDir, ".cache"),
       };
-      // The person's own session must not leak in: apps go to this display and these buses only.
-      for (const name of [
-        "WAYLAND_DISPLAY",
-        "DBUS_SESSION_BUS_ADDRESS",
-        "NO_AT_BRIDGE",
-        "AT_SPI_BUS_ADDRESS",
-        "XAUTHORITY",
-        // The person's session manager and desktop: apps would register with the one and pick
-        // their toolkit by the other.
-        "SESSION_MANAGER",
-        "XDG_CURRENT_DESKTOP",
-        "XDG_SESSION_DESKTOP",
-        "XDG_SESSION_TYPE",
-        "DESKTOP_SESSION",
-        "KDE_FULL_SESSION",
-        "KDE_SESSION_VERSION",
-        "GNOME_DESKTOP_SESSION_ID",
-      ])
-        delete base[name];
       const bus = await startBus(base, runtimeDir, "bus", ["--session"]);
       processes.push(bus.process);
       record(runtimeDir, bus.process);
@@ -222,6 +241,7 @@ export class DesktopSession {
       };
       const atspi = await Atspi.connect(bus.address, a11y.address);
       const session = new DesktopSession(options, xvfb.display, env, atspi, runtimeDir, processes);
+      session.framebuffer = join(runtimeDir, "fb", "Xvfb_screen0");
       await atspi.onEvents(
         ["object:state-changed:showing", "object:state-changed:focused"],
         (event, address, detail) => {
@@ -265,7 +285,9 @@ export class DesktopSession {
         `There is no app called "${name}". ${names.length ? `The apps are: ${names.join(", ")}.` : "No apps are set up."}`,
       );
     }
-    const [program, ...args] = command;
+    const [program, ...args] = this.options.sandbox
+      ? ["bwrap", ...this.sandboxArgs(this.options.sandbox), "--", ...command]
+      : command;
     const child = spawn(program!, args, {
       env: this.env,
       cwd: this.options.homeDir,
@@ -287,10 +309,70 @@ export class DesktopSession {
     for (let i = 0; i < 100; i++) {
       await Promise.race([sleep(150), failed]);
       if (child.exitCode !== null && !this.launched.size)
-        throw new ActionError(`${name} exited at once (code ${child.exitCode}).`);
+        throw new ActionError(
+          `${name} exited at once (code ${child.exitCode}).${this.options.sandbox ? " It runs in a sandbox that shows it only the system's programs and the desktop's home; if it is installed elsewhere, that directory belongs in the desktop extension's \"readable\" setting." : ""}`,
+        );
       if ((await this.windowCount()) > before) return `Started ${name}.`;
     }
     return `Started ${name}, but no window of it has appeared yet.`;
+  }
+
+  /**
+   * bubblewrap's arguments for an app: the system read-only, the desktop's home, display and
+   * buses writable, an empty /tmp, and no other files of the machine. It shares the network, and
+   * IPC for X's shared memory. It dies with Nudge.
+   */
+  private sandboxArgs(sandbox: NonNullable<DesktopOptions["sandbox"]>): string[] {
+    const system = ["/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/etc", "/opt"];
+    // Fonts' caches, and where /etc/resolv.conf points on systemd hosts.
+    const extra = ["/var/cache/fontconfig", "/run/systemd/resolve", ...(sandbox.readable ?? [])];
+    const socket = `/tmp/.X11-unix/X${this.display.slice(1)}`;
+    return [
+      "--die-with-parent",
+      "--unshare-pid",
+      "--unshare-uts",
+      "--unshare-cgroup-try",
+      ...system.flatMap((path) => ["--ro-bind-try", path, path]),
+      "--proc",
+      "/proc",
+      "--dev",
+      "/dev",
+      "--tmpfs",
+      "/tmp",
+      "--tmpfs",
+      "/run",
+      ...extra.flatMap((path) => ["--ro-bind-try", path, path]),
+      "--bind",
+      socket,
+      socket,
+      "--bind",
+      this.runtimeDir,
+      this.runtimeDir,
+      "--bind",
+      this.options.homeDir,
+      this.options.homeDir,
+      "--chdir",
+      this.options.homeDir,
+    ];
+  }
+
+  /** The windows on the screen, by title, with refs to bring them to the front; without reading into them. */
+  async windowList(): Promise<{ ref: string; title: string; app: string }[]> {
+    const atspi = this.atspi;
+    const root = await atspi.info(atspi.root);
+    const list: { ref: string; title: string; app: string }[] = [];
+    for (const appAddress of await atspi.children(atspi.root, root.childCount, CHILD_LIMIT)) {
+      const app = await atspi.info(appAddress).catch(() => undefined);
+      if (!app) continue;
+      for (const top of await atspi
+        .children(appAddress, app.childCount, CHILD_LIMIT)
+        .catch(() => [] as Address[])) {
+        const window = await atspi.info(top).catch(() => undefined);
+        if (window && WINDOWS.has(window.role) && window.states.has("showing"))
+          list.push({ ref: this.refFor(top), title: window.name, app: app.name });
+      }
+    }
+    return list;
   }
 
   /** The windows as text, as the agent reads them. */
@@ -876,16 +958,31 @@ function kill(child: ChildProcess): void {
   }
 }
 
-async function startXvfb(size: {
-  width: number;
-  height: number;
-}): Promise<{ display: string; process: ChildProcess }> {
+/**
+ * Starts Xvfb on a free display. It keeps the screen in `<runtimeDir>/fb/Xvfb_screen0`, which the
+ * live view reads.
+ */
+async function startXvfb(
+  size: { width: number; height: number },
+  runtimeDir: string,
+): Promise<{ display: string; process: ChildProcess }> {
+  const fbdir = join(runtimeDir, "fb");
+  mkdirSync(fbdir, { recursive: true });
   for (let n = 140; n < 200; n++) {
     if (existsSync(`/tmp/.X11-unix/X${n}`) || existsSync(`/tmp/.X${n}-lock`)) continue;
     const display = `:${n}`;
     const child = spawn(
       "Xvfb",
-      [display, "-screen", "0", `${size.width}x${size.height}x24`, "-nolisten", "tcp"],
+      [
+        display,
+        "-screen",
+        "0",
+        `${size.width}x${size.height}x24`,
+        "-fbdir",
+        fbdir,
+        "-nolisten",
+        "tcp",
+      ],
       {
         stdio: "ignore",
         detached: true,

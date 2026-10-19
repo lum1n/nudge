@@ -49,10 +49,14 @@ export async function loadExtensions(
  * Loads a config's extensions and runs their setup without an assistant, to check modules, exports
  * and settings. Lists them as they would be installed.
  */
-export async function checkExtensions(
-  entries: readonly ExtensionConfig[],
-): Promise<
-  { name: string; version?: string; models: readonly { provider: string; modelId: string }[] }[]
+export async function checkExtensions(entries: readonly ExtensionConfig[]): Promise<
+  {
+    name: string;
+    version?: string;
+    models: readonly { provider: string; modelId: string }[];
+    /** What keeps it from working on this machine (`problems`). */
+    problems: readonly string[];
+  }[]
 > {
   const host = {
     name: "check",
@@ -71,9 +75,15 @@ export async function checkExtensions(
   };
   const checked: Awaited<ReturnType<typeof checkExtensions>> = [];
   for (const input of await loadExtensions(entries)) {
-    const { extension, version, models, close } = await setUpExtension(input, host);
+    const { extension, version, models, problems, close } = await setUpExtension(input, host);
+    const found = (await problems?.()) ?? [];
     await close?.();
-    checked.push({ name: extension.name, ...(version === undefined ? {} : { version }), models });
+    checked.push({
+      name: extension.name,
+      ...(version === undefined ? {} : { version }),
+      models,
+      problems: found,
+    });
   }
   return checked;
 }

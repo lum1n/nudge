@@ -2,6 +2,8 @@ import { DesktopSession, type DesktopOptions } from "./session.ts";
 
 type Slot = {
   session?: Promise<DesktopSession>;
+  /** Live viewers keep the desktop open. */
+  holders: number;
   /** Tasks on one desktop run one at a time; they share its windows. */
   queue: Promise<unknown>;
   idle?: NodeJS.Timeout;
@@ -19,19 +21,13 @@ export function withDesktop<T>(
   use: (session: DesktopSession) => Promise<T>,
 ): Promise<T> {
   const key = options.homeDir;
-  const slot = slots.get(key) ?? { queue: Promise.resolve() };
-  slots.set(key, slot);
+  const slot = slotFor(key);
   const run = async (): Promise<T> => {
     clearTimeout(slot.idle);
     try {
-      const session = await open(slot, options);
-      // The apps follow the settings, also for a desktop opened before they changed.
-      session.options = { ...session.options, apps: options.apps };
-      return await use(session);
+      return await use(await open(slot, options));
     } finally {
-      clearTimeout(slot.idle);
-      slot.idle = setTimeout(() => void closeDesktop(key), idleMs);
-      slot.idle.unref();
+      idleLater(slot, key, idleMs);
     }
   };
   const result = slot.queue.then(run, run);
@@ -39,16 +35,61 @@ export function withDesktop<T>(
   return result;
 }
 
-function open(slot: Slot, options: DesktopOptions): Promise<DesktopSession> {
+/**
+ * The desktop for `options.homeDir` for a live viewer: no waiting behind running tasks, which it
+ * watches and can take over. It stays open until `release`, then closes after `idleMs` unused.
+ */
+export async function holdDesktop(
+  options: DesktopOptions,
+  idleMs: number,
+): Promise<{ session: DesktopSession; release: () => void }> {
+  const key = options.homeDir;
+  const slot = slotFor(key);
+  slot.holders++;
+  clearTimeout(slot.idle);
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    slot.holders--;
+    idleLater(slot, key, idleMs);
+  };
+  try {
+    return { session: await open(slot, options), release };
+  } catch (error) {
+    release();
+    throw error;
+  }
+}
+
+function slotFor(key: string): Slot {
+  const slot = slots.get(key) ?? { queue: Promise.resolve(), holders: 0 };
+  slots.set(key, slot);
+  return slot;
+}
+
+async function open(slot: Slot, options: DesktopOptions): Promise<DesktopSession> {
   stopOnExit();
   slot.session ??= DesktopSession.open(options).then((session) => {
     opened.add(session);
     return session;
   });
-  return slot.session.catch((error: unknown) => {
+  try {
+    const session = await slot.session;
+    // The apps and sandbox follow the settings, also for a desktop opened before they changed.
+    session.options = { ...session.options, apps: options.apps, sandbox: options.sandbox };
+    return session;
+  } catch (error) {
     slot.session = undefined;
     throw error;
-  });
+  }
+}
+
+function idleLater(slot: Slot, key: string, idleMs: number): void {
+  clearTimeout(slot.idle);
+  if (slot.holders > 0) return;
+  slot.idle = setTimeout(() => void closeDesktop(key), idleMs);
+  slot.idle.unref();
 }
 
 /** Closes the desktop for `homeDir` once the task running on it, if any, is done. */

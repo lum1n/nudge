@@ -139,6 +139,14 @@ function Room() {
               Browser
             </Link>
             <Link
+              to="/$assistant/$room/desktop"
+              params={{ assistant, room }}
+              title="The room's desktop, where the assistant uses apps"
+              className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
+            >
+              Desktop
+            </Link>
+            <Link
               to="/$assistant/$room/connectors"
               params={{ assistant, room }}
               className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"

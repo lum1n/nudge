@@ -4,6 +4,7 @@
 //   submit <ref> <text> | press <keys> [ref] | select <ref> <option> | focus <ref> | sleep <ms>
 // A ref may be `@words`: the ref on the first line of the desktop that contains every word.
 // node eval/probe.ts --app editor=gnome-text-editor --app calc=libreoffice,--calc < steps.txt
+// `--sandbox` runs the apps sandboxed, as Nudge does; `--readable <dir>` lets them read a directory.
 import { execFileSync } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -19,6 +20,8 @@ const { values } = parseArgs({
     home: { type: "string" },
     quiet: { type: "boolean", default: false },
     "no-settle": { type: "boolean", default: false },
+    sandbox: { type: "boolean", default: false },
+    readable: { type: "string", multiple: true, default: [] },
   },
 });
 const apps = Object.fromEntries(
@@ -28,7 +31,11 @@ const apps = Object.fromEntries(
   }),
 );
 const homeDir = values.home ?? mkdtempSync(join(tmpdir(), "nudge-probe-home-"));
-const desktop = await DesktopSession.open({ apps, homeDir });
+const desktop = await DesktopSession.open({
+  apps,
+  homeDir,
+  ...(values.sandbox ? { sandbox: { readable: values.readable! } } : {}),
+});
 console.log(`# desktop ${desktop.display}, home ${homeDir}`);
 
 const heard: string[] = [];

@@ -18,8 +18,11 @@ import {
   DEFAULT_DESKTOP_MODEL,
   runDesktopAgent,
 } from "./agent.ts";
-import { closeAllDesktops, withDesktop } from "./pool.ts";
-import { desktopProblem } from "./session.ts";
+import { foundApps } from "./apps.ts";
+import { type LiveInput, startLiveView } from "./live.ts";
+import { closeAllDesktops, holdDesktop, withDesktop } from "./pool.ts";
+import { type DesktopOptions, desktopProblem } from "./session.ts";
+import { type Viewer, viewersOf } from "./viewers.ts";
 
 /** What a `confirm` approval holds: the task a run stopped in, and the action to approve. */
 type ConfirmPayload = { task: string; action: string };
@@ -39,7 +42,18 @@ export default defineNudgeExtension({
     apps: Type.Record(Type.String(), Type.Array(Type.String(), { minItems: 1 }), {
       default: {},
       description:
-        'The apps the desktop agent may start, by name: the program and its arguments, like "writer": ["libreoffice", "--writer"].',
+        'The apps the desktop agent may start, by name: the program and its arguments, like "writer": ["libreoffice", "--writer"]. Left empty, the ones this server has of LibreOffice Writer and Calc, GNOME Text Editor and Dolphin.',
+    }),
+    /** Apps see the system's programs, their desktop's home and nothing else of the machine. */
+    sandbox: Type.Boolean({
+      default: true,
+      description:
+        "Run the apps in a bubblewrap sandbox, where they see only the system's programs and their desktop's own files, not the server's. Needs bubblewrap and user namespaces.",
+    }),
+    readable: Type.Array(Type.String(), {
+      default: [],
+      description:
+        "More directories the sandboxed apps may read, such as where an app is installed outside /usr and /opt.",
     }),
     /** `provider/model` from the providers Nudge knows, such as `openai/gpt-5-mini`. */
     model: Type.String({
@@ -76,10 +90,17 @@ export default defineNudgeExtension({
       dataDir ? join(dataDir, "homes") : (temp ??= mkdtempSync(join(tmpdir(), "nudge-homes-")));
     const [provider, ...id] = settings.model.split("/");
     const idleMs = settings.idleMinutes * 60_000;
-    const apps = settings.apps as Record<string, string[]>;
+    const set = settings.apps as Record<string, string[]>;
+    const apps = Object.keys(set).length ? set : foundApps();
     const unavailable = `The desktop model "${settings.model}" is not available. Set "model" in the desktop extension's settings in nudge.json.`;
 
     /** One run of the desktop agent on a room's desktop: its own home, files and app settings. */
+    const scopeOf = (conversationId: number) => `conversation-${conversationId}`;
+    const optionsFor = (conversationId: number): DesktopOptions => ({
+      apps,
+      homeDir: join(homes(), scopeOf(conversationId)),
+      ...(settings.sandbox ? { sandbox: { readable: settings.readable } } : {}),
+    });
     const useIn = async (
       run: { readonly models: Models; readonly conversationId: number; readonly context: Context },
       task: string,
@@ -87,13 +108,13 @@ export default defineNudgeExtension({
     ): Promise<DesktopAgentResult | string> => {
       const model = run.models.getModel(provider!, id.join("/")) as Model<Api> | undefined;
       if (!model) return unavailable;
-      const problem = desktopProblem();
+      const problem = desktopProblem({ sandbox: settings.sandbox });
       if (problem) return problem;
-      return withDesktop(
-        { apps, homeDir: join(homes(), `conversation-${run.conversationId}`) },
-        idleMs,
-        (desktop) =>
-          runDesktopAgent({
+      // People watching the desktop see what the agent does, as the room does.
+      const viewers = viewersOf(scopeOf(run.conversationId));
+      return withDesktop(optionsFor(run.conversationId), idleMs, async (desktop) => {
+        try {
+          return await runDesktopAgent({
             models: run.models,
             model,
             desktop,
@@ -105,8 +126,15 @@ export default defineNudgeExtension({
             now,
             ...(run.context.abortSignal ? { signal: run.context.abortSignal } : {}),
             ...extra,
-          }),
-      );
+            onStep: (step) => {
+              if (step.type === "doing") viewers.broadcast({ type: "status", text: step.text });
+              extra.onStep?.(step);
+            },
+          });
+        } finally {
+          viewers.broadcast({ type: "status", text: "" });
+        }
+      });
     };
 
     /**
@@ -139,6 +167,16 @@ export default defineNudgeExtension({
 
     return {
       models: [{ provider: provider!, modelId: id.join("/") }],
+      // For `nudge doctor`: what this server lacks for a desktop, and apps to run on it.
+      problems: () => {
+        const problem = desktopProblem({ sandbox: settings.sandbox });
+        if (problem) return [problem];
+        return Object.keys(apps).length
+          ? []
+          : [
+              'No apps to run: this server has none of LibreOffice, GNOME Text Editor or Dolphin, and "apps" in the desktop extension\'s settings names none.',
+            ];
+      },
       tools: [
         defineTool({
           name: "use_desktop",
@@ -212,6 +250,44 @@ export default defineNudgeExtension({
           }
           return { text: stopped(result), usage: result.usage, isError: true };
         },
+      },
+      // The room's desktop, live, for the people in the room: watch the agent, take over.
+      roomSocket: async ({ room, player }, socket) => {
+        const problem = desktopProblem({ sandbox: settings.sandbox });
+        if (problem) throw new Error(problem);
+        const viewers = viewersOf(scopeOf(room.conversationId));
+        const { session, release } = await holdDesktop(optionsFor(room.conversationId), idleMs);
+        const viewer: Viewer = {
+          name: player.displayName,
+          send: (output) => socket.send(JSON.stringify(output)),
+        };
+        // One stream per desktop, shared by its viewers, from the first who comes to the last.
+        viewers.live ??= startLiveView(session, (output) => viewers.broadcast(output));
+        const live = viewers.live;
+        viewers.join(viewer);
+        viewer.send({ type: "apps", apps: Object.keys(apps) });
+        await live.welcome(viewer.send).catch(() => {});
+        return {
+          receive: (data) => {
+            const input = JSON.parse(data) as LiveInput;
+            if (input.type === "take") return viewers.take(viewer);
+            // Only the one in control drives the desktop; the others watch.
+            if (viewers.holder !== viewer)
+              return viewer.send({
+                type: "error",
+                message: `${viewers.holder?.name ?? "Someone"} is using the desktop. Take control to use it.`,
+              });
+            live.receive(data, viewer.send);
+          },
+          close: () => {
+            viewers.leave(viewer);
+            if (viewers.size === 0) {
+              live.close();
+              if (viewers.live === live) viewers.live = undefined;
+            }
+            release();
+          },
+        };
       },
       // A reload or the assistant closing: the desktops close once their running tasks are done,
       // and open again, with the new settings, on the next task.

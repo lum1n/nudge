@@ -11,6 +11,8 @@
 // The database and the extensions' files are kept in a temporary directory, removed on exit, or
 // in `NUDGE_FAUX_DATA` when that is set. `NUDGE_FAUX_BROWSER=1` adds the browser extension, headless
 // and driven by the faux model, for the live view (it needs Chromium: `npx patchright install`).
+// `NUDGE_FAUX_DESKTOP=1` adds the desktop extension with the GTK test app as "notes", for its live
+// view (it needs Xvfb, dbus, at-spi2-core, bubblewrap and python-gobject).
 //
 // The model answers "Hello! …" in several pieces first and "Answer <n>." after that. A message
 // containing "please pay" makes it call `pay`, which waits for an approval and answers "Paid 10 kr.";
@@ -42,6 +44,7 @@ import {
   Type,
 } from "@nudge/core";
 import browserExtension, { closeAllBrowsers } from "@nudge/ext-browser";
+import desktopExtension, { closeAllDesktops } from "@nudge/ext-desktop";
 import connectorsExtension from "@nudge/ext-connectors";
 import { documentsExtension } from "@nudge/ext-documents";
 import federationExtension from "@nudge/ext-federation";
@@ -63,6 +66,10 @@ const freePort = () =>
 const port = Number(process.env.NUDGE_FAUX_PORT ?? 0) || (await freePort());
 const url = `http://127.0.0.1:${port}`;
 const withBrowser = process.env.NUDGE_FAUX_BROWSER === "1";
+const withDesktop = process.env.NUDGE_FAUX_DESKTOP === "1";
+/** The desktop extension's GTK test app. */
+const notesApp = new URL("../../../extensions/desktop/test/fixtures/notes.py", import.meta.url)
+  .pathname;
 /** Typed by the faux model as the browser's task, so its requests can be told apart. */
 const BROWSER_TASK = "Read the inbox on example.com";
 
@@ -194,6 +201,19 @@ const setups: Setup[] = [
     enabled: withBrowser,
     settings: withBrowser
       ? { model: `${faux.provider.id}/${faux.getModel().id}`, headless: true }
+      : {},
+  },
+  {
+    from: "@nudge/ext-desktop",
+    extension: desktopExtension,
+    configured: withDesktop,
+    enabled: withDesktop,
+    settings: withDesktop
+      ? {
+          model: `${faux.provider.id}/${faux.getModel().id}`,
+          apps: { notes: ["python3", notesApp] },
+          readable: [join(notesApp, "..")],
+        }
       : {},
   },
   {
@@ -347,6 +367,7 @@ const stop = () => {
     .then(() => nudge.close(context))
     .then(() => team.close(context))
     .then(() => (withBrowser ? closeAllBrowsers() : undefined))
+    .then(() => (withDesktop ? closeAllDesktops() : undefined))
     .finally(() => {
       removeData();
       process.exit(0);

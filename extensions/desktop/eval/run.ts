@@ -1,12 +1,12 @@
 // Runs the desktop tasks against each model, a few times each, through the same redaction as
 // Nudge, each run on a desktop and home of its own, and writes a result line per run, every
 // request the providers got, and a summary table.
-// pnpm -C extensions/desktop eval -- [--model anthropic/claude-haiku-5-5] [--tasks calc-sum] [--runs 2] [--apps apps.json]
+// pnpm -C extensions/desktop eval -- [--model anthropic/claude-haiku-5-5] [--tasks calc-sum] [--runs 2] [--apps apps.json] [--no-sandbox]
 // Keys come from the environment only (ANTHROPIC_API_KEY, …). Needs `pnpm build` first: plain
 // Node runs @nudge/core from its build. The apps are started as `--apps` says (see DEFAULT_APPS);
 // `{home}` in their arguments is the run's home.
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import type { Api, Model, ThinkingLevel } from "@earendil-works/pi-ai";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
@@ -62,6 +62,8 @@ const { values } = parseArgs({
     reasoning: { type: "string", default: "low" },
     steps: { type: "string", default: "40" },
     apps: { type: "string" },
+    /** Runs the apps without the sandbox Nudge puts them in by default. */
+    "no-sandbox": { type: "boolean", default: false },
     out: { type: "string", default: join(import.meta.dirname, "..", ".eval") },
   },
 });
@@ -132,7 +134,11 @@ for (const { spec, providerId, model } of runs) {
           return [name, command.map((arg) => arg.replaceAll("{home}", home))];
         }),
       );
-      const desktop = await DesktopSession.open({ apps: taskApps, homeDir: home });
+      // Sandboxed, as in Nudge; apps unpacked beside --apps' file can be read there.
+      const sandbox = values["no-sandbox"]
+        ? {}
+        : { sandbox: { readable: values.apps ? [dirname(resolve(values.apps))] : [] } };
+      const desktop = await DesktopSession.open({ apps: taskApps, homeDir: home, ...sandbox });
       const label = `${task.id}#${n}`;
       const started = Date.now();
       const result = await runDesktopAgent({

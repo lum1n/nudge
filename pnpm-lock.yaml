@@ -563,6 +563,9 @@ importers:
       '@nudge/ext-connectors':
         specifier: workspace:*
         version: link:../../extensions/connectors
+      '@nudge/ext-desktop':
+        specifier: workspace:*
+        version: link:../../extensions/desktop
       '@nudge/ext-documents':
         specifier: workspace:*
         version: link:../../extensions/documents
@@ -636,6 +639,9 @@ importers:
       '@nudge/ext-connectors':
         specifier: workspace:*
         version: link:../../extensions/connectors
+      '@nudge/ext-desktop':
+        specifier: workspace:*
+        version: link:../../extensions/desktop
       '@nudge/ext-documents':
         specifier: workspace:*
         version: link:../../extensions/documents

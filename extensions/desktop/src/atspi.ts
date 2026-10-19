@@ -112,6 +112,11 @@ const KEYSYMS: Record<string, number> = {
   up: 0xff52,
   right: 0xff53,
   down: 0xff54,
+  // As web pages name them, for the live view.
+  arrowleft: 0xff51,
+  arrowup: 0xff52,
+  arrowright: 0xff53,
+  arrowdown: 0xff54,
   pageup: 0xff55,
   pagedown: 0xff56,
   insert: 0xff63,

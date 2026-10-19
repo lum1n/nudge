@@ -107,7 +107,9 @@ export async function doctor(options: DoctorOptions): Promise<boolean> {
         const installed = await checkExtensions(assistant.extensions);
         const names = installed.map((e) => `${e.name}${e.version ? ` ${e.version}` : ""}`);
         check(true, `${assistant.name}: extensions ${names.join(", ") || "none enabled"}`);
-        for (const extension of installed)
+        for (const extension of installed) {
+          for (const problem of extension.problems)
+            check(false, `${assistant.name}: ${extension.name}: ${problem}`);
           for (const used of extension.models) {
             const what = `${assistant.name}: ${extension.name} uses ${used.provider}/${used.modelId}`;
             if (models.getModel(used.provider, used.modelId) === undefined) {
@@ -120,6 +122,7 @@ export async function doctor(options: DoctorOptions): Promise<boolean> {
             if (options.ping && auth !== undefined)
               await ping(models, what, used.provider, used.modelId);
           }
+        }
       } catch (error) {
         check(false, `${assistant.name}: extensions: ${(error as Error).message}`);
       }

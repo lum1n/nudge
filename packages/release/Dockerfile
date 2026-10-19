@@ -18,6 +18,17 @@ RUN apt-get update \
   && useradd --system --uid 1000 --home-dir /data --shell /usr/sbin/nologin nudge \
   && mkdir /data && chown nudge:nudge /data
 
+# The desktop extension's: D-Bus and AT-SPI, through which it reads and drives the apps, bubblewrap,
+# which sandboxes them, and the apps it finds by itself, LibreOffice Writer and Calc on their Qt 6
+# backend (on GTK 3 LibreOffice aborts when its windows are read), from bookworm-backports.
+RUN echo 'deb http://deb.debian.org/debian bookworm-backports main' \
+    >/etc/apt/sources.list.d/backports.list \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends dbus-daemon at-spi2-core bubblewrap \
+  && apt-get install -y --no-install-recommends -t bookworm-backports \
+    libreoffice-writer libreoffice-calc libreoffice-qt6 \
+  && rm -rf /var/lib/apt/lists/*
+
 ARG TARGETOS
 ARG TARGETARCH
 ADD ${TARGETOS}-${TARGETARCH}.tar.gz /opt/

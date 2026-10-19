@@ -142,6 +142,11 @@ export type ExtensionParts = Omit<Extension, "name"> & {
   /** Models the extension calls itself, so `nudge doctor` can check their credentials. */
   readonly models?: readonly { readonly provider: string; readonly modelId: string }[];
   /**
+   * What keeps the extension from working on this machine, such as programs it needs that are
+   * missing, for `nudge doctor`; none when it can work.
+   */
+  readonly problems?: () => readonly string[] | Promise<readonly string[]>;
+  /**
    * Runs actions people approved, by kind. The extension's tools ask with `requestApproval`
    * under the extension's name.
    */
@@ -249,6 +254,7 @@ export type SetUpExtension = {
   readonly roomSocket?: RoomSocketHandler;
   readonly routes: readonly ExtensionRoute[];
   readonly models: readonly { readonly provider: string; readonly modelId: string }[];
+  readonly problems?: () => readonly string[] | Promise<readonly string[]>;
   readonly approvals: Readonly<Record<string, ApprovalHandler>>;
   readonly onRoomEvent?: (event: RoomEvent) => void | Promise<void>;
   readonly close?: () => void | Promise<void>;
@@ -292,6 +298,7 @@ export async function setUpExtension(
     roomSocket,
     routes = [],
     models = [],
+    problems,
     approvals = {},
     onRoomEvent,
     close,
@@ -315,6 +322,7 @@ export async function setUpExtension(
     routes,
     models,
     approvals,
+    ...(problems === undefined ? {} : { problems }),
     ...(roomSocket === undefined ? {} : { roomSocket }),
     ...(onRoomEvent === undefined ? {} : { onRoomEvent }),
     ...(close === undefined ? {} : { close }),

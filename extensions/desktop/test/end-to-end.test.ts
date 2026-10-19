@@ -61,6 +61,8 @@ describe.runIf(run)("use_desktop on a real desktop", () => {
             settings: {
               model: `${faux.provider.id}/${faux.getModel().id}`,
               apps: { notes: ["python3", app, "/dev/null"] },
+              // Sandboxed, as by default: the app is in the checkout, which it can't see otherwise.
+              readable: [new URL("./fixtures", import.meta.url).pathname],
             },
           },
         ],
