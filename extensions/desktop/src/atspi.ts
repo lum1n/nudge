@@ -143,6 +143,34 @@ export function parseKeys(combo: string): { keysym: number; modifiers: number } 
   return { keysym, modifiers };
 }
 
+/** `org.a11y.Bus`, as at-spi-bus-launcher serves it: where the accessibility bus is. */
+class A11yBus extends dbus.interface.Interface {
+  readonly address: string;
+
+  constructor(address: string) {
+    super("org.a11y.Bus");
+    this.address = address;
+  }
+
+  GetAddress(): string {
+    return this.address;
+  }
+}
+A11yBus.configureMembers({ methods: { GetAddress: { inSignature: "", outSignature: "s" } } });
+
+/** `org.a11y.Status`: assistive technology is on, always, so toolkits expose their trees. */
+class A11yStatus extends dbus.interface.Interface {
+  IsEnabled = true;
+  ScreenReaderEnabled = false;
+
+  constructor() {
+    super("org.a11y.Status");
+  }
+}
+A11yStatus.configureMembers({
+  properties: { IsEnabled: { signature: "b" }, ScreenReaderEnabled: { signature: "b" } },
+});
+
 export class Atspi {
   private readonly bus: Bus;
   private readonly session: Bus;
@@ -153,25 +181,21 @@ export class Atspi {
   }
 
   /**
-   * Connects to the accessibility bus of the session at `sessionAddress`, starting it if needed,
-   * and tells toolkits that assistive technology is on (Qt and Chromium wait for that).
+   * Connects to the accessibility bus at `a11yAddress`, and serves `org.a11y.Bus` on the session
+   * at `sessionAddress`: apps that ask the session for the accessibility bus get that one, and
+   * hear that assistive technology is on (Qt and Chromium wait for that). Serving it keeps
+   * at-spi-bus-launcher from starting: inside a systemd user unit it runs the bus on dbus-broker,
+   * which starts the registry as a unit of the person's own session, where it fails.
    */
-  static async connect(sessionAddress: string): Promise<Atspi> {
+  static async connect(sessionAddress: string, a11yAddress: string): Promise<Atspi> {
     const session = dbus.sessionBus({ busAddress: sessionAddress });
     try {
-      const [address] = (await call(
-        session,
-        "org.a11y.Bus",
-        "/org/a11y/bus",
-        "org.a11y.Bus",
-        "GetAddress",
-      )) as [string];
-      await call(session, "org.a11y.Bus", "/org/a11y/bus", PROPERTIES, "Set", "ssv", [
-        "org.a11y.Status",
-        "IsEnabled",
-        new dbus.Variant("b", true),
-      ]);
-      return new Atspi(dbus.sessionBus({ busAddress: address }), session);
+      session.export("/org/a11y/bus", new A11yBus(a11yAddress));
+      session.export("/org/a11y/bus", new A11yStatus());
+      // 4: don't queue. 1: now the primary owner.
+      if ((await session.requestName("org.a11y.Bus", 4)) !== 1)
+        throw new Error("The desktop's session already has an accessibility bus.");
+      return new Atspi(dbus.sessionBus({ busAddress: a11yAddress }), session);
     } catch (error) {
       session.disconnect();
       throw error;

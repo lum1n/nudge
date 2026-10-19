@@ -43,9 +43,17 @@ const CLICKS = ["click", "press", "activate", "toggle", "jump", "open"];
 /** Why a desktop can't start here, if it can't: it needs Xvfb, D-Bus and AT-SPI. */
 export function desktopProblem(): string | undefined {
   const missing = ["Xvfb", "dbus-daemon"].filter((program) => !onPath(program));
+  if (!a11yBusConfig()) missing.push("AT-SPI bus config");
   if (missing.length)
     return `This server has no ${missing.join(" or ")} for the desktop. Install xvfb, dbus and at-spi2-core.`;
   return undefined;
+}
+
+/** at-spi2-core's config for the accessibility bus, where at-spi-bus-launcher looks for it. */
+function a11yBusConfig(): string | undefined {
+  return ["/etc/at-spi2/accessibility.conf", "/usr/share/defaults/at-spi2/accessibility.conf"].find(
+    (path) => existsSync(path),
+  );
 }
 
 /** Runtime directories of desktops are named so; `sweepDesktops` finds the ones left behind. */
@@ -162,12 +170,23 @@ export class DesktopSession {
         "GNOME_DESKTOP_SESSION_ID",
       ])
         delete base[name];
-      const bus = await startSessionBus(base, runtimeDir);
+      const bus = await startBus(base, runtimeDir, "bus", ["--session"]);
       processes.push(bus.process);
       record(runtimeDir, bus.process);
+      // The accessibility bus too, on dbus-daemon: it starts the registry with this environment.
+      const a11y = await startBus(
+        { ...base, DBUS_SESSION_BUS_ADDRESS: bus.address },
+        runtimeDir,
+        "a11y-bus",
+        [`--config-file=${a11yBusConfig()}`],
+      );
+      processes.push(a11y.process);
+      record(runtimeDir, a11y.process);
       const env: NodeJS.ProcessEnv = {
         ...base,
         DBUS_SESSION_BUS_ADDRESS: bus.address,
+        // GTK, Qt and libatspi take this before asking the session.
+        AT_SPI_BUS_ADDRESS: a11y.address,
         GDK_BACKEND: "x11",
         QT_QPA_PLATFORM: "xcb",
         // Qt, Chromium and Electron only expose their tree when asked to.
@@ -181,7 +200,7 @@ export class DesktopSession {
         GTK_USE_PORTAL: "0",
         QT_NO_XDG_DESKTOP_PORTAL: "1",
       };
-      const atspi = await Atspi.connect(bus.address);
+      const atspi = await Atspi.connect(bus.address, a11y.address);
       const session = new DesktopSession(options, xvfb.display, env, atspi, runtimeDir, processes);
       await atspi.onEvents(["object:state-changed:showing"], (event, address, detail) => {
         if (event === "object:state-changed:showing" && detail === 1) session.noteShown(address);
@@ -805,19 +824,16 @@ async function startXvfb(size: {
   throw new Error("Could not start Xvfb for the desktop.");
 }
 
-/** A session bus for the desktop alone. It starts the accessibility bus when an app asks for it. */
-async function startSessionBus(
+/** A bus for the desktop alone, at `name` in its runtime dir: `config` picks which kind. */
+async function startBus(
   env: NodeJS.ProcessEnv,
   runtimeDir: string,
+  name: string,
+  config: string[],
 ): Promise<{ address: string; process: ChildProcess }> {
   const child = spawn(
     "dbus-daemon",
-    [
-      "--session",
-      "--nofork",
-      "--print-address=1",
-      `--address=unix:path=${join(runtimeDir, "bus")}`,
-    ],
+    [...config, "--nofork", "--print-address=1", `--address=unix:path=${join(runtimeDir, name)}`],
     // Services it starts begin in its working dir: the desktop's home, not the server's.
     { env, cwd: env.HOME, stdio: ["ignore", "pipe", "ignore"], detached: true },
   );
