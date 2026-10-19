@@ -1346,44 +1346,6 @@ pub struct SetUpdatesRequest {
     pub automatic: bool,
 }
 
-/// How far the server's own Tailscale is.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum TailscaleStatus {
-    Off,
-    Starting,
-    /// Someone approves it at `auth_url`.
-    NeedsLogin,
-    /// A tailnet admin approves the machine.
-    NeedsApproval,
-    Connected,
-    Error,
-}
-
-/// The server's own Tailscale, so it can reach assistants only in its owner's tailnet.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TailscaleState {
-    pub state: TailscaleStatus,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub auth_url: Option<String>,
-    /// Its MagicDNS name, such as `nudge-robin.tail1234.ts.net`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub addresses: Option<Vec<String>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-}
-
-/// Without `auth_key`, the state answers with a login URL to approve.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TailscaleConnectRequest {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub auth_key: Option<String>,
-}
-
 /// How far the server's Wired is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]

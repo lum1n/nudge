@@ -14,7 +14,6 @@ import {
   type ServerKeys,
   type ServerOwner,
   type ServerOwners,
-  type TailscaleState,
   WiredError,
 } from "@nudge/core";
 import {
@@ -36,7 +35,6 @@ import {
   type ServerSessionResponse,
   SetProviderKeyRequest,
   SetUpdatesRequest,
-  TailscaleConnectRequest,
   WiredJoinRequest,
   WiredRelayRequest,
   type WiredRelayResponse,
@@ -65,8 +63,6 @@ export type ServerControl = {
   backupKey(): Promise<Buffer>;
   /** Self-update, for a server `nudge-server` runs; absent otherwise. */
   readonly updates?: UpdateControl;
-  /** The server's own Tailscale, on Linux; absent elsewhere. */
-  readonly tailscale?: TailscaleControl;
   /** The server's Wired; absent where the server wasn't given one. */
   readonly wired?: WiredControl;
 };
@@ -84,14 +80,6 @@ export type WiredControl = {
   remove(name: string): Promise<WiredState>;
   /** Leaves the network, or stops holding it, and forgets it. */
   disable(): Promise<WiredState>;
-};
-
-/** What owners see of and do with the server's Tailscale. */
-export type TailscaleControl = {
-  state(): Promise<TailscaleState>;
-  /** Joins the tailnet, with a login URL in the state when no key was given. */
-  connect(authKey?: string): Promise<TailscaleState>;
-  disconnect(): Promise<TailscaleState>;
 };
 
 /** What owners see of and do with updates. */
@@ -169,21 +157,6 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
     const { automatic } = await readJson(c, SetUpdatesRequest);
     return c.json(await updates().setAutomatic(automatic));
   });
-
-  const tailscale = () => {
-    if (control.tailscale === undefined)
-      throw new HttpError(404, "This server can't run Tailscale: it only runs on Linux");
-    return control.tailscale;
-  };
-
-  app.get("/tailscale", async (c) => c.json(await tailscale().state()));
-
-  app.post("/tailscale", async (c) => {
-    const { authKey } = await readJson(c, TailscaleConnectRequest);
-    return c.json(await tailscale().connect(authKey));
-  });
-
-  app.delete("/tailscale", async (c) => c.json(await tailscale().disconnect()));
 
   const wired = () => {
     if (control.wired === undefined) throw new HttpError(404, "This server has no Wired");

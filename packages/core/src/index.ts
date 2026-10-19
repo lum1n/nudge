@@ -90,18 +90,10 @@ export {
   type UpdateState,
 } from "./server/updates.ts";
 export {
-  isTailnetHost,
-  routeOutgoing,
-  stateOfStatus,
-  Tailscale,
-  TailscaleError,
-  type TailscaleOptions,
-  type TailscaleState,
-} from "./server/tailscale.ts";
-export {
   isWiredHost,
   loadWired,
   type RelayFront,
+  routeOutgoing,
   ServerWired,
   serverWiredName,
   WiredError,

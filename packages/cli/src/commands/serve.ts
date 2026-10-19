@@ -21,7 +21,6 @@ import {
   ServerOwners,
   serverOwnersFile,
   SetupCodes,
-  Tailscale,
   routeOutgoing,
   ServerWired,
   serverWiredName,
@@ -124,7 +123,7 @@ export function startupLines(
   ];
   if (everywhere)
     lines.push(
-      "Plain HTTP: anyone on this network can read what goes over it, tokens included. Put a TLS proxy in front, or use a VPN such as Tailscale, beyond a network you trust.",
+      "Plain HTTP: anyone on this network can read what goes over it, tokens included. Put a TLS proxy in front, or use a VPN, beyond a network you trust.",
     );
   else if (host === "127.0.0.1" || host === "localhost" || host === "::1")
     lines.push(
@@ -184,14 +183,16 @@ export async function serve(options: ServeOptions): Promise<number> {
     say,
   );
   const publicUrl = () => options.publicUrl ?? config?.server?.publicUrl;
-  const tailscale = serverTailscale(configPath, publicUrl, say);
-  const wired = new ServerWired({ dir: join(dirname(configPath), "server", "wired"), publicUrl, say });
+  // Where the server's own Tailscale was, before Wired replaced it: its binaries and state.
+  void rm(join(dirname(configPath), "server", "tailscale"), { recursive: true, force: true });
+  const wired = new ServerWired({
+    dir: join(dirname(configPath), "server", "wired"),
+    publicUrl,
+    say,
+  });
   await wired.load();
   const relayFront = wired.relayFront();
-  routeOutgoing(
-    () => tailscale?.proxy,
-    () => wired.dispatcher(),
-  );
+  routeOutgoing(() => wired.dispatcher());
   // Where the network reaches this server's API; known once it listens.
   let apiAddr: string | undefined;
   try {
@@ -217,7 +218,6 @@ export async function serve(options: ServeOptions): Promise<number> {
       testKey,
       backupKey: theBackupKey,
       ...(updates === undefined ? {} : { updates: updates.control }),
-      ...(tailscale === undefined ? {} : { tailscale }),
       wired: {
         state: () => wired.state(),
         enable: async () => {
@@ -298,7 +298,6 @@ export async function serve(options: ServeOptions): Promise<number> {
     stopReloading();
     stopUpdates();
     stopBackups();
-    tailscale?.stop();
     await wired.stop();
     console.log(restarting ? "Restarting into the new release…" : "Stopping…");
     await server.close();
@@ -306,31 +305,6 @@ export async function serve(options: ServeOptions): Promise<number> {
     await assistants.close();
   }
   return restarting ? RESTART_EXIT_CODE : 0;
-}
-
-/**
- * The server's own Tailscale, on Linux, where Tailscale's static builds run: started again if an
- * owner connected it before; `routeOutgoing` sends requests to tailnet addresses through it. It is
- * named for the server's address, such as `nudge-robin` for `https://robin.exe.xyz`.
- */
-function serverTailscale(
-  configPath: string,
-  publicUrl: () => string | undefined,
-  say: (line: string) => void,
-): Tailscale | undefined {
-  if (process.platform !== "linux") return undefined;
-  const tailscale = new Tailscale({
-    dir: join(dirname(configPath), "server", "tailscale"),
-    // A release has Node in node/bin and Tailscale in tailscale/.
-    bundled: join(dirname(process.execPath), "..", "..", "tailscale"),
-    hostname: () => {
-      const label = /^https?:\/\/([a-z0-9-]+)/i.exec(publicUrl() ?? "")?.[1];
-      return label === undefined ? "nudge" : `nudge-${label.toLowerCase()}`;
-    },
-    say,
-  });
-  void tailscale.resume();
-  return tailscale;
 }
 
 /**

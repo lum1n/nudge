@@ -43,7 +43,6 @@ import nudge.ffi.PushPlatforms
 import nudge.ffi.Reach
 import nudge.ffi.RoomListUpdate
 import nudge.ffi.SetupChoices
-import nudge.ffi.TailscaleStatus
 import nudge.ffi.listAssistants
 import nudge.ffi.newDeviceKey
 import nudge.ffi.reach
@@ -194,8 +193,7 @@ class AppModel(private val context: Context) {
     /**
      * Sets a server up with what the wizard asked (ADR 11), and signs in as its owner. Signed out,
      * its new assistant becomes the person's home. Signed in at home, it is joined from there
-     * instead, so they keep one home: at once, or once the server is in the home's tailnet when
-     * the home is only there, which the answer says ([SetUpServer.NeedsTailscale]).
+     * instead, so they keep one home.
      */
     suspend fun setUp(server: String, choices: SetupChoices): SetUpServer {
         if (mutableSession.value != null) homeProblem()?.let { throw ServerProblem(it) }
@@ -210,7 +208,6 @@ class AppModel(private val context: Context) {
             runCatching { setup.signOut() }
             setupTokens.set(null)
             setup.close()
-            if (homeReach() == Reach.TAILNET) return SetUpServer.NeedsTailscale(done.assistant)
             joinFromHome(server, done.assistant)
             return SetUpServer.Joined
         }
@@ -242,10 +239,7 @@ class AppModel(private val context: Context) {
         return reach(home.account.server)
     }
 
-    /**
-     * Why the home can't join assistants on other servers yet, if it can't. A home only in a
-     * tailnet can, once the other server is in that tailnet too, which is up to each server.
-     */
+    /** Why the home can't join assistants on other servers yet, if it can't. */
     fun homeProblem(): ServerProblem.Kind? {
         if (mutableSession.value == null) return null
         if (homeReach() == Reach.PRIVATE) return ServerProblem.Kind.PRIVATE_HOME
@@ -283,17 +277,13 @@ class AppModel(private val context: Context) {
 
     /**
      * Joins an assistant on a server this device owns from home, as its owner: invites the home's
-     * address, joins, and makes that guest an admin there and an owner of the server. A home only
-     * in a tailnet needs the server's own Tailscale connected first.
+     * address, joins, and makes that guest an admin there and an owner of the server.
      */
     suspend fun joinFromHome(server: String, assistant: String) {
         if (mutableSession.value == null) return
         homeProblem()?.let { throw ServerProblem(it) }
         val address = mutableMemberships.value?.address ?: throw ServerProblem(ServerProblem.Kind.NO_FEDERATION)
         val owner = servers.client(server)
-        if (homeReach() == Reach.TAILNET && runCatching { owner.tailscale() }.getOrNull()?.state != TailscaleStatus.CONNECTED) {
-            throw ServerProblem(ServerProblem.Kind.NEEDS_TAILSCALE)
-        }
         // At the address this device knows the server by, which the link may write otherwise.
         owner.invite(assistant, address)
         join(JoinLink(server, assistant))
@@ -310,14 +300,7 @@ class AppModel(private val context: Context) {
      * at once, so its rooms show beside the home's and the person is its first admin.
      */
     suspend fun createAssistant(server: String, new: NewAssistant): MadeAssistant {
-        if (new.madeFor is AssistantFor.Me) {
-            homeProblem()?.let { throw ServerProblem(it) }
-            if (homeReach() == Reach.TAILNET &&
-                runCatching { servers.client(server).tailscale() }.getOrNull()?.state != TailscaleStatus.CONNECTED
-            ) {
-                throw ServerProblem(ServerProblem.Kind.NEEDS_TAILSCALE)
-            }
-        }
+        if (new.madeFor is AssistantFor.Me) homeProblem()?.let { throw ServerProblem(it) }
         val made = servers.client(server).createAssistant(new)
         made.joinLink?.let { JoinLink.parse(it) }?.let { join(it) }
         return made
@@ -635,8 +618,6 @@ sealed interface SetUpServer {
     data object Home : SetUpServer
     /** Joined from home. */
     data object Joined : SetUpServer
-    /** The home is only in a tailnet: the server joins it before the home can join the assistant. */
-    data class NeedsTailscale(val assistant: String) : SetUpServer
 }
 
 /** Why the home can't join an assistant on a server this device owns, or more on servers. */
@@ -646,9 +627,9 @@ class ServerProblem(val kind: Kind) : Exception(kind.text) {
         NO_FEDERATION_EXTENSION("Your home's server has no federation extension to turn on. Update it first."),
         PRIVATE_HOME(
             "This device reaches your home at a local address, which other servers can't reach. " +
-                "Sign in to your home at its Tailscale or public address.",
+                "Sign in to your home at its public address, or hold a Wired network at home and use its address: " +
+                "under Settings → Servers, open your home's server.",
         ),
-        NEEDS_TAILSCALE("Your home is only in your tailnet, so this server has to join it first: under Settings → Servers, open the server and connect it under Tailscale."),
         NOT_JOINED("Joining the assistant from home didn't work."),
         NOT_ON_EXE("This server isn't one this device made on exe.dev."),
     }

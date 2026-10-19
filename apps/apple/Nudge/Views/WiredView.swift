@@ -67,7 +67,7 @@ struct WiredSection: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Your other servers then reach your home over Wired, without Tailscale. Your home's address is who it is to other assistants: the ones you joined from home have to be joined again.")
+            Text("Your other servers then reach your home over Wired. Your home's address is who it is to other assistants: the ones you joined from home have to be joined again.")
         }
         .alert(
             "Remove \(removing ?? "") from the network?",

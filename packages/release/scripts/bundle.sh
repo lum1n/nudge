@@ -5,7 +5,6 @@
 #     node/       Node, the release's own
 #     app/        @nudge/release deployed with its production dependencies
 #     bin/        nudge-server (the launcher) and nudge
-#     tailscale/  Tailscale's static build, for the server's own Tailscale
 #     wired-node/ Wired's Node binding (github.com/lum1n/wired), for the server's own Wired
 #     chromium.json  where the release's Chromium is, and its sha256, with NUDGE_RELEASE_URL set
 #     VERSION
@@ -21,8 +20,8 @@ version=${1:?usage: bundle.sh <version>}
 node_version=${NODE_VERSION:-24.22.0}
 root=$(cd "$(dirname "$0")/../../.." && pwd)
 case $(uname -m) in
-  x86_64) arch=x64 tailscale_arch=amd64 ;;
-  aarch64 | arm64) arch=arm64 tailscale_arch=arm64 ;;
+  x86_64) arch=x64 ;;
+  aarch64 | arm64) arch=arm64 ;;
   *) echo "Unsupported architecture $(uname -m)" >&2 && exit 1 ;;
 esac
 name=nudge-$version-linux-$arch
@@ -57,17 +56,6 @@ find "$work/app/node_modules" -type d \( -name test -o -name tests -o -name __te
 "$work/node/bin/node" -e 'require(process.argv[1])' "$sqlite"
 
 cp "$root/packages/release/bin/nudge-server" "$root/packages/release/bin/nudge" "$work/bin/"
-
-# Tailscale's newest stable build, checked against the hash it publishes: a server downloading it
-# itself can take many minutes, as from exe.dev, where pkgs.tailscale.com sends about 65 KB/s.
-packages=https://pkgs.tailscale.com/stable
-tailscale=$(curl -fsSL "$packages/?mode=json" |
-  "$work/node/bin/node" -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>console.log(JSON.parse(s).Tarballs[process.argv[1]]))' "$tailscale_arch")
-curl -fsSL "$packages/$tailscale" -o "$out/$tailscale"
-echo "$(curl -fsSL "$packages/$tailscale.sha256")  $tailscale" | (cd "$out" && sha256sum -c -)
-mkdir "$work/tailscale"
-tar -xzf "$out/$tailscale" -C "$work/tailscale" --strip-components=1 --wildcards '*/tailscale' '*/tailscaled'
-rm "$out/$tailscale"
 
 # Wired's Node binding, from its release at the version and hashes wired.sh pins.
 "$root/packages/release/scripts/wired.sh" "$work" "linux-$arch"

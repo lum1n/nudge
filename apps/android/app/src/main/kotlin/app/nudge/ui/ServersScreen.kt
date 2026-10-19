@@ -69,11 +69,8 @@ import nudge.ffi.MadeAssistant
 import nudge.ffi.ModelChoice
 import nudge.ffi.NewAssistant
 import nudge.ffi.ProviderKey
-import nudge.ffi.Reach
 import nudge.ffi.ServerAssistant
 import nudge.ffi.ServerInfo
-import nudge.ffi.TailscaleState
-import nudge.ffi.TailscaleStatus
 
 /** The model a provider's new assistant starts with, until the owner picks another. */
 private val DEFAULT_MODELS = mapOf("anthropic" to "claude-sonnet-5", "openai" to "gpt-6.1-sol")
@@ -136,8 +133,8 @@ fun ServersScreen(model: AppModel, address: String?, exe: () -> Unit, close: () 
 }
 
 /**
- * One server: its updates, its assistants, the model keys set on it, its Tailscale, and its
- * recovery kit; removing it, for one made on exe.dev.
+ * One server: its updates, its assistants, the model keys set on it, and its recovery kit;
+ * removing it, for one made on exe.dev.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -189,7 +186,7 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
     if (creating) {
         BackHandler { creating = false }
         NewAssistantScreen(
-            model, server, keys, address,
+            model, keys, address,
             create = { new -> model.createAssistant(server, new).also { reload() } },
             close = { creating = false },
         )
@@ -350,7 +347,6 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
                     ) { Text("New assistant") }
                 },
             )
-            item(key = "tailscale") { TailscaleCard(model, server) }
             group(
                 "Model keys",
                 keys.map<ProviderKey, GroupRow> { key ->
@@ -428,7 +424,6 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
 @Composable
 private fun NewAssistantScreen(
     model: AppModel,
-    server: String,
     keys: List<ProviderKey>,
     address: String?,
     create: suspend (NewAssistant) -> MadeAssistant,
@@ -445,13 +440,11 @@ private fun NewAssistantScreen(
     var busy by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
     var made by remember { mutableStateOf<MadeAssistant?>(null) }
-    var tailscale by remember { mutableStateOf<TailscaleState?>(null) }
     val home by model.session.collectAsStateWithLifecycle()
     val memberships by model.memberships.collectAsStateWithLifecycle()
     val missing = homeProblem(model)
-    // Its home joins it now: it has federation, and when it is only in a tailnet, so is this server.
-    val tailnetHome = missing == null && model.homeReach() == Reach.TAILNET
-    val homeCanJoin = missing == null && (!tailnetHome || tailscale?.state == TailscaleStatus.CONNECTED)
+    // Its home joins it now: it has federation, at an address other servers reach.
+    val homeCanJoin = missing == null
 
     Scaffold(
         topBar = {
@@ -524,12 +517,6 @@ private fun NewAssistantScreen(
                     OutlinedTextField(value = person, onValueChange = { person = it }, label = { Text("Their name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 } else {
                     HomeFederationCard(model)
-                    if (tailnetHome) {
-                        if (tailscale?.state != TailscaleStatus.CONNECTED) {
-                            Text("Your home is only in your tailnet, so this server joins it first.")
-                        }
-                        TailscaleCard(model, server) { tailscale = it }
-                    }
                 }
                 problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 Button(

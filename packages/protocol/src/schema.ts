@@ -948,32 +948,6 @@ export type UpdateState = Static<typeof UpdateState>;
 export const SetUpdatesRequest = Type.Object({ automatic: Type.Boolean() });
 export type SetUpdatesRequest = Static<typeof SetUpdatesRequest>;
 
-/** The server's own Tailscale, so it can reach assistants only in its owner's tailnet. */
-export const TailscaleState = Type.Object({
-  /**
-   * `needs-login`: someone approves it at `authUrl`; `needs-approval`: a tailnet admin approves
-   * the machine; `connected`: in the tailnet as `name`.
-   */
-  state: Type.Union([
-    Type.Literal("off"),
-    Type.Literal("starting"),
-    Type.Literal("needs-login"),
-    Type.Literal("needs-approval"),
-    Type.Literal("connected"),
-    Type.Literal("error"),
-  ]),
-  authUrl: Type.Optional(Type.String()),
-  /** Its MagicDNS name, such as `nudge-robin.tail1234.ts.net`. */
-  name: Type.Optional(Type.String()),
-  addresses: Type.Optional(Type.Array(Type.String())),
-  error: Type.Optional(Type.String()),
-});
-export type TailscaleState = Static<typeof TailscaleState>;
-
-/** Without `authKey`, the state answers with a login URL to approve. */
-export const TailscaleConnectRequest = Type.Object({ authKey: Type.Optional(Type.String()) });
-export type TailscaleConnectRequest = Static<typeof TailscaleConnectRequest>;
-
 /**
  * The server's Wired: an encrypted network between Nudge servers that needs no open port at
  * home. Other servers reach this one's API at `http://nudge.<name>.wired`.
@@ -1211,8 +1185,6 @@ export const SCHEMAS = {
   ServerSessionResponse,
   UpdateState,
   SetUpdatesRequest,
-  TailscaleState,
-  TailscaleConnectRequest,
   WiredState,
   WiredJoinRequest,
   WiredRelayRequest,

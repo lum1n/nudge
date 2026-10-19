@@ -45,7 +45,7 @@ struct ServersView: View {
     }
 }
 
-/// One server: its updates, its assistants, the model keys set on it, its Tailscale and Wired, and its
+/// One server: its updates, its assistants, the model keys set on it, its Wired, and its
 /// recovery kit; removing it, for one made on exe.dev.
 private struct ServerView: View {
     @Environment(AppModel.self) private var model
@@ -91,7 +91,6 @@ private struct ServerView: View {
                         Label("New assistant", systemImage: "plus")
                     }
                 }
-                TailscaleSection(server: server)
                 WiredSection(server: server)
                 Section("Model keys") {
                     ForEach(keys, id: \.provider) { key in
@@ -276,7 +275,6 @@ private struct NewAssistantView: View {
     @State private var busy = false
     @State private var problem: String?
     @State private var made: MadeAssistant?
-    @State private var tailscale: TailscaleState?
 
     init(server: String, keys: [ProviderKey], address: String?, changed: @escaping () async throws -> Void) {
         self.server = server
@@ -291,11 +289,8 @@ private struct NewAssistantView: View {
 
     private var ready: [String] { keys.filter { $0.source != .none }.map(\.provider) }
 
-    /// Whether the home can join it now: it has federation, and when it is only in a tailnet,
-    /// this server is in it too.
-    private var homeCanJoin: Bool {
-        model.homeProblem == nil && (model.homeReach != .tailnet || tailscale?.state == .connected)
-    }
+    /// Whether the home can join it now: it has federation, at an address this server reaches.
+    private var homeCanJoin: Bool { model.homeProblem == nil }
 
     var body: some View {
         Form {
@@ -356,14 +351,6 @@ private struct NewAssistantView: View {
                 }
                 if forMe {
                     HomeFederationSection()
-                    if model.homeProblem == nil, model.homeReach == .tailnet {
-                        if tailscale?.state != .connected {
-                            Section {
-                                Text("Your home is only in your tailnet, so this server joins it first.")
-                            }
-                        }
-                        TailscaleSection(server: server) { tailscale = $0 }
-                    }
                 }
                 if let problem {
                     Section { Text(problem).foregroundStyle(.red) }

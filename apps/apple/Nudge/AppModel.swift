@@ -144,8 +144,7 @@ final class AppModel {
 
     /// Sets a server up with what the wizard asked (ADR 11), and signs in as its owner. Signed out,
     /// its new assistant becomes the person's home. Signed in at home, it is joined from there
-    /// instead, so they keep one home: at once, or once the server is in the home's tailnet when
-    /// the home is only there, which the answer says (`.needsTailscale`).
+    /// instead, so they keep one home.
     func setUpServer(_ server: String, choices: SetupChoices) async throws -> SetUpServer {
         if session != nil, let problem = homeProblem { throw problem }
         let done = try await setUp(server: server, choices: choices, clientName: "nudge-apple", platform: Push.platformName)
@@ -155,7 +154,6 @@ final class AppModel {
             var setupConfig = config(for: Account(server: server, assistant: done.assistant, assistantName: done.assistant))
             setupConfig.cachePath = nil
             try? await NudgeClient(config: setupConfig, tokens: MemoryTokens(done.token)).signOut()
-            if homeReach == .tailnet { return .needsTailscale(assistant: done.assistant) }
             try await joinFromHome(server: server, assistant: done.assistant)
             return .joined
         }
@@ -181,8 +179,7 @@ final class AppModel {
         return reach(server: home.account.server)
     }
 
-    /// Why the home can't join assistants on other servers yet, if it can't. A home only in a
-    /// tailnet can, once the other server is in that tailnet too, which is up to each server.
+    /// Why the home can't join assistants on other servers yet, if it can't.
     var homeProblem: ServerProblem? {
         guard session != nil else { return nil }
         if homeReach == .private { return .privateHome }
@@ -235,15 +232,10 @@ final class AppModel {
         return labels.count == 3 ? String(labels[1]) : nil
     }
 
-    /// Makes sure `server` reaches the home as other servers do: through its own Tailscale for a
-    /// home only in a tailnet, or in the home's Wired network for a home on Wired, which this device
-    /// puts it in when it owns the server holding that network.
+    /// Makes sure `server` reaches the home as other servers do: in the home's Wired network for a
+    /// home on Wired, which this device puts it in when it owns the server holding that network.
     private func ensureReachesHome(_ server: String) async throws {
         switch homeReach {
-        case .tailnet:
-            if (try? await servers.client(server).tailscale())?.state != .connected {
-                throw ServerProblem.needsTailscale
-            }
         case .wired:
             guard let name = homeWiredName else { return }
             let owner = try servers.client(server)
@@ -276,9 +268,8 @@ final class AppModel {
     }
 
     /// Joins an assistant on a server this device owns from home, as its owner: invites the home's
-    /// address, joins, and makes that guest an admin there and an owner of the server. A home
-    /// only in a tailnet needs the server's own Tailscale connected first; a home on Wired, the
-    /// server in its network, which this does when it can.
+    /// address, joins, and makes that guest an admin there and an owner of the server. A home on
+    /// Wired needs the server in its network, which this does when it can.
     func joinFromHome(server: String, assistant: String) async throws {
         guard session != nil else { return }
         if let homeProblem { throw homeProblem }
@@ -624,15 +615,12 @@ enum SetUpServer: Equatable {
     case home
     /// Joined from home.
     case joined
-    /// The home is only in a tailnet: the server joins it before the home can join the assistant.
-    case needsTailscale(assistant: String)
 }
 
 enum ServerProblem: LocalizedError {
     case noFederation
     case noFederationExtension
     case privateHome
-    case needsTailscale
     case needsWired
     case wiredElsewhere
     case notJoined
@@ -642,8 +630,7 @@ enum ServerProblem: LocalizedError {
         switch self {
         case .noFederation: "Your home has no federation yet, so it can't join assistants on other servers."
         case .noFederationExtension: "Your home's server has no federation extension to turn on. Update it first."
-        case .privateHome: "This device reaches your home at a local address, which other servers can't reach. Sign in to your home at its Tailscale or public address."
-        case .needsTailscale: "Your home is only in your tailnet, so this server has to join it first: under Settings → Servers, open the server and connect it under Tailscale."
+        case .privateHome: "This device reaches your home at a local address, which other servers can't reach. Sign in to your home at its public address, or hold a Wired network at home and use its address: under Settings → Servers, open your home's server."
         case .needsWired: "Your home is on Wired, but none of your servers here holds its network. Open your home under Settings → Servers and hold a network there, then try again."
         case .wiredElsewhere: "This server is in another Wired network. Turn Wired off on it under Settings → Servers, then try again: it joins your home's."
         case .notJoined: "Joining the assistant from home didn't work."

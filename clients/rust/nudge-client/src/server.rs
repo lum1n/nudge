@@ -191,30 +191,6 @@ impl ServerApi {
             .await
     }
 
-    /// The server's own Tailscale; 404 on a server that can't run it.
-    pub async fn tailscale(&self) -> Result<TailscaleState, ApiError> {
-        self.request(Method::GET, &["tailscale"], &[], NO_BODY)
-            .await
-    }
-
-    /// Joins the server to a tailnet: at once with `auth_key`, else the state has a login URL
-    /// for someone to approve.
-    pub async fn connect_tailscale(
-        &self,
-        auth_key: Option<&str>,
-    ) -> Result<TailscaleState, ApiError> {
-        let body = TailscaleConnectRequest {
-            auth_key: auth_key.map(str::to_owned),
-        };
-        self.request(Method::POST, &["tailscale"], &[], Some(&body))
-            .await
-    }
-
-    pub async fn disconnect_tailscale(&self) -> Result<TailscaleState, ApiError> {
-        self.request(Method::DELETE, &["tailscale"], &[], NO_BODY)
-            .await
-    }
-
     /// The server's Wired; 404 on a server that wasn't given one.
     pub async fn wired(&self) -> Result<WiredState, ApiError> {
         self.request(Method::GET, &["wired"], &[], NO_BODY).await
@@ -353,16 +329,14 @@ pub async fn set_up(server: &str, body: &SetupRequest) -> Result<SetupResponse, 
     read(reqwest::Client::new().post(url).json(body).send().await).await
 }
 
-/// Who can reach a server at its address: anyone (`Public`), only the same tailnet (`Tailnet`:
-/// `*.ts.net`, 100.64.0.0/10, fd7a:115c:a1e0::/48), only the same Wired network (`Wired`:
-/// `<service>.<name>.wired`), or only the same network (`Private`: this computer, a LAN address
-/// or a local name). Another server reaches a tailnet one only through its own Tailscale, a Wired
-/// one only once it is in that network, and a private one not at all.
+/// Who can reach a server at its address: anyone (`Public`), only the same Wired network (`Wired`:
+/// `<service>.<name>.wired`), or only the same network (`Private`: this computer, a LAN or VPN
+/// address, such as a tailnet's, or a local name). Another server reaches a Wired one only once
+/// it is in that network, and a private one not at all.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Reach {
     Public,
     Wired,
-    Tailnet,
     Private,
 }
 
@@ -373,14 +347,19 @@ pub fn reach(server: &str) -> Reach {
     match url.host() {
         Some(url::Host::Domain(name)) => {
             let name = name.to_ascii_lowercase();
-            if name.ends_with(".ts.net") {
-                Reach::Tailnet
-            } else if name.ends_with(".wired") {
+            if name.ends_with(".wired") {
                 Reach::Wired
             } else if !name.contains('.')
-                || [".local", ".lan", ".home.arpa", ".internal", ".localhost"]
-                    .iter()
-                    .any(|suffix| name.ends_with(suffix))
+                || [
+                    ".local",
+                    ".lan",
+                    ".home.arpa",
+                    ".internal",
+                    ".localhost",
+                    ".ts.net",
+                ]
+                .iter()
+                .any(|suffix| name.ends_with(suffix))
             {
                 Reach::Private
             } else {
@@ -389,9 +368,12 @@ pub fn reach(server: &str) -> Reach {
         }
         Some(url::Host::Ipv4(ip)) => {
             let [a, b, ..] = ip.octets();
-            if a == 100 && (64..=127).contains(&b) {
-                Reach::Tailnet
-            } else if ip.is_private() || ip.is_loopback() || ip.is_link_local() {
+            // 100.64.0.0/10 is carrier-grade NAT, such as a tailnet's.
+            if ip.is_private()
+                || ip.is_loopback()
+                || ip.is_link_local()
+                || (a == 100 && (64..=127).contains(&b))
+            {
                 Reach::Private
             } else {
                 Reach::Public
@@ -399,9 +381,7 @@ pub fn reach(server: &str) -> Reach {
         }
         Some(url::Host::Ipv6(ip)) => {
             let s = ip.segments();
-            if s[0] == 0xfd7a && s[1] == 0x115c && s[2] == 0xa1e0 {
-                Reach::Tailnet
-            } else if ip.is_loopback() || (s[0] & 0xfe00) == 0xfc00 || (s[0] & 0xffc0) == 0xfe80 {
+            if ip.is_loopback() || (s[0] & 0xfe00) == 0xfc00 || (s[0] & 0xffc0) == 0xfe80 {
                 Reach::Private
             } else {
                 Reach::Public
@@ -417,9 +397,9 @@ mod tests {
 
     #[test]
     fn tells_who_can_reach_an_address() {
-        assert_eq!(reach("https://home.tail1234.ts.net"), Reach::Tailnet);
-        assert_eq!(reach("http://100.101.102.103:8787"), Reach::Tailnet);
-        assert_eq!(reach("http://[fd7a:115c:a1e0::1]:8787"), Reach::Tailnet);
+        assert_eq!(reach("https://home.tail1234.ts.net"), Reach::Private);
+        assert_eq!(reach("http://100.101.102.103:8787"), Reach::Private);
+        assert_eq!(reach("http://[fd7a:115c:a1e0::1]:8787"), Reach::Private);
         assert_eq!(reach("http://192.168.1.5:8787"), Reach::Private);
         assert_eq!(reach("http://127.0.0.1:8787"), Reach::Private);
         assert_eq!(reach("http://nudge.local:8787"), Reach::Private);

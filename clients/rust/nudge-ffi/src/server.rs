@@ -132,30 +132,6 @@ pub struct UpdateState {
     pub error: Option<String>,
 }
 
-/// How far the server's own Tailscale is.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
-pub enum TailscaleStatus {
-    Off,
-    Starting,
-    /// Someone approves it at `auth_url`.
-    NeedsLogin,
-    /// A tailnet admin approves the machine.
-    NeedsApproval,
-    Connected,
-    Error,
-}
-
-/// The server's own Tailscale, so it can reach assistants only in its owner's tailnet.
-#[derive(Clone, Debug, PartialEq, uniffi::Record)]
-pub struct TailscaleState {
-    pub state: TailscaleStatus,
-    pub auth_url: Option<String>,
-    /// Its MagicDNS name, such as `nudge-robin.tail1234.ts.net`.
-    pub name: Option<String>,
-    pub addresses: Vec<String>,
-    pub error: Option<String>,
-}
-
 /// How far the server's Wired is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
 pub enum WiredStatus {
@@ -352,25 +328,6 @@ impl From<p::UpdateState> for UpdateState {
             available: u.available,
             checked_at: u.checked_at,
             error: u.error,
-        }
-    }
-}
-
-impl From<p::TailscaleState> for TailscaleState {
-    fn from(t: p::TailscaleState) -> Self {
-        TailscaleState {
-            state: match t.state {
-                p::TailscaleStatus::Off => TailscaleStatus::Off,
-                p::TailscaleStatus::Starting => TailscaleStatus::Starting,
-                p::TailscaleStatus::NeedsLogin => TailscaleStatus::NeedsLogin,
-                p::TailscaleStatus::NeedsApproval => TailscaleStatus::NeedsApproval,
-                p::TailscaleStatus::Connected => TailscaleStatus::Connected,
-                p::TailscaleStatus::Error => TailscaleStatus::Error,
-            },
-            auth_url: t.auth_url,
-            name: t.name,
-            addresses: t.addresses.unwrap_or_default(),
-            error: t.error,
         }
     }
 }
@@ -622,33 +579,6 @@ impl ServerClient {
             .into())
     }
 
-    /// The server's own Tailscale; fails with 404 where it can't run.
-    pub async fn tailscale(&self) -> Result<TailscaleState, NudgeError> {
-        let api = self.api.clone();
-        Ok(run(async move { api.tailscale().await }).await?.into())
-    }
-
-    /// Joins the server to a tailnet: at once with `auth_key`, else open the state's `auth_url`
-    /// and ask `tailscale()` until it is connected.
-    pub async fn connect_tailscale(
-        &self,
-        auth_key: Option<String>,
-    ) -> Result<TailscaleState, NudgeError> {
-        let api = self.api.clone();
-        Ok(
-            run(async move { api.connect_tailscale(auth_key.as_deref()).await })
-                .await?
-                .into(),
-        )
-    }
-
-    pub async fn disconnect_tailscale(&self) -> Result<TailscaleState, NudgeError> {
-        let api = self.api.clone();
-        Ok(run(async move { api.disconnect_tailscale().await })
-            .await?
-            .into())
-    }
-
     /// The server's Wired; fails with 404 on a server that wasn't given one.
     pub async fn wired(&self) -> Result<WiredState, NudgeError> {
         let api = self.api.clone();
@@ -721,11 +651,9 @@ impl ServerClient {
 pub enum Reach {
     /// Anyone.
     Public,
-    /// Only the same tailnet: another server needs its own Tailscale connected.
-    Tailnet,
     /// Only the same Wired network (`nudge.<name>.wired`): another server has to join it.
     Wired,
-    /// Only the same network, such as a LAN address: no other server.
+    /// Only the same network, such as a LAN or tailnet address: no other server.
     Private,
 }
 
@@ -734,7 +662,6 @@ pub enum Reach {
 pub fn reach(server: String) -> Reach {
     match nudge_client::reach(&server) {
         nudge_client::Reach::Public => Reach::Public,
-        nudge_client::Reach::Tailnet => Reach::Tailnet,
         nudge_client::Reach::Wired => Reach::Wired,
         nudge_client::Reach::Private => Reach::Private,
     }

@@ -49,7 +49,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import app.nudge.AppModel
-import app.nudge.SetUpServer
 import app.nudge.explain
 import java.text.Normalizer
 import kotlinx.coroutines.launch
@@ -57,7 +56,6 @@ import nudge.ffi.ModelChoice
 import nudge.ffi.NudgeException
 import nudge.ffi.SetupChoices
 import nudge.ffi.SetupInfo
-import nudge.ffi.TailscaleStatus
 import nudge.ffi.checkSetupCode
 import nudge.ffi.checkSetupKey
 import nudge.ffi.setupInfo
@@ -65,7 +63,7 @@ import nudge.ffi.setupInfo
 /** Where setup starts: a server's address, and its code when the app knows it, as after exe.dev. */
 data class SetupStart(val server: String = "", val code: String = "")
 
-private enum class Step { ADDRESS, CODE, NAME, MODEL, YOU, TAILSCALE }
+private enum class Step { ADDRESS, CODE, NAME, MODEL, YOU }
 
 /** Where people get a key for each provider setup offers. */
 private val KEY_PAGES = mapOf(
@@ -78,8 +76,7 @@ private val KEY_PAGES = mapOf(
  * name for the assistant, a model with the person's own key (or a model server found there), and
  * their name. Setting up signs this device in to the server as its owner, and to the new assistant:
  * as the person's home, or joined from it when they are signed in at home already. Then the home
- * needs federation, checked before anything is made, and a home only in a tailnet needs the server
- * in that tailnet too, which the last step connects.
+ * needs federation, checked before anything is made.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -99,8 +96,6 @@ fun SetupScreen(model: AppModel, start: SetupStart, close: () -> Unit) {
     var backups by remember { mutableStateOf(true) }
     var busy by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
-    // The assistant setup made, for joining it from home once the server is in the tailnet.
-    var made by remember { mutableStateOf<String?>(null) }
     val missing = homeProblem(model)
     val assistant = slug ?: slugOf(name)
     val offered = info?.providers?.firstOrNull { it.id == provider }
@@ -114,8 +109,6 @@ fun SetupScreen(model: AppModel, start: SetupStart, close: () -> Unit) {
             Step.NAME -> if (start.code.isEmpty()) Step.CODE else return close()
             Step.MODEL -> Step.NAME
             Step.YOU -> Step.MODEL
-            // Set up already: joining from home waits under Servers until then.
-            Step.TAILSCALE -> return close()
         }
     }
 
@@ -165,7 +158,7 @@ fun SetupScreen(model: AppModel, start: SetupStart, close: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Column(Modifier.widthIn(max = 480.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                if (step != Step.TAILSCALE) HomeFederationCard(model)
+                HomeFederationCard(model)
                 when (step) {
                     Step.ADDRESS -> {
                         Text("Where is the server?", style = MaterialTheme.typography.headlineSmall)
@@ -253,39 +246,17 @@ fun SetupScreen(model: AppModel, start: SetupStart, close: () -> Unit) {
                             )
                         }
                     }
-                    Step.TAILSCALE -> {
-                        Text("One more step", style = MaterialTheme.typography.headlineSmall)
-                        Text("Your home is only in your tailnet. Add this server to it, and your home joins ${name.trim()} from there.")
-                        fun join() {
-                            val joining = made ?: return
-                            busy = true
-                            run {
-                                if (!model.isSignedIn(server, joining)) model.joinFromHome(server, joining)
-                                close()
-                            }
-                        }
-                        var connected by remember { mutableStateOf(false) }
-                        TailscaleCard(model, server) { state ->
-                            connected = state.state == TailscaleStatus.CONNECTED
-                            if (connected && !busy && problem == null) join()
-                        }
-                        if (connected && problem != null && !busy) {
-                            Button(onClick = { join() }, modifier = Modifier.fillMaxWidth()) { Text("Join it from home") }
-                        }
-                        TextButton(onClick = close) { Text("Later") }
-                    }
                 }
                 problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 if (busy) {
                     LoadingIndicator(Modifier.align(Alignment.CenterHorizontally))
-                } else if (step != Step.TAILSCALE) {
+                } else {
                     val ready = missing == null && when (step) {
                         Step.ADDRESS -> server.isNotBlank()
                         Step.CODE -> code.isNotBlank()
                         Step.NAME -> name.isNotBlank() && assistant.isNotEmpty()
                         Step.MODEL -> provider != null && modelId != null && (local != null || key.isNotBlank())
                         Step.YOU -> you.isNotBlank()
-                        Step.TAILSCALE -> false
                     }
                     Button(
                         onClick = {
@@ -305,7 +276,7 @@ fun SetupScreen(model: AppModel, start: SetupStart, close: () -> Unit) {
                                     step = Step.YOU
                                 }
                                 Step.YOU -> run {
-                                    val ended = model.setUp(
+                                    model.setUp(
                                         server,
                                         SetupChoices(
                                             code = code.trim(),
@@ -319,14 +290,8 @@ fun SetupScreen(model: AppModel, start: SetupStart, close: () -> Unit) {
                                             backups = backups,
                                         ),
                                     )
-                                    if (ended is SetUpServer.NeedsTailscale) {
-                                        made = ended.assistant
-                                        step = Step.TAILSCALE
-                                    } else {
-                                        close()
-                                    }
+                                    close()
                                 }
-                                Step.TAILSCALE -> {}
                             }
                         },
                         enabled = ready,

@@ -5,7 +5,6 @@ export { type ExtensionSettings, pairingLink, requestOrigin } from "./v1/rest.ts
 export {
   type ServerControl,
   serverRoutes,
-  type TailscaleControl,
   type WiredControl,
   type UpdateControl,
 } from "./v1/server.ts";

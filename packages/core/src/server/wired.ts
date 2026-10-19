@@ -3,7 +3,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { hostname } from "node:os";
 import { dirname, join } from "node:path";
 import type { Duplex } from "node:stream";
-import { Agent, type Dispatcher } from "undici";
+import { Agent, Dispatcher, setGlobalDispatcher } from "undici";
 
 /**
  * Wired (github.com/lum1n/wired): an encrypted network between Nudge servers that needs no open
@@ -171,7 +171,10 @@ export class ServerWired {
       this.module = await (this.options.load ?? loadWired)();
       this.givenRelayUrl =
         process.env.NUDGE_WIRED_RELAY_URL ||
-        (await readFile(this.relayUrlFile, "utf8").then((s) => s.trim(), () => undefined));
+        (await readFile(this.relayUrlFile, "utf8").then(
+          (s) => s.trim(),
+          () => undefined,
+        ));
       this.loaded = true;
     }
     return this.module !== undefined;
@@ -243,7 +246,12 @@ export class ServerWired {
    * Joins the network `invite` is for, as a member, serving a relay at this server's public HTTPS
    * address (or `relayUrl`) when it has one. The root must have listed that relay first.
    */
-  async join(invite: string, name: string, apiAddr: string, relayUrl?: string): Promise<WiredState> {
+  async join(
+    invite: string,
+    name: string,
+    apiAddr: string,
+    relayUrl?: string,
+  ): Promise<WiredState> {
     if (!(await this.load())) return this.state();
     if (this.node !== undefined) throw new WiredError("This server is already in a Wired network");
     if (!/^wired1[a-z0-9]+$/.test(invite.trim())) throw new WiredError("That isn't a Wired invite");
@@ -309,7 +317,13 @@ export class ServerWired {
       this.servingAt = relayUrl === undefined ? undefined : this.relayBind;
       this.node =
         role === "root"
-          ? await module.Node.anchor({ name, stateDir, port: 0, noRelay: relayUrl === undefined, ...relay })
+          ? await module.Node.anchor({
+              name,
+              stateDir,
+              port: 0,
+              noRelay: relayUrl === undefined,
+              ...relay,
+            })
           : await module.Node.join({
               name,
               stateDir,
@@ -389,4 +403,39 @@ export class ServerWired {
 export function serverWiredName(publicUrl: string | undefined): string {
   const label = /^https?:\/\/([a-z0-9-]+)/i.exec(publicUrl ?? "")?.[1];
   return wiredName(label ?? hostname().split(".")[0] ?? "nudge");
+}
+
+/**
+ * Routes this process's requests: to `*.wired` hosts over `wired()` (the server's Wired), and the
+ * rest as before. `fetch` everywhere in the process, extensions' included, goes through it.
+ */
+export function routeOutgoing(wired: () => Dispatcher | undefined): void {
+  setGlobalDispatcher(new OutgoingDispatcher(new Agent(), wired));
+}
+
+class OutgoingDispatcher extends Dispatcher {
+  constructor(
+    private readonly direct: Dispatcher,
+    private readonly wired: () => Dispatcher | undefined,
+  ) {
+    super();
+  }
+
+  override dispatch(options: Dispatcher.DispatchOptions, handler: Dispatcher.DispatchHandler) {
+    return this.pick(options.origin).dispatch(options, handler);
+  }
+
+  override close(): Promise<void> {
+    return this.direct.close();
+  }
+
+  override destroy(): Promise<void> {
+    return this.direct.destroy();
+  }
+
+  private pick(origin: Dispatcher.DispatchOptions["origin"]): Dispatcher {
+    if (origin === undefined) return this.direct;
+    const host = (typeof origin === "string" ? new URL(origin) : origin).hostname;
+    return isWiredHost(host) ? (this.wired() ?? this.direct) : this.direct;
+  }
 }

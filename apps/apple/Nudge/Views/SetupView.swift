@@ -47,14 +47,13 @@ private let keyPages = [
 /// name for the assistant, a model with the person's own key (or a model server found there), and
 /// their name. Setting up signs this device in to the server as its owner, and to the new assistant:
 /// as the person's home, or joined from it when they are signed in at home already. Then the home
-/// needs federation, checked before anything is made, and a home only in a tailnet needs the
-/// server in that tailnet too, which the last step connects.
+/// needs federation, checked before anything is made.
 struct SetupView: View {
     @Environment(AppModel.self) private var model
     let start: SetupStart
     let done: () -> Void
 
-    private enum Step { case address, code, name, model, you, tailscale }
+    private enum Step { case address, code, name, model, you }
 
     @State private var step: Step
     @State private var server: String
@@ -69,9 +68,6 @@ struct SetupView: View {
     @State private var backups = true
     @State private var busy = false
     @State private var problem: String?
-    /// The assistant setup made, for joining it from home once the server is in the tailnet.
-    @State private var made: String?
-    @State private var connected = false
 
     init(start: SetupStart, done: @escaping () -> Void) {
         self.start = start
@@ -87,9 +83,7 @@ struct SetupView: View {
 
     var body: some View {
         Form {
-            if step != .tailscale {
-                HomeFederationSection()
-            }
+            HomeFederationSection()
             switch step {
             case .address:
                 Section {
@@ -153,23 +147,6 @@ struct SetupView: View {
                 Section {
                     Toggle("Back up every night, keeping two weeks, beside the data", isOn: $backups)
                 }
-            case .tailscale:
-                Section {
-                    Text("Your home is only in your tailnet. Add this server to it, and your home joins \(name.trimmed) from there.")
-                } header: {
-                    Text("One more step")
-                }
-                TailscaleSection(server: server) { state in
-                    connected = state.state == .connected
-                    guard connected, !busy, problem == nil else { return }
-                    join()
-                }
-                if connected, problem != nil {
-                    Section {
-                        Button("Join it from home", systemImage: "person.badge.plus") { join() }
-                            .disabled(busy)
-                    }
-                }
             }
             if let problem {
                 Section { Text(problem).foregroundStyle(.red) }
@@ -180,18 +157,15 @@ struct SetupView: View {
         .navigationTitle("Set up Nudge")
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                // Set up already: joining from home waits under Servers until then.
-                Button(step == .tailscale ? "Later" : isFirstStep ? "Cancel" : "Back") { back() }
+                Button(isFirstStep ? "Cancel" : "Back") { back() }
                     .disabled(busy)
             }
-            if step != .tailscale {
-                ToolbarItem(placement: .confirmationAction) {
-                    if busy {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Button(step == .you ? "Set up" : "Continue") { next() }
-                            .disabled(!ready)
-                    }
+            ToolbarItem(placement: .confirmationAction) {
+                if busy {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button(step == .you ? "Set up" : "Continue") { next() }
+                        .disabled(!ready)
                 }
             }
         }
@@ -251,7 +225,6 @@ struct SetupView: View {
         case .code: !start.server.isEmpty
         case .name: !start.code.isEmpty
         case .model, .you: false
-        case .tailscale: true
         }
     }
 
@@ -263,7 +236,6 @@ struct SetupView: View {
         case .name: !name.trimmed.isEmpty && !assistant.isEmpty
         case .model: provider != nil && modelId != nil && (local != nil || !key.trimmed.isEmpty)
         case .you: !you.trimmed.isEmpty
-        case .tailscale: false
         }
     }
 
@@ -285,7 +257,6 @@ struct SetupView: View {
         case .name: step = .code
         case .model: step = .name
         case .you: step = .model
-        case .tailscale: done()
         }
     }
 
@@ -315,7 +286,7 @@ struct SetupView: View {
             case .you:
                 await run {
                     guard let provider, let modelId else { return }
-                    let ended = try await model.setUpServer(
+                    _ = try await model.setUpServer(
                         server,
                         choices: SetupChoices(
                             code: code.trimmed,
@@ -327,29 +298,10 @@ struct SetupView: View {
                             yourName: you.trimmed,
                             publicUrl: server,
                             backups: backups))
-                    if case .needsTailscale(let assistant) = ended {
-                        made = assistant
-                        step = .tailscale
-                    } else {
-                        done()
-                    }
+                    done()
                 }
-            case .tailscale:
-                break
             }
         }
-    }
-
-    private func join() {
-        busy = true
-        Task { await run { try await joinMade() } }
-    }
-
-    /// Joins the assistant setup made from home, once the server is in the tailnet.
-    private func joinMade() async throws {
-        guard let made, !model.isSignedIn(server: server, assistant: made) else { return }
-        try await model.joinFromHome(server: server, assistant: made)
-        done()
     }
 
     private func load() async throws {
