@@ -362,11 +362,27 @@ describe("projectTimeline", () => {
     const entries = views.at(-1)!.entries;
     const whole = projectTimeline(entries);
     const at = entries.findIndex((entry) => entry.kind === FIRE_ENTRY);
-    const page = projectTimeline(entries.slice(at + 1), { after: `entry:${entries[at]!.id}` });
+    const page = projectTimeline(entries.slice(at + 1), {
+      after: `entry:${entries[at]!.id}`,
+      afterEntry: entries[at],
+    });
     expect(page).toEqual(whole.slice(-1));
     expect(page[0]!.id).toBe(
       new RoomProjector().project(sources(views.at(-1)!)).timeline.at(-1)!.id,
     );
+  });
+
+  it("says an answer to a fired nudge or a watch was prompted by it, and one to a message not", () => {
+    const entries = views.at(-1)!.entries as EntryRecord[];
+    const answers = (items: TimelineItem[]) =>
+      items.flatMap((item) => (item.type === "answer" ? [item.promptedBy] : []));
+    expect(answers(projectTimeline(entries))).toEqual([undefined, undefined, "nudge"]);
+    const watched = entries.map((entry) =>
+      entry.kind === FIRE_ENTRY
+        ? { ...entry, data: { ...(entry.data as object), source: "watch" } }
+        : entry,
+    );
+    expect(answers(projectTimeline(watched))).toEqual([undefined, undefined, "watch"]);
   });
 
   it("ends answers by how they stopped, never as running", () => {

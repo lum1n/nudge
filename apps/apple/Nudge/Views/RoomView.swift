@@ -169,7 +169,7 @@ struct RoomView: View {
     }
 
     private func answerLength(_ item: TimelineItem) -> String {
-        guard case .answer(let id, _, _, let parts, _, _) = item else { return item.id }
+        guard case .answer(let id, _, _, let parts, _, _, _) = item else { return item.id }
         return "\(id):\(parts.count):\(parts.last.map(partLength) ?? 0)"
     }
 

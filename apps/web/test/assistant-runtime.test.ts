@@ -59,6 +59,19 @@ describe("toThreadMessageLike", () => {
     });
   });
 
+  it("says what prompted an answer to a nudge or a watch", () => {
+    const answer: TimelineItem = {
+      type: "answer",
+      id: "answer:1",
+      status: "done",
+      parts: [{ type: "text", text: "Two new mails." }],
+      promptedBy: "watch",
+    };
+    expect(toThreadMessageLike(answer, "ann")).toMatchObject({
+      metadata: { custom: { promptedBy: "watch" } },
+    });
+  });
+
   // assistant-ui's own conversion runs too: it refuses system messages that aren't one text part.
   const accepted = (item: TimelineItem) =>
     fromThreadMessageLike(toThreadMessageLike(item, "ann"), item.id, {

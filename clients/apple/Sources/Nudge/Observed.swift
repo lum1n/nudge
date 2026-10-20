@@ -64,7 +64,7 @@ extension TimelineItem {
     public var id: String {
         switch self {
         case .user(let id, _, _, _, _, _, _), .nudge(let id, _, _, _),
-            .approval(let id, _, _, _, _, _), .answer(let id, _, _, _, _, _), .marker(let id, _):
+            .approval(let id, _, _, _, _, _), .answer(let id, _, _, _, _, _, _), .marker(let id, _):
             id
         }
     }

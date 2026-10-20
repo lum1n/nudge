@@ -101,6 +101,7 @@ export class Viewer {
             id: item.id,
             status: item.status,
             ...(item.startedAt === undefined ? {} : { startedAt: item.startedAt }),
+            ...(item.promptedBy === undefined ? {} : { promptedBy: item.promptedBy }),
             parts: [],
             privateTo: item.privateTo!,
           };

@@ -10,7 +10,7 @@ extension Array where Element == TimelineItem {
             switch item {
             case .nudge, .approval:
                 return nil
-            case .answer(let id, let status, let error, let parts, let startedAt, let privateTo):
+            case .answer(let id, let status, let error, let parts, let startedAt, let promptedBy, let privateTo):
                 let kept = parts.filter {
                     switch $0 {
                     case .text: true
@@ -21,7 +21,7 @@ extension Array where Element == TimelineItem {
                 // Someone else's private answer comes without parts, and stays as a line saying so.
                 let othersPrivate = privateTo != nil && parts.isEmpty
                 if kept.isEmpty && status == .done && !othersPrivate { return nil }
-                return .answer(id: id, status: status, error: error, parts: kept, startedAt: startedAt, privateTo: privateTo)
+                return .answer(id: id, status: status, error: error, parts: kept, startedAt: startedAt, promptedBy: promptedBy, privateTo: privateTo)
             case .user, .marker:
                 return item
             }
@@ -35,12 +35,12 @@ extension Array where Element == TimelineItem {
             switch item {
             case .nudge, .approval:
                 return item
-            case .answer(let id, let status, let error, let parts, let startedAt, let privateTo):
+            case .answer(let id, let status, let error, let parts, let startedAt, let promptedBy, let privateTo):
                 let kept = parts.filter {
                     if case .text = $0 { return false }
                     return true
                 }
-                return kept.isEmpty ? nil : .answer(id: id, status: status, error: error, parts: kept, startedAt: startedAt, privateTo: privateTo)
+                return kept.isEmpty ? nil : .answer(id: id, status: status, error: error, parts: kept, startedAt: startedAt, promptedBy: promptedBy, privateTo: privateTo)
             case .user, .marker:
                 return nil
             }
@@ -68,7 +68,7 @@ extension TimelineItem {
     public var time: Double? {
         switch self {
         case .user(_, _, _, let sentAt, _, _, _): sentAt
-        case .answer(_, _, _, _, let startedAt, _): startedAt
+        case .answer(_, _, _, _, let startedAt, _, _): startedAt
         case .nudge(_, _, let firedAt, _): firedAt
         case .approval, .marker: nil
         }

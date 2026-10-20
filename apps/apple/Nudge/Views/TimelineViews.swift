@@ -23,20 +23,29 @@ struct TimelineRow: View {
             .frame(maxWidth: .infinity, alignment: mine ? .trailing : .leading)
         case .nudge, .approval:
             EmptyView()
-        case .answer(_, let status, _, _, _, let privateTo?) where privateTo.id != me:
+        case .answer(_, let status, _, _, _, _, let privateTo?) where privateTo.id != me:
             PrivateLine(
                 text: status == .running
                     ? "Answering \(privateTo.displayName) privately…" : "Answered \(privateTo.displayName) privately")
-        case .answer(_, let status, let error, let parts, let startedAt, let privateTo):
+        case .answer(_, let status, let error, let parts, let startedAt, let promptedBy, let privateTo):
             // On a surface of its own, under the assistant's name, so it reads apart from the
-            // messages around it and from the answer before.
+            // messages around it and from the answer before. One no one asked for just now, to a
+            // nudge or a watch, is tinted by what prompted it.
             VStack(alignment: .leading, spacing: 8) {
-                AnswerHeader(name: assistant, startedAt: startedAt)
+                AnswerHeader(name: assistant, startedAt: startedAt, promptedBy: promptedBy)
                 if privateTo != nil { OnlyYou() }
                 AnswerView(status: status, error: error, parts: parts)
             }
             .padding(14)
-            .background(.fill.quinary, in: .rect(cornerRadius: 22))
+            .background {
+                let shape = RoundedRectangle(cornerRadius: 22)
+                if let promptedBy {
+                    shape.fill(promptedBy.color.opacity(0.12))
+                        .overlay(shape.strokeBorder(promptedBy.color.opacity(0.35)))
+                } else {
+                    shape.fill(.fill.quinary)
+                }
+            }
         case .marker(_, let kind):
             Text(kind == .compacted ? "Earlier messages summarized" : "Conversation started over")
                 .font(.caption)
@@ -53,10 +62,34 @@ func date(_ milliseconds: Double) -> Date {
     Date(timeIntervalSince1970: milliseconds / 1000)
 }
 
-/// Whose answer it is, and when it started.
+extension PromptedBy {
+    var label: String {
+        switch self {
+        case .nudge: "Nudge"
+        case .watch: "Watch"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .nudge: "bell.fill"
+        case .watch: "eye.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .nudge: .orange
+        case .watch: .indigo
+        }
+    }
+}
+
+/// Whose answer it is, when it started, and the nudge or watch that prompted it.
 struct AnswerHeader: View {
     let name: String
     let startedAt: Double?
+    var promptedBy: PromptedBy? = nil
 
     var body: some View {
         HStack(spacing: 6) {
@@ -66,6 +99,14 @@ struct AnswerHeader: View {
                 .frame(width: 20, height: 20)
                 .background(.tint, in: .circle)
             Text(name).font(.subheadline.weight(.semibold))
+            if let promptedBy {
+                Label(promptedBy.label, systemImage: promptedBy.symbol)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(promptedBy.color)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(promptedBy.color.opacity(0.15), in: .capsule)
+            }
             if let startedAt {
                 Text(date(startedAt), format: .dateTime.hour().minute())
                     .font(.caption)

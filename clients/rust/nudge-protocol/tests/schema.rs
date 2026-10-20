@@ -163,6 +163,7 @@ fn items() -> Vec<TimelineItem> {
                 Part::Tool(tool()),
             ],
             started_at: Some(1.0),
+            prompted_by: Some(PromptedBy::Watch),
             private_to: Some(ann()),
         }),
         TimelineItem::Marker(MarkerItem {

@@ -24,6 +24,7 @@ import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.PanTool
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -44,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -66,6 +68,7 @@ import nudge.ffi.MarkerKind
 import nudge.ffi.Part
 import nudge.ffi.PendingMessage
 import nudge.ffi.PendingState
+import nudge.ffi.PromptedBy
 import nudge.ffi.TimelineItem
 import nudge.ffi.ToolPart
 import nudge.ffi.ToolStatus
@@ -128,8 +131,15 @@ private fun AnswerCard(
     openBrowser: () -> Unit,
     openActivity: () -> Unit,
 ) {
+    // One no one asked for just now, to a nudge or a watch, takes the colours of what prompted it.
+    val colors = MaterialTheme.colorScheme
+    val (surface, accent, onAccent) = when (answer.promptedBy) {
+        PromptedBy.NUDGE -> Triple(colors.tertiaryContainer.copy(alpha = 0.5f), colors.tertiaryContainer, colors.onTertiaryContainer)
+        PromptedBy.WATCH -> Triple(colors.secondaryContainer.copy(alpha = 0.5f), colors.secondaryContainer, colors.onSecondaryContainer)
+        null -> Triple(colors.surfaceContainerLow, colors.surfaceContainerLow, colors.onSurface)
+    }
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        color = surface,
         shape = MaterialTheme.shapes.extraLarge,
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -142,12 +152,32 @@ private fun AnswerCard(
                     Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onPrimary)
                 }
                 Text(assistant, style = MaterialTheme.typography.titleSmall)
+                answer.promptedBy?.let { PromptedChip(it, accent, onAccent) }
                 answer.startedAt?.let {
                     Text(timeOfDay(it), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             if (mine) OnlyYou()
             Answer(answer, openBrowser, openActivity)
+        }
+    }
+}
+
+/** The nudge or watch an answer answers. */
+@Composable
+private fun PromptedChip(prompt: PromptedBy, color: Color, content: Color) {
+    Surface(color = color, contentColor = content, shape = CircleShape) {
+        Row(
+            Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Icon(
+                if (prompt == PromptedBy.NUDGE) Icons.Outlined.NotificationsActive else Icons.Outlined.Visibility,
+                null,
+                Modifier.size(14.dp),
+            )
+            Text(if (prompt == PromptedBy.NUDGE) "Nudge" else "Watch", style = MaterialTheme.typography.labelMedium)
         }
     }
 }

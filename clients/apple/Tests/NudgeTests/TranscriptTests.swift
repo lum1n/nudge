@@ -14,10 +14,10 @@ final class TranscriptTests: XCTestCase {
             .answer(id: "a1", status: .done, error: nil, parts: [
                 .reasoning(text: "hm"), tool("call_api"), tool("browse", details: #"{"needsLogin":true}"#),
                 .text(text: "Two new mails."),
-            ], startedAt: nil, privateTo: nil),
+            ], startedAt: nil, promptedBy: .watch, privateTo: nil),
             .approval(id: "ap", approvalId: "p0", summary: "Send", status: .done, decidedBy: "Bo", privateTo: nil),
-            .answer(id: "a2", status: .done, error: nil, parts: [tool("call_api")], startedAt: nil, privateTo: nil),
-            .answer(id: "a3", status: .running, error: nil, parts: [tool("call_api")], startedAt: nil, privateTo: nil),
+            .answer(id: "a2", status: .done, error: nil, parts: [tool("call_api")], startedAt: nil, promptedBy: nil, privateTo: nil),
+            .answer(id: "a3", status: .running, error: nil, parts: [tool("call_api")], startedAt: nil, promptedBy: nil, privateTo: nil),
             .marker(id: "m", kind: .reset),
         ]
     }
@@ -25,22 +25,23 @@ final class TranscriptTests: XCTestCase {
     func testTranscriptKeepsMessagesTextAndLogins() {
         let kept = timeline.transcript
         XCTAssertEqual(kept.map(\.id), ["a1", "a3", "m"])
-        guard case .answer(_, _, _, let parts, _, _) = kept[0] else { return XCTFail() }
+        guard case .answer(_, _, _, let parts, _, let promptedBy, _) = kept[0] else { return XCTFail() }
         XCTAssertEqual(parts.count, 2)
-        guard case .answer(_, _, _, let running, _, _) = kept[1] else { return XCTFail() }
+        XCTAssertEqual(promptedBy, .watch)
+        guard case .answer(_, _, _, let running, _, _, _) = kept[1] else { return XCTFail() }
         XCTAssertTrue(running.isEmpty)
     }
 
     func testTranscriptKeepsSomeoneElsesPrivateAnswer() {
         let secret = TimelineItem.answer(
-            id: "s", status: .done, error: nil, parts: [], startedAt: nil, privateTo: Player(id: "bo", displayName: "Bo", address: nil))
+            id: "s", status: .done, error: nil, parts: [], startedAt: nil, promptedBy: nil, privateTo: Player(id: "bo", displayName: "Bo", address: nil))
         XCTAssertEqual([secret].transcript, [secret])
     }
 
     func testActivityHasNudgesApprovalsToolsAndThinking() {
         let activity = timeline.activity
         XCTAssertEqual(activity.map(\.id), ["n", "a1", "ap", "a2", "a3"])
-        guard case .answer(_, _, _, let parts, _, _) = activity[1] else { return XCTFail() }
+        guard case .answer(_, _, _, let parts, _, _, _) = activity[1] else { return XCTFail() }
         XCTAssertEqual(parts.count, 3)
     }
 
@@ -54,7 +55,7 @@ final class TranscriptTests: XCTestCase {
             TimelineItem.user(id: id, text: id, author: nil, sentAt: sentAt, clientId: nil, requestId: nil, privateTo: nil)
         }
         let answer = { (id: String, startedAt: Double?) in
-            TimelineItem.answer(id: id, status: .done, error: nil, parts: [.text(text: id)], startedAt: startedAt, privateTo: nil)
+            TimelineItem.answer(id: id, status: .done, error: nil, parts: [.text(text: id)], startedAt: startedAt, promptedBy: nil, privateTo: nil)
         }
         let items = [
             user("a", at(18, 9)), answer("b", at(18, 9)), .marker(id: "m", kind: .compacted),

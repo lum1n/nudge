@@ -117,6 +117,8 @@ export const TimelineItem = Type.Union([
     parts: Type.Array(Part),
     /** When its first model response started, in ms since the epoch. */
     startedAt: Type.Optional(Type.Number()),
+    /** It answers a fired nudge, or what a watch found, rather than a message. */
+    promptedBy: Type.Optional(Type.Union([Type.Literal("nudge"), Type.Literal("watch")])),
     /** It answers something private: only this player sees its parts; everyone else gets none. */
     privateTo: Type.Optional(Player),
   }),

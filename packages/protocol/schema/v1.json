@@ -582,6 +582,18 @@
             "startedAt": {
               "type": "number"
             },
+            "promptedBy": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "nudge"
+                },
+                {
+                  "type": "string",
+                  "const": "watch"
+                }
+              ]
+            },
             "privateTo": {
               "type": "object",
               "required": [
@@ -1347,6 +1359,18 @@
                   },
                   "startedAt": {
                     "type": "number"
+                  },
+                  "promptedBy": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "nudge"
+                      },
+                      {
+                        "type": "string",
+                        "const": "watch"
+                      }
+                    ]
                   },
                   "privateTo": {
                     "type": "object",
@@ -2737,6 +2761,18 @@
                               "startedAt": {
                                 "type": "number"
                               },
+                              "promptedBy": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "const": "nudge"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "const": "watch"
+                                  }
+                                ]
+                              },
                               "privateTo": {
                                 "type": "object",
                                 "required": [
@@ -4080,6 +4116,18 @@
                   },
                   "startedAt": {
                     "type": "number"
+                  },
+                  "promptedBy": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "nudge"
+                      },
+                      {
+                        "type": "string",
+                        "const": "watch"
+                      }
+                    ]
                   },
                   "privateTo": {
                     "type": "object",

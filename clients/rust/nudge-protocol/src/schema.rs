@@ -151,6 +151,18 @@ pub enum AnswerStatus {
     Failed,
 }
 
+/// What an answer answers, when it isn't a message.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PromptedBy {
+    /// A scheduled nudge that fired.
+    Nudge,
+    /// Something new a watch found.
+    Watch,
+    #[serde(other)]
+    Unknown,
+}
+
 /// One answer: every model response and tool round between two messages.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AnswerItem {
@@ -162,6 +174,8 @@ pub struct AnswerItem {
     /// When its first model response started, in ms since the epoch.
     #[serde(default, rename = "startedAt", skip_serializing_if = "Option::is_none")]
     pub started_at: Option<f64>,
+    #[serde(default, rename = "promptedBy", skip_serializing_if = "Option::is_none")]
+    pub prompted_by: Option<PromptedBy>,
     /// It answers something private: only this player sees its parts; everyone else gets none.
     #[serde(default, rename = "privateTo", skip_serializing_if = "Option::is_none")]
     pub private_to: Option<Player>,

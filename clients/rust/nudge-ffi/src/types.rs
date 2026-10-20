@@ -66,6 +66,13 @@ pub enum Part {
     Tool { tool: ToolPart },
 }
 
+/// What an answer answers, when it isn't a message.
+#[derive(Clone, Copy, Debug, PartialEq, uniffi::Enum)]
+pub enum PromptedBy {
+    Nudge,
+    Watch,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, uniffi::Enum)]
 pub enum AnswerStatus {
     Running,
@@ -115,6 +122,8 @@ pub enum TimelineItem {
         parts: Vec<Part>,
         /// When its first model response started, in ms since the epoch.
         started_at: Option<f64>,
+        /// It answers a fired nudge or a watch, rather than a message.
+        prompted_by: Option<PromptedBy>,
         /// Only this player sees it; everyone else gets it emptied.
         private_to: Option<Player>,
     },
@@ -510,6 +519,11 @@ pub fn timeline_item(item: &p::TimelineItem) -> Option<TimelineItem> {
             error: answer.error.clone(),
             parts: answer.parts.iter().filter_map(part).collect(),
             started_at: answer.started_at,
+            prompted_by: match answer.prompted_by {
+                Some(p::PromptedBy::Nudge) => Some(PromptedBy::Nudge),
+                Some(p::PromptedBy::Watch) => Some(PromptedBy::Watch),
+                Some(p::PromptedBy::Unknown) | None => None,
+            },
             private_to: answer.private_to.clone().map(Into::into),
         },
         p::TimelineItem::Marker(marker) => TimelineItem::Marker {

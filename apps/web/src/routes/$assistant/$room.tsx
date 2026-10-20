@@ -526,6 +526,22 @@ function UserMessage({ message }: { message: MessageState }) {
   );
 }
 
+/** How an answer to a fired nudge, or to what a watch found, looks. */
+const PROMPTS = {
+  nudge: {
+    label: "Nudge",
+    glyph: "🔔",
+    card: "border-amber-200 border-l-amber-500 bg-amber-50",
+    badge: "bg-amber-100 text-amber-800",
+  },
+  watch: {
+    label: "Watch",
+    glyph: "👀",
+    card: "border-indigo-200 border-l-indigo-500 bg-indigo-50",
+    badge: "bg-indigo-100 text-indigo-800",
+  },
+} as const;
+
 function AssistantMessage({
   message,
   name,
@@ -534,19 +550,34 @@ function AssistantMessage({
   name: string;
 }) {
   const { assistant, room } = Route.useParams();
-  const secret = (message.metadata.custom as { private?: boolean } | undefined)?.private === true;
+  const custom = message.metadata.custom as
+    | { private?: boolean; promptedBy?: "nudge" | "watch" }
+    | undefined;
+  const secret = custom?.private === true;
+  // An answer no one asked for just now stands out from the rest, by what prompted it.
+  const prompt = custom?.promptedBy === undefined ? undefined : PROMPTS[custom.promptedBy];
   const at = timeOfMessage(message);
   return (
     <MessagePrimitive.Root>
       <div className="flex justify-start">
-        <div className="max-w-full min-w-0 rounded-2xl border border-stone-200 border-l-4 border-l-teal-500 bg-white px-3 py-2 [overflow-wrap:anywhere] md:max-w-[85%]">
-          <p className="mb-1 flex items-baseline gap-2 text-xs">
+        <div
+          className={`max-w-full min-w-0 rounded-2xl border border-l-4 px-3 py-2 [overflow-wrap:anywhere] md:max-w-[85%] ${
+            prompt?.card ?? "border-stone-200 border-l-teal-500 bg-white"
+          }`}
+        >
+          <p className="mb-1 flex flex-wrap items-baseline gap-2 text-xs">
             <span className="font-semibold text-stone-700">
               <span aria-hidden className="text-teal-600">
                 ✦{" "}
               </span>
               {name}
             </span>
+            {prompt !== undefined && (
+              <span className={`rounded-full px-2 py-0.5 font-medium ${prompt.badge}`}>
+                <span aria-hidden>{prompt.glyph} </span>
+                {prompt.label}
+              </span>
+            )}
             {at !== undefined && (
               <time dateTime={new Date(at).toISOString()} className="text-stone-400">
                 {timeLabel(at)}

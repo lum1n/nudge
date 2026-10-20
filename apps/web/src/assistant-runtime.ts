@@ -202,6 +202,7 @@ export function toThreadMessageLike(item: TimelineItem, me: string): ThreadMessa
           custom: {
             ...(item.privateTo === undefined ? {} : { private: true }),
             ...(item.startedAt === undefined ? {} : { at: item.startedAt }),
+            ...(item.promptedBy === undefined ? {} : { promptedBy: item.promptedBy }),
           },
         },
       };

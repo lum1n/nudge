@@ -254,10 +254,15 @@ function items(
     ];
     const id = `answer:${after}`;
     const owner = before === undefined ? undefined : privateToOf(before);
+    const prompt = before === undefined ? undefined : promptedBy(before);
     timeline.push(
       keep(id, sources, () => {
         const built = buildAnswer(id, answerEntries, results, live, generated);
-        return owner === undefined ? built : { ...built, privateTo: owner };
+        return {
+          ...built,
+          ...(prompt === undefined ? {} : { promptedBy: prompt }),
+          ...(owner === undefined ? {} : { privateTo: owner }),
+        };
       }),
     );
     if (answerEntries[0] !== undefined) options.start?.(answerEntries[0].id);
@@ -340,6 +345,12 @@ function privateToOf(entry: {
     return owner === undefined ? undefined : { id: owner.playerId, displayName: owner.displayName };
   }
   return undefined;
+}
+
+/** What an answer to this entry answers, when it isn't a message: a fired nudge or a watch. */
+function promptedBy(entry: EntryRecord): "nudge" | "watch" | undefined {
+  if (entry.kind !== FIRE_ENTRY) return undefined;
+  return (entry.data as FireEntryData).source === "watch" ? "watch" : "nudge";
 }
 
 function privately(entry: { readonly kind?: string; readonly data?: unknown }): {
