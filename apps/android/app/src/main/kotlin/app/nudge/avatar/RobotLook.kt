@@ -8,17 +8,19 @@ enum class EyeShape { PILL, ROUND, SQUARE, WIDE }
 
 enum class Accessory { NONE, ANTENNA, HEADPHONES, SPROUT, CROWN }
 
-data class Appearance(
+data class RobotLook(
     /** The ribbon's two ends, as `#rrggbb`. */
     val body: Pair<String, String>,
     val eyes: String,
     val sparks: String,
     val eyeShape: EyeShape,
     val accessory: Accessory,
-)
+) {
+    companion object
+}
 
 /** The robot of the app icon. */
-val NUDGE = Appearance(
+val NUDGE = RobotLook(
     body = "#1438f5" to "#19e6f0",
     eyes = "#3ff6ff",
     sparks = "#2fe6b8",
@@ -26,7 +28,7 @@ val NUDGE = Appearance(
     accessory = Accessory.NONE,
 )
 
-val PRESETS: Map<String, Appearance> = linkedMapOf(
+val PRESETS: Map<String, RobotLook> = linkedMapOf(
     "Nudge" to NUDGE,
     "Ember" to NUDGE.copy(body = "#e8361c" to "#ffb238", eyes = "#ffd36b", sparks = "#ff7a45"),
     "Moss" to NUDGE.copy(body = "#127a4a" to "#a5e86a", eyes = "#b8ff8a", sparks = "#e4f36a", eyeShape = EyeShape.ROUND),

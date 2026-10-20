@@ -51,6 +51,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import app.nudge.avatar.LocalRobotLook
 import app.nudge.avatar.Portrait
 import java.text.DateFormat
 import java.time.Instant
@@ -143,7 +144,7 @@ private fun AnswerCard(
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Portrait(size = 22.dp)
+                Portrait(appearance = LocalRobotLook.current, size = 22.dp)
                 Text(assistant, style = MaterialTheme.typography.titleSmall)
                 answer.promptedBy?.let { PromptedChip(it, accent, onAccent) }
                 answer.startedAt?.let {

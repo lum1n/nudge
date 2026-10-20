@@ -61,6 +61,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.nudge.avatar.look
+import app.nudge.avatar.Portrait
 import app.nudge.AppModel
 import app.nudge.BuildConfig
 import app.nudge.Dictation
@@ -106,6 +108,7 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
     // The assistant whose extensions or invites are open: home, or one joined from there.
     var extensionsOf by remember { mutableStateOf<Session?>(null) }
     var invitesOf by remember { mutableStateOf<Session?>(null) }
+    var robotOf by remember { mutableStateOf<Session?>(null) }
     val places by model.places.collectAsStateWithLifecycle()
     val administered = places.filter { place ->
         key(place.account.key) { place.me.collectAsStateWithLifecycle().value?.admin == true }
@@ -135,6 +138,11 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
     extensionsOf?.let { at ->
         BackHandler { extensionsOf = null }
         ExtensionsScreen(at.client, close = { extensionsOf = null })
+        return
+    }
+    robotOf?.let { at ->
+        BackHandler { robotOf = null }
+        RobotScreen(at, close = { robotOf = null })
         return
     }
     invitesOf?.let { at ->
@@ -313,6 +321,15 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                     // Titles key the list, and assistants on different servers may share a name.
                     if (at === session) "Assistant" else "${at.account.assistantName} on ${java.net.URI(at.account.server).host ?: at.account.server}",
                     buildList<GroupRow> {
+                        add { shapes ->
+                            SegmentedListItem(
+                                onClick = { robotOf = at },
+                                shapes = shapes,
+                                leadingContent = { Portrait(appearance = at.look(), size = 24.dp) },
+                                supportingContent = { Text("How it looks to everyone, in every app") },
+                                trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) },
+                            ) { Text("Robot") }
+                        }
                         add { shapes ->
                             SegmentedListItem(
                                 onClick = { extensionsOf = at },

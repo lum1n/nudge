@@ -35,7 +35,7 @@ import nudge.ffi.TimelineItem
 fun Avatar(
     mood: Mood,
     modifier: Modifier = Modifier,
-    appearance: Appearance = NUDGE,
+    appearance: RobotLook = NUDGE,
     size: Dp = 96.dp,
     level: (() -> Double?)? = null,
     title: String? = null,
@@ -68,7 +68,7 @@ fun Avatar(
 
 /** The robot at rest, for where many are drawn at once, such as beside every answer. */
 @Composable
-fun Portrait(modifier: Modifier = Modifier, appearance: Appearance = NUDGE, size: Dp = 20.dp) {
+fun Portrait(modifier: Modifier = Modifier, appearance: RobotLook = NUDGE, size: Dp = 20.dp) {
     val robot = remember(appearance) { Robot(appearance) }
     Canvas(modifier.size(size)) { draw(robot, REST, 0.0) }
 }

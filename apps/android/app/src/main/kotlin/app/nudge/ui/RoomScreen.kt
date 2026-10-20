@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.nudge.Dictation
 import app.nudge.avatar.Avatar
+import app.nudge.avatar.LocalRobotLook
 import app.nudge.avatar.Mood
 import app.nudge.avatar.presenceLabel
 import app.nudge.avatar.roomMood
@@ -277,7 +278,7 @@ private fun Timeline(
             verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Avatar(mood, size = 160.dp, level = level, title = assistant)
+            Avatar(mood, appearance = LocalRobotLook.current, size = 160.dp, level = level, title = assistant)
             Text("Say hello to $assistant.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         return
@@ -442,7 +443,7 @@ private fun Presence(mood: Mood, label: String, assistant: String, level: () -> 
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Avatar(mood, size = 40.dp, level = level, title = assistant)
+        Avatar(mood, appearance = LocalRobotLook.current, size = 40.dp, level = level, title = assistant)
         Text(
             label,
             style = MaterialTheme.typography.bodyMedium,

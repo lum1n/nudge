@@ -161,7 +161,7 @@ private fun Path.arcClockwise(x0: Float, y0: Float, x1: Float, y1: Float, radius
 }
 
 /** Draws one look's robot; keeps what doesn't change from frame to frame. */
-class Robot(private val look: Appearance) {
+class Robot(private val look: RobotLook) {
     private val body0 = look.body.first
     private val body1 = look.body.second
     private val eye = eyeOf(look.eyeShape)

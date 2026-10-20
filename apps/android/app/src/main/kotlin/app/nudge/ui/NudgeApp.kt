@@ -1,5 +1,8 @@
 package app.nudge.ui
 
+import androidx.compose.runtime.CompositionLocalProvider
+import app.nudge.avatar.LocalRobotLook
+import app.nudge.avatar.look
 import androidx.activity.compose.BackHandler
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
@@ -162,13 +165,15 @@ private fun SignedIn(model: AppModel, session: Session) {
                 if (room == null || at == null) {
                     EmptyRoom()
                 } else {
-                    RoomScreen(
-                        at, room.room, model.dictation,
-                        back = if (listVisible) null else ({ scope.launch { navigator.navigateBack() } }),
-                        lists = { open(Destination.of(room, Extra.LISTS)) },
-                        info = { open(Destination.of(room, Extra.INFO)) },
-                        browser = { open(Destination.of(room, Extra.BROWSER)) },
-                    )
+                    CompositionLocalProvider(LocalRobotLook provides at.look()) {
+                        RoomScreen(
+                            at, room.room, model.dictation,
+                            back = if (listVisible) null else ({ scope.launch { navigator.navigateBack() } }),
+                            lists = { open(Destination.of(room, Extra.LISTS)) },
+                            info = { open(Destination.of(room, Extra.INFO)) },
+                            browser = { open(Destination.of(room, Extra.BROWSER)) },
+                        )
+                    }
                 }
             }
         },
