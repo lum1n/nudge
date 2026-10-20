@@ -36,15 +36,16 @@ const HARNESSES = ["claude", "codex", "cursor", "copilot", "pi", "opencode"] as 
 const MAX_READ = 8_000;
 
 const HostSettings = Type.Object({
-  name: Type.String({
-    pattern: "^[a-z0-9][a-z0-9-]*$",
-    description:
-      "What you call the machine, in lowercase letters, digits and dashes, such as devbox.",
-  }),
   host: Type.String({
     minLength: 1,
-    description: "Its address: a host name or IP the server reaches it at.",
+    description: "Its address: a host name or IP the server reaches it at, such as 192.168.1.20.",
   }),
+  name: Type.Optional(
+    Type.String({
+      description:
+        "What you call the machine when you talk to the assistant, such as devbox; its address when left out.",
+    }),
+  ),
   port: Type.Optional(Type.Number({ description: "The SSH port; 22 when left out." })),
   user: Type.String({ minLength: 1, description: "The user the agents run as there." }),
   auth: Type.Optional(
@@ -70,6 +71,11 @@ const HostSettings = Type.Object({
 });
 
 const Settings = Type.Object({
+  local: Type.Boolean({
+    default: true,
+    description:
+      "Whether the assistant also reaches the coding sessions on the machine Nudge runs on, as the user Nudge runs as, with nothing to set up. Agents started there can read what that user can, Nudge's own data included.",
+  }),
   hosts: Type.Array(HostSettings, {
     default: [],
     description: "The machines your coding agents run on, reached over SSH.",
@@ -156,6 +162,35 @@ function describeState(attachment: Attachment): string {
   return state.state;
 }
 
+/**
+ * The machines from the settings, with this machine first as `local` when `local` is on, and
+ * names made unique: a second "devbox" is "devbox-2".
+ */
+export function machines(local: boolean, configured: readonly HostEntry[]): HostEntry[] {
+  const all: HostEntry[] = [
+    ...(local
+      ? [
+          {
+            name: "local",
+            host: "localhost",
+            port: 22,
+            user: "",
+            auth: "local" as const,
+            rooms: ["*"],
+          },
+        ]
+      : []),
+    ...configured,
+  ];
+  const taken = new Set<string>();
+  return all.map((entry) => {
+    let name = entry.name;
+    for (let n = 2; taken.has(name.toLowerCase()); n++) name = `${entry.name}-${n}`;
+    taken.add(name.toLowerCase());
+    return name === entry.name ? entry : { ...entry, name };
+  });
+}
+
 /** The extension with its binding chosen; the default export loads ACC's. */
 export function accExtension(options: AccOptions = {}) {
   return defineNudgeExtension({
@@ -168,17 +203,20 @@ export function accExtension(options: AccOptions = {}) {
       const backend = options.backend ?? loadAcc();
       const report = options.report ?? ((error: unknown) => console.error("acc:", error));
       let changedKeys: ReadonlyMap<string, string> = new Map();
-      const entries: HostEntry[] = host.settings.hosts.map((entry) => ({
-        name: entry.name,
-        host: entry.host,
-        port: entry.port ?? 22,
-        user: entry.user,
-        auth: entry.auth ?? "key",
-        ...(entry.password === undefined
-          ? {}
-          : { password: fillVariables(entry.password, process.env, "acc") }),
-        rooms: entry.rooms ?? ["*"],
-      }));
+      const entries = machines(
+        host.settings.local,
+        host.settings.hosts.map((entry) => ({
+          name: entry.name?.trim() || entry.host.trim(),
+          host: entry.host.trim(),
+          port: entry.port ?? 22,
+          user: entry.user,
+          auth: entry.auth ?? "key",
+          ...(entry.password === undefined
+            ? {}
+            : { password: fillVariables(entry.password, process.env, "acc") }),
+          rooms: entry.rooms ?? ["*"],
+        })),
+      );
       const problems = (): string[] => [
         ...(backend === undefined
           ? [
@@ -186,6 +224,11 @@ export function accExtension(options: AccOptions = {}) {
             ]
           : []),
         ...(entries.length === 0 ? ["No machines are set up for coding agents."] : []),
+        ...(backend !== undefined && backend.localHost === undefined && host.settings.local
+          ? [
+              "This ACC binding can't reach this machine's sessions; run pnpm acc:fetch for a newer one.",
+            ]
+          : []),
         ...[...changedKeys].map(
           ([name, key]) => `${name} shows a host key other than the one pinned (${key}).`,
         ),
@@ -229,7 +272,7 @@ export function accExtension(options: AccOptions = {}) {
         if (here.length === 0)
           return "No machine for coding agents is set up for this conversation.";
         return (
-          here.find((entry) => entry.name === name) ??
+          here.find((entry) => entry.name.toLowerCase() === name.trim().toLowerCase()) ??
           `No machine "${name}" here; there is ${here.map((e) => e.name).join(", ")}.`
         );
       };
@@ -334,7 +377,10 @@ export function accExtension(options: AccOptions = {}) {
             return text("No machine for coding agents is set up for this conversation.", true);
           const lines = await Promise.all(
             here.map(async (entry) => {
-              const name = `${entry.name} (${entry.user}@${entry.host}${entry.port === 22 ? "" : `:${entry.port}`})`;
+              const name =
+                entry.auth === "local"
+                  ? `${entry.name} (this machine${entry.user === "" ? "" : `, as ${entry.user}`})`
+                  : `${entry.name} (${entry.user}@${entry.host}${entry.port === 22 ? "" : `:${entry.port}`})`;
               try {
                 const connection = await hosts.connect(entry.name);
                 const found = await connection.probe();
@@ -347,10 +393,10 @@ export function accExtension(options: AccOptions = {}) {
               }
             }),
           );
-          return text(
-            `${lines.join("\n")}\n\nThe assistant's key, for ~/.ssh/authorized_keys on machines that log in with it:\n` +
-              hosts.publicKey(),
-          );
+          const key = here.some((entry) => entry.auth === "key")
+            ? `\n\nThe assistant's key, for ~/.ssh/authorized_keys on machines that log in with it:\n${hosts.publicKey()}`
+            : "";
+          return text(`${lines.join("\n")}${key}`);
         },
       });
 
@@ -707,11 +753,14 @@ export function accExtension(options: AccOptions = {}) {
         parameters: Type.Object(sessionParameters),
         execute: async (args, api, ctx) => {
           const room = await roomOf(api, api.conversationId, ctx);
-          const follows = sessions
+          const follow = sessions
             .followed(room.id)
-            .some((f) => f.host === args.host && f.id === args.id);
-          if (!follows) return text(`This room doesn't follow ${args.host}/${args.id}.`, true);
-          await sessions.unfollow(args.host, args.id);
+            .find(
+              (f) => f.host.toLowerCase() === args.host.trim().toLowerCase() && f.id === args.id,
+            );
+          if (follow === undefined)
+            return text(`This room doesn't follow ${args.host}/${args.id}.`, true);
+          await sessions.unfollow(follow.host, follow.id);
           return text(`This room no longer follows ${args.host}/${args.id}.`);
         },
       });

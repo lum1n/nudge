@@ -113,7 +113,9 @@ describe("extensions", () => {
         { ...options, extensions: [{ extension: hello, settings: { maxSides: 1 } }] },
         context,
       ),
-    ).rejects.toThrow(/Invalid settings for extension "hello":\n {2}\/maxSides/);
+    ).rejects.toThrow(
+      "Settings for the hello extension need fixing:\n  Max sides: must be at least 2.",
+    );
     const plain = defineNudgeExtension({ name: "plain", version: "1", setup: () => ({}) });
     await expect(
       createNudge({ ...options, extensions: [{ extension: plain, settings: { a: 1 } }] }, context),

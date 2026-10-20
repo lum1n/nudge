@@ -9,7 +9,8 @@ export type HostEntry = {
   readonly host: string;
   readonly port: number;
   readonly user: string;
-  readonly auth: "key" | "agent" | "password";
+  /** `local`: this machine, as the user Nudge runs as, with no login. */
+  readonly auth: "key" | "agent" | "password" | "local";
   readonly password?: string;
   /** Room ids that may use it, `*` for every room. */
   readonly rooms: readonly string[];
@@ -93,6 +94,11 @@ export class Hosts {
   }
 
   private async open(entry: HostEntry): Promise<AccHost> {
+    if (entry.auth === "local") {
+      if (this.backend.localHost === undefined)
+        throw new Error("This ACC binding can't reach this machine's sessions; it needs updating.");
+      return this.backend.localHost();
+    }
     const pin = this.pinned(entry.name);
     const config: SshConfig = {
       host: entry.host,

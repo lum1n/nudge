@@ -299,11 +299,12 @@ An entry's `rooms` lists the kinds of room it is on in by default (`"lobby"`, `"
 ```json
 {
   "from": "./extensions/acc",
-  "settings": { "hosts": [{ "name": "devbox", "host": "devbox.local", "user": "me" }] }
+  "settings": { "hosts": [{ "host": "192.168.1.20", "user": "me", "name": "devbox" }] }
 }
 ```
 
-- Each machine has a `name` the room uses, a `host` and `port` (22) the server reaches it at, and a `user`. `rooms` limits which rooms may use it.
+- With nothing set up, it reaches the sessions on the machine Nudge runs on, as `local`, as the user Nudge runs as: those you started with the Sessh app or the `acc` CLI there, and the ones it starts. No SSH is involved; scripts run with `sh` and a login's environment, not Nudge's. Agents it starts there can read what that user can, Nudge's own data included; `"local": false` turns this off.
+- Each other machine has a `host` and `port` (22) the server reaches it at, a `user`, and optionally a `name` to call it by (its address when left out). `rooms` limits which rooms may use it.
 - The assistant logs in with a key of its own (`auth: "key"`, the default), made the first time and kept encrypted in the extension's secret store. Ask the assistant for its machines (`acc_hosts`) and it gives the line to add to `~/.ssh/authorized_keys` there. `auth: "agent"` uses the server's ssh-agent instead, and `auth: "password"` a `password` (`${NAME}` takes it from the environment).
 - The first connection pins the machine's host key in `<database>.extensions/acc/hosts.json`. A machine that later shows another key is refused, and `nudge doctor` says so. After a reinstall, ask the assistant to trust the new key, which waits for an admin to approve it.
 - `acc_start` starts an agent in a directory there with a first prompt, after someone in the room approves it (`approveStart`, default on). The agent runs detached on the machine and keeps running when Nudge restarts or the connection drops.

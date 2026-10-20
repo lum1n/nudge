@@ -47,9 +47,9 @@
           "settings": { "minMinutes": 30, "maxPerRoom": 10 }
         },
         {
-          "$comment": "Coding agents (Claude Code, Codex, Cursor, Copilot, pi, opencode) on your machines over SSH, through ACC. The assistant logs in with a key of its own; acc_hosts gives the line for ~/.ssh/authorized_keys. Needs ACC's binding (pnpm acc:fetch); off here so the example works without it.",
+          "$comment": "Coding agents (Claude Code, Codex, Cursor, Copilot, pi, opencode) through ACC: on this machine with nothing set up, and on other machines over SSH. The assistant logs in with a key of its own; acc_hosts gives the line for ~/.ssh/authorized_keys. Needs ACC's binding (pnpm acc:fetch); off here so the example works without it.",
           "from": "./extensions/acc",
-          "settings": { "hosts": [{ "name": "devbox", "host": "devbox.local", "user": "me" }] },
+          "settings": { "hosts": [{ "host": "192.168.1.20", "user": "me", "name": "devbox" }] },
           "enabled": false
         },
         {

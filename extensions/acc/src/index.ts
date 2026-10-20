@@ -3,6 +3,7 @@ export {
   accExtension,
   allowAndReject,
   default,
+  machines,
   quote,
   transcript,
 } from "./extension.ts";

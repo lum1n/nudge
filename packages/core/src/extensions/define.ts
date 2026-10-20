@@ -11,6 +11,7 @@ import type { PiiDetector } from "../privacy/detectors.ts";
 import type { RoomEvent } from "../room-events.ts";
 import type { Nudge } from "../nudge.ts";
 import { SecretStore } from "../secrets.ts";
+import { settingsProblems } from "./settings-errors.ts";
 
 /** What an extension's `setup` gets from the assistant it is installed in. */
 export type ExtensionHost<Settings, PlayerSettings = undefined> = {
@@ -343,11 +344,9 @@ function checkSettings(extension: NudgeExtension, settings: unknown): unknown {
   }
   const value = Value.Default(extension.settings, Value.Clone(settings ?? {}));
   if (!Value.Check(extension.settings, value)) {
-    const problems = [...Value.Errors(extension.settings, value)]
-      .slice(0, 5)
-      .map((error) => `${error.instancePath || "/"} ${error.message}`);
+    const problems = settingsProblems(extension.settings, value);
     throw new ConfigError(
-      `Invalid settings for extension "${extension.name}":\n  ${problems.join("\n  ")}`,
+      `Settings for the ${extension.name} extension need fixing:\n  ${problems.join("\n  ")}`,
     );
   }
   return value;
@@ -433,10 +432,10 @@ export function checkPlayerSettings(
     throw new InvalidProfile(`Extension "${name}" takes no player settings`);
   const value = Value.Default(schema, Value.Clone(chosen));
   if (!Value.Check(schema, value)) {
-    const problems = [...Value.Errors(schema, value)]
-      .slice(0, 5)
-      .map((error) => `${error.instancePath || "/"} ${error.message}`);
-    throw new InvalidProfile(`Invalid settings for extension "${name}": ${problems.join("; ")}`);
+    const problems = settingsProblems(schema, value);
+    throw new InvalidProfile(
+      `Settings for the ${name} extension need fixing: ${problems.join(" ")}`,
+    );
   }
 }
 

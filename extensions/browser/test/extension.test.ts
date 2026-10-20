@@ -235,6 +235,6 @@ describe("browser extension", () => {
 
   it("checks its settings", async () => {
     const { open } = setup("no-slash");
-    await expect(open()).rejects.toThrow(/Invalid settings for extension "browser"/);
+    await expect(open()).rejects.toThrow(/Settings for the browser extension need fixing/);
   });
 });

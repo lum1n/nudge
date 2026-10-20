@@ -147,12 +147,14 @@ export interface AccHost {
 /** What the extension needs of `@acc/node`; tests pass a fake. */
 export interface AccBackend {
   host(config: SshConfig): AccHost;
+  /** This machine, with no login; absent in a binding older than ACC 0.2. */
+  localHost?: () => AccHost;
   generateKey(comment: string): { privateKey: string; publicKey: string };
   newSessionId(harness: HarnessId): string;
 }
 
 type AccModule = {
-  SshHost: new (config: SshConfig) => AccHost;
+  SshHost: (new (config: SshConfig) => AccHost) & { local?: () => AccHost };
   generateKey(comment: string): { privateKey: string; publicKey: string };
   newSessionId(harness: HarnessId, entropy: Buffer): string;
 };
@@ -176,6 +178,9 @@ export function loadAcc(): AccBackend | undefined {
       if (typeof acc.SshHost !== "function") continue;
       return {
         host: (config) => new acc.SshHost(config),
+        ...(typeof acc.SshHost.local === "function"
+          ? { localHost: () => acc.SshHost.local!() }
+          : {}),
         generateKey: (comment) => acc.generateKey(comment),
         newSessionId: (harness) =>
           acc.newSessionId(harness, Buffer.from(crypto.getRandomValues(new Uint8Array(15)))),

@@ -7,7 +7,7 @@
 #   acc.sh [<dir>] [<platform>]   (default: the checkout's root, and this machine's platform)
 set -eu
 
-version=0.1.0
+version=0.2.0
 here=$(cd "$(dirname "$0")" && pwd)
 dir=${1:-$here/../../..}
 platform=${2:-}
@@ -41,9 +41,9 @@ if [ -z "$version" ] || [ -n "${ACC_SRC:-}" ]; then
   from="the checkout at $src"
 else
   case $platform in
-    linux-x64) sha256=638925788e6a1f1d839acdead5c9bcc5cbaa39dba42b6ace3ea1fd02219383c8 ;;
-    linux-arm64) sha256=df86c1695b094f6548fe8092528a472406c12cfa1882cd7f584ed30d9f1f79d2 ;;
-    darwin-arm64) sha256=9d8a538a507ad980ebfba9fb3123026d9b69c385290d4c23b6b14790c9304cb4 ;;
+    linux-x64) sha256=739e1f95ae185178d659bb6517b7cb7c8b74c48dc8de0ca0a8bf395f69efd5e8 ;;
+    linux-arm64) sha256=2b8b1a6af63c81b09551dfd6b55450f404d5040610a7a556f3f7b460fb296857 ;;
+    darwin-arm64) sha256=ef1f0c79ede69a0e74e7b3a788c51b705b8adb5c739b984254c8ea86063b7298 ;;
     *) echo "ACC has no build for $platform" >&2 && exit 1 ;;
   esac
   archive=acc-node-$version-$platform.tar.gz

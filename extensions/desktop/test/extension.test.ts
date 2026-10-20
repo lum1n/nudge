@@ -231,6 +231,6 @@ describe("desktop extension", () => {
 
   it("checks its settings", async () => {
     const { open } = setup("no-slash");
-    await expect(open()).rejects.toThrow(/Invalid settings for extension "desktop"/);
+    await expect(open()).rejects.toThrow(/Settings for the desktop extension need fixing/);
   });
 });

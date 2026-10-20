@@ -24,6 +24,7 @@ import {
   type DetachedStatus,
   type HarnessId,
   Hosts,
+  machines,
   quote,
   type SessionConfig,
   type SshConfig,
@@ -80,12 +81,27 @@ class FakeSession implements AccSession {
 class FakeAcc implements AccBackend {
   fingerprint = "SHA256:one";
   readonly logs = new Map<string, Log>();
-  readonly configs: SshConfig[] = [];
+  readonly configs: (SshConfig | "local")[] = [];
   keys = 0;
   private ids = 0;
 
+  /** Configs of the hosts made, `"local"` for this machine. */
+  localHost = (): AccHost => {
+    this.configs.push("local");
+    return this.make({
+      host: "localhost",
+      user: "",
+      auth: { agent: true },
+      hostKey: { acceptAny: true },
+    });
+  };
+
   host(config: SshConfig): AccHost {
     this.configs.push(config);
+    return this.make(config);
+  }
+
+  private make(config: SshConfig): AccHost {
     return {
       connect: async () => {
         if (
@@ -192,7 +208,10 @@ describe("acc", () => {
     for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
   });
 
-  async function open(acc: FakeAcc, options: { approveStart?: boolean; database?: string } = {}) {
+  async function open(
+    acc: FakeAcc,
+    options: { approveStart?: boolean; database?: string; settings?: object } = {},
+  ) {
     const faux = fauxProvider();
     const models = createModels();
     models.setProvider(faux.provider);
@@ -215,6 +234,8 @@ describe("acc", () => {
           ],
           { stopReason: "toolUse" },
         );
+      if (/what runs here/i.test(text))
+        return fauxAssistantMessage([fauxToolCall("acc_sessions", {})], { stopReason: "toolUse" });
       if (text.includes("finished its turn"))
         return fauxAssistantMessage([fauxText(`Heard: ${text}`)]);
       return fauxAssistantMessage([fauxText("Okay.")]);
@@ -229,7 +250,8 @@ describe("acc", () => {
         extensions: [
           {
             extension: accExtension({ backend: acc, report: () => {} }),
-            settings: {
+            settings: options.settings ?? {
+              local: false,
               hosts: [{ name: "devbox", host: "10.0.0.2", user: "u" }],
               approveStart: options.approveStart ?? false,
             },
@@ -381,6 +403,39 @@ describe("acc", () => {
     expect(later.pinned("devbox")).toBe("SHA256:two");
     expect(later.publicKey()).toBe("ssh-ed25519 AAAA nudge-test");
     expect(acc.keys).toBe(1);
+  });
+
+  it("reaches this machine's sessions with nothing set up", async () => {
+    const acc = new FakeAcc();
+    acc.logs.set("claude-here", {
+      harness: "claude",
+      cwd: "/home/me/app",
+      batches: [],
+      waiters: [],
+      items: [],
+      sent: [],
+    });
+    const { nudge, say } = await open(acc, { settings: {} });
+    await say("What runs here?");
+    expect(acc.configs).toEqual(["local"]);
+    const conversation = await nudge.conversation(LOBBY, context);
+    const entries = await conversation.entries({}, 50, undefined, context);
+    expect(JSON.stringify(entries.items)).toContain("claude-here: claude in /home/me/app, running");
+  });
+
+  it("names machines by their address when unnamed, and keeps names apart", () => {
+    const entry = (name: string) => ({
+      name,
+      host: name,
+      port: 22,
+      user: "u",
+      auth: "key" as const,
+      rooms: ["*"],
+    });
+    expect(
+      machines(true, [entry("10.0.0.2"), entry("local"), entry("10.0.0.2")]).map((m) => m.name),
+    ).toEqual(["local", "10.0.0.2", "local-2", "10.0.0.2-2"]);
+    expect(machines(false, [entry("devbox")]).map((m) => m.name)).toEqual(["devbox"]);
   });
 
   it("picks the options that answer once, quotes for the shell, and shows a transcript", () => {
