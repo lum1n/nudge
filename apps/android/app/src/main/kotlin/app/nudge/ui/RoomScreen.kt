@@ -46,6 +46,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,9 +55,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.nudge.Dictation
+import app.nudge.avatar.Avatar
+import app.nudge.avatar.Mood
+import app.nudge.avatar.presenceLabel
+import app.nudge.avatar.roomMood
 import app.nudge.Session
 import app.nudge.explain
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -104,6 +112,15 @@ fun RoomScreen(
     var problem by remember { mutableStateOf<String?>(null) }
     var showActivity by remember(roomId) { mutableStateOf(false) }
     var dictating by remember(roomId) { mutableStateOf(false) }
+    val heard = dictation.state.collectAsStateWithLifecycle()
+    // Not the level itself, which changes many times a second: the robot reads that as it draws.
+    val listening by remember { derivedStateOf { heard.value is Dictation.State.Listening } }
+    val mood = roomMood(
+        state?.timeline.orEmpty(), state?.live, state?.approvals.orEmpty(),
+        listening = dictating && listening,
+    )
+    // The mic's loudness, for the robot to follow while it listens; otherwise its own made-up voice.
+    val level = remember(dictation) { { (dictation.state.value as? Dictation.State.Listening)?.level?.toDouble() } }
 
     fun attempt(action: suspend () -> Unit) = scope.launch {
         try {
@@ -126,6 +143,10 @@ fun RoomScreen(
                         }
                     }
                     state?.live?.status?.let { LiveStatus(it) }
+                    // In an empty room the robot is in the middle of it instead.
+                    if (state != null && (state.timeline.transcript.isNotEmpty() || state.pending.isNotEmpty())) {
+                        Presence(mood, presenceLabel(mood, state.timeline, state.live), session.account.assistantName, level)
+                    }
                     Composer(
                         draft = draft,
                         onDraft = {
@@ -201,7 +222,7 @@ fun RoomScreen(
                 state == null || (state.room == null && state.status == SyncStatus.SYNCING) ->
                     LoadingIndicator(Modifier.align(Alignment.Center))
                 else -> Timeline(
-                    state, me?.player?.id, session.account.assistantName,
+                    state, me?.player?.id, session.account.assistantName, mood, level,
                     loadEarlier = { scope.launch { room?.loadEarlier() } },
                     retry = { requestId -> attempt { client.resend(roomId, requestId) } },
                     dismiss = { requestId -> client.dismiss(roomId, requestId) },
@@ -235,6 +256,8 @@ private fun Timeline(
     state: RoomState,
     me: String?,
     assistant: String,
+    mood: Mood,
+    level: () -> Double?,
     loadEarlier: () -> Unit,
     retry: (String) -> Unit,
     dismiss: (String) -> Unit,
@@ -248,6 +271,17 @@ private fun Timeline(
     val queued = state.queue.filter { !it.nudge && it.requestId !in pendingIds }.reversed()
     val transcript = state.timeline.transcript
     val days = remember(transcript) { transcript.dayStarts() }
+    if (transcript.isEmpty() && pending.isEmpty() && queued.isEmpty() && !state.canLoadEarlier && !state.loadingEarlier) {
+        Column(
+            Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Avatar(mood, size = 160.dp, level = level, title = assistant)
+            Text("Say hello to $assistant.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        return
+    }
     LazyColumn(
         state = listState,
         reverseLayout = true,
@@ -397,6 +431,25 @@ private fun Composer(
                 ) { Icon(Icons.AutoMirrored.Filled.Send, "Send") }
             }
         }
+    }
+}
+
+/** The robot, live, and a word on what it is doing. */
+@Composable
+private fun Presence(mood: Mood, label: String, assistant: String, level: () -> Double?) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Avatar(mood, size = 40.dp, level = level, title = assistant)
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        )
     }
 }
 
