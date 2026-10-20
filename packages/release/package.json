@@ -7,6 +7,7 @@
   "type": "module",
   "dependencies": {
     "@nudge/cli": "workspace:*",
+    "@nudge/ext-acc": "workspace:*",
     "@nudge/ext-browser": "workspace:*",
     "@nudge/ext-calendar": "workspace:*",
     "@nudge/ext-codemode": "workspace:*",

@@ -39,6 +39,7 @@ export {
   type Approval,
   type ApprovalDraft,
   type ApprovalEntryData,
+  type ApprovalDenialHandler,
   type ApprovalHandler,
   ApprovalNotFound,
   type ApprovalOutcome,
@@ -277,7 +278,7 @@ export {
 export { Vault, type VaultEntry } from "./privacy/vault.ts";
 export { keepsPlaceholders } from "./privacy/tool-values.ts";
 export type { RedactedHistory };
-export { currentTurn, type Owner, type Turn } from "./privacy/turn.ts";
+export { currentTurn, inTurn, type Owner, type Turn } from "./privacy/turn.ts";
 export {
   type DatabaseEncryption,
   type DatabaseKey,

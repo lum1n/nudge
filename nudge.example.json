@@ -47,6 +47,12 @@
           "settings": { "minMinutes": 30, "maxPerRoom": 10 }
         },
         {
+          "$comment": "Coding agents (Claude Code, Codex, Cursor, Copilot, pi, opencode) on your machines over SSH, through ACC. The assistant logs in with a key of its own; acc_hosts gives the line for ~/.ssh/authorized_keys. Needs ACC's binding (pnpm acc:fetch); off here so the example works without it.",
+          "from": "./extensions/acc",
+          "settings": { "hosts": [{ "name": "devbox", "host": "devbox.local", "user": "me" }] },
+          "enabled": false
+        },
+        {
           "$comment": "Web search through your own SearXNG (JSON output on), and reading a page as text.",
           "from": "./extensions/search",
           "settings": { "url": "http://127.0.0.1:8888", "language": "nb" },

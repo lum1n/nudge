@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import type { Context } from "@earendil-works/chord";
 import type { Extension, JsonObject, Session } from "@earendil-works/pi-durable";
-import type { ApprovalHandler } from "../approvals/approvals.ts";
+import type { ApprovalDenialHandler, ApprovalHandler } from "../approvals/approvals.ts";
 import { type Static, type TSchema, Type } from "typebox";
 import { Value } from "typebox/value";
 import { ConfigError } from "../config.ts";
@@ -151,6 +151,8 @@ export type ExtensionParts = Omit<Extension, "name"> & {
    * under the extension's name.
    */
   readonly approvals?: Readonly<Record<string, ApprovalHandler>>;
+  /** Hears that people denied an action, by kind, such as to tell whoever asked for it no. */
+  readonly denials?: Readonly<Record<string, ApprovalDenialHandler>>;
   /**
    * Hears about answers and approvals in the rooms the extension is on in, after they are
    * committed, such as to pass them on to a phone. Must not block; a throw or rejection is reported.
@@ -256,6 +258,7 @@ export type SetUpExtension = {
   readonly models: readonly { readonly provider: string; readonly modelId: string }[];
   readonly problems?: () => readonly string[] | Promise<readonly string[]>;
   readonly approvals: Readonly<Record<string, ApprovalHandler>>;
+  readonly denials?: Readonly<Record<string, ApprovalDenialHandler>>;
   readonly onRoomEvent?: (event: RoomEvent) => void | Promise<void>;
   readonly close?: () => void | Promise<void>;
   readonly retire?: (context: Context) => void | Promise<void>;
@@ -300,6 +303,7 @@ export async function setUpExtension(
     models = [],
     problems,
     approvals = {},
+    denials,
     onRoomEvent,
     close,
     retire,
@@ -322,6 +326,7 @@ export async function setUpExtension(
     routes,
     models,
     approvals,
+    ...(denials === undefined ? {} : { denials }),
     ...(problems === undefined ? {} : { problems }),
     ...(roomSocket === undefined ? {} : { roomSocket }),
     ...(onRoomEvent === undefined ? {} : { onRoomEvent }),

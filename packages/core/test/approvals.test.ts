@@ -26,8 +26,11 @@ import {
 const context = BACKGROUND_CONTEXT;
 const by = { playerId: "owner", displayName: "Vegard" };
 
-/** A `send_mail` tool that only asks; its handler records what it was asked to send. */
-function mailer(sent: string[]) {
+/**
+ * A `send_mail` tool that only asks; its handler records what it was asked to send, and its
+ * denial handler what it was refused.
+ */
+function mailer(sent: string[], refused: string[] = []) {
   return defineNudgeExtension({
     name: "mailer",
     version: "1",
@@ -70,11 +73,16 @@ function mailer(sent: string[]) {
           return { text: `Sent to ${to}.` };
         },
       },
+      denials: {
+        send: async (payload) => {
+          refused.push((payload as { to: string }).to);
+        },
+      },
     }),
   });
 }
 
-function setup(sent: string[]) {
+function setup(sent: string[], refused: string[] = []) {
   const faux = fauxProvider();
   const models = createModels();
   models.setProvider(faux.provider);
@@ -88,7 +96,7 @@ function setup(sent: string[]) {
     models,
     model: { provider: faux.provider.id, modelId: faux.getModel().id },
     timeZone: "Europe/Oslo",
-    extensions: [mailer(sent)],
+    extensions: [mailer(sent, refused)],
   };
   const askToSend = (to: string) => {
     faux.setResponses([
@@ -182,7 +190,8 @@ describe("approvals", () => {
 
   it("does nothing when denied, and reports a failing action", async () => {
     const sent: string[] = [];
-    const { options, requests, askToSend } = setup(sent);
+    const refused: string[] = [];
+    const { options, requests, askToSend } = setup(sent, refused);
     const nudge = await createNudge(options, context);
     askToSend("bo@example.com");
     await say(nudge, "Mail Bo");
@@ -191,6 +200,8 @@ describe("approvals", () => {
     await nudge.harness.waitForIdle(context);
     expect(lastInput(requests.at(-1))).toContain("denied approval a1");
     expect(sent).toEqual([]);
+    // The extension hears of it, with the values put back.
+    expect(refused).toEqual(["bo@example.com"]);
 
     askToSend("nobody");
     await say(nudge, "Mail nobody");

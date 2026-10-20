@@ -230,6 +230,9 @@ export class Nudge {
       (text) => this.models.vault.rehydrate(text),
       (text) => this.redact(text),
       (playerId, context) => this.players.isAdmin(playerId, context),
+      (extension, kind) =>
+        this.installed.find((installed) => installed.extension.name === extension)?.denials?.[kind],
+      parts.report,
     );
   }
 

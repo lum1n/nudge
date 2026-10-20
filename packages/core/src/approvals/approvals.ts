@@ -100,6 +100,12 @@ export type ApprovalOutcome = {
 /** Runs one kind of approved action. A throw counts as a failure with its message. */
 export type ApprovalHandler = (payload: JsonValue, run: ApprovalRun) => Promise<ApprovalOutcome>;
 
+/**
+ * Hears that one kind of action was denied, such as to tell whoever asked for it no. A throw is
+ * reported; the room hears of the denial either way.
+ */
+export type ApprovalDenialHandler = (payload: JsonValue, run: ApprovalRun) => Promise<void>;
+
 export const MAX_PENDING = 20;
 /** Decided approvals kept per room for history. */
 const KEEP_DECIDED = 30;
@@ -172,6 +178,12 @@ export class Approvals {
     /** Whether a player may decide approvals only an admin may. */
     private readonly isAdmin: (playerId: string, context: Context) => Promise<boolean> = async () =>
       false,
+    /** The denial handler an installed extension has for `kind`, if any. */
+    private readonly denial: (
+      extension: string,
+      kind: string,
+    ) => ApprovalDenialHandler | undefined = () => undefined,
+    private readonly report: (error: unknown) => void = () => {},
   ) {}
 
   /** Newest first. */
@@ -209,6 +221,12 @@ export class Approvals {
       item.decidedAt = this.now();
     });
     if (!decision.approve) {
+      const denied = this.denial(decided.extension, decided.kind);
+      if (denied !== undefined)
+        await denied(
+          mapStrings(decided.payload, this.rehydrate),
+          this.runFor(room, decided, context),
+        ).catch(this.report);
       await this.tell(room, decided, context);
       return decided;
     }
@@ -263,17 +281,21 @@ export class Approvals {
       // What the action asks for in turn, such as another approval, stays as private as it is.
       const turn = approval.privateTo === undefined ? {} : { privateTo: approval.privateTo };
       return await inTurn(turn, () =>
-        handler(mapStrings(approval.payload, this.rehydrate), {
-          room,
-          approval,
-          commit: (apply) => this.harness.commit(apply, context),
-          models: this.models,
-          context,
-        }),
+        handler(mapStrings(approval.payload, this.rehydrate), this.runFor(room, approval, context)),
       );
     } catch (error) {
       return { text: (error as Error).message, isError: true };
     }
+  }
+
+  private runFor(room: Room, approval: Approval, context: Context): ApprovalRun {
+    return {
+      room,
+      approval,
+      commit: (apply) => this.harness.commit(apply, context),
+      models: this.models,
+      context,
+    };
   }
 
   private async update(

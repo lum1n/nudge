@@ -6,6 +6,7 @@
 #     app/        @nudge/release deployed with its production dependencies
 #     bin/        nudge-server (the launcher) and nudge
 #     wired-node/ Wired's Node binding (github.com/lum1n/wired), for the server's own Wired
+#     acc-node/   ACC's Node binding (github.com/lum1n/acc), for the acc extension
 #     chromium.json  where the release's Chromium is, and its sha256, with NUDGE_RELEASE_URL set
 #     VERSION
 #
@@ -61,6 +62,11 @@ cp "$root/packages/release/bin/nudge-server" "$root/packages/release/bin/nudge" 
 "$root/packages/release/scripts/wired.sh" "$work" "linux-$arch"
 "$work/node/bin/node" -e 'if (typeof require(process.argv[1]).Node.anchor !== "function") process.exit(1)' \
   "$work/wired-node/index.js"
+
+# ACC's Node binding, for the acc extension: from its release at the version and hashes acc.sh pins.
+"$root/packages/release/scripts/acc.sh" "$work" "linux-$arch"
+"$work/node/bin/node" -e 'if (typeof require(process.argv[1]).SshHost !== "function") process.exit(1)' \
+  "$work/acc-node/index.js"
 
 # Chromium, from Google's storage, can take hours to download on a server, as on exe.dev, where it
 # comes at about 30 KB/s; from the release on GitHub, seconds.
