@@ -143,7 +143,7 @@ describe("mcp", () => {
   });
 
   it("leaves out a server it can't start, and stops the programs it started at close", async () => {
-    const { faux, outputs, call, done, say, nudge } = await open({
+    const { faux, requests, outputs, call, done, say, nudge } = await open({
       fake: { command: process.execPath, args: [FAKE] },
       broken: { command: join(dir, "no-such-program") },
       unset: { command: process.execPath, args: [FAKE], env: { X: "${NUDGE_MCP_UNSET}" } },
@@ -154,12 +154,24 @@ describe("mcp", () => {
       done,
     ]);
     await say("Which process?");
+    const prompt = current(requests[0]).prompt;
+    expect(prompt).toContain("- broken: ");
+    expect(prompt).toContain("- unset: $NUDGE_MCP_UNSET is not set");
     const pid = Number(outputs.at(-1));
     expect(pid).toBeGreaterThan(0);
     expect(() => process.kill(pid, 0)).not.toThrow();
     await nudge.close(context);
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect(() => process.kill(pid, 0)).toThrow();
+  });
+
+  it("tells the model when no servers are set up", async () => {
+    const { faux, requests, done, say } = await open({});
+    faux.setResponses([done]);
+    await say("Which MCP tools do you have?");
+    const first = current(requests[0]);
+    expect(first.tools).not.toContain("tool_search");
+    expect(first.prompt).toContain("no MCP servers are set up");
   });
 
   it("refuses bad server settings", async () => {

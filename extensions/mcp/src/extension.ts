@@ -250,14 +250,27 @@ export default defineNudgeExtension({
     return {
       tools: tools.length === 0 ? [] : [...tools, createToolSearchTool() as ToolRegistration],
       sections: [
+        // Said even with no tools, so the model can tell someone asking why it has none.
         section("mcp", () => {
-          if (servers.length === 0) return undefined;
+          const left =
+            failed.length === 0
+              ? ""
+              : "\nMCP servers left out because they could not be set up or reached:\n" +
+                failed.map((problem) => `- ${problem}`).join("\n");
+          if (tools.length === 0)
+            return (
+              (configs.size + failed.length === 0
+                ? "The MCP extension is on, but no MCP servers are set up, so there are no MCP " +
+                  "tools; servers are added in the MCP extension's settings."
+                : "No MCP tools are available.") + left
+            );
           return (
             "Tools from MCP servers, named mcp__<server>__<tool>, are not loaded yet; find the " +
             "ones a task needs with tool_search. Servers:\n" +
             servers
               .map((server) => `- ${server.name}: ${server.tools.map((t) => t.name).join(", ")}`)
-              .join("\n")
+              .join("\n") +
+            left
           );
         }),
       ],
