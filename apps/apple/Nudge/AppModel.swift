@@ -424,8 +424,14 @@ final class AppModel {
                 await servers.forget(server)
                 continue
             }
-            guard let owner = try? await servers.client(server).info().owner, owner.address == address
-            else { continue }
+            // Set up before owners had addresses, this device may be signed in as the setup's
+            // player, beside the owner its home vouches for.
+            let client = try? servers.client(server)
+            guard let owner = try? await client?.info().owner else { continue }
+            if owner.address != address {
+                guard let owners = try? await client?.owners(), owners.contains(where: { $0.address == address })
+                else { continue }
+            }
             if (try? await home.client.addOwnedServer(server: key)) != nil {
                 atHome.insert(key)
             }

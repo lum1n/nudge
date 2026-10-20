@@ -443,8 +443,13 @@ class AppModel(private val context: Context) {
                 servers.forget(server)
                 continue
             }
-            val owner = runCatching { servers.client(server).info().owner }.getOrNull() ?: continue
-            if (owner.address != address) continue
+            val client = servers.client(server)
+            val owner = runCatching { client.info().owner }.getOrNull() ?: continue
+            // Set up before owners had addresses, this device may be signed in as the setup's
+            // player, beside the owner its home vouches for.
+            if (owner.address != address &&
+                runCatching { client.owners() }.getOrNull()?.none { it.address == address } != false
+            ) continue
             runCatching { home.client.addOwnedServer(key) }.onSuccess { atHome += key }
         }
         for (owned in listed) {

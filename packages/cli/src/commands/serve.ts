@@ -324,7 +324,7 @@ export async function serve(options: ServeOptions): Promise<number> {
 /**
  * Self-update (ADR 11) when `nudge-server` started this server, which says so with
  * `NUDGE_RELEASES` and `NUDGE_VERSION`: a check 10 minutes after starting (or
- * `NUDGE_UPDATE_DELAY` seconds) and every day after, installing what it finds while `automatic`
+ * `NUDGE_UPDATE_DELAY` seconds) and every hour after, installing what it finds while `automatic`
  * says so. After 30 s of running, this release confirms itself, so a rollback no longer happens.
  */
 function selfUpdates(
@@ -394,15 +394,15 @@ function selfUpdates(
         () => void updates.confirm().catch((error: Error) => say(error.message)),
         30_000,
       );
-      let daily: ReturnType<typeof setInterval> | undefined;
+      let hourly: ReturnType<typeof setInterval> | undefined;
       const first = setTimeout(() => {
         void check();
-        daily = setInterval(() => void check(), 24 * 60 * 60_000);
+        hourly = setInterval(() => void check(), 60 * 60_000);
       }, delay);
       return () => {
         clearTimeout(confirm);
         clearTimeout(first);
-        clearInterval(daily);
+        clearInterval(hourly);
       };
     },
   };

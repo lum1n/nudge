@@ -230,7 +230,7 @@ private struct ServerView: View {
         }
     }
 
-    /// Asks the server for a newer release now, rather than at its daily check: it installs it and
+    /// Asks the server for a newer release now, rather than at its hourly check: it installs it and
     /// restarts into it when it updates automatically.
     private func checkUpdates() async {
         checking = true
