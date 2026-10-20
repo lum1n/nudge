@@ -291,6 +291,44 @@ pub struct RoomListView {
     pub player: Player,
     pub rooms: Vec<RoomListEntry>,
     pub nudges: Vec<RoomListNudge>,
+    /// The assistant's robot; the app icon's when absent.
+    pub appearance: Option<Appearance>,
+}
+
+/// How the assistant's robot looks: colours as `#rrggbb`, `body` the ribbon's two ends. Apps draw
+/// the app icon's eyes or nothing worn for an `eye_shape` or `accessory` they don't know.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct Appearance {
+    pub body: Vec<String>,
+    pub eyes: String,
+    pub sparks: String,
+    pub eye_shape: String,
+    pub accessory: String,
+}
+
+impl From<p::Appearance> for Appearance {
+    fn from(look: p::Appearance) -> Self {
+        Appearance {
+            body: look.body.to_vec(),
+            eyes: look.eyes,
+            sparks: look.sparks,
+            eye_shape: look.eye_shape,
+            accessory: look.accessory,
+        }
+    }
+}
+
+impl From<Appearance> for p::Appearance {
+    fn from(look: Appearance) -> Self {
+        let end = |i: usize| look.body.get(i).cloned().unwrap_or_default();
+        p::Appearance {
+            body: [end(0), end(1)],
+            eyes: look.eyes,
+            sparks: look.sparks,
+            eye_shape: look.eye_shape,
+            accessory: look.accessory,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, uniffi::Enum)]
@@ -373,6 +411,7 @@ pub struct PairingCode {
 pub struct Assistant {
     pub name: String,
     pub display_name: String,
+    pub appearance: Option<Appearance>,
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Enum)]
@@ -660,6 +699,7 @@ impl From<p::RoomListView> for RoomListView {
                     private_to: nudge.private_to.map(Into::into),
                 })
                 .collect(),
+            appearance: list.appearance.map(Into::into),
         }
     }
 }

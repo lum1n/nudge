@@ -411,9 +411,14 @@ export class RoomListHub implements Hub<RoomListView> {
       rooms.push(this.row(lease.hub));
       nudges.push(...lease.hub.nudgesNow());
     }
-    this.projected = this.hubs
-      .viewer(this.playerId)
-      .roomList(projectRoomList({ player: this.player, rooms, nudges }));
+    this.projected = this.hubs.viewer(this.playerId).roomList(
+      projectRoomList({
+        player: this.player,
+        rooms,
+        nudges,
+        appearance: this.directory.value.appearance,
+      }),
+    );
     return this.projected;
   }
 

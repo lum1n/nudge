@@ -19,6 +19,7 @@ import type {
 } from "@nudge/core";
 import { addressOf } from "@nudge/core";
 import type {
+  Appearance,
   Approval,
   Fact,
   RoomListNudge,
@@ -584,6 +585,7 @@ export type RoomListSources = {
   readonly player: Player;
   readonly rooms: readonly RoomListEntry[];
   readonly nudges: readonly ScheduledNudge[];
+  readonly appearance?: Appearance;
 };
 
 export function projectRoomList(sources: RoomListSources): RoomListView {
@@ -591,6 +593,7 @@ export function projectRoomList(sources: RoomListSources): RoomListView {
     player: sources.player,
     rooms: [...sources.rooms],
     nudges: [...sources.nudges].sort((a, b) => a.fireAt - b.fireAt).map(toRoomListNudge),
+    ...(sources.appearance === undefined ? {} : { appearance: sources.appearance }),
   };
 }
 

@@ -58,6 +58,7 @@ export class Viewer {
       nudges: this.kept(view.nudges, () =>
         this.mine(view.nudges).map((nudge) => this.texts(nudge)),
       ),
+      ...(view.appearance === undefined ? {} : { appearance: view.appearance }),
     }));
   }
 

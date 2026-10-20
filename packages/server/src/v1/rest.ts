@@ -9,6 +9,7 @@ import {
   ConfigError,
   type Credential,
   ExtensionNotFound,
+  InvalidAppearance,
   InvalidProfile,
   MAX_ROUTE_BODY,
   NotAllowed,
@@ -21,6 +22,7 @@ import {
 import {
   AdminCreateRoomRequest,
   type AdminPlayer,
+  type AppearanceResponse,
   type AssistantsResponse,
   CreatePlayerRequest,
   CreateRoomRequest,
@@ -54,6 +56,7 @@ import {
   type RoomExtensionsResponse,
   type RoomsResponse,
   SetAdminRequest,
+  SetAppearanceRequest,
   ShareMemoryRequest,
   SetRoomExtensionRequest,
   type TimelineResponse,
@@ -134,12 +137,18 @@ const PAGE_MAX = 200;
 export function restRoutes(options: RestOptions): Hono {
   const app = new Hono<Env>();
 
-  app.get("/a", (c) =>
+  app.get("/a", async (c) =>
     c.json({
-      assistants: [...options.assistants].map(([name, nudge]) => ({
-        name,
-        displayName: nudge.displayName,
-      })),
+      assistants: await Promise.all(
+        [...options.assistants].map(async ([name, nudge]) => {
+          const appearance = await nudge.appearance.get(context);
+          return {
+            name,
+            displayName: nudge.displayName,
+            ...(appearance === undefined ? {} : { appearance }),
+          };
+        }),
+      ),
     } satisfies AssistantsResponse),
   );
 
@@ -621,6 +630,18 @@ export function restRoutes(options: RestOptions): Hono {
       throw new HttpError(404, `No player "${id}"`);
     const player = await c.var.nudge.players.setAdmin(id, body.admin, context);
     return c.json(await adminPlayerOf(c.var.nudge, player));
+  });
+
+  // Room lists show the change as it happens; `null` goes back to the app icon's robot.
+  api.put("/admin/appearance", admin, async (c) => {
+    const body = await readJson(c, SetAppearanceRequest);
+    try {
+      const appearance = await c.var.nudge.appearance.set(body.appearance, context);
+      return c.json((appearance === undefined ? {} : { appearance }) satisfies AppearanceResponse);
+    } catch (error) {
+      if (error instanceof InvalidAppearance) throw new HttpError(400, error.message);
+      throw error;
+    }
   });
 
   api.post("/admin/tokens", admin, async (c) => {

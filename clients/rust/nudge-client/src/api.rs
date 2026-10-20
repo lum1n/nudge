@@ -543,6 +543,18 @@ impl Api {
 
     // Admin routes, for players with the admin flag.
 
+    /// How the assistant's robot looks; `None` goes back to the app icon's. Room lists show it.
+    pub async fn set_appearance(
+        &self,
+        appearance: Option<Appearance>,
+    ) -> Result<Option<Appearance>, ApiError> {
+        let body = SetAppearanceRequest { appearance };
+        let response: AppearanceResponse = self
+            .request(Method::PUT, &["admin", "appearance"], &[], Some(&body))
+            .await?;
+        Ok(response.appearance)
+    }
+
     /// Gives a player the admin flag, or with `false` takes it; the first player keeps it.
     pub async fn set_admin(&self, player_id: &str, admin: bool) -> Result<AdminPlayer, ApiError> {
         let body = SetAdminRequest { admin };

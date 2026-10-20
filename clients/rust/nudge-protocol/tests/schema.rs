@@ -241,6 +241,17 @@ fn room_list_view() -> RoomListView {
             every: Some(60_000.0),
             private_to: Some(ann()),
         }],
+        appearance: Some(appearance()),
+    }
+}
+
+fn appearance() -> Appearance {
+    Appearance {
+        body: ["#e8361c".into(), "#ffb238".into()],
+        eyes: "#ffd36b".into(),
+        sparks: "#ff7a45".into(),
+        eye_shape: "round".into(),
+        accessory: "crown".into(),
     }
 }
 
@@ -368,6 +379,7 @@ fn http_bodies_match_the_schema() {
             assistants: vec![AssistantInfo {
                 name: "robin".into(),
                 display_name: "Robin".into(),
+                appearance: Some(appearance()),
             }],
         },
     );
@@ -823,6 +835,22 @@ fn server_and_setup_bodies_match_the_schema() {
         },
     );
     check("SetAdminRequest", &SetAdminRequest { admin: true });
+    check(
+        "SetAppearanceRequest",
+        &SetAppearanceRequest {
+            appearance: Some(appearance()),
+        },
+    );
+    check(
+        "SetAppearanceRequest",
+        &SetAppearanceRequest { appearance: None },
+    );
+    check(
+        "AppearanceResponse",
+        &AppearanceResponse {
+            appearance: Some(appearance()),
+        },
+    );
     check("ModelChoice", &model);
     check("AssistantBudget", &budget);
     check("ServerAssistant", &assistant);

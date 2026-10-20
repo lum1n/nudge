@@ -254,6 +254,13 @@ export {
   type ProfileUpdate,
 } from "./identity/profiles.ts";
 export { Rooms, type SharedRoomDraft } from "./identity/rooms.ts";
+export {
+  ACCESSORIES,
+  type Appearance,
+  EYE_SHAPES,
+  InvalidAppearance,
+  Looks,
+} from "./identity/appearance.ts";
 export { scrubSecrets, SecretStore } from "./secrets.ts";
 export { type NudgeDraft, Nudges } from "./nudges/nudges.ts";
 export { formatTime, parseTime, ScheduleDoc, type ScheduledNudge } from "./nudges/schedule.ts";

@@ -28,10 +28,12 @@ import {
   useCallback,
   useContext,
   useEffect,
+  use,
   useMemo,
   useState,
 } from "react";
-import { clientFor, forgetToken, useConnection, useRoom } from "../../api.ts";
+import { clientFor, forgetToken, useConnection, useRoom, useRoomList } from "../../api.ts";
+import { type Appearance, lookOf, NUDGE } from "../../avatar/appearance.ts";
 import { Avatar, Portrait } from "../../avatar/Avatar.tsx";
 import type { Mood } from "../../avatar/pose.ts";
 import { useRoomMood } from "../../avatar/use-room-mood.ts";
@@ -55,6 +57,8 @@ const UNAUTHORIZED = 4401;
 
 /** The room's view, for the parts deep in the chat that need it, such as approval cards. */
 const ViewContext = createContext<RoomView | undefined>(undefined);
+/** How the assistant's robot looks, for the portraits beside its answers. */
+const LookContext = createContext<Appearance>(NUDGE);
 
 function Room() {
   const { assistant, room } = Route.useParams();
@@ -306,6 +310,7 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
   const shared = view.room.kind !== "personal";
   const [secret, setSecret] = useState(false);
   const mood = useRoomMood(view);
+  const look = lookOf(useRoomList(assistant)?.view?.appearance);
   const dispatch = useCallback(
     (message: AppendMessage, lane: Lane) => {
       const text = appendText(message).trim();
@@ -346,81 +351,95 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <div className="flex h-full min-h-0 flex-col gap-3">
-        <StatusLine status={view.live.status} />
-        <ThreadPrimitive.Viewport className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto">
-          <ThreadPrimitive.LoadEarlier className="self-center text-sm text-stone-500 underline disabled:text-stone-300 disabled:no-underline">
-            Load earlier
-          </ThreadPrimitive.LoadEarlier>
-          {state.earlierError !== undefined && (
-            <p className="self-center text-sm text-red-700">{state.earlierError}</p>
-          )}
-          <ThreadPrimitive.Empty>
-            <div className="m-auto flex flex-col items-center gap-2 py-8 text-stone-500">
-              <Avatar mood={mood} size={160} title={name} />
-              <p>Say hello to {name}.</p>
+      <LookContext value={look}>
+        <div className="flex h-full min-h-0 flex-col gap-3">
+          <StatusLine status={view.live.status} />
+          <ThreadPrimitive.Viewport className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto">
+            <ThreadPrimitive.LoadEarlier className="self-center text-sm text-stone-500 underline disabled:text-stone-300 disabled:no-underline">
+              Load earlier
+            </ThreadPrimitive.LoadEarlier>
+            {state.earlierError !== undefined && (
+              <p className="self-center text-sm text-red-700">{state.earlierError}</p>
+            )}
+            <ThreadPrimitive.Empty>
+              <div className="m-auto flex flex-col items-center gap-2 py-8 text-stone-500">
+                <Avatar mood={mood} appearance={look} size={160} title={name} />
+                <p>Say hello to {name}.</p>
+              </div>
+            </ThreadPrimitive.Empty>
+            <ThreadPrimitive.Messages>
+              {({ message }) => (
+                <>
+                  {days.has(message.id) && <DayDivider at={days.get(message.id)!} />}
+                  <MessageRow message={message} assistant={name} />
+                </>
+              )}
+            </ThreadPrimitive.Messages>
+          </ThreadPrimitive.Viewport>
+          <FailedSends store={store} pending={state.pending} />
+          {messages.length > 0 && <Presence mood={mood} look={look} view={view} name={name} />}
+          <ComposerPrimitive.Root className="flex shrink-0 flex-col gap-2">
+            <ComposerPrimitive.Queue>
+              {({ queueItem }) => (
+                <p key={queueItem.id} className="text-sm [overflow-wrap:anywhere] text-stone-500">
+                  Waiting: {queueItem.prompt}
+                </p>
+              )}
+            </ComposerPrimitive.Queue>
+            <div className="flex gap-2">
+              {shared && (
+                <button
+                  type="button"
+                  aria-pressed={secret}
+                  onClick={() => setSecret((on) => !on)}
+                  title="Only you see a private message and the answer to it; the others see that there was one"
+                  className={`shrink-0 rounded border px-2 text-sm ${
+                    secret
+                      ? "border-violet-700 bg-violet-700 text-white"
+                      : "bg-white text-stone-600"
+                  }`}
+                >
+                  Private
+                </button>
+              )}
+              <ComposerPrimitive.Input
+                placeholder={
+                  secret && shared ? "Private message: only you see it and the answer" : "Message"
+                }
+                className="max-h-40 min-w-0 flex-1 resize-none rounded border border-stone-300 bg-white px-2 py-1.5"
+              />
+              {view.live.running ? (
+                <ComposerPrimitive.Cancel className="shrink-0 rounded border bg-white px-3">
+                  Stop
+                </ComposerPrimitive.Cancel>
+              ) : (
+                <ComposerPrimitive.Send className="shrink-0 rounded border bg-white px-3">
+                  Send
+                </ComposerPrimitive.Send>
+              )}
             </div>
-          </ThreadPrimitive.Empty>
-          <ThreadPrimitive.Messages>
-            {({ message }) => (
-              <>
-                {days.has(message.id) && <DayDivider at={days.get(message.id)!} />}
-                <MessageRow message={message} assistant={name} />
-              </>
-            )}
-          </ThreadPrimitive.Messages>
-        </ThreadPrimitive.Viewport>
-        <FailedSends store={store} pending={state.pending} />
-        {messages.length > 0 && <Presence mood={mood} view={view} name={name} />}
-        <ComposerPrimitive.Root className="flex shrink-0 flex-col gap-2">
-          <ComposerPrimitive.Queue>
-            {({ queueItem }) => (
-              <p key={queueItem.id} className="text-sm [overflow-wrap:anywhere] text-stone-500">
-                Waiting: {queueItem.prompt}
-              </p>
-            )}
-          </ComposerPrimitive.Queue>
-          <div className="flex gap-2">
-            {shared && (
-              <button
-                type="button"
-                aria-pressed={secret}
-                onClick={() => setSecret((on) => !on)}
-                title="Only you see a private message and the answer to it; the others see that there was one"
-                className={`shrink-0 rounded border px-2 text-sm ${
-                  secret ? "border-violet-700 bg-violet-700 text-white" : "bg-white text-stone-600"
-                }`}
-              >
-                Private
-              </button>
-            )}
-            <ComposerPrimitive.Input
-              placeholder={
-                secret && shared ? "Private message: only you see it and the answer" : "Message"
-              }
-              className="max-h-40 min-w-0 flex-1 resize-none rounded border border-stone-300 bg-white px-2 py-1.5"
-            />
-            {view.live.running ? (
-              <ComposerPrimitive.Cancel className="shrink-0 rounded border bg-white px-3">
-                Stop
-              </ComposerPrimitive.Cancel>
-            ) : (
-              <ComposerPrimitive.Send className="shrink-0 rounded border bg-white px-3">
-                Send
-              </ComposerPrimitive.Send>
-            )}
-          </div>
-        </ComposerPrimitive.Root>
-      </div>
+          </ComposerPrimitive.Root>
+        </div>
+      </LookContext>
     </AssistantRuntimeProvider>
   );
 }
 
 /** The robot, live, and a word on what it is doing. */
-function Presence({ mood, view, name }: { mood: Mood; view: RoomView; name: string }) {
+function Presence({
+  mood,
+  look,
+  view,
+  name,
+}: {
+  mood: Mood;
+  look: Appearance;
+  view: RoomView;
+  name: string;
+}) {
   return (
     <div className="flex shrink-0 items-center gap-2 text-sm text-stone-500">
-      <Avatar mood={mood} size={40} title={name} />
+      <Avatar mood={mood} appearance={look} size={40} title={name} />
       <span aria-live="polite">{presenceLabel(mood, view)}</span>
     </div>
   );
@@ -614,7 +633,11 @@ function AssistantMessage({
         >
           <p className="mb-1 flex flex-wrap items-baseline gap-2 text-xs">
             <span className="font-semibold text-stone-700">
-              <Portrait size={18} className="mr-1 inline-block align-[-4px]" />
+              <Portrait
+                appearance={use(LookContext)}
+                size={18}
+                className="mr-1 inline-block align-[-4px]"
+              />
               {name}
             </span>
             {prompt !== undefined && (

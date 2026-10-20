@@ -1,8 +1,11 @@
 // How an assistant's robot looks: a few choices, not a picture, so it stays small, recolours on
-// every platform, and everyone in a room sees the same one.
+// every platform, and everyone in a room sees the same one. The server keeps it (`Appearance` in
+// protocol v1).
+import type { Appearance } from "@nudge/client";
 
-export type EyeShape = "pill" | "round" | "square" | "wide";
-export type Accessory = "none" | "antenna" | "headphones" | "sprout" | "crown";
+export type { Appearance };
+export type EyeShape = Appearance["eyeShape"];
+export type Accessory = Appearance["accessory"];
 
 export const EYE_SHAPES: readonly EyeShape[] = ["pill", "round", "square", "wide"];
 export const ACCESSORIES: readonly Accessory[] = [
@@ -12,15 +15,6 @@ export const ACCESSORIES: readonly Accessory[] = [
   "sprout",
   "crown",
 ];
-
-export interface Appearance {
-  /** The ribbon's two ends, as `#rrggbb`. */
-  body: [string, string];
-  eyes: string;
-  sparks: string;
-  eyeShape: EyeShape;
-  accessory: Accessory;
-}
 
 /** The robot of the app icon. */
 export const NUDGE: Appearance = {
@@ -56,3 +50,16 @@ export const PRESETS: Readonly<Record<string, Appearance>> = {
     eyeShape: "square",
   },
 };
+
+/**
+ * The look to draw for what the server says: the app icon's when it says none, and the icon's eyes
+ * or nothing worn for a choice made by a newer app than this one.
+ */
+export function lookOf(appearance: Appearance | undefined): Appearance {
+  if (appearance === undefined) return NUDGE;
+  return {
+    ...appearance,
+    eyeShape: EYE_SHAPES.includes(appearance.eyeShape) ? appearance.eyeShape : NUDGE.eyeShape,
+    accessory: ACCESSORIES.includes(appearance.accessory) ? appearance.accessory : "none",
+  };
+}

@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { Context } from "@earendil-works/chord";
 import { type DocumentReader, defineDoc } from "@earendil-works/pi-durable";
+import type { Appearance } from "./appearance.ts";
 
 // Stored in a document, so plain JSON: no readonly arrays.
 export type Player = {
@@ -110,6 +111,8 @@ export type Room = {
 
 export type DirectoryState = {
   players: Record<string, Player>;
+  /** How the assistant's robot looks; the app icon's when absent. */
+  appearance?: Appearance;
   /** Keyed by the token's SHA-256, hex. */
   tokens: Record<string, TokenRecord>;
   rooms: Record<string, Room>;

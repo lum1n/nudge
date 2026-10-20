@@ -1898,6 +1898,79 @@
         }
       }
     },
+    "Appearance": {
+      "type": "object",
+      "required": [
+        "body",
+        "eyes",
+        "sparks",
+        "eyeShape",
+        "accessory"
+      ],
+      "properties": {
+        "body": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "eyes": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "sparks": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "eyeShape": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "pill"
+            },
+            {
+              "type": "string",
+              "const": "round"
+            },
+            {
+              "type": "string",
+              "const": "square"
+            },
+            {
+              "type": "string",
+              "const": "wide"
+            }
+          ]
+        },
+        "accessory": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "none"
+            },
+            {
+              "type": "string",
+              "const": "antenna"
+            },
+            {
+              "type": "string",
+              "const": "headphones"
+            },
+            {
+              "type": "string",
+              "const": "sprout"
+            },
+            {
+              "type": "string",
+              "const": "crown"
+            }
+          ]
+        }
+      }
+    },
     "RoomListView": {
       "type": "object",
       "required": [
@@ -2044,6 +2117,79 @@
                   }
                 }
               }
+            }
+          }
+        },
+        "appearance": {
+          "type": "object",
+          "required": [
+            "body",
+            "eyes",
+            "sparks",
+            "eyeShape",
+            "accessory"
+          ],
+          "properties": {
+            "body": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "eyes": {
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "sparks": {
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "eyeShape": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "pill"
+                },
+                {
+                  "type": "string",
+                  "const": "round"
+                },
+                {
+                  "type": "string",
+                  "const": "square"
+                },
+                {
+                  "type": "string",
+                  "const": "wide"
+                }
+              ]
+            },
+            "accessory": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "none"
+                },
+                {
+                  "type": "string",
+                  "const": "antenna"
+                },
+                {
+                  "type": "string",
+                  "const": "headphones"
+                },
+                {
+                  "type": "string",
+                  "const": "sprout"
+                },
+                {
+                  "type": "string",
+                  "const": "crown"
+                }
+              ]
             }
           }
         }
@@ -3330,6 +3476,79 @@
                           }
                         }
                       }
+                    },
+                    "appearance": {
+                      "type": "object",
+                      "required": [
+                        "body",
+                        "eyes",
+                        "sparks",
+                        "eyeShape",
+                        "accessory"
+                      ],
+                      "properties": {
+                        "body": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "pattern": "^#[0-9a-fA-F]{6}$"
+                          },
+                          "minItems": 2,
+                          "maxItems": 2
+                        },
+                        "eyes": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-fA-F]{6}$"
+                        },
+                        "sparks": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-fA-F]{6}$"
+                        },
+                        "eyeShape": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "const": "pill"
+                            },
+                            {
+                              "type": "string",
+                              "const": "round"
+                            },
+                            {
+                              "type": "string",
+                              "const": "square"
+                            },
+                            {
+                              "type": "string",
+                              "const": "wide"
+                            }
+                          ]
+                        },
+                        "accessory": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "const": "none"
+                            },
+                            {
+                              "type": "string",
+                              "const": "antenna"
+                            },
+                            {
+                              "type": "string",
+                              "const": "headphones"
+                            },
+                            {
+                              "type": "string",
+                              "const": "sprout"
+                            },
+                            {
+                              "type": "string",
+                              "const": "crown"
+                            }
+                          ]
+                        }
+                      }
                     }
                   }
                 }
@@ -3587,6 +3806,79 @@
               },
               "displayName": {
                 "type": "string"
+              },
+              "appearance": {
+                "type": "object",
+                "required": [
+                  "body",
+                  "eyes",
+                  "sparks",
+                  "eyeShape",
+                  "accessory"
+                ],
+                "properties": {
+                  "body": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^#[0-9a-fA-F]{6}$"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                  },
+                  "eyes": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-fA-F]{6}$"
+                  },
+                  "sparks": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-fA-F]{6}$"
+                  },
+                  "eyeShape": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "pill"
+                      },
+                      {
+                        "type": "string",
+                        "const": "round"
+                      },
+                      {
+                        "type": "string",
+                        "const": "square"
+                      },
+                      {
+                        "type": "string",
+                        "const": "wide"
+                      }
+                    ]
+                  },
+                  "accessory": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "none"
+                      },
+                      {
+                        "type": "string",
+                        "const": "antenna"
+                      },
+                      {
+                        "type": "string",
+                        "const": "headphones"
+                      },
+                      {
+                        "type": "string",
+                        "const": "sprout"
+                      },
+                      {
+                        "type": "string",
+                        "const": "crown"
+                      }
+                    ]
+                  }
+                }
               }
             }
           }
@@ -5729,6 +6021,172 @@
               "admin": {
                 "type": "boolean"
               }
+            }
+          }
+        }
+      }
+    },
+    "SetAppearanceRequest": {
+      "type": "object",
+      "required": [
+        "appearance"
+      ],
+      "properties": {
+        "appearance": {
+          "anyOf": [
+            {
+              "type": "object",
+              "required": [
+                "body",
+                "eyes",
+                "sparks",
+                "eyeShape",
+                "accessory"
+              ],
+              "properties": {
+                "body": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-fA-F]{6}$"
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "eyes": {
+                  "type": "string",
+                  "pattern": "^#[0-9a-fA-F]{6}$"
+                },
+                "sparks": {
+                  "type": "string",
+                  "pattern": "^#[0-9a-fA-F]{6}$"
+                },
+                "eyeShape": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "const": "pill"
+                    },
+                    {
+                      "type": "string",
+                      "const": "round"
+                    },
+                    {
+                      "type": "string",
+                      "const": "square"
+                    },
+                    {
+                      "type": "string",
+                      "const": "wide"
+                    }
+                  ]
+                },
+                "accessory": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "const": "none"
+                    },
+                    {
+                      "type": "string",
+                      "const": "antenna"
+                    },
+                    {
+                      "type": "string",
+                      "const": "headphones"
+                    },
+                    {
+                      "type": "string",
+                      "const": "sprout"
+                    },
+                    {
+                      "type": "string",
+                      "const": "crown"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "AppearanceResponse": {
+      "type": "object",
+      "properties": {
+        "appearance": {
+          "type": "object",
+          "required": [
+            "body",
+            "eyes",
+            "sparks",
+            "eyeShape",
+            "accessory"
+          ],
+          "properties": {
+            "body": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "eyes": {
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "sparks": {
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$"
+            },
+            "eyeShape": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "pill"
+                },
+                {
+                  "type": "string",
+                  "const": "round"
+                },
+                {
+                  "type": "string",
+                  "const": "square"
+                },
+                {
+                  "type": "string",
+                  "const": "wide"
+                }
+              ]
+            },
+            "accessory": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "none"
+                },
+                {
+                  "type": "string",
+                  "const": "antenna"
+                },
+                {
+                  "type": "string",
+                  "const": "headphones"
+                },
+                {
+                  "type": "string",
+                  "const": "sprout"
+                },
+                {
+                  "type": "string",
+                  "const": "crown"
+                }
+              ]
             }
           }
         }

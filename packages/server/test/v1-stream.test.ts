@@ -395,6 +395,35 @@ describe("v1 stream", () => {
     ann.close();
   });
 
+  it("shows a new look of the robot in open room lists", async () => {
+    const bo = open("Bo");
+    await bo.welcome;
+    bo.send({ type: "subscribe", target: "rooms" });
+    await eventually(() => bo.views.size === 1);
+    expect(bo.view<RoomListView>("rooms")?.appearance).toBeUndefined();
+
+    const appearance = {
+      body: ["#e8361c", "#ffb238"],
+      eyes: "#ffd36b",
+      sparks: "#ff7a45",
+      eyeShape: "round",
+      accessory: "crown",
+    };
+    const set = (value: object | null) =>
+      fetch(`${server.url}/v1/a/robin/admin/appearance`, {
+        method: "PUT",
+        headers: { authorization: `Bearer ${tokens.Ann}`, "content-type": "application/json" },
+        body: JSON.stringify({ appearance: value }),
+      });
+    expect((await set(appearance)).status).toBe(200);
+    await eventually(() => bo.view<RoomListView>("rooms")?.appearance !== undefined);
+    expect(bo.view<RoomListView>("rooms")?.appearance).toEqual(appearance);
+
+    expect((await set(null)).status).toBe(200);
+    await eventually(() => bo.view<RoomListView>("rooms")?.appearance === undefined);
+    bo.close();
+  });
+
   it("starts over on subscribe and stops on unsubscribe", async () => {
     const ann = open("Ann");
     await ann.welcome;

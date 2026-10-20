@@ -1,4 +1,6 @@
 import type {
+  Appearance,
+  AppearanceResponse,
   Approval,
   AssertResponse,
   AssistantsResponse,
@@ -339,6 +341,12 @@ export class Api {
   }
 
   // Admin routes, for players with the admin flag.
+
+  /** How the assistant's robot looks; `null` goes back to the app icon's. */
+  async setAppearance(appearance: Appearance | null): Promise<Appearance | undefined> {
+    return (await this.request<AppearanceResponse>("PUT", "/admin/appearance", { appearance }))
+      .appearance;
+  }
 
   async createPlayer(displayName: string): Promise<Player> {
     return (await this.request<PlayerResponse>("POST", "/admin/players", { displayName })).player;

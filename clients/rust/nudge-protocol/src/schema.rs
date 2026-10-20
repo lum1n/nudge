@@ -375,6 +375,25 @@ pub struct RoomListView {
     pub rooms: Vec<RoomListEntry>,
     /// Soonest first.
     pub nudges: Vec<RoomListNudge>,
+    /// The assistant's robot; the app icon's when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appearance: Option<Appearance>,
+}
+
+/// How the assistant's robot looks in the apps. Colours are `#rrggbb`. `eye_shape` and
+/// `accessory` are strings so that ones a newer server knows still read: apps draw the app icon's
+/// for those they don't.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Appearance {
+    /// The ribbon's two ends.
+    pub body: [String; 2],
+    pub eyes: String,
+    pub sparks: String,
+    /// `pill`, `round`, `square` or `wide`.
+    pub eye_shape: String,
+    /// `none`, `antenna`, `headphones`, `sprout` or `crown`.
+    pub accessory: String,
 }
 
 // Patches.
@@ -555,6 +574,8 @@ pub struct ErrorResponse {
 pub struct AssistantInfo {
     pub name: String,
     pub display_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appearance: Option<Appearance>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -1148,6 +1169,18 @@ pub struct AdminPlayer {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SetAdminRequest {
     pub admin: bool,
+}
+
+/// `None` goes back to the app icon's robot.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SetAppearanceRequest {
+    pub appearance: Option<Appearance>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppearanceResponse {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appearance: Option<Appearance>,
 }
 
 // The server's own API, under `/v1/server` (ADR 11): for its owners, not an assistant's admins.

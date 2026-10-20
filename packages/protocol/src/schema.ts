@@ -237,11 +237,40 @@ export const RoomListNudge = Type.Object({
 });
 export type RoomListNudge = Static<typeof RoomListNudge>;
 
+const Colour = Type.String({ pattern: "^#[0-9a-fA-F]{6}$" });
+
+/**
+ * How the assistant's robot looks in the apps. Clients draw the robot of the app icon for an
+ * eye shape or accessory they don't know, as for none at all.
+ */
+export const Appearance = Type.Object({
+  /** The ribbon's two ends. (Not a `Type.Tuple`, which the JSON schema would write in draft-07.) */
+  body: Type.Unsafe<[string, string]>(Type.Array(Colour, { minItems: 2, maxItems: 2 })),
+  eyes: Colour,
+  sparks: Colour,
+  eyeShape: Type.Union([
+    Type.Literal("pill"),
+    Type.Literal("round"),
+    Type.Literal("square"),
+    Type.Literal("wide"),
+  ]),
+  accessory: Type.Union([
+    Type.Literal("none"),
+    Type.Literal("antenna"),
+    Type.Literal("headphones"),
+    Type.Literal("sprout"),
+    Type.Literal("crown"),
+  ]),
+});
+export type Appearance = Static<typeof Appearance>;
+
 export const RoomListView = Type.Object({
   player: Player,
   rooms: Type.Array(RoomListEntry),
   /** Soonest first. */
   nudges: Type.Array(RoomListNudge),
+  /** The assistant's robot; the app icon's when absent. */
+  appearance: Type.Optional(Appearance),
 });
 export type RoomListView = Static<typeof RoomListView>;
 
@@ -331,7 +360,13 @@ export const ErrorResponse = Type.Object({ error: Type.String() });
 export type ErrorResponse = Static<typeof ErrorResponse>;
 
 export const AssistantsResponse = Type.Object({
-  assistants: Type.Array(Type.Object({ name: Type.String(), displayName: Type.String() })),
+  assistants: Type.Array(
+    Type.Object({
+      name: Type.String(),
+      displayName: Type.String(),
+      appearance: Type.Optional(Appearance),
+    }),
+  ),
 });
 export type AssistantsResponse = Static<typeof AssistantsResponse>;
 
@@ -775,6 +810,15 @@ export const AdminPlayer = Type.Object({
 export type AdminPlayer = Static<typeof AdminPlayer>;
 
 export const PlayersResponse = Type.Object({ players: Type.Array(AdminPlayer) });
+
+/** `null` goes back to the app icon's robot. */
+export const SetAppearanceRequest = Type.Object({
+  appearance: Type.Union([Appearance, Type.Null()]),
+});
+export type SetAppearanceRequest = Static<typeof SetAppearanceRequest>;
+
+export const AppearanceResponse = Type.Object({ appearance: Type.Optional(Appearance) });
+export type AppearanceResponse = Static<typeof AppearanceResponse>;
 export type PlayersResponse = Static<typeof PlayersResponse>;
 
 export const SetAdminRequest = Type.Object({ admin: Type.Boolean() });
@@ -1147,6 +1191,7 @@ export const SCHEMAS = {
   RoomView,
   RoomListEntry,
   RoomListNudge,
+  Appearance,
   RoomListView,
   Path,
   Op,
@@ -1214,6 +1259,8 @@ export const SCHEMAS = {
   TokensResponse,
   AdminPlayer,
   PlayersResponse,
+  SetAppearanceRequest,
+  AppearanceResponse,
   SetAdminRequest,
   IssueTokenRequest,
   RoomsResponse,

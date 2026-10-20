@@ -41,6 +41,7 @@ import {
 import { attach, MESSAGE_ENTRY, type MessageDraft, submitMessage } from "./host-api.ts";
 import { DirectoryDoc, type Room } from "./identity/directory.ts";
 import { Players } from "./identity/players.ts";
+import { Looks } from "./identity/appearance.ts";
 import { Profiles } from "./identity/profiles.ts";
 import { Rooms } from "./identity/rooms.ts";
 import { Memory } from "./memory/memory.ts";
@@ -147,6 +148,8 @@ export class Nudge {
   readonly players: Players;
   /** What each player says about themselves: time zone, language, preferences. */
   readonly profiles: Profiles;
+  /** How its robot looks in the apps. */
+  readonly appearance: Looks;
   readonly rooms: Rooms;
   readonly nudges: Nudges;
   readonly memory: Memory;
@@ -205,6 +208,7 @@ export class Nudge {
       (playerId) => changed({ kind: "profile", playerId }),
       (name, chosen) => checkPlayerSettings(this.installed, name, chosen),
     );
+    this.appearance = new Looks(harness);
     this.rooms = new Rooms(
       harness,
       (room) => ({ ...agent, extensions: this.selection(room) }),

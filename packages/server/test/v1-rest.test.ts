@@ -11,6 +11,8 @@ import {
 } from "@nudge/core";
 import {
   AdminPlayer,
+  AppearanceResponse,
+  type AssistantsResponse,
   CLOSE,
   ExtensionSetupsResponse,
   MeResponse,
@@ -461,6 +463,47 @@ describe("v1 HTTP", () => {
     expect(
       (await call("POST", "/me/memory", { token: tokens.Ann, body: { text: " " } })).status,
     ).toBe(400);
+  });
+
+  it("lets an admin pick the robot's look, and lists it with the assistant", async () => {
+    const appearance = {
+      body: ["#127a4a", "#a5e86a"],
+      eyes: "#b8ff8a",
+      sparks: "#e4f36a",
+      eyeShape: "round",
+      accessory: "sprout",
+    };
+    const list = async () =>
+      ((await (await fetch(`${server.url}/v1/a`)).json()) as AssistantsResponse).assistants[0];
+    expect(await list()).toEqual({ name: "robin", displayName: "Nudge" });
+
+    expect(
+      (await call("PUT", "/admin/appearance", { token: tokens.Bo, body: { appearance } })).status,
+    ).toBe(403);
+    const set = await call("PUT", "/admin/appearance", {
+      token: tokens.Ann,
+      body: { appearance },
+      schema: AppearanceResponse,
+    });
+    expect(set.json).toEqual({ appearance });
+    expect(await list()).toEqual({ name: "robin", displayName: "Nudge", appearance });
+
+    for (const wrong of [
+      { ...appearance, eyes: "blue" },
+      { ...appearance, body: ["#000000"] },
+      { ...appearance, accessory: "cape" },
+    ])
+      expect(
+        (await call("PUT", "/admin/appearance", { token: tokens.Ann, body: { appearance: wrong } }))
+          .status,
+      ).toBe(400);
+
+    const cleared = await call("PUT", "/admin/appearance", {
+      token: tokens.Ann,
+      body: { appearance: null },
+    });
+    expect(cleared).toMatchObject({ status: 200, json: {} });
+    expect(await list()).toEqual({ name: "robin", displayName: "Nudge" });
   });
 
   it("lets an admin manage players, tokens, rooms and nudges while serving", async () => {

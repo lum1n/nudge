@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { ACCESSORIES, type Appearance, EYE_SHAPES, NUDGE, PRESETS } from "../avatar/appearance.ts";
+import { type Appearance, NUDGE, PRESETS } from "../avatar/appearance.ts";
 import { Avatar } from "../avatar/Avatar.tsx";
+import { LookPicker } from "../avatar/LookPicker.tsx";
 import { type Mood, MOODS } from "../avatar/pose.ts";
 
 // A playground for the robot: every mood, every choice of look, and the sizes the apps draw it at.
@@ -106,58 +107,7 @@ function Playground() {
           </Group>
 
           <Group title="Look">
-            <div className="flex flex-wrap gap-1.5">
-              {Object.entries(PRESETS).map(([name, preset]) => (
-                <button
-                  key={name}
-                  type="button"
-                  className={button(sameLook(look, preset))}
-                  onClick={() => setLook(preset)}
-                >
-                  <span
-                    className="mr-1.5 inline-block size-3 rounded-full align-[-1px]"
-                    style={{
-                      background: `linear-gradient(135deg, ${preset.body[0]}, ${preset.body[1]})`,
-                    }}
-                  />
-                  {name}
-                </button>
-              ))}
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <Colour
-                label="Ribbon"
-                value={look.body[0]}
-                onChange={(c) => setLook({ ...look, body: [c, look.body[1]] })}
-              />
-              <Colour
-                label="Ribbon end"
-                value={look.body[1]}
-                onChange={(c) => setLook({ ...look, body: [look.body[0], c] })}
-              />
-              <Colour
-                label="Eyes"
-                value={look.eyes}
-                onChange={(c) => setLook({ ...look, eyes: c })}
-              />
-              <Colour
-                label="Sparks"
-                value={look.sparks}
-                onChange={(c) => setLook({ ...look, sparks: c })}
-              />
-            </div>
-            <Choice
-              label="Eyes"
-              options={EYE_SHAPES}
-              value={look.eyeShape}
-              onChange={(eyeShape) => setLook({ ...look, eyeShape })}
-            />
-            <Choice
-              label="Wears"
-              options={ACCESSORIES}
-              value={look.accessory}
-              onChange={(accessory) => setLook({ ...look, accessory })}
-            />
+            <LookPicker look={look} onChange={setLook} />
           </Group>
 
           <label className="flex items-center gap-2 text-sm text-stone-600">
@@ -173,67 +123,12 @@ function Playground() {
   );
 }
 
-function sameLook(a: Appearance, b: Appearance): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
-
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="flex flex-col gap-2">
       <h2 className="text-sm font-medium text-stone-500">{title}</h2>
       {children}
     </section>
-  );
-}
-
-function Colour({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (c: string) => void;
-}) {
-  return (
-    <label className="flex items-center gap-2 text-stone-600">
-      <input
-        type="color"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-7 w-9 cursor-pointer rounded border border-stone-300 bg-white"
-      />
-      {label}
-    </label>
-  );
-}
-
-function Choice<T extends string>({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: readonly T[];
-  value: T;
-  onChange: (value: T) => void;
-}) {
-  return (
-    <label className="flex items-center justify-between gap-2 text-sm text-stone-600">
-      {label}
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value as T)}
-        className="rounded border border-stone-300 bg-white px-2 py-1 capitalize"
-      >
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
-    </label>
   );
 }
 

@@ -400,6 +400,7 @@ pub async fn list_assistants(server: String) -> Result<Vec<Assistant>, NudgeErro
         .map(|a| Assistant {
             name: a.name,
             display_name: a.display_name,
+            appearance: a.appearance.map(Into::into),
         })
         .collect())
 }
@@ -934,6 +935,20 @@ impl NudgeClient {
     }
 
     // Admin commands, for players with the admin flag.
+
+    /// How the assistant's robot looks, for everyone; `None` goes back to the app icon's. The
+    /// room list shows the change. A 400 for a colour, eye shape or accessory that isn't one.
+    pub async fn set_appearance(
+        &self,
+        appearance: Option<Appearance>,
+    ) -> Result<Option<Appearance>, NudgeError> {
+        let api = self.client.api().clone();
+        Ok(
+            run(async move { api.set_appearance(appearance.map(Into::into)).await })
+                .await?
+                .map(Into::into),
+        )
+    }
 
     /// Gives a player the admin flag, or with `false` takes it; returns whether they have it now.
     pub async fn set_admin(&self, player_id: String, admin: bool) -> Result<bool, NudgeError> {
