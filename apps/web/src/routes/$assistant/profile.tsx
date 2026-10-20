@@ -1,4 +1,4 @@
-import type { Membership, PlayerSettingsSchema, Profile } from "@nudge/client";
+import type { Membership, PersonalDetails, PlayerSettingsSchema, Profile } from "@nudge/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { type FormEvent, useEffect, useState } from "react";
@@ -239,8 +239,149 @@ function ProfilePage() {
           {error !== undefined && <span className="text-sm text-red-700">{error}</span>}
         </div>
       </form>
+      <Personal assistant={assistant} />
       <Memberships assistant={assistant} />
     </Page>
+  );
+}
+
+const PERSONAL_FIELDS = [
+  { field: "fullName", label: "Full name", type: "text", autoComplete: "name" },
+  { field: "email", label: "E-mail", type: "email", autoComplete: "email" },
+  { field: "phone", label: "Phone", type: "tel", autoComplete: "tel" },
+  { field: "address", label: "Address", type: "text", autoComplete: "street-address" },
+] as const;
+
+type PersonalField = (typeof PERSONAL_FIELDS)[number]["field"];
+
+/**
+ * The player's personal details, for forms, mail and what is near them. The model only ever sees
+ * placeholders for them, in the player's own room and private messages.
+ */
+function Personal({ assistant }: { assistant: string }) {
+  const queryClient = useQueryClient();
+  const key = [assistant, "personal"];
+  const details = useQuery({ queryKey: key, queryFn: () => clientFor(assistant).api.personal() });
+  const [draft, setDraft] = useState<Record<PersonalField, string>>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (details.data !== undefined)
+      setDraft({
+        fullName: details.data.fullName ?? "",
+        email: details.data.email ?? "",
+        phone: details.data.phone ?? "",
+        address: details.data.address ?? "",
+      });
+  }, [details.data]);
+
+  if (details.error) return <p className="text-sm text-red-700">{details.error.message}</p>;
+  if (draft === undefined) return null;
+
+  async function update(work: () => Promise<PersonalDetails>) {
+    setBusy(true);
+    setError(undefined);
+    setSaved(false);
+    try {
+      queryClient.setQueryData(key, await work());
+      setSaved(true);
+    } catch (caught) {
+      setError((caught as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const api = clientFor(assistant).api;
+  const save = (event: FormEvent) => {
+    event.preventDefault();
+    void update(() => api.updatePersonal(draft));
+  };
+  const locate = () => {
+    setError(undefined);
+    if (!("geolocation" in navigator)) return setError("This browser can't tell where you are.");
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) =>
+        void update(() =>
+          api.updatePersonal({
+            location: { latitude: coords.latitude, longitude: coords.longitude },
+          }),
+        ),
+      (failed) => setError(failed.message),
+      { enableHighAccuracy: false, timeout: 15_000 },
+    );
+  };
+  const location = details.data?.location;
+  return (
+    <form
+      onSubmit={save}
+      className="flex flex-col gap-3 rounded border border-stone-200 bg-white p-3"
+    >
+      <div>
+        <h3 className="text-sm font-medium">Personal details</h3>
+        <p className="text-xs text-stone-500">
+          For filling in forms, writing mail and finding what is near you. Only you see them: the
+          model gets placeholders such as ⟦EMAIL1⟧, in your own room and your private messages only,
+          and tools get the real values when they act for you.
+        </p>
+      </div>
+      {PERSONAL_FIELDS.map(({ field, label, type, autoComplete }) => (
+        <label key={field} className="flex flex-col gap-1 text-sm">
+          {label}
+          <input
+            type={type}
+            autoComplete={autoComplete}
+            value={draft[field]}
+            onChange={(event) => {
+              setSaved(false);
+              setDraft({ ...draft, [field]: event.target.value });
+            }}
+            className="rounded border border-stone-300 px-2 py-1 text-sm"
+          />
+        </label>
+      ))}
+      <div className="flex flex-col gap-1 text-sm">
+        Where you are
+        <span className="text-stone-600">
+          {location === undefined
+            ? "Not shared. The apps can share it as you move."
+            : `${location.text}, ${new Date(location.at).toLocaleString()}`}
+        </span>
+        <span className="flex gap-3">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={locate}
+            className="underline disabled:opacity-50"
+          >
+            Share where I am now
+          </button>
+          {location !== undefined && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void update(() => api.updatePersonal({ location: null }))}
+              className="text-stone-600 underline disabled:opacity-50"
+            >
+              Forget it
+            </button>
+          )}
+        </span>
+      </div>
+      <div className="flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={busy}
+          className="rounded border px-3 py-1 text-sm disabled:opacity-50"
+        >
+          Save
+        </button>
+        {saved && <span className="text-sm text-stone-600">Saved.</span>}
+        {error !== undefined && <span className="text-sm text-red-700">{error}</span>}
+      </div>
+    </form>
   );
 }
 

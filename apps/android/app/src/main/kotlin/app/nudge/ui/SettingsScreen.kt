@@ -174,7 +174,7 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
     }
     if (profile) {
         BackHandler { profile = false }
-        ProfileScreen(session, close = { profile = false })
+        ProfileScreen(model, session, close = { profile = false })
         return
     }
 

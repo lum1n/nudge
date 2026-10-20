@@ -22,6 +22,7 @@ import {
   PlayerMemoryResponse,
   PlayersResponse,
   PlayerSettingsResponse,
+  PersonalDetails,
   Profile,
   Room,
   RoomsResponse,
@@ -193,6 +194,44 @@ describe("v1 HTTP", () => {
     expect((await rename(tokens.Ann, "lobby", { name: "Hall" })).json.name).toBe("Hall");
     const rooms = await call("GET", "/admin/rooms", { token: tokens.Ann, schema: RoomsResponse });
     expect(rooms.json.rooms.map((room: Room) => room.name)).toEqual(["Hall", "Rome"]);
+  });
+
+  it("keeps the caller's personal details apart from their profile", async () => {
+    expect(
+      await call("GET", "/me/personal", { token: tokens.Bo, schema: PersonalDetails }),
+    ).toEqual({ status: 200, json: {} });
+    const changed = await call("PATCH", "/me/personal", {
+      token: tokens.Bo,
+      body: {
+        email: "bo@example.com",
+        phone: "+47 912 34 567",
+        location: { latitude: 59.9139, longitude: 10.7522 },
+      },
+      schema: PersonalDetails,
+    });
+    expect(changed.json).toEqual({
+      email: "bo@example.com",
+      phone: "+47 912 34 567",
+      location: { text: "59.9139, 10.7522", at: expect.any(Number) },
+    });
+    expect(
+      (await call("PATCH", "/me/personal", { token: tokens.Bo, body: { phone: null } })).json.phone,
+    ).toBeUndefined();
+    expect(
+      await call("PATCH", "/me/personal", { token: tokens.Bo, body: { email: "nope" } }),
+    ).toMatchObject({ status: 400, json: { error: expect.stringContaining("nope") } });
+    expect(
+      (
+        await call("PATCH", "/me/personal", {
+          token: tokens.Bo,
+          body: { location: { latitude: 100, longitude: 0 } },
+        })
+      ).status,
+    ).toBe(400);
+    expect((await call("GET", "/me/profile", { token: tokens.Bo })).json).not.toHaveProperty(
+      "email",
+    );
+    expect((await call("GET", "/me/personal", { token: tokens.Ann })).json).toEqual({});
   });
 
   it("reads and changes the caller's own profile", async () => {

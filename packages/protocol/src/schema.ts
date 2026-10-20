@@ -489,6 +489,39 @@ export const UpdateProfileRequest = Type.Object({
 });
 export type UpdateProfileRequest = Static<typeof UpdateProfileRequest>;
 
+/**
+ * A player's personal details, as they see them. Each value is theirs alone: the model and
+ * everyone else only ever see its placeholder. Kept by the assistant they were given to; a home
+ * doesn't send them on.
+ */
+export const PersonalDetails = Type.Object({
+  fullName: Type.Optional(Type.String()),
+  email: Type.Optional(Type.String()),
+  phone: Type.Optional(Type.String()),
+  address: Type.Optional(Type.String()),
+  /** Where their device last said they were (`place (lat, lon)`), and when, in ms. */
+  location: Type.Optional(Type.Object({ text: Type.String(), at: Type.Number() })),
+});
+export type PersonalDetails = Static<typeof PersonalDetails>;
+
+/** Where a device is, and the place it named, such as a street address. */
+export const LocationRequest = Type.Object({
+  latitude: Type.Number({ minimum: -90, maximum: 90 }),
+  longitude: Type.Number({ minimum: -180, maximum: 180 }),
+  place: Type.Optional(Type.String({ maxLength: 200 })),
+});
+export type LocationRequest = Static<typeof LocationRequest>;
+
+/** The details to change; absent ones stay, `null` or `""` clears one. */
+export const UpdatePersonalRequest = Type.Object({
+  fullName: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  email: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  phone: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  address: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  location: Type.Optional(Type.Union([LocationRequest, Type.Null()])),
+});
+export type UpdatePersonalRequest = Static<typeof UpdatePersonalRequest>;
+
 /** An installed extension that takes settings from each player, for a profile's settings form. */
 export const PlayerSettingsSchema = Type.Object({
   name: Type.String(),
@@ -1218,6 +1251,9 @@ export const SCHEMAS = {
   NotificationPrefs,
   Profile,
   UpdateProfileRequest,
+  PersonalDetails,
+  LocationRequest,
+  UpdatePersonalRequest,
   PlayerSettingsSchema,
   PlayerSettingsResponse,
   PushKeyResponse,

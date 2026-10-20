@@ -1,7 +1,9 @@
 // The player's profile at home: name, picture, time zone, language, which pushes they get, and
-// each extension's settings for them. Their home sends it to every assistant they joined.
+// each extension's settings for them. Their home sends it to every assistant they joined. Their
+// personal details and where they are stay at home.
 package app.nudge.ui
 
+import android.Manifest
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -54,7 +56,11 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import app.nudge.AppModel
 import app.nudge.Session
 import app.nudge.explain
 import java.io.ByteArrayOutputStream
@@ -71,6 +77,8 @@ import kotlinx.serialization.json.jsonObject
 import nudge.client.settingFields
 import nudge.client.withoutDefaults
 import nudge.ffi.Notifications
+import nudge.ffi.PersonalDetails
+import nudge.ffi.PersonalUpdate
 import nudge.ffi.PlayerSettings
 import nudge.ffi.Profile
 import nudge.ffi.ProfileUpdate
@@ -96,13 +104,30 @@ private fun draftOf(profile: Profile) = ProfileDraft(
         .mapValues { (_, value) -> value as? JsonObject ?: JsonObject(emptyMap()) },
 )
 
+/** The personal details in the form until they are saved. */
+private data class PersonalDraft(val fullName: String, val email: String, val phone: String, val address: String)
+
+private fun personalDraftOf(details: PersonalDetails) = PersonalDraft(
+    fullName = details.fullName.orEmpty(),
+    email = details.email.orEmpty(),
+    phone = details.phone.orEmpty(),
+    address = details.address.orEmpty(),
+)
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ProfileScreen(session: Session, close: () -> Unit) {
+fun ProfileScreen(model: AppModel, session: Session, close: () -> Unit) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val client = session.client
     var draft by remember { mutableStateOf<ProfileDraft?>(null) }
+    var personal by remember { mutableStateOf<PersonalDraft?>(null) }
+    val sharing by model.location.enabled.collectAsState()
+    val known by model.location.known.collectAsState()
+    val locationProblem by model.location.problem.collectAsState()
+    val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
+        if (granted.values.any { it }) scope.launch { model.location.setEnabled(true) }
+    }
     var extensions by remember { mutableStateOf<List<PlayerSettings>>(emptyList()) }
     var busy by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
@@ -112,6 +137,8 @@ fun ProfileScreen(session: Session, close: () -> Unit) {
     LaunchedEffect(client) {
         try {
             draft = draftOf(client.profile())
+            personal = runCatching { personalDraftOf(client.personal()) }.getOrNull()
+            model.location.refresh()
             extensions = runCatching { client.profileExtensions() }.getOrDefault(emptyList())
         } catch (error: Exception) {
             problem = explain(error)
@@ -121,6 +148,11 @@ fun ProfileScreen(session: Session, close: () -> Unit) {
     fun change(next: ProfileDraft) {
         saved = false
         draft = next
+    }
+
+    fun changePersonal(next: PersonalDraft) {
+        saved = false
+        personal = next
     }
 
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -214,6 +246,68 @@ fun ProfileScreen(session: Session, close: () -> Unit) {
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
+            personal?.let { details ->
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Personal details", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "For filling in forms, writing mail and finding what is near you. Only you see them, and " +
+                                "they stay at home: the model gets placeholders such as ⟦EMAIL1⟧, in your own room and " +
+                                "private messages, and tools get the real values. Your location is sent while the app is open.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        OutlinedTextField(
+                            value = details.fullName,
+                            onValueChange = { changePersonal(details.copy(fullName = it)) },
+                            label = { Text("Full name") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        OutlinedTextField(
+                            value = details.email,
+                            onValueChange = { changePersonal(details.copy(email = it)) },
+                            label = { Text("E-mail") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        OutlinedTextField(
+                            value = details.phone,
+                            onValueChange = { changePersonal(details.copy(phone = it)) },
+                            label = { Text("Phone") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        OutlinedTextField(
+                            value = details.address,
+                            onValueChange = { changePersonal(details.copy(address = it)) },
+                            label = { Text("Address") },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        SwitchRow("Share where I am", sharing) { on ->
+                            if (on) {
+                                askLocation.launch(
+                                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
+                                )
+                            } else {
+                                scope.launch { model.location.setEnabled(false) }
+                            }
+                        }
+                        known?.takeIf { sharing }?.let { location ->
+                            val at = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT)
+                                .format(java.util.Date(location.at.toLong()))
+                            Text(
+                                "${location.text}, $at",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        locationProblem?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+                    }
+                }
+            }
             item {
                 Column {
                     Text("Notifications", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 4.dp))
@@ -267,6 +361,19 @@ fun ProfileScreen(session: Session, close: () -> Unit) {
                                     ),
                                 )
                                 draft = draftOf(next)
+                                personal?.let { details ->
+                                    // An empty string clears one.
+                                    personal = personalDraftOf(
+                                        client.updatePersonal(
+                                            PersonalUpdate(
+                                                fullName = details.fullName.trim(),
+                                                email = details.email.trim(),
+                                                phone = details.phone.trim(),
+                                                address = details.address.trim(),
+                                            ),
+                                        ),
+                                    )
+                                }
                                 session.me.value = session.me.value?.let { me ->
                                     me.copy(player = me.player.copy(displayName = next.displayName))
                                 }

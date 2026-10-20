@@ -255,6 +255,18 @@ export {
   Profiles,
   type ProfileUpdate,
 } from "./identity/profiles.ts";
+export {
+  InvalidPersonal,
+  locationText,
+  type LocationUpdate,
+  MAX_PERSONAL_LENGTH,
+  PERSONAL_FIELDS,
+  Personal,
+  type PersonalDetails,
+  PersonalDoc,
+  type PersonalField,
+  type PersonalUpdate,
+} from "./identity/personal.ts";
 export { Rooms, type SharedRoomDraft } from "./identity/rooms.ts";
 export {
   ACCESSORIES,

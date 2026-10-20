@@ -93,6 +93,8 @@ final class AppModel {
     let servers = Servers()
     /// Speech to text for the composer, on this device.
     let speech = Speech()
+    /// Where the player is, told to home while the app is open, if they turned it on.
+    let location = LocationSharing()
 
     var account: Account? { session?.account }
     var client: NudgeClient? { session?.client }
@@ -483,6 +485,7 @@ final class AppModel {
         // a second time.
         let places = places
         self.session = nil
+        location.client = nil
         self.places = []
         memberships = nil
         homeFederation = nil
@@ -505,6 +508,7 @@ final class AppModel {
             }
         }
         if active { Task { await syncPlaces() } }
+        location.setActive(active)
     }
 
     /// From the push service: register it with every server once signed in.
@@ -589,6 +593,8 @@ final class AppModel {
     private func start(_ account: Account, client existing: NudgeClient? = nil) {
         guard let session = open(account, client: existing) else { return }
         self.session = session
+        // Only home learns where the player is, never the assistants they joined.
+        location.client = session.client
         // The assistants joined, as this device last knew them, until home says.
         places = savedPlaces().compactMap { place in
             KeychainTokens(account: place.keychainAccount).get() == nil ? nil : open(place)

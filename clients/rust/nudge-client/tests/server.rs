@@ -697,6 +697,51 @@ async fn sets_up_extensions_for_admins() {
 }
 
 #[tokio::test]
+async fn keeps_personal_details_and_a_location() {
+    let Some(server) = faux_server().await else {
+        return;
+    };
+    let api = Api::new(&server.url, "robin", tokens(Some(&server.ann))).unwrap();
+    let details = api
+        .update_personal(&UpdatePersonalRequest {
+            email: Some(Some("ann@example.com".into())),
+            location: Some(Some(LocationRequest {
+                latitude: 59.913868,
+                longitude: 10.752245,
+                place: Some("Oslo S".into()),
+            })),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(details.email.as_deref(), Some("ann@example.com"));
+    assert_eq!(
+        details
+            .location
+            .as_ref()
+            .map(|location| location.text.as_str()),
+        Some("Oslo S (59.9139, 10.7522)")
+    );
+    let cleared = api
+        .update_personal(&UpdatePersonalRequest {
+            location: Some(None),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(cleared.location, None);
+    assert_eq!(api.personal().await.unwrap(), cleared);
+    let refused = api
+        .update_personal(&UpdatePersonalRequest {
+            email: Some(Some("nope".into())),
+            ..Default::default()
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(refused.status(), Some(400));
+}
+
+#[tokio::test]
 async fn edits_the_profile_and_joins_another_assistant_from_home() {
     let Some(server) = faux_server().await else {
         return;

@@ -388,6 +388,22 @@ impl Api {
         .await
     }
 
+    /// The caller's full name, e-mail, phone, address and location; only they see the values.
+    pub async fn personal(&self) -> Result<PersonalDetails, ApiError> {
+        self.request(Method::GET, &["me", "personal"], &[], NO_BODY)
+            .await
+    }
+
+    /// Changes the details `update` sets; 400 for one that isn't one, such as an e-mail address,
+    /// 403 for a player whose home is another assistant.
+    pub async fn update_personal(
+        &self,
+        update: &UpdatePersonalRequest,
+    ) -> Result<PersonalDetails, ApiError> {
+        self.request(Method::PATCH, &["me", "personal"], &[], Some(update))
+            .await
+    }
+
     /// The caller's profile: name, avatar, time zone, language and preferences.
     pub async fn profile(&self) -> Result<Profile, ApiError> {
         self.request(Method::GET, &["me", "profile"], &[], NO_BODY)

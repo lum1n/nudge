@@ -964,6 +964,53 @@ pub struct ProfileUpdate {
     pub extensions_json: Option<String>,
 }
 
+/// The player's full name, e-mail, phone, address and location. Only they see the values: the
+/// model gets placeholders, in their own room and private messages.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct PersonalDetails {
+    pub full_name: Option<String>,
+    pub email: Option<String>,
+    pub phone: Option<String>,
+    pub address: Option<String>,
+    pub location: Option<KnownLocation>,
+}
+
+/// Where the player's device last said they were (`place (lat, lon)`), and when.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct KnownLocation {
+    pub text: String,
+    /// In ms since the epoch.
+    pub at: f64,
+}
+
+impl From<p::PersonalDetails> for PersonalDetails {
+    fn from(details: p::PersonalDetails) -> Self {
+        PersonalDetails {
+            full_name: details.full_name,
+            email: details.email,
+            phone: details.phone,
+            address: details.address,
+            location: details.location.map(|location| KnownLocation {
+                text: location.text,
+                at: location.at,
+            }),
+        }
+    }
+}
+
+/// The personal details to change; absent ones stay, and an empty string clears one.
+#[derive(Clone, Debug, Default, PartialEq, uniffi::Record)]
+pub struct PersonalUpdate {
+    #[uniffi(default = None)]
+    pub full_name: Option<String>,
+    #[uniffi(default = None)]
+    pub email: Option<String>,
+    #[uniffi(default = None)]
+    pub phone: Option<String>,
+    #[uniffi(default = None)]
+    pub address: Option<String>,
+}
+
 /// An installed extension that takes settings from each player; `schema_json` is JSON Schema.
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
 pub struct PlayerSettings {

@@ -11,11 +11,13 @@ import {
   type Credential,
   ExtensionNotFound,
   InvalidAppearance,
+  InvalidPersonal,
   InvalidProfile,
   MAX_ROUTE_BODY,
   NotAllowed,
   type Nudge,
   type Player as CorePlayer,
+  type PersonalUpdate,
   type ProfileUpdate,
   type Room as CoreRoom,
   type TokenRecord,
@@ -48,6 +50,7 @@ import {
   ProtectRequest,
   type PrivateValuesResponse,
   type PlayerSettingsResponse,
+  type PersonalDetails,
   type Profile,
   type ProtectResponse,
   RememberRequest,
@@ -63,6 +66,7 @@ import {
   type TimelineResponse,
   type TokenInfo,
   type TokensResponse,
+  UpdatePersonalRequest,
   UpdateProfileRequest,
   type UsageResponse,
 } from "@nudge/protocol";
@@ -330,6 +334,31 @@ export function restRoutes(options: RestOptions): Hono {
       return c.json(profile satisfies Profile);
     } catch (error) {
       if (error instanceof InvalidProfile) throw new HttpError(400, error.message);
+      throw error;
+    }
+  });
+
+  api.get("/me/personal", async (c) => {
+    const details = await c.var.nudge.personal.get(c.var.credential.player.id, context);
+    if (details === undefined) throw new HttpError(404, "No such player");
+    return c.json(details satisfies PersonalDetails);
+  });
+
+  api.patch("/me/personal", async (c) => {
+    // Kept where the player lives, and not spread to the assistants they joined.
+    const { home } = c.var.credential.player;
+    if (home !== undefined)
+      throw new HttpError(403, `Your personal details stay at your home, ${addressOf(home)}`);
+    const body = await readJson(c, UpdatePersonalRequest);
+    try {
+      const details = await c.var.nudge.personal.update(
+        c.var.credential.player.id,
+        body as PersonalUpdate,
+        context,
+      );
+      return c.json(details satisfies PersonalDetails);
+    } catch (error) {
+      if (error instanceof InvalidPersonal) throw new HttpError(400, error.message);
       throw error;
     }
   });

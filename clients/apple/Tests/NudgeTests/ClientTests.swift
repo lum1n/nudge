@@ -222,6 +222,21 @@ final class ClientTests: XCTestCase {
         }
     }
 
+    func testKeepsPersonalDetailsAndALocation() async throws {
+        let home = try client(MemoryTokens(server.ann))
+        let details = try await home.updatePersonal(
+            update: PersonalUpdate(email: "ann@example.com", phone: "+47 912 34 567"))
+        XCTAssertEqual(details.email, "ann@example.com")
+        let cleared = try await home.updatePersonal(update: PersonalUpdate(phone: ""))
+        XCTAssertNil(cleared.phone)
+        let located = try await home.shareLocation(latitude: 59.913868, longitude: 10.752245, place: "Oslo S")
+        XCTAssertEqual(located.location?.text, "Oslo S (59.9139, 10.7522)")
+        let forgotten = try await home.forgetLocation()
+        XCTAssertNil(forgotten.location)
+        let personal = try await home.personal()
+        XCTAssertEqual(personal.email, "ann@example.com")
+    }
+
     func testEditsTheProfileAndJoinsAnotherAssistantFromHome() async throws {
         let home = try client(MemoryTokens(server.ann))
         let profile = try await home.updateProfile(

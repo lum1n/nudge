@@ -816,6 +816,65 @@ impl NudgeClient {
         Ok(run(async move { api.forget_value(&placeholder).await }).await?)
     }
 
+    /// The player's full name, e-mail, phone, address and location.
+    pub async fn personal(&self) -> Result<PersonalDetails, NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.personal().await }).await?.into())
+    }
+
+    /// Changes the details `update` sets; 400 for one that isn't one, such as an e-mail address.
+    /// 403 for a player whose home is another assistant: their details stay there.
+    pub async fn update_personal(
+        &self,
+        update: PersonalUpdate,
+    ) -> Result<PersonalDetails, NudgeError> {
+        let update = p::UpdatePersonalRequest {
+            full_name: update.full_name.map(Some),
+            email: update.email.map(Some),
+            phone: update.phone.map(Some),
+            address: update.address.map(Some),
+            location: None,
+        };
+        let api = self.client.api().clone();
+        Ok(run(async move { api.update_personal(&update).await })
+            .await?
+            .into())
+    }
+
+    /// Tells the assistant where the player is: coordinates, and the place the device named,
+    /// such as a street address. A spot within 100 m of the last keeps its placeholder.
+    pub async fn share_location(
+        &self,
+        latitude: f64,
+        longitude: f64,
+        place: Option<String>,
+    ) -> Result<PersonalDetails, NudgeError> {
+        let update = p::UpdatePersonalRequest {
+            location: Some(Some(p::LocationRequest {
+                latitude,
+                longitude,
+                place: place.filter(|place| !place.trim().is_empty()),
+            })),
+            ..Default::default()
+        };
+        let api = self.client.api().clone();
+        Ok(run(async move { api.update_personal(&update).await })
+            .await?
+            .into())
+    }
+
+    /// Forgets where the player was; the assistant no longer knows their location.
+    pub async fn forget_location(&self) -> Result<PersonalDetails, NudgeError> {
+        let update = p::UpdatePersonalRequest {
+            location: Some(None),
+            ..Default::default()
+        };
+        let api = self.client.api().clone();
+        Ok(run(async move { api.update_personal(&update).await })
+            .await?
+            .into())
+    }
+
     /// The player's profile: name, avatar, time zone, language and preferences.
     pub async fn profile(&self) -> Result<Profile, NudgeError> {
         let api = self.client.api().clone();
