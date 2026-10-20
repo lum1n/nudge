@@ -85,19 +85,16 @@ extension PromptedBy {
     }
 }
 
-/// Whose answer it is, when it started, and the nudge or watch that prompted it.
+/// Whose answer it is, its robot at rest, when it started, and the nudge or watch that prompted it.
 struct AnswerHeader: View {
     let name: String
     let startedAt: Double?
     var promptedBy: PromptedBy? = nil
+    var appearance: Appearance = .nudge
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: "sparkle")
-                .font(.caption2.bold())
-                .foregroundStyle(.white)
-                .frame(width: 20, height: 20)
-                .background(.tint, in: .circle)
+            Portrait(appearance: appearance, size: 20)
             Text(name).font(.subheadline.weight(.semibold))
             if let promptedBy {
                 Label(promptedBy.label, systemImage: promptedBy.symbol)
