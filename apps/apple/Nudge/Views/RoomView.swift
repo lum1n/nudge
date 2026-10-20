@@ -8,6 +8,8 @@ struct RoomView: View {
     let me: String?
     /// The assistant's display name, over its answers.
     let assistant: String
+    /// How its robot looks.
+    let look: RobotLook
     @State private var observed: ObservedRoom?
     @State private var draft = ""
     @State private var secret = false
@@ -123,7 +125,7 @@ struct RoomView: View {
                             }
                             if !empty {
                                 Presence(
-                                    mood: mood, level: level, status: state?.live?.status,
+                                    mood: mood, look: look, level: level, status: state?.live?.status,
                                     label: RoomMood.label(mood, timeline: state?.timeline ?? [], live: state?.live))
                             } else if let status = state?.live?.status {
                                 LiveStatusView(status: status)
@@ -168,7 +170,7 @@ struct RoomView: View {
                     let days = transcript.dayStarts()
                     ForEach(transcript, id: \.id) { item in
                         if let day = days[item.id] { DayDivider(at: day) }
-                        TimelineRow(item: item, me: me, assistant: assistant)
+                        TimelineRow(item: item, me: me, assistant: assistant, look: look)
                     }
                     ForEach(queued, id: \.id) { message in
                         let mine = message.author == nil || message.author?.id == me
@@ -199,7 +201,7 @@ struct RoomView: View {
                     ProgressView()
                 } else if empty {
                     VStack(spacing: 12) {
-                        AvatarView(mood: mood, size: 160, level: level)
+                        AvatarView(mood: mood, appearance: look, size: 160, level: level)
                         Text("Say hello to \(assistant).").foregroundStyle(.secondary)
                     }
                 }
@@ -460,13 +462,14 @@ struct Composer: View {
 /// one.
 struct Presence: View {
     let mood: Mood
+    let look: RobotLook
     let level: (@MainActor () -> Double)?
     let status: Status?
     let label: String
 
     var body: some View {
         HStack(spacing: 8) {
-            AvatarView(mood: mood, size: 40, level: level)
+            AvatarView(mood: mood, appearance: look, size: 40, level: level)
             if let status {
                 LiveStatusView(status: status)
             } else if !label.isEmpty {

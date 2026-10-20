@@ -10,7 +10,7 @@ enum Accessory: String, CaseIterable, Sendable {
     case none, antenna, headphones, sprout, crown
 }
 
-struct Appearance: Equatable, Sendable {
+struct RobotLook: Equatable, Sendable {
     /// The ribbon's two ends, as `#rrggbb`.
     var body: (String, String)
     var eyes: String
@@ -18,24 +18,24 @@ struct Appearance: Equatable, Sendable {
     var eyeShape: EyeShape
     var accessory: Accessory
 
-    static func == (a: Appearance, b: Appearance) -> Bool {
+    static func == (a: RobotLook, b: RobotLook) -> Bool {
         a.body == b.body && a.eyes == b.eyes && a.sparks == b.sparks && a.eyeShape == b.eyeShape
             && a.accessory == b.accessory
     }
 
     /// The robot of the app icon.
-    static let nudge = Appearance(
+    static let nudge = RobotLook(
         body: ("#1438f5", "#19e6f0"), eyes: "#3ff6ff", sparks: "#2fe6b8", eyeShape: .pill, accessory: .none)
 
-    static let presets: KeyValuePairs<String, Appearance> = [
+    static let presets: KeyValuePairs<String, RobotLook> = [
         "Nudge": .nudge,
-        "Ember": Appearance(
+        "Ember": RobotLook(
             body: ("#e8361c", "#ffb238"), eyes: "#ffd36b", sparks: "#ff7a45", eyeShape: .pill, accessory: .none),
-        "Moss": Appearance(
+        "Moss": RobotLook(
             body: ("#127a4a", "#a5e86a"), eyes: "#b8ff8a", sparks: "#e4f36a", eyeShape: .round, accessory: .none),
-        "Grape": Appearance(
+        "Grape": RobotLook(
             body: ("#5b21d6", "#e45bff"), eyes: "#f0a8ff", sparks: "#ff6fcf", eyeShape: .wide, accessory: .none),
-        "Graphite": Appearance(
+        "Graphite": RobotLook(
             body: ("#30343c", "#8a94a6"), eyes: "#ffffff", sparks: "#c9d1de", eyeShape: .square, accessory: .none),
     ]
 }

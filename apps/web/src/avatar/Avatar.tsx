@@ -21,7 +21,7 @@ export function Avatar({
   className?: string;
   title?: string;
 }) {
-  const t = useClock();
+  const { t, still } = useClock();
   const change = useRef({ from: mood, to: mood, at: t });
   if (change.current.to !== mood) {
     // A change during a change starts from where the last one was going.
@@ -29,7 +29,8 @@ export function Avatar({
   }
   const { from, to, at } = change.current;
   const inputs = { level: level?.() };
-  const k = settle(t - at);
+  // A still clock never gets through a change, so a still robot shows the new mood at once.
+  const k = still ? 1 : settle(t - at);
   const now = k >= 1 ? pose(to, t, inputs) : blend(pose(from, t, inputs), pose(to, t, inputs), k);
   return (
     <Robot
@@ -57,18 +58,19 @@ export function Portrait({
 }
 
 /** Seconds since mount, every frame; still for people who asked for less motion. */
-function useClock(): number {
+function useClock(): { t: number; still: boolean } {
   const [t, setT] = useState(0.9);
+  const [still] = useState(() => matchMedia("(prefers-reduced-motion: reduce)").matches);
   useEffect(() => {
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (still) return;
     const start = performance.now() - 900;
     let frame = requestAnimationFrame(function tick(now) {
       setT((now - start) / 1000);
       frame = requestAnimationFrame(tick);
     });
     return () => cancelAnimationFrame(frame);
-  }, []);
-  return t;
+  }, [still]);
+  return { t, still };
 }
 
 const EYES: Record<EyeShape, { w: number; h: number; r: number; turn: number }> = {

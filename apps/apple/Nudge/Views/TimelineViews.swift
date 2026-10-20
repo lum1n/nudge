@@ -8,6 +8,8 @@ struct TimelineRow: View {
     let me: String?
     /// The assistant's display name, over each of its answers.
     let assistant: String
+    /// How its robot looks, beside them.
+    var look: RobotLook = .nudge
 
     var body: some View {
         switch item {
@@ -32,7 +34,7 @@ struct TimelineRow: View {
             // messages around it and from the answer before. One no one asked for just now, to a
             // nudge or a watch, is tinted by what prompted it.
             VStack(alignment: .leading, spacing: 8) {
-                AnswerHeader(name: assistant, startedAt: startedAt, promptedBy: promptedBy)
+                AnswerHeader(name: assistant, startedAt: startedAt, promptedBy: promptedBy, appearance: look)
                 if privateTo != nil { OnlyYou() }
                 AnswerView(status: status, error: error, parts: parts)
             }
@@ -90,7 +92,7 @@ struct AnswerHeader: View {
     let name: String
     let startedAt: Double?
     var promptedBy: PromptedBy? = nil
-    var appearance: Appearance = .nudge
+    var appearance: RobotLook = .nudge
 
     var body: some View {
         HStack(spacing: 6) {

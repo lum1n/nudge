@@ -6,7 +6,7 @@ import SwiftUI
 /// next. `level` is read every frame for the voice's loudness while listening or speaking.
 struct AvatarView: View {
     let mood: Mood
-    var appearance: Appearance = .nudge
+    var appearance: RobotLook = .nudge
     var size: CGFloat = 96
     var level: (@MainActor () -> Double)? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -50,7 +50,7 @@ struct AvatarView: View {
 
 /// The robot at rest, for where many are drawn at once, such as beside every answer.
 struct Portrait: View {
-    var appearance: Appearance = .nudge
+    var appearance: RobotLook = .nudge
     var size: CGFloat = 20
 
     var body: some View {
@@ -64,7 +64,7 @@ struct Portrait: View {
 struct RobotCanvas: View {
     let pose: Pose
     let t: Double
-    let look: Appearance
+    let look: RobotLook
 
     var body: some View {
         Canvas { context, size in
@@ -85,7 +85,7 @@ extension Color {
 private struct Robot {
     let p: Pose
     let t: Double
-    let look: Appearance
+    let look: RobotLook
 
     /// Points on the screen per unit of the canvas.
     let scale: CGFloat

@@ -104,6 +104,11 @@ struct SettingsView: View {
                 }
                 if model.me?.admin == true {
                     Section {
+                        if let session = model.session {
+                            NavigationLink { RobotView(session: session) } label: {
+                                Label("Robot", systemImage: "face.smiling")
+                            }
+                        }
                         NavigationLink { ExtensionsView(client: client) } label: {
                             Label("Extensions", systemImage: "puzzlepiece.extension")
                         }
@@ -116,12 +121,15 @@ struct SettingsView: View {
                     } header: {
                         Text("Assistant")
                     } footer: {
-                        Text("Turn extensions on or off and change their settings, for every room. Invite someone from another assistant by their address.")
+                        Text("How the assistant's robot looks to everyone. Turn extensions on or off and change their settings, for every room. Invite someone from another assistant by their address.")
                     }
                 }
                 // The assistants joined from home where the player is an admin too.
                 ForEach(model.places.filter { $0.me?.admin == true }, id: \.account.keychainAccount) { place in
                     Section {
+                        NavigationLink { RobotView(session: place) } label: {
+                            Label("Robot", systemImage: "face.smiling")
+                        }
                         NavigationLink { ExtensionsView(client: place.client) } label: {
                             Label("Extensions", systemImage: "puzzlepiece.extension")
                         }
