@@ -1,15 +1,20 @@
+import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
-import { Api, ApiError, memoryTokens, ServerApi } from "@nudge/client";
+import { Api, ApiError, memoryTokens, ServerApi, setUp } from "@nudge/client";
 import {
-  type Assistants,
+  Assistants,
+  completeSetup,
   createNudge,
   type Nudge,
   ServerIdentity,
   ServerKeys,
   ServerOwners,
+  SetupCodes,
 } from "@nudge/core";
 import { type RunningServer, type ServerControl, serveNudge } from "@nudge/server";
 import { afterEach, describe, expect, it } from "vitest";
@@ -206,5 +211,130 @@ describe("federation over the network", () => {
     await expect(vegard.removeOwnedServer(away.url)).rejects.toEqual(
       new ApiError(404, "No such server"),
     );
+  });
+
+  it("sets a server up from home, standalone, and joins it to the cluster later as one player", async () => {
+    const home = await start("robin");
+    const vegard = new Api({
+      server: home.url,
+      assistant: "robin",
+      tokens: memoryTokens((await home.nudge.players.invite("Vegard", context)).token),
+    });
+    const address = `vegard@${home.url}/robin`;
+
+    // A new server in setup mode. Its assistant gets federation as if turned on after setup.
+    const dir = await mkdtemp(join(tmpdir(), "nudge-started-"));
+    const port = await freePort();
+    const url = `http://127.0.0.1:${port}`;
+    const faux = fauxProvider();
+    faux.setResponses([fauxAssistantMessage("Hi.")]);
+    const models = createModels();
+    models.setProvider(faux.provider);
+    const model = { provider: faux.provider.id, modelId: faux.getModel().id };
+    const configPath = join(dir, "nudge.json");
+    const assistants = await Assistants.open({
+      configPath,
+      open: async (_config, assistant) => {
+        const nudge = await createNudge(
+          {
+            name: assistant.name,
+            database: ":memory:",
+            models,
+            model,
+            extensions: [
+              {
+                extension: federationExtension({ report: (e) => errors.push(e) }),
+                settings: { server: url },
+              },
+            ],
+          },
+          context,
+        );
+        opened.push(nudge);
+        return nudge;
+      },
+      context,
+      allowMissing: true,
+    });
+    const owners = new ServerOwners(undefined);
+    const identity = new ServerIdentity(undefined);
+    const keys = new ServerKeys(undefined, () => []);
+    try {
+      servers.push(
+        await serveNudge({
+          assistants: assistants.running,
+          port,
+          server: {
+            assistants,
+            keys,
+            owners,
+            identity,
+            backupBeforeDelete: async () => "",
+            testKey: async () => {},
+            backupKey: async () => Buffer.alloc(32),
+          },
+          setup: {
+            codes: new SetupCodes("ABCD-EFGH-JKMN"),
+            offer: async () => ({ providers: [], local: [] }),
+            testKey: async () => {},
+            complete: (choices, client) =>
+              completeSetup(
+                { configPath, assistants, keys, owners, identity },
+                choices,
+                client,
+                context,
+              ),
+          },
+        }),
+      );
+
+      const client = { name: "test", platform: "node" };
+      const done = await setUp(url, {
+        code: "ABCD-EFGH-JKMN",
+        client,
+        assistant: { name: "team" },
+        model,
+        you: { displayName: "Vegard" },
+        federation: false,
+        home: await vegard.ownerAssertion(url),
+      });
+      expect(done.owner).toEqual({
+        id: expect.any(String),
+        address,
+        keys: expect.any(Object),
+        addedAt: expect.any(Number),
+      });
+      const place = { server: url, assistant: "team" };
+      const standalone = new Api({ ...place, tokens: memoryTokens(done.token) });
+      expect((await standalone.me()).player).toEqual({
+        id: "vegard",
+        displayName: "Vegard",
+        address,
+      });
+      const room = await standalone.createRoom({ name: "Plans", members: [] });
+
+      // Joined to the cluster later: the same player, with their rooms, and home lists it.
+      const tokens = memoryTokens();
+      const joined = await new Api({ ...place, tokens }).join(await vegard.vouchFor(place));
+      expect(joined.player).toEqual({ id: "vegard", displayName: "Vegard", address });
+      expect((await new Api({ ...place, tokens }).me()).admin).toBe(true);
+      expect((await standalone.me()).player.id).toBe("vegard");
+      expect((await assistants.running.get("team")!.players.list(context)).length).toBe(1);
+      expect((await vegard.memberships()).memberships).toMatchObject([place]);
+      await expect(new Api({ ...place, tokens }).timeline(room.id)).resolves.toBeDefined();
+
+      // Their owner is their address: any device signs in from home, and stays owner without
+      // the assistant.
+      const session = await new ServerApi({ server: url, tokens: memoryTokens() }).signInFromHome(
+        await vegard.ownerAssertion(url),
+        client,
+      );
+      expect(session.owner.id).toBe(done.owner.id);
+      owners.forgetAssistant("team");
+      expect(owners.list().map((owner) => owner.address)).toEqual([address]);
+    } finally {
+      await assistants.close();
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

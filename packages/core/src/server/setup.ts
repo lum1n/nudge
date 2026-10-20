@@ -4,10 +4,16 @@ import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import type { LocalProviderConfig, ModelChoice, ServerSettings } from "../config.ts";
 import { readRawConfig, writeRawConfig } from "../config-file.ts";
-import { type ClientInfo, normalizePairingCode, type Player } from "../identity/directory.ts";
+import {
+  addressOf,
+  type ClientInfo,
+  normalizePairingCode,
+  type Player,
+} from "../identity/directory.ts";
 import type { Assistants } from "./assistants.ts";
 import { defaultExtensions } from "./defaults.ts";
 import type { ServerKeys } from "./keys.ts";
+import { homeAtSetup, type ServerIdentity, type VouchedHome } from "./identity.ts";
 import type { ServerOwner, ServerOwners } from "./owners.ts";
 
 /** What the setup wizard asks (ADR 11), sent once at the end. */
@@ -25,6 +31,12 @@ export type SetupChoices = {
   readonly backups?: boolean;
   /** Federation for the first assistant, at the public address; default on. Off: standalone. */
   readonly federation?: boolean;
+  /**
+   * An owner assertion from the person's home, sealed for this server: it is started from that
+   * home, so its first player is the person there, and its owner their address. Without one, the
+   * first player lives here, a new home of their own.
+   */
+  readonly home?: unknown;
 };
 
 export type SetupResult = {
@@ -43,6 +55,9 @@ export type SetupTarget = {
   readonly assistants: Assistants;
   readonly keys: ServerKeys;
   readonly owners: ServerOwners;
+  /** The server's own keys and how it reaches homes, to check `home` with; needed for one. */
+  readonly identity?: ServerIdentity;
+  readonly fetch?: typeof fetch;
 };
 
 /** Crockford's base 32, as pairing codes: no I, L, O or U. */
@@ -94,7 +109,8 @@ export class SetupCodes {
 /**
  * Sets the server up as `choices` say: writes its config, keeps the key, creates the first
  * assistant with the person as its first player and admin, and makes them the server's owner.
- * Returns their tokens. Refuses a server that has a config already.
+ * Set up from their home, that player is bound to it and the owner is their address (ADR 11).
+ * Returns their tokens. Refuses a server that has a config already, or a bad assertion from home.
  */
 export async function completeSetup(
   target: SetupTarget,
@@ -103,6 +119,15 @@ export async function completeSetup(
   context: Context,
 ): Promise<SetupResult> {
   if (existsSync(target.configPath)) throw new Error("This server is set up already");
+  let home: VouchedHome | undefined;
+  if (choices.home !== undefined) {
+    if (target.identity === undefined) throw new Error("This server can't check homes");
+    home = await homeAtSetup(choices.home, {
+      identity: target.identity,
+      owners: target.owners,
+      fetch: target.fetch ?? fetch,
+    });
+  }
   const raw = await readRawConfig(target.configPath);
   if (choices.server !== undefined && Object.keys(choices.server).length > 0)
     raw.server = { ...choices.server };
@@ -131,11 +156,23 @@ export async function completeSetup(
   if (choices.key !== undefined) target.keys.set(choices.key.provider, choices.key.key);
   // The first player is the assistant's admin for good.
   const invited = await nudge.players.invite(choices.you.displayName, context);
-  const owner = target.owners.add(choices.assistant.name, invited.player.id);
+  let player = invited.player;
+  let owner: ServerOwner | undefined;
+  if (home === undefined) owner = target.owners.add(choices.assistant.name, player.id);
+  else {
+    player = await nudge.players.setHome(
+      player.id,
+      home.home,
+      home.keys === undefined ? { proof: home.proof! } : { keys: home.keys },
+      context,
+    );
+    owner = target.owners.addAddress(addressOf(home.home), home.keys);
+    if (owner === undefined) throw new Error("That home has no address");
+  }
   const issued = target.owners.issue(owner.id, client);
   return {
     assistant: choices.assistant.name,
-    player: invited.player,
+    player,
     token: invited.token,
     clientId: invited.clientId,
     owner,

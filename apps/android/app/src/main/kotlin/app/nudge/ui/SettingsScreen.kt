@@ -87,6 +87,7 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
     val memberships by model.memberships.collectAsStateWithLifecycle()
     var leaving by remember { mutableStateOf<Membership?>(null) }
     var signingOutOf by remember { mutableStateOf<Session?>(null) }
+    var joiningCluster by remember { mutableStateOf<Session?>(null) }
     var profile by rememberSaveable { mutableStateOf(false) }
     var speech by rememberSaveable { mutableStateOf(false) }
     val speechLanguages by model.dictation.languages.collectAsStateWithLifecycle()
@@ -283,14 +284,22 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                     "On their own",
                     standalone.map<Session, GroupRow> { place ->
                         { shapes ->
+                            // Read so the row changes once the server says who the player is.
+                            val placeMe by place.me.collectAsStateWithLifecycle()
+                            val canJoin = placeMe != null && memberships != null && model.canJoinCluster(place)
                             SegmentedListItem(
-                                onClick = {},
+                                onClick = { if (canJoin) joiningCluster = place },
                                 onLongClick = { signingOutOf = place },
                                 onLongClickLabel = "Sign out",
                                 shapes = shapes,
                                 leadingContent = { Icon(Icons.Outlined.SmartToy, null) },
                                 overlineContent = { Text(java.net.URI(place.account.server).host ?: place.account.server) },
-                                supportingContent = { Text("Outside your cluster, without federation: you are a person of its own. Long press to sign out.") },
+                                supportingContent = {
+                                    Text(
+                                        if (canJoin) "Started from your home, without federation. Tap to join your cluster, keeping its rooms. Long press to sign out."
+                                        else "Outside your cluster, without federation: you are a person of its own. Long press to sign out.",
+                                    )
+                                },
                             ) { Text(place.account.assistantName) }
                         }
                     },
@@ -529,6 +538,30 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                 }) { Text("Leave") }
             },
             dismissButton = { TextButton(onClick = { leaving = null }) { Text("Cancel") } },
+        )
+    }
+
+    joiningCluster?.let { place ->
+        AlertDialog(
+            onDismissRequest = { joiningCluster = null },
+            title = { Text("Join ${place.account.assistantName} to your cluster?") },
+            text = {
+                Text("It gets federation, and you join it from home as the person you are there now: its rooms and history stay, and your other devices list it.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    joiningCluster = null
+                    scope.launch {
+                        try {
+                            model.joinCluster(place)
+                            problem = null
+                        } catch (error: Exception) {
+                            problem = explain(error)
+                        }
+                    }
+                }) { Text("Join my cluster") }
+            },
+            dismissButton = { TextButton(onClick = { joiningCluster = null }) { Text("Cancel") } },
         )
     }
 

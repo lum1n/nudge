@@ -313,6 +313,28 @@ describe("players and rooms", () => {
     await nudge.close(context);
   });
 
+  it("binds a player who lives here to their home, once, so joining from it lands on them", async () => {
+    const { options } = setup(":memory:");
+    const nudge = await createNudge(options, context);
+    const vegard = await nudge.players.invite("Vegard", context);
+    const ann = (await nudge.players.invite("Ann", context)).player;
+    const home = { server: "https://other.example", assistant: "robin", playerId: "vegard" };
+    const keys = { signingKey: "s", encryptionKey: "e" };
+    const bound = await nudge.players.setHome(vegard.player.id, home, { keys }, context);
+    expect(bound).toMatchObject({ id: "vegard", home, startedFrom: { keys } });
+    await expect(
+      nudge.players.setHome(vegard.player.id, { ...home, playerId: "v" }, { keys }, context),
+    ).rejects.toThrow(/has a home already/);
+    await expect(nudge.players.setHome(ann.id, home, { keys }, context)).rejects.toThrow(
+      /Another player has that home/,
+    );
+    const joined = await nudge.players.addRoaming(home, "Vegard", context);
+    expect(joined.player.id).toBe("vegard");
+    expect(await nudge.players.isAdmin("vegard", context)).toBe(true);
+    expect((await nudge.players.authenticate(vegard.token, context))?.player.id).toBe("vegard");
+    await nudge.close(context);
+  });
+
   it("moves every room to a new model from the config", async () => {
     const database = join(dir, "a.sqlite");
     const { options } = setup(database);

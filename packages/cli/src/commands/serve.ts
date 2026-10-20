@@ -259,7 +259,7 @@ export async function serve(options: ServeOptions): Promise<number> {
             testKey,
             complete: async (choices, client) => {
               const result = await completeSetup(
-                { configPath, assistants, keys, owners },
+                { configPath, assistants, keys, owners, identity },
                 choices,
                 client,
                 context,

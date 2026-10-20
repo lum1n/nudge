@@ -194,6 +194,7 @@ async fn makes_a_server_on_exe_dev_and_sets_it_up_from_the_app() {
             public_url: Some(server.clone()),
             backups: Some(false),
             federation: None,
+            home: None,
         },
     )
     .await

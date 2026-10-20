@@ -18,6 +18,7 @@ struct SettingsView: View {
     @State private var problem: String?
     @State private var confirmSignOut = false
     @State private var signingOutOf: Session?
+    @State private var joiningCluster: Session?
     @State private var leaving: Membership?
 
     var body: some View {
@@ -79,18 +80,26 @@ struct SettingsView: View {
                         ForEach(standalone, id: \.account.keychainAccount) { place in
                             LabeledContent(place.account.assistantName, value: place.account.server)
                                 .contextMenu {
+                                    if model.canJoinCluster(place) {
+                                        Button("Join my cluster", systemImage: "point.3.connected.trianglepath.dotted") {
+                                            joiningCluster = place
+                                        }
+                                    }
                                     Button("Sign out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
                                         signingOutOf = place
                                     }
                                 }
                                 .swipeActions {
                                     Button("Sign out", role: .destructive) { signingOutOf = place }
+                                    if model.canJoinCluster(place) {
+                                        Button("Join my cluster") { joiningCluster = place }
+                                    }
                                 }
                         }
                     } header: {
                         Text("On their own")
                     } footer: {
-                        Text("Servers outside your cluster, without federation: you are a person of their own there, not joined from home.")
+                        Text("Servers outside your cluster, without federation. One set up from your home can join your cluster later, keeping its rooms and history.")
                     }
                 }
                 if model.me?.admin == true {
@@ -243,6 +252,18 @@ struct SettingsView: View {
                 }
             } message: {
                 Text("You'll need a new pairing code from it to sign in again.")
+            }
+            .confirmationDialog(
+                "Join \(joiningCluster?.account.assistantName ?? "") to your cluster?",
+                isPresented: Binding(get: { joiningCluster != nil }, set: { if !$0 { joiningCluster = nil } })
+            ) {
+                Button("Join my cluster") {
+                    if let place = joiningCluster {
+                        Task { await change { try await model.joinCluster(place) } }
+                    }
+                }
+            } message: {
+                Text("It gets federation, and you join it from home as the person you are there now: its rooms and history stay, and your other devices list it.")
             }
             .task { await load() }
         }

@@ -1100,6 +1100,13 @@ export const SetupRequest = Type.Object({
    * part of a cluster; default true, when it has a public address. False sets it up standalone.
    */
   federation: Type.Optional(Type.Boolean()),
+  /**
+   * An owner assertion from the person's home (its `POST /ext/federation/owner-assertion`), when
+   * they set it up signed in there: the server is started from that home, so its first player is
+   * them and its owner their address, and it can join their cluster later. Without one, the first
+   * player lives here, a new home.
+   */
+  home: Type.Optional(Sealed),
 });
 export type SetupRequest = Static<typeof SetupRequest>;
 

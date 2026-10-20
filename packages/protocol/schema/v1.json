@@ -7121,6 +7121,34 @@
         },
         "federation": {
           "type": "boolean"
+        },
+        "home": {
+          "type": "object",
+          "required": [
+            "v",
+            "epk",
+            "iv",
+            "data",
+            "tag"
+          ],
+          "properties": {
+            "v": {
+              "type": "number",
+              "const": 1
+            },
+            "epk": {
+              "type": "string"
+            },
+            "iv": {
+              "type": "string"
+            },
+            "data": {
+              "type": "string"
+            },
+            "tag": {
+              "type": "string"
+            }
+          }
         }
       }
     },

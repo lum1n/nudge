@@ -601,14 +601,23 @@ class Federation {
     const invited = Object.values(state.invites).some(
       (invite) => invite.expiresAt > now && sameHome(invite.home, home),
     );
-    if (guest === undefined && !invited) return problem(403, `No invite for ${address}`);
+    // The first player of a server set up from their home is theirs to join without an invite.
+    const started = guest === undefined ? before?.startedFrom : undefined;
+    if (guest === undefined && !invited && started === undefined)
+      return problem(403, `No invite for ${address}`);
     // Only once someone here vouched for the address: the home is fetched from what it says.
-    const pinned = guest ?? (await this.keysOf(home));
+    const pinned = guest ?? started?.keys ?? (await this.keysOf(home));
     if (pinned === undefined) return problem(502, `Could not reach the home of ${address}`);
     const checked = await this.checkFrom(home, pinned, signed, context);
     if (checked === undefined || !Value.Check(JoinClaim, checked.claim))
       return problem(401, "The home did not sign that");
     const { claim: claimed, keys } = checked;
+    // Set up while this server couldn't reach the home: it must have signed what setup was sent.
+    if (started?.proof !== undefined) {
+      const vouched = checkSigned(keys.signingKey, started.proof);
+      if (!Value.Check(OwnerClaim, vouched) || !sameHome(vouched.home, home))
+        return problem(403, `This server wasn't set up from the home of ${address}`);
+    }
     const fresh = await this.commit((state) => {
       for (const [nonce, expiresAt] of Object.entries(state.used))
         if (expiresAt < now) delete state.used[nonce];
@@ -620,6 +629,7 @@ class Federation {
     }, context);
     if (!fresh) return problem(401, "The assertion was used already");
     const joined = await nudge.players.addRoaming(home, claimed.profile.displayName, context);
+    if (started?.proof !== undefined) await nudge.players.confirmHome(before!.id, keys, context);
     const applies = await this.commit((state) => {
       const current = state.guests[joined.player.id];
       if (current === undefined)

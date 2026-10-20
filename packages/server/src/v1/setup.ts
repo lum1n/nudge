@@ -1,5 +1,6 @@
 import {
   type ClientInfo,
+  HomeRefused,
   type SetupChoices,
   type SetupCodes,
   type SetupResult,
@@ -79,24 +80,33 @@ export function setupRoutes(control: SetupControl): Hono {
           throw new HttpError(400, `The key didn't work: ${(error as Error).message}`);
         }
       }
-      const result = await control.complete(
-        {
-          assistant: body.assistant,
-          model:
-            local === undefined ? body.model : { provider: local.id, modelId: body.model.modelId },
-          ...(body.key === undefined || local !== undefined
-            ? {}
-            : { key: { provider: body.model.provider, key: body.key } }),
-          ...(local === undefined ? {} : { localProvider: localProvider(local) }),
-          you: body.you,
-          ...(body.publicUrl === undefined || isLoopback(body.publicUrl)
-            ? {}
-            : { server: { publicUrl: body.publicUrl.replace(/\/+$/, "") } }),
-          ...(body.backups === undefined ? {} : { backups: body.backups }),
-          ...(body.federation === undefined ? {} : { federation: body.federation }),
-        },
-        body.client,
-      );
+      let result: SetupResult;
+      try {
+        result = await control.complete(
+          {
+            assistant: body.assistant,
+            model:
+              local === undefined
+                ? body.model
+                : { provider: local.id, modelId: body.model.modelId },
+            ...(body.key === undefined || local !== undefined
+              ? {}
+              : { key: { provider: body.model.provider, key: body.key } }),
+            ...(local === undefined ? {} : { localProvider: localProvider(local) }),
+            you: body.you,
+            ...(body.publicUrl === undefined || isLoopback(body.publicUrl)
+              ? {}
+              : { server: { publicUrl: body.publicUrl.replace(/\/+$/, "") } }),
+            ...(body.backups === undefined ? {} : { backups: body.backups }),
+            ...(body.federation === undefined ? {} : { federation: body.federation }),
+            ...(body.home === undefined ? {} : { home: body.home }),
+          },
+          body.client,
+        );
+      } catch (error) {
+        if (error instanceof HomeRefused) throw new HttpError(403, error.message);
+        throw error;
+      }
       control.codes.claim();
       return result;
     });

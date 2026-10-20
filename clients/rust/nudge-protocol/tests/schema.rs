@@ -1065,6 +1065,13 @@ fn server_and_setup_bodies_match_the_schema() {
             public_url: Some("https://robin.exe.xyz".into()),
             backups: Some(true),
             federation: Some(true),
+            home: Some(Sealed {
+                v: 1,
+                epk: "e".into(),
+                iv: "i".into(),
+                data: "d".into(),
+                tag: "t".into(),
+            }),
         },
     );
     check(

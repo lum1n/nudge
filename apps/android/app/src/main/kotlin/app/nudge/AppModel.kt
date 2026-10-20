@@ -201,12 +201,23 @@ class AppModel(private val context: Context) {
 
     /**
      * Sets a server up with what the wizard asked (ADR 11), and signs in as its owner. Signed out,
-     * its new assistant becomes the person's home. Signed in at home, it is joined from there
-     * instead, so they keep one home; or, set up without federation, it stays standalone, and this
-     * device signs in as the person it made there.
+     * its new assistant becomes the person's home. Signed in at home, it is started from there:
+     * home vouches for the person, so its first player is them and its owner their address. With
+     * federation it is joined from home at once, landing on that player; without, it stays
+     * standalone, and can join the cluster later ([joinCluster]).
      */
-    suspend fun setUp(server: String, choices: SetupChoices): SetUpServer {
-        if (mutableSession.value != null && choices.federation) homeProblem()?.let { throw ServerProblem(it) }
+    suspend fun setUp(server: String, wizard: SetupChoices): SetUpServer {
+        if (mutableSession.value != null && wizard.federation) homeProblem()?.let { throw ServerProblem(it) }
+        var choices = wizard
+        val home = mutableSession.value
+        if (home != null && mutableMemberships.value?.address != null) {
+            try {
+                choices = choices.copy(homeAssertion = home.client.ownerAssertion(server.trimEnd('/')))
+            } catch (error: NudgeException) {
+                // A standalone server home can't vouch for becomes a home of its own instead.
+                if (choices.federation) throw error
+            }
+        }
         val done = nudge.ffi.setUp(server, choices, "nudge-android", "android")
         servers.remember(server, done.serverToken)
         if (mutableSession.value != null && !choices.federation) {
@@ -272,11 +283,20 @@ class AppModel(private val context: Context) {
      */
     suspend fun turnOnFederation() {
         val home = mutableSession.value ?: return
-        val setups = home.client.extensionSetups()
+        setFederationAddress(home.client, home.account.server.trimEnd('/'))
+        mutableMemberships.value = home.client.memberships()
+        mutableHomeFederation.value = true
+    }
+
+    /**
+     * Turns federation on for the assistant [client] is signed in to, at [server], the address
+     * other servers know it by. Needs the player to be an admin there.
+     */
+    private suspend fun setFederationAddress(client: NudgeClient, server: String) {
+        val setups = client.extensionSetups()
         val federation = setups.firstOrNull { it.from.endsWith("federation") }
             ?: throw ServerProblem(ServerProblem.Kind.NO_FEDERATION_EXTENSION)
-        val server = home.account.server.trimEnd('/')
-        home.client.saveExtensionSetups(
+        client.saveExtensionSetups(
             setups
                 .filter { it.configured || it.from == federation.from }
                 .map { setup ->
@@ -287,8 +307,48 @@ class AppModel(private val context: Context) {
                     }
                 },
         )
-        mutableMemberships.value = home.client.memberships()
-        mutableHomeFederation.value = true
+    }
+
+    /**
+     * Whether a standalone assistant was started from this person's home, so it can join their
+     * cluster: its player there is them, by their address. Independent ones never can.
+     */
+    fun canJoinCluster(place: Session): Boolean {
+        val address = mutableMemberships.value?.address ?: return false
+        return place.account.standalone && place.me.value?.player?.address == address
+    }
+
+    /**
+     * Joins a standalone assistant started from home to the person's cluster (ADR 11): turns its
+     * federation on at the address this device reaches it by, and joins it from home, which lands
+     * on the same player, so its rooms and history stay. From then on it is one of home's
+     * memberships, on all their devices.
+     */
+    suspend fun joinCluster(place: Session) {
+        val home = mutableSession.value ?: return
+        if (!canJoinCluster(place)) return
+        homeProblem()?.let { throw ServerProblem(it) }
+        val server = place.account.server
+        setFederationAddress(place.client, server.trimEnd('/'))
+        val old = tokens(place.account).get()
+        syncing.withLock {
+            val joined = joined(home, server, place.account.assistant)
+            mutablePlaces.value =
+                if (mutablePlaces.value.any { it === place }) mutablePlaces.value.map { if (it === place) joined else it }
+                else mutablePlaces.value + joined
+            savePlaces()
+        }
+        place.close()
+        // The standalone token is the same player's; the joined one replaced it.
+        if (old != null) {
+            val oldTokens = PreferencesTokens(preferences, "setup:${place.account.key}")
+            oldTokens.set(old)
+            val client = NudgeClient(config(place.account).copy(cachePath = null), oldTokens)
+            runCatching { client.signOut() }
+            oldTokens.set(null)
+            client.close()
+        }
+        syncPlaces()
     }
 
     /** Whether this device is signed in to that assistant, as home or joined from it. */

@@ -270,7 +270,7 @@ fun SetupScreen(model: AppModel, start: SetupStart, close: () -> Unit) {
                                     cluster ->
                                         "Joined from your home: its rooms show beside your home's, and your other devices list the server."
                                     else ->
-                                        "On its own, without federation: you sign in to it as its first person, and it never talks to your other servers."
+                                        "On its own, without federation for now: you are its first person, as yourself from home, so you can join it to your cluster later. Until then it never talks to your other servers."
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -320,6 +320,7 @@ fun SetupScreen(model: AppModel, start: SetupStart, close: () -> Unit) {
                                             publicUrl = server,
                                             backups = backups,
                                             federation = home == null || (cluster && !noCluster),
+                                            homeAssertion = null,
                                         ),
                                     )
                                     close()

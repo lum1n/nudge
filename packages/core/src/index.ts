@@ -98,10 +98,13 @@ export {
   serverOwnersFile,
 } from "./server/owners.ts";
 export {
+  HomeRefused,
+  homeAtSetup,
   ownerFromHome,
   type OwnerSignIn,
   ServerIdentity,
   serverIdentityDir,
+  type VouchedHome,
 } from "./server/identity.ts";
 export { openRecoveryKit, RecoveryKitError, sealRecoveryKit } from "./server/recovery.ts";
 export {

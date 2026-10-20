@@ -148,11 +148,21 @@ final class AppModel {
     }
 
     /// Sets a server up with what the wizard asked (ADR 11), and signs in as its owner. Signed out,
-    /// its new assistant becomes the person's home. Signed in at home, it is joined from there
-    /// instead, so they keep one home; or, set up without federation, it stays standalone, and
-    /// this device signs in as the person it made there.
+    /// its new assistant becomes the person's home. Signed in at home, it is started from there:
+    /// home vouches for the person, so its first player is them and its owner their address. With
+    /// federation it is joined from home at once, landing on that player; without, it stays
+    /// standalone, and can join the cluster later (`joinCluster`).
     func setUpServer(_ server: String, choices: SetupChoices) async throws -> SetUpServer {
         if session != nil, choices.federation, let problem = homeProblem { throw problem }
+        var choices = choices
+        if let home = session, memberships?.address != nil {
+            do {
+                choices.homeAssertion = try await home.client.ownerAssertion(server: server.trimmingCharacters(in: ["/"]))
+            } catch {
+                // A standalone server home can't vouch for becomes a home of its own instead.
+                if choices.federation { throw error }
+            }
+        }
         let done = try await setUp(server: server, choices: choices, clientName: "nudge-apple", platform: Push.platformName)
         servers.remember(server, token: done.serverToken)
         if session != nil, !choices.federation {
@@ -221,11 +231,19 @@ final class AppModel {
     /// Sets the address other servers know the home by: federation's `server`, turned on.
     private func setHomeAddress(_ server: String) async throws {
         guard let home = session else { return }
-        let setups = try await home.client.extensionSetups()
+        try await setFederationAddress(of: home.client, server)
+        memberships = try await home.client.memberships()
+        homeFederation = true
+    }
+
+    /// Turns federation on for the assistant `client` is signed in to, at `server`, the address
+    /// other servers know it by. Needs the player to be an admin there.
+    private func setFederationAddress(of client: NudgeClient, _ server: String) async throws {
+        let setups = try await client.extensionSetups()
         guard let federation = setups.first(where: { $0.from.hasSuffix("federation") }) else {
             throw ServerProblem.noFederationExtension
         }
-        _ = try await home.client.saveExtensionSetups(
+        _ = try await client.saveExtensionSetups(
             extensions: setups
                 .filter { $0.configured || $0.from == federation.from }
                 .map { setup in
@@ -233,8 +251,41 @@ final class AppModel {
                         ? setup.saved(enabled: true, settings: setup.settings.merging(["server": .string(server)]) { _, new in new }, rooms: setup.rooms)
                         : setup.saved(enabled: setup.enabled, settings: setup.settings, rooms: setup.rooms)
                 })
-        memberships = try await home.client.memberships()
-        homeFederation = true
+    }
+
+    /// Whether a standalone assistant was started from this person's home, so it can join their
+    /// cluster: its player there is them, by their address. Independent ones never can.
+    func canJoinCluster(_ place: Session) -> Bool {
+        guard place.account.isStandalone, let address = memberships?.address else { return false }
+        return place.me?.player.address == address
+    }
+
+    /// Joins a standalone assistant started from home to the person's cluster (ADR 11): turns its
+    /// federation on at the address this device reaches it by, and joins it from home, which lands
+    /// on the same player, so its rooms and history stay. From then on it is one of home's
+    /// memberships, on all their devices.
+    func joinCluster(_ place: Session) async throws {
+        guard let home = session, canJoinCluster(place) else { return }
+        if let homeProblem { throw homeProblem }
+        let server = place.account.server
+        try await setFederationAddress(of: place.client, server.trimmingCharacters(in: ["/"]))
+        try await ensureReachesHome(server)
+        let old = KeychainTokens(account: place.account.keychainAccount).get()
+        let joined = try await join(from: home, server: server, assistant: place.account.assistant)
+        if let at = places.firstIndex(where: { $0 === place }) {
+            places[at] = joined
+        } else {
+            places.append(joined)
+        }
+        savePlaces()
+        place.close()
+        // The standalone token is the same player's; the joined one replaced it in the keychain.
+        if let old {
+            var oldConfig = config(for: place.account)
+            oldConfig.cachePath = nil
+            try? await NudgeClient(config: oldConfig, tokens: MemoryTokens(old)).signOut()
+        }
+        await syncPlaces()
     }
 
     /// The home's name in its Wired network, `box` for `nudge.box.wired`, when its address is a

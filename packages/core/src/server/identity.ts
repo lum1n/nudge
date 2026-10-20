@@ -1,4 +1,5 @@
 import { dirname, join, resolve } from "node:path";
+import type { Static } from "typebox";
 import { Value } from "typebox/value";
 import { ASSERTION_TTL_MS, fetchKeys, type Keys, OwnerClaim, SKEW_MS } from "../federation/keys.ts";
 import {
@@ -10,6 +11,7 @@ import {
   type Sealed,
   type Signed,
 } from "../federation/signing.ts";
+import { addressOf, parseAddress, type PlayerHome } from "../identity/directory.ts";
 import { SecretStore } from "../secrets.ts";
 import type { ServerOwner, ServerOwners } from "./owners.ts";
 
@@ -63,6 +65,27 @@ export class ServerIdentity {
 /** Why an assertion signed no one in: 401 when it isn't a good one, 403 when it names no owner. */
 export type OwnerSignIn = { owner: ServerOwner } | { status: 401 | 403; error: string };
 
+/** What an owner assertion says, once opened: sealed for this server, for its key, and in time. */
+function openOwnerClaim(
+  assertion: unknown,
+  identity: ServerIdentity,
+  now: number,
+): { signed: Signed; claim: Static<typeof OwnerClaim> } | undefined {
+  if (!isSealed(assertion)) return undefined;
+  const signed = identity.open(assertion);
+  const claim = signed === undefined ? undefined : peek(signed);
+  if (
+    signed === undefined ||
+    !Value.Check(OwnerClaim, claim) ||
+    claim.audience.key !== identity.publicKeys().signingKey ||
+    now < claim.issuedAt - SKEW_MS ||
+    now > claim.expiresAt ||
+    claim.expiresAt - claim.issuedAt > ASSERTION_TTL_MS
+  )
+    return undefined;
+  return { signed, claim };
+}
+
 /**
  * The owner an assertion from their home names, once it checks out: sealed for this server, in
  * time, signed by that home's pinned keys (or keys its rotations lead to, then pinned instead, or
@@ -78,18 +101,9 @@ export async function ownerFromHome(
   }: { identity: ServerIdentity; owners: ServerOwners; fetch: typeof fetch; now?: number },
 ): Promise<OwnerSignIn> {
   const refused = { status: 401, error: "That assertion isn't good here" } as const;
-  if (!isSealed(assertion)) return refused;
-  const signed = identity.open(assertion);
-  const claim = signed === undefined ? undefined : peek(signed);
-  if (
-    signed === undefined ||
-    !Value.Check(OwnerClaim, claim) ||
-    claim.audience.key !== identity.publicKeys().signingKey ||
-    now < claim.issuedAt - SKEW_MS ||
-    now > claim.expiresAt ||
-    claim.expiresAt - claim.issuedAt > ASSERTION_TTL_MS
-  )
-    return refused;
+  const opened = openOwnerClaim(assertion, identity, now);
+  if (opened === undefined) return refused;
+  const { signed, claim } = opened;
   const owner = owners.ownerAt(claim.home);
   if (owner === undefined) return { status: 403, error: "Only the server's owners may do that" };
   const home = { server: claim.home.server, assistant: claim.home.assistant };
@@ -103,6 +117,55 @@ export async function ownerFromHome(
   if (!Value.Check(OwnerClaim, checked) || !owners.useNonce(checked.nonce, checked.expiresAt))
     return refused;
   return { owner };
+}
+
+/**
+ * Who a server set up from their home is started from (ADR 11): the home, and its keys when setup
+ * reached it; otherwise its signed assertion, for whoever reaches it first to check.
+ */
+export type VouchedHome = {
+  readonly home: PlayerHome;
+  readonly keys?: Keys;
+  readonly proof?: Signed;
+};
+
+/** An assertion from home that setup won't take. */
+export class HomeRefused extends Error {
+  override name = "HomeRefused";
+}
+
+/**
+ * The home an owner assertion sent with setup names, once it checks out: sealed for this server,
+ * in time, and used once. Its signature is checked against the home's keys when the home answers
+ * within a few seconds; a home this server can't reach yet, as one on a Wired network it isn't in,
+ * leaves the assertion as proof, checked when the person first joins from there. Throws when it
+ * isn't a good one, with `HomeRefused`.
+ */
+export async function homeAtSetup(
+  assertion: unknown,
+  {
+    identity,
+    owners,
+    fetch: fetcher,
+    now = Date.now(),
+  }: { identity: ServerIdentity; owners: ServerOwners; fetch: typeof fetch; now?: number },
+): Promise<VouchedHome> {
+  const opened = openOwnerClaim(assertion, identity, now);
+  if (opened === undefined) throw new HomeRefused("That assertion from home isn't good here");
+  const { signed, claim } = opened;
+  const home = {
+    server: claim.home.server,
+    assistant: claim.home.assistant,
+    playerId: claim.home.playerId,
+  };
+  if (parseAddress(addressOf(home)) === undefined)
+    throw new HomeRefused("That assertion from home names no address");
+  const keys = await fetchKeys(home, (url) => fetcher(url, { signal: AbortSignal.timeout(5_000) }));
+  if (keys !== undefined && !Value.Check(OwnerClaim, checkSigned(keys.signingKey, signed)))
+    throw new HomeRefused("The home did not sign that assertion");
+  if (!owners.useNonce(claim.nonce, claim.expiresAt))
+    throw new HomeRefused("That assertion from home was used already");
+  return keys === undefined ? { home, proof: signed } : { home, keys };
 }
 
 function isSealed(value: unknown): value is Sealed {

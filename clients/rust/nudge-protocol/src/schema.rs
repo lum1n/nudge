@@ -1559,6 +1559,11 @@ pub struct SetupRequest {
     /// it up standalone.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub federation: Option<bool>,
+    /// An owner assertion from the person's home, when they set it up signed in there: the server
+    /// is started from that home, so its first player is them and its owner their address, and it
+    /// can join their cluster later. Without one, the first player lives there, a new home.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub home: Option<Sealed>,
 }
 
 /// The tokens are shown only here: the player's for the assistant, the owner's for the server.

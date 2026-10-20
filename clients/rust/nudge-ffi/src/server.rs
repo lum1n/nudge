@@ -227,6 +227,10 @@ pub struct SetupChoices {
     /// Federation for its assistant, so it can be part of the person's cluster; false sets it up
     /// standalone.
     pub federation: bool,
+    /// An owner assertion from the person's home, from `NudgeClient::owner_assertion` with this
+    /// server, when they are signed in there: its first player is them, so it can join their
+    /// cluster later. `None` makes them a new home there.
+    pub home_assertion: Option<String>,
 }
 
 /// The tokens are shown only here: the player's for the assistant, the owner's for the server.
@@ -760,6 +764,14 @@ pub async fn set_up(
     client_name: String,
     platform: String,
 ) -> Result<SetupResult, NudgeError> {
+    let home = match choices.home_assertion {
+        None => None,
+        Some(assertion) => Some(serde_json::from_str::<p::Sealed>(&assertion).map_err(|error| {
+            NudgeError::Decode {
+                detail: format!("Not an assertion: {error}"),
+            }
+        })?),
+    };
     let body = p::SetupRequest {
         code: choices.code,
         client: client_info(&client_name, &platform),
@@ -776,6 +788,7 @@ pub async fn set_up(
         public_url: choices.public_url,
         backups: Some(choices.backups),
         federation: Some(choices.federation),
+        home,
     };
     let done = run(async move { nudge_client::set_up(&server, &body).await }).await?;
     Ok(SetupResult {

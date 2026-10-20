@@ -158,7 +158,7 @@ struct SetupView: View {
                             ? "Your home has no federation, so this server stays on its own: you sign in to it as its first person. Turn federation on at home to join servers to it."
                             : cluster
                                 ? "Joined from your home: its rooms show beside your home's, and your other devices list the server."
-                                : "On its own, without federation: you sign in to it as its first person, and it never talks to your other servers.")
+                                : "On its own, without federation for now: you are its first person, as yourself from home, so you can join it to your cluster later. Until then it never talks to your other servers.")
                     }
                 }
             }
@@ -312,7 +312,8 @@ struct SetupView: View {
                             yourName: you.trimmed,
                             publicUrl: server,
                             backups: backups,
-                            federation: model.session == nil || (cluster && model.homeProblem == nil)))
+                            federation: model.session == nil || (cluster && model.homeProblem == nil),
+                            homeAssertion: nil))
                     done()
                 }
             }

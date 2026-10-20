@@ -12,7 +12,16 @@ export type Player = {
   admin?: boolean;
   /** Set for someone whose home is another assistant, which vouches for them (ADR 10). */
   home?: PlayerHome;
+  /**
+   * Set for the first player of a server set up from their home, which vouched for them then
+   * (ADR 11): they join from it without an invite, landing on this player. `keys` are the home's
+   * when setup reached it; else `proof` is its signed owner assertion, checked on the first join.
+   */
+  startedFrom?: { keys?: { signingKey: string; encryptionKey: string }; proof?: Signed };
 };
+
+/** A JSON payload and its Ed25519 signature, as federation signs them. */
+type Signed = { payload: string; signature: string };
 
 /** Where a roaming player's home is: the server, the assistant on it, and their id there. */
 export type PlayerHome = {
