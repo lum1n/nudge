@@ -86,6 +86,7 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
     val platforms by session.pushPlatforms.collectAsStateWithLifecycle()
     val memberships by model.memberships.collectAsStateWithLifecycle()
     var leaving by remember { mutableStateOf<Membership?>(null) }
+    var signingOutOf by remember { mutableStateOf<Session?>(null) }
     var profile by rememberSaveable { mutableStateOf(false) }
     var speech by rememberSaveable { mutableStateOf(false) }
     val speechLanguages by model.dictation.languages.collectAsStateWithLifecycle()
@@ -276,6 +277,26 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                 )
             }
 
+            val standalone = places.filter { it.account.standalone }
+            if (standalone.isNotEmpty()) {
+                group(
+                    "On their own",
+                    standalone.map<Session, GroupRow> { place ->
+                        { shapes ->
+                            SegmentedListItem(
+                                onClick = {},
+                                onLongClick = { signingOutOf = place },
+                                onLongClickLabel = "Sign out",
+                                shapes = shapes,
+                                leadingContent = { Icon(Icons.Outlined.SmartToy, null) },
+                                overlineContent = { Text(java.net.URI(place.account.server).host ?: place.account.server) },
+                                supportingContent = { Text("Outside your cluster, without federation: you are a person of its own. Long press to sign out.") },
+                            ) { Text(place.account.assistantName) }
+                        }
+                    },
+                )
+            }
+
             // Home first, then the assistants joined from it where the player is an admin too.
             val admin = listOfNotNull(session.takeIf { me?.admin == true }) + administered
             admin.forEach { at ->
@@ -293,7 +314,7 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                             ) { Text("Extensions") }
                         }
                         // Without federation at home there are no memberships; joined ones have it.
-                        if (at !== session || memberships != null) {
+                        if (if (at === session) memberships != null else !at.account.standalone) {
                             add { shapes ->
                                 SegmentedListItem(
                                     onClick = { invitesOf = at },
@@ -508,6 +529,21 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                 }) { Text("Leave") }
             },
             dismissButton = { TextButton(onClick = { leaving = null }) { Text("Cancel") } },
+        )
+    }
+
+    signingOutOf?.let { place ->
+        AlertDialog(
+            onDismissRequest = { signingOutOf = null },
+            title = { Text("Sign out of ${place.account.assistantName}?") },
+            text = { Text("You'll need a new pairing code from it to sign in again.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    signingOutOf = null
+                    scope.launch { model.signOutOf(place) }
+                }) { Text("Sign out") }
+            },
+            dismissButton = { TextButton(onClick = { signingOutOf = null }) { Text("Cancel") } },
         )
     }
 

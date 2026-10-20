@@ -60,9 +60,11 @@ Commands:
   restore <file>     Unpack a backup into --to <dir> (--force overwrites files there);
                      --kit <file> takes the key from a recovery kit, as on a new machine
   kit [file]         Write a recovery kit: the backup key, sealed with a passphrase
-  owner [list|add <player>|remove <id>|token <player>]
+  owner [list|add <player or address>|remove <id>|token <player>]
                      The server's owners, who create, change and delete assistants and
-                     set model keys over /v1/server; token prints one for an owner
+                     set model keys over /v1/server: a player here, or someone's address
+                     (vegard@home.example/robin) whose home vouches for them; token
+                     prints one for an owner
   wired [status|on|add <url>|join <invite>]
                      The server's Wired, a network between Nudge servers with no open port at
                      home: on (at home), add a server's https address there for its invite,

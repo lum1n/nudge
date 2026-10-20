@@ -11,6 +11,7 @@ import {
   openAssistant,
   openRecoveryKit,
   ServerKeys,
+  ServerIdentity,
   ServerOwners,
   SetupCodes,
 } from "@nudge/core";
@@ -78,6 +79,7 @@ describe("setup mode", () => {
         assistants,
         keys,
         owners,
+        identity: new ServerIdentity(undefined),
         backupBeforeDelete: async () => "backup",
         testKey,
         backupKey: async () => Buffer.alloc(32, 7),

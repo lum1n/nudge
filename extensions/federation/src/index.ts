@@ -8,4 +8,4 @@ export {
   type Sealed,
   type Signed,
   signPayload,
-} from "./signing.ts";
+} from "@nudge/core";

@@ -6,13 +6,16 @@ import { fileURLToPath } from "node:url";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { fauxProvider } from "@earendil-works/pi-ai/providers/faux";
-import { Assistants, openAssistant, ServerKeys, ServerOwners } from "@nudge/core";
+import { Assistants, openAssistant, ServerIdentity, ServerKeys, ServerOwners } from "@nudge/core";
 import type { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp, type ServerControl } from "../src/index.ts";
 
 const context = BACKGROUND_CONTEXT;
 const client = { name: "test", platform: "node" };
+
+/** How the server reaches owners' homes, as each test says. */
+let homes: typeof fetch = async () => new Response(null, { status: 404 });
 
 describe("the server API", () => {
   let dir: string;
@@ -61,6 +64,8 @@ describe("the server API", () => {
       assistants,
       keys: new ServerKeys(undefined, () => []),
       owners: new ServerOwners(undefined),
+      identity: new ServerIdentity(undefined),
+      fetch: (input, init) => homes(input, init),
       backupBeforeDelete: async (config) => {
         backedUp.push(...config.assistants.map((a) => a.name));
         return "nudge-1.nudgebackup";
@@ -271,5 +276,46 @@ describe("the server API", () => {
       body: { assistant: "robin", playerId: "bo", admin: true },
     });
     expect((await call("GET", "/a/robin/admin/players", { token: bo })).status).toBe(200);
+  });
+
+  it("shows its own keys to anyone, and adds owners whose home is elsewhere by address", async () => {
+    const key = await call("GET", "/server/key");
+    expect(key).toMatchObject({
+      status: 200,
+      json: { signingKey: expect.any(String), encryptionKey: expect.any(String) },
+    });
+    const token = await signIn();
+    const add = (body: unknown) => call("POST", "/server/owners", { token, body });
+    expect((await add({})).status).toBe(400);
+    expect((await add({ address: "nobody" })).status).toBe(400);
+    // Their home must answer with its keys, to pin them.
+    homes = async () => new Response(null, { status: 404 });
+    expect((await add({ address: "vegard@home.example/robin" })).status).toBe(502);
+    homes = async (input) => {
+      expect(String(input)).toBe("https://home.example/v1/a/robin/ext/federation/key");
+      return Response.json({
+        server: "https://home.example",
+        assistant: "robin",
+        signingKey: "sign",
+        encryptionKey: "seal",
+      });
+    };
+    const added = await add({ address: "vegard@home.example/robin" });
+    expect(added).toMatchObject({
+      status: 201,
+      json: { address: "vegard@home.example/robin", addedAt: expect.any(Number) },
+    });
+    // Their home's keys stay on the server.
+    const listed = (await call("GET", "/server/owners", { token })).json;
+    expect(JSON.stringify(listed)).not.toContain("seal");
+    expect(
+      control.owners.ownerAt({
+        server: "https://home.example",
+        assistant: "robin",
+        playerId: "vegard",
+      })?.keys,
+    ).toEqual({ signingKey: "sign", encryptionKey: "seal" });
+    // They keep the server when every assistant here goes.
+    expect(control.owners.wouldLeaveNoOwner("robin")).toBe(false);
   });
 });

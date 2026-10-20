@@ -49,7 +49,16 @@ import nudge.ffi.reach
 import nudge.ffi.registerWithRelay
 
 /** An assistant the app is signed in to. */
-data class Account(val server: String, val assistant: String, val assistantName: String) {
+/**
+ * An assistant the app is signed in to. [standalone]: signed in as a person of its own there, not
+ * joined from home: a standalone server, outside the person's cluster, which home never names.
+ */
+data class Account(
+    val server: String,
+    val assistant: String,
+    val assistantName: String,
+    val standalone: Boolean = false,
+) {
     val key get() = "$server|$assistant"
 
     fun isAt(server: String, assistant: String) =
@@ -193,12 +202,22 @@ class AppModel(private val context: Context) {
     /**
      * Sets a server up with what the wizard asked (ADR 11), and signs in as its owner. Signed out,
      * its new assistant becomes the person's home. Signed in at home, it is joined from there
-     * instead, so they keep one home.
+     * instead, so they keep one home; or, set up without federation, it stays standalone, and this
+     * device signs in as the person it made there.
      */
     suspend fun setUp(server: String, choices: SetupChoices): SetUpServer {
-        if (mutableSession.value != null) homeProblem()?.let { throw ServerProblem(it) }
+        if (mutableSession.value != null && choices.federation) homeProblem()?.let { throw ServerProblem(it) }
         val done = nudge.ffi.setUp(server, choices, "nudge-android", "android")
         servers.remember(server, done.serverToken)
+        if (mutableSession.value != null && !choices.federation) {
+            val account = Account(server, done.assistant, choices.displayName ?: done.assistant, standalone = true)
+            tokens(account).set(done.token)
+            syncing.withLock {
+                open(account)?.let { mutablePlaces.value += it }
+                savePlaces()
+            }
+            return SetUpServer.Standalone
+        }
         if (mutableSession.value != null) {
             // The owner API invites and joins from here on; the setup player's token isn't needed.
             val setupAccount = Account(server, done.assistant, done.assistant)
@@ -277,7 +296,8 @@ class AppModel(private val context: Context) {
 
     /**
      * Joins an assistant on a server this device owns from home, as its owner: invites the home's
-     * address, joins, and makes that guest an admin there and an owner of the server.
+     * address, joins, and makes that guest an admin there; the server makes the person an owner by
+     * their address, so deleting the assistant later leaves them its owner.
      */
     suspend fun joinFromHome(server: String, assistant: String) {
         if (mutableSession.value == null) return
@@ -295,7 +315,7 @@ class AppModel(private val context: Context) {
         place.me.value = runCatching { place.client.me() }.getOrNull() ?: place.me.value
         // On the list at home, for the person's other devices; the next sync puts it there otherwise.
         mutableSession.value?.let { home ->
-            runCatching { home.client.addOwnedServer(server.trimEnd('/'), assistant) }
+            runCatching { home.client.addOwnedServer(server.trimEnd('/')) }
                 .onSuccess { listed -> servers.setAtHome(listed.map { it.server }.toSet()) }
         }
     }
@@ -365,15 +385,25 @@ class AppModel(private val context: Context) {
             }
             val owner = runCatching { servers.client(server).info().owner }.getOrNull() ?: continue
             if (owner.address != address) continue
-            runCatching { home.client.addOwnedServer(key, owner.assistant) }.onSuccess { atHome += key }
+            runCatching { home.client.addOwnedServer(key) }.onSuccess { atHome += key }
         }
         for (owned in listed) {
-            if (servers.owned.value.any { it.trimEnd('/') == owned.server }) continue
+            val local = servers.owned.value.firstOrNull { it.trimEnd('/') == owned.server }
+            if (local != null) {
+                // Still signed in, unless its token was revoked, as with the player it was through.
+                try {
+                    servers.client(local).info()
+                    continue
+                } catch (error: NudgeException) {
+                    if (error !is NudgeException.Status || error.status.toInt() != 401) continue
+                }
+            }
+            val server = local ?: owned.server
             try {
-                val assertion = home.client.ownerAssertion(owned.server, owned.assistant)
-                servers.client(owned.server).signInFromHome(owned.assistant, assertion)
+                val assertion = home.client.ownerAssertion(owned.server)
+                servers.client(server).signInFromHome(assertion)
                 // The client kept the token; remember the server.
-                servers.remember(owned.server, serverToken(owned.server) ?: continue)
+                servers.remember(server, serverToken(server) ?: continue)
             } catch (_: NudgeException) {
                 // Unreachable for now, or no longer theirs: tried again next time.
             }
@@ -485,6 +515,15 @@ class AppModel(private val context: Context) {
     }
 
     /** Stops the home sending the player's profile and memory there, and signs this device out of it. */
+    /** Signs this device out of a standalone assistant; nothing at home changes. */
+    suspend fun signOutOf(place: Session) {
+        syncing.withLock {
+            mutablePlaces.value = mutablePlaces.value.filter { it !== place }
+            savePlaces()
+        }
+        forget(place)
+    }
+
     suspend fun leave(membership: Membership) {
         val home = mutableSession.value ?: return
         home.client.leave(membership.server, membership.assistant)
@@ -550,7 +589,7 @@ class AppModel(private val context: Context) {
         syncing.withLock {
             if (mutableSession.value !== home) return
             val (gone, kept) = mutablePlaces.value.partition { place ->
-                before.any { it === place } &&
+                !place.account.standalone && before.any { it === place } &&
                     memberships.memberships.none { place.account.isAt(it.server, it.assistant) }
             }
             val added = memberships.memberships
@@ -572,7 +611,7 @@ class AppModel(private val context: Context) {
     suspend fun rejoinSignedOut() {
         val home = mutableSession.value ?: return
         syncing.withLock {
-            for (place in mutablePlaces.value.filter { it.signedOut }) {
+            for (place in mutablePlaces.value.filter { it.signedOut && !it.account.standalone }) {
                 val fresh = runCatching { joined(home, place.account.server, place.account.assistant) }.getOrNull() ?: continue
                 if (mutableSession.value !== home || mutablePlaces.value.none { it === place }) {
                     fresh.close()
@@ -645,11 +684,18 @@ class AppModel(private val context: Context) {
 
     private fun savedPlaces(): List<Account> = preferences.getStringSet(PLACES, emptySet()).orEmpty().mapNotNull { saved ->
         val parts = saved.split('\u0001')
-        if (parts.size == 3) Account(parts[0], parts[1], parts[2]) else null
+        when (parts.size) {
+            3 -> Account(parts[0], parts[1], parts[2])
+            4 -> Account(parts[0], parts[1], parts[2], standalone = parts[3] == STANDALONE)
+            else -> null
+        }
     }
 
     private fun savePlaces() {
-        val saved = mutablePlaces.value.map { "${it.account.server}\u0001${it.account.assistant}\u0001${it.account.assistantName}" }
+        val saved = mutablePlaces.value.map {
+            val kind = if (it.account.standalone) "\u0001$STANDALONE" else ""
+            "${it.account.server}\u0001${it.account.assistant}\u0001${it.account.assistantName}$kind"
+        }
         preferences.edit().putStringSet(PLACES, saved.toSet()).apply()
     }
 
@@ -671,6 +717,7 @@ class AppModel(private val context: Context) {
 
     private companion object {
         const val PLACES = "places"
+        const val STANDALONE = "standalone"
     }
 }
 
@@ -680,6 +727,8 @@ sealed interface SetUpServer {
     data object Home : SetUpServer
     /** Joined from home. */
     data object Joined : SetUpServer
+    /** Outside the person's cluster: signed in to as a person of its own. */
+    data object Standalone : SetUpServer
 }
 
 /** Why the home can't join an assistant on a server this device owns, or more on servers. */

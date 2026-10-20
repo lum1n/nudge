@@ -35,6 +35,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -94,6 +95,11 @@ fun SetupScreen(model: AppModel, start: SetupStart, close: () -> Unit) {
     var key by remember { mutableStateOf("") }
     var you by remember { mutableStateOf("") }
     var backups by remember { mutableStateOf(true) }
+    // Part of the person's cluster: federation on, and joined from home.
+    var cluster by remember { mutableStateOf(true) }
+    val home by model.session.collectAsState()
+    val homeFederation by model.homeFederation.collectAsState()
+    val noCluster = home != null && (homeFederation == false || model.homeProblem() != null)
     var busy by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
     val missing = homeProblem(model)
@@ -245,6 +251,31 @@ fun SetupScreen(model: AppModel, start: SetupStart, close: () -> Unit) {
                                 Modifier.padding(start = 12.dp),
                             )
                         }
+                        if (home != null) {
+                            Row(
+                                Modifier.fillMaxWidth().selectable(
+                                    selected = cluster && !noCluster,
+                                    enabled = !noCluster,
+                                    onClick = { cluster = !cluster },
+                                ),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Checkbox(checked = cluster && !noCluster, onCheckedChange = null, enabled = !noCluster)
+                                Text("Part of my cluster", Modifier.padding(start = 12.dp))
+                            }
+                            Text(
+                                when {
+                                    noCluster ->
+                                        "Your home has no federation, so this server stays on its own: you sign in to it as its first person. Turn federation on at home to join servers to it."
+                                    cluster ->
+                                        "Joined from your home: its rooms show beside your home's, and your other devices list the server."
+                                    else ->
+                                        "On its own, without federation: you sign in to it as its first person, and it never talks to your other servers."
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
                 problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -288,6 +319,7 @@ fun SetupScreen(model: AppModel, start: SetupStart, close: () -> Unit) {
                                             yourName = you.trim(),
                                             publicUrl = server,
                                             backups = backups,
+                                            federation = home == null || (cluster && !noCluster),
                                         ),
                                     )
                                     close()

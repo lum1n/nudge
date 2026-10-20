@@ -109,17 +109,13 @@ export class ServerApi {
 
   /**
    * Trades an assertion from the owner's home, from `Api.ownerAssertion`, for a server token, and
-   * stores it: for a device with no player token on `assistant`.
+   * stores it: for an owner whose home is elsewhere.
    */
-  async signInFromHome(
-    assistant: string,
-    assertion: Sealed,
-    client: ClientInfo,
-  ): Promise<ServerSessionResponse> {
+  async signInFromHome(assertion: Sealed, client: ClientInfo): Promise<ServerSessionResponse> {
     const session = await this.request<ServerSessionResponse>(
       "POST",
       "/session",
-      { assistant, client, assertion },
+      { client, assertion },
       null,
     );
     this.tokens.set(session.token);
@@ -188,6 +184,11 @@ export class ServerApi {
   /** Makes a player of one of the server's assistants an owner too. */
   addOwner(assistant: string, playerId: string): Promise<ServerOwner> {
     return this.request("POST", "/owners", { assistant, playerId });
+  }
+
+  /** Makes the person at `address` an owner too, vouched for by their home when they sign in. */
+  addOwnerAt(address: string): Promise<ServerOwner> {
+    return this.request("POST", "/owners", { address });
   }
 
   /** Refused (409) for the last owner. */

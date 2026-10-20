@@ -1063,12 +1063,16 @@ pub struct Sealed {
     pub tag: String,
 }
 
-/// A server the caller owns, kept at their home so all their devices see it (ADR 11): its
-/// address, and the assistant there through whose player they own it.
+/// A server, by its address: one the caller owns, or one to vouch for them to.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ServerRequest {
+    pub server: String,
+}
+
+/// A server the caller owns, kept at their home so all their devices see it (ADR 11).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct OwnedServer {
     pub server: String,
-    pub assistant: String,
     pub since: f64,
 }
 
@@ -1304,13 +1308,15 @@ pub struct SetProviderKeyRequest {
 #[serde(rename_all = "camelCase")]
 pub struct ServerOwner {
     pub id: String,
-    /// The assistant they are a player of, and their id there.
-    pub assistant: String,
-    pub player_id: String,
-    pub added_at: f64,
-    /// Their address, when their home is elsewhere and they joined `assistant` from there.
+    /// For someone who lives on one of the server's assistants: it, and their id there.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assistant: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub player_id: Option<String>,
+    /// For someone whose home is elsewhere, which vouches for them: their address.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub address: Option<String>,
+    pub added_at: f64,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -1318,24 +1324,38 @@ pub struct ServerOwnersResponse {
     pub owners: Vec<ServerOwner>,
 }
 
+/// A player of one of the server's assistants (`assistant` and `player_id`), or an `address`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AddOwnerRequest {
-    pub assistant: String,
-    pub player_id: String,
-    /// Makes them an admin of `assistant` too.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assistant: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub player_id: Option<String>,
+    /// Makes the player an admin of `assistant` too.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub admin: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub address: Option<String>,
 }
 
-/// Sent with the player's token of `assistant`, or with `assertion`: their home vouching for
-/// them to `assistant`, from the home's `POST /ext/federation/owner-assertion`.
+/// Sent with the player's token of `assistant`, or with `assertion` alone: their home vouching
+/// for them to this server, from the home's `POST /ext/federation/owner-assertion`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ServerSessionRequest {
-    pub assistant: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assistant: Option<String>,
     pub client: ClientInfo,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub assertion: Option<Sealed>,
+}
+
+/// The server's own keys, as homes seal owner assertions to it (ADR 11).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerKeyResponse {
+    pub signing_key: String,
+    pub encryption_key: String,
 }
 
 /// `token` is shown only here; keep it like a password.
@@ -1535,6 +1555,10 @@ pub struct SetupRequest {
     /// Nightly backups beside the config; default true.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub backups: Option<bool>,
+    /// Whether its assistant has federation, to be part of a cluster; default true. False sets
+    /// it up standalone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub federation: Option<bool>,
 }
 
 /// The tokens are shown only here: the player's for the assistant, the owner's for the server.

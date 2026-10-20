@@ -4816,18 +4816,25 @@
         }
       }
     },
-    "OwnedServer": {
+    "ServerRequest": {
       "type": "object",
       "required": [
-        "server",
-        "assistant",
-        "since"
+        "server"
       ],
       "properties": {
         "server": {
           "type": "string"
-        },
-        "assistant": {
+        }
+      }
+    },
+    "OwnedServer": {
+      "type": "object",
+      "required": [
+        "server",
+        "since"
+      ],
+      "properties": {
+        "server": {
           "type": "string"
         },
         "since": {
@@ -4847,14 +4854,10 @@
             "type": "object",
             "required": [
               "server",
-              "assistant",
               "since"
             ],
             "properties": {
               "server": {
-                "type": "string"
-              },
-              "assistant": {
                 "type": "string"
               },
               "since": {
@@ -6405,8 +6408,6 @@
       "type": "object",
       "required": [
         "id",
-        "assistant",
-        "playerId",
         "addedAt"
       ],
       "properties": {
@@ -6419,11 +6420,11 @@
         "playerId": {
           "type": "string"
         },
-        "addedAt": {
-          "type": "number"
-        },
         "address": {
           "type": "string"
+        },
+        "addedAt": {
+          "type": "number"
         }
       }
     },
@@ -6439,8 +6440,6 @@
             "type": "object",
             "required": [
               "id",
-              "assistant",
-              "playerId",
               "addedAt"
             ],
             "properties": {
@@ -6453,11 +6452,11 @@
               "playerId": {
                 "type": "string"
               },
-              "addedAt": {
-                "type": "number"
-              },
               "address": {
                 "type": "string"
+              },
+              "addedAt": {
+                "type": "number"
               }
             }
           }
@@ -6466,10 +6465,6 @@
     },
     "AddOwnerRequest": {
       "type": "object",
-      "required": [
-        "assistant",
-        "playerId"
-      ],
       "properties": {
         "assistant": {
           "type": "string"
@@ -6479,13 +6474,15 @@
         },
         "admin": {
           "type": "boolean"
+        },
+        "address": {
+          "type": "string"
         }
       }
     },
     "ServerSessionRequest": {
       "type": "object",
       "required": [
-        "assistant",
         "client"
       ],
       "properties": {
@@ -6537,6 +6534,21 @@
         }
       }
     },
+    "ServerKeyResponse": {
+      "type": "object",
+      "required": [
+        "signingKey",
+        "encryptionKey"
+      ],
+      "properties": {
+        "signingKey": {
+          "type": "string"
+        },
+        "encryptionKey": {
+          "type": "string"
+        }
+      }
+    },
     "ServerSessionResponse": {
       "type": "object",
       "required": [
@@ -6555,8 +6567,6 @@
           "type": "object",
           "required": [
             "id",
-            "assistant",
-            "playerId",
             "addedAt"
           ],
           "properties": {
@@ -6569,11 +6579,11 @@
             "playerId": {
               "type": "string"
             },
-            "addedAt": {
-              "type": "number"
-            },
             "address": {
               "type": "string"
+            },
+            "addedAt": {
+              "type": "number"
             }
           }
         }
@@ -6737,8 +6747,6 @@
           "type": "object",
           "required": [
             "id",
-            "assistant",
-            "playerId",
             "addedAt"
           ],
           "properties": {
@@ -6751,11 +6759,11 @@
             "playerId": {
               "type": "string"
             },
-            "addedAt": {
-              "type": "number"
-            },
             "address": {
               "type": "string"
+            },
+            "addedAt": {
+              "type": "number"
             }
           }
         },
@@ -7110,6 +7118,9 @@
         },
         "backups": {
           "type": "boolean"
+        },
+        "federation": {
+          "type": "boolean"
         }
       }
     },
@@ -7158,8 +7169,6 @@
           "type": "object",
           "required": [
             "id",
-            "assistant",
-            "playerId",
             "addedAt"
           ],
           "properties": {
@@ -7172,11 +7181,11 @@
             "playerId": {
               "type": "string"
             },
-            "addedAt": {
-              "type": "number"
-            },
             "address": {
               "type": "string"
+            },
+            "addedAt": {
+              "type": "number"
             }
           }
         }

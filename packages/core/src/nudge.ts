@@ -851,18 +851,6 @@ export class Nudge {
     }
   }
 
-  /**
-   * The player here an assertion from another assistant names, as the first extension that can
-   * check it says (federation, for a home vouching for an owner); undefined when none can.
-   */
-  async identify(assertion: unknown, context: Context): Promise<string | undefined> {
-    for (const { identify } of this.installed) {
-      const playerId = await identify?.(assertion, context);
-      if (playerId !== undefined) return playerId;
-    }
-    return undefined;
-  }
-
   async close(context: Context): Promise<void> {
     try {
       this.events.close();

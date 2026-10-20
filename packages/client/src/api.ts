@@ -267,9 +267,9 @@ export class Api {
     return (await this.request<OwnedServersResponse>("GET", "/ext/federation/servers")).servers;
   }
 
-  /** Keeps a server the caller owns at home: `assistant` is the one there they own it through. */
-  async addOwnedServer(place: PlaceRequest): Promise<OwnedServer[]> {
-    return (await this.request<OwnedServersResponse>("PUT", "/ext/federation/servers", place))
+  /** Keeps a server the caller owns at home. */
+  async addOwnedServer(server: string): Promise<OwnedServer[]> {
+    return (await this.request<OwnedServersResponse>("PUT", "/ext/federation/servers", { server }))
       .servers;
   }
 
@@ -279,10 +279,11 @@ export class Api {
     return this.request("DELETE", `/ext/federation/servers?${query}`);
   }
 
-  /** Has the caller's home vouch for them to a server they own, through `place`'s assistant. */
-  async ownerAssertion(place: PlaceRequest): Promise<Sealed> {
-    return (await this.request<AssertResponse>("POST", "/ext/federation/owner-assertion", place))
-      .assertion;
+  /** Has the caller's home vouch for them to a server they own, sealed for that server. */
+  async ownerAssertion(server: string): Promise<Sealed> {
+    return (
+      await this.request<AssertResponse>("POST", "/ext/federation/owner-assertion", { server })
+    ).assertion;
   }
 
   decide(room: string, approval: string, approve: boolean): Promise<Approval> {

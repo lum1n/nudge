@@ -118,11 +118,12 @@ pub struct ProviderKey {
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
 pub struct ServerOwner {
     pub id: String,
-    pub assistant: String,
-    pub player_id: String,
-    pub added_at: f64,
-    /// Their address, when their home is elsewhere and they joined `assistant` from there.
+    /// For someone who lives on one of the server's assistants: it, and their id there.
+    pub assistant: Option<String>,
+    pub player_id: Option<String>,
+    /// For someone whose home is elsewhere, which vouches for them: their address.
     pub address: Option<String>,
+    pub added_at: f64,
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
@@ -223,6 +224,9 @@ pub struct SetupChoices {
     /// The address the app reached the server at.
     pub public_url: Option<String>,
     pub backups: bool,
+    /// Federation for its assistant, so it can be part of the person's cluster; false sets it up
+    /// standalone.
+    pub federation: bool,
 }
 
 /// The tokens are shown only here: the player's for the assistant, the owner's for the server.
@@ -317,8 +321,8 @@ impl From<p::ServerOwner> for ServerOwner {
             id: o.id,
             assistant: o.assistant,
             player_id: o.player_id,
-            added_at: o.added_at,
             address: o.address,
+            added_at: o.added_at,
         }
     }
 }
@@ -422,19 +426,14 @@ impl ServerClient {
     }
 
     /// Trades an assertion from the owner's home, from `NudgeClient::owner_assertion`, for a server
-    /// token, and stores it: for a device with no player token on `assistant`.
-    pub async fn sign_in_from_home(
-        &self,
-        assistant: String,
-        assertion: String,
-    ) -> Result<ServerOwner, NudgeError> {
+    /// token, and stores it: for an owner whose home is elsewhere.
+    pub async fn sign_in_from_home(&self, assertion: String) -> Result<ServerOwner, NudgeError> {
         let assertion: p::Sealed =
             serde_json::from_str(&assertion).map_err(|error| NudgeError::Decode {
                 detail: format!("Not an assertion: {error}"),
             })?;
         let (api, info) = (self.api.clone(), self.info.clone());
-        let session =
-            run(async move { api.sign_in_from_home(&assistant, assertion, info).await }).await?;
+        let session = run(async move { api.sign_in_from_home(assertion, info).await }).await?;
         Ok(session.owner.into())
     }
 
@@ -573,6 +572,14 @@ impl ServerClient {
                 .await?
                 .into(),
         )
+    }
+
+    /// Makes the person at `address` an owner too, vouched for by their home when they sign in.
+    pub async fn add_owner_at(&self, address: String) -> Result<ServerOwner, NudgeError> {
+        let api = self.api.clone();
+        Ok(run(async move { api.add_owner_at(&address).await })
+            .await?
+            .into())
     }
 
     /// Invites `address` to an assistant here through its federation: the join link, for an
@@ -768,6 +775,7 @@ pub async fn set_up(
         },
         public_url: choices.public_url,
         backups: Some(choices.backups),
+        federation: Some(choices.federation),
     };
     let done = run(async move { nudge_client::set_up(&server, &body).await }).await?;
     Ok(SetupResult {

@@ -167,12 +167,6 @@ export type ExtensionParts = Omit<Extension, "name"> & {
    * `RETIRE_TIMEOUT_MS`.
    */
   readonly retire?: (context: Context) => void | Promise<void>;
-  /**
-   * Which player here an assertion from another assistant names, once the extension checked it,
-   * such as the home of an owner vouching for them (ADR 11); undefined when it can't tell. The
-   * assertion is whatever the caller sent, unchecked.
-   */
-  readonly identify?: (assertion: unknown, context: Context) => Promise<string | undefined>;
 };
 
 export type NudgeExtension<S extends TSchema = TSchema, P extends TSchema = TSchema> = {
@@ -265,7 +259,6 @@ export type SetUpExtension = {
   readonly onRoomEvent?: (event: RoomEvent) => void | Promise<void>;
   readonly close?: () => void | Promise<void>;
   readonly retire?: (context: Context) => void | Promise<void>;
-  readonly identify?: (assertion: unknown, context: Context) => Promise<string | undefined>;
 };
 
 /** Checks the settings and runs `setup`. A plain extension passes through. */
@@ -310,7 +303,6 @@ export async function setUpExtension(
     onRoomEvent,
     close,
     retire,
-    identify,
     ...parts
   } = await definition.setup({
     ...base,
@@ -335,7 +327,6 @@ export async function setUpExtension(
     ...(onRoomEvent === undefined ? {} : { onRoomEvent }),
     ...(close === undefined ? {} : { close }),
     ...(retire === undefined ? {} : { retire }),
-    ...(identify === undefined ? {} : { identify }),
   };
 }
 

@@ -912,15 +912,10 @@ impl NudgeClient {
         Ok(servers.into_iter().map(Into::into).collect())
     }
 
-    /// Keeps a server the player owns at home: `assistant` is the one there they own it through.
-    pub async fn add_owned_server(
-        &self,
-        server: String,
-        assistant: String,
-    ) -> Result<Vec<OwnedServer>, NudgeError> {
+    /// Keeps a server the player owns at home.
+    pub async fn add_owned_server(&self, server: String) -> Result<Vec<OwnedServer>, NudgeError> {
         let api = self.client.api().clone();
-        let place = p::PlaceRequest { server, assistant };
-        let servers = run(async move { api.add_owned_server(&place).await }).await?;
+        let servers = run(async move { api.add_owned_server(&server).await }).await?;
         Ok(servers.into_iter().map(Into::into).collect())
     }
 
@@ -930,16 +925,11 @@ impl NudgeClient {
         Ok(run(async move { api.remove_owned_server(&server).await }).await?)
     }
 
-    /// Has the player's home vouch for them to a server they own, through its assistant
-    /// `assistant`: an assertion for `ServerClient::sign_in_from_home`, good for five minutes.
-    pub async fn owner_assertion(
-        &self,
-        server: String,
-        assistant: String,
-    ) -> Result<String, NudgeError> {
+    /// Has the player's home vouch for them to a server they own, sealed for that server: an
+    /// assertion for `ServerClient::sign_in_from_home`, good for five minutes.
+    pub async fn owner_assertion(&self, server: String) -> Result<String, NudgeError> {
         let api = self.client.api().clone();
-        let place = p::PlaceRequest { server, assistant };
-        let sealed = run(async move { api.owner_assertion(&place).await }).await?;
+        let sealed = run(async move { api.owner_assertion(&server).await }).await?;
         Ok(serde_json::to_string(&sealed).expect("JSON values serialize"))
     }
 

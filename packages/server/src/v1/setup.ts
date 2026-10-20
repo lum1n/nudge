@@ -93,6 +93,7 @@ export function setupRoutes(control: SetupControl): Hono {
             ? {}
             : { server: { publicUrl: body.publicUrl.replace(/\/+$/, "") } }),
           ...(body.backups === undefined ? {} : { backups: body.backups }),
+          ...(body.federation === undefined ? {} : { federation: body.federation }),
         },
         body.client,
       );

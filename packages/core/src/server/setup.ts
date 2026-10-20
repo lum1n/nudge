@@ -23,6 +23,8 @@ export type SetupChoices = {
   readonly server?: ServerSettings;
   /** Nightly backups beside the config, the last 14 kept; default on. */
   readonly backups?: boolean;
+  /** Federation for the first assistant, at the public address; default on. Off: standalone. */
+  readonly federation?: boolean;
 };
 
 export type SetupResult = {
@@ -116,7 +118,10 @@ export async function completeSetup(
         ? {}
         : { displayName: choices.assistant.displayName }),
       model: choices.model,
-      extensions: defaultExtensions(target.configPath, choices.server?.publicUrl),
+      extensions:
+        choices.federation === false
+          ? []
+          : defaultExtensions(target.configPath, choices.server?.publicUrl),
     });
   } catch (error) {
     // Still not set up, so setup can be tried again.

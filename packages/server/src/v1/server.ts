@@ -8,10 +8,15 @@ import {
   ConfigError,
   DEFAULT_MODEL,
   defaultExtensions,
+  fetchKeys,
   LastOwner,
   type Nudge,
+  ownerFromHome,
+  parseAddress,
+  type PlayerHome,
   type NudgeConfig,
   sealRecoveryKit,
+  type ServerIdentity,
   type ServerKeys,
   type ServerOwner,
   type ServerOwners,
@@ -32,6 +37,7 @@ import {
   type ServerAssistantsResponse,
   type ServerInfoResponse,
   type ServerOwner as ShownOwner,
+  type ServerKeyResponse,
   type ServerOwnersResponse,
   ServerSessionRequest,
   type ServerSessionResponse,
@@ -57,6 +63,10 @@ export type ServerControl = {
   readonly assistants: Assistants;
   readonly keys: ServerKeys;
   readonly owners: ServerOwners;
+  /** The server's own keys, that owners' homes vouch for them to. */
+  readonly identity: ServerIdentity;
+  /** How the server reaches owners' homes for their keys; default the global `fetch`. */
+  readonly fetch?: typeof fetch;
   /** Backs up the assistant `config` holds before it is deleted; returns the backup's name. */
   backupBeforeDelete(config: NudgeConfig): Promise<string>;
   /** Sends one tiny request with the key, throwing with the provider's answer when it fails. */
@@ -103,34 +113,47 @@ type Env = { Variables: { owner: ServerOwner; clientId: string } };
 
 /**
  * The server's own API (ADR 11), to mount at `/v1/server`: for its owners, with a server token,
- * to create, change and delete assistants and to set the model keys. A player of one of its
- * assistants who is an owner trades their player token for a server token at `POST /session`.
+ * to create, change and delete assistants and to set the model keys. An owner who lives on one of
+ * its assistants trades their player token for a server token at `POST /session`; one whose home
+ * is elsewhere trades an assertion from it, sealed for the server's own keys at `GET /key`.
  */
 export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
   const { control } = options;
   const app = new Hono<Env>();
 
+  app.get("/key", (c) => c.json(control.identity.publicKeys() satisfies ServerKeyResponse));
+
   app.post("/session", async (c) => {
     const body = await readJson(c, ServerSessionRequest);
-    const nudge = control.assistants.running.get(body.assistant);
-    const token = bearer(c);
-    // A player's token, or their home vouching for them, the way joining from home works.
-    const playerId =
-      nudge === undefined
-        ? undefined
-        : token !== undefined
-          ? (await nudge.players.authenticate(token, context))?.player.id
-          : body.assertion !== undefined
-            ? await nudge.identify(body.assertion, context)
-            : undefined;
-    if (playerId === undefined) throw new HttpError(401, "Missing or unknown token");
-    const owner = control.owners.ownerOf(body.assistant, playerId);
-    if (owner === undefined) throw new HttpError(403, "Only the server's owners may do that");
+    let owner: ServerOwner | undefined;
+    if (body.assertion !== undefined) {
+      // Their home vouching for them, to this server itself.
+      const signedIn = await ownerFromHome(body.assertion, {
+        identity: control.identity,
+        owners: control.owners,
+        fetch: control.fetch ?? fetch,
+      });
+      if (!("owner" in signedIn)) throw new HttpError(signedIn.status, signedIn.error);
+      owner = signedIn.owner;
+    } else {
+      // The token of their player on the assistant they live on.
+      const nudge =
+        body.assistant === undefined ? undefined : control.assistants.running.get(body.assistant);
+      const token = bearer(c);
+      const credential =
+        nudge === undefined || token === undefined
+          ? undefined
+          : await nudge.players.authenticate(token, context);
+      if (credential === undefined) throw new HttpError(401, "Missing or unknown token");
+      const { player } = credential;
+      owner =
+        player.home === undefined
+          ? control.owners.ownerOf(body.assistant!, player.id)
+          : control.owners.ownerAt(player.home);
+      if (owner === undefined) throw new HttpError(403, "Only the server's owners may do that");
+    }
     const issued = control.owners.issue(owner.id, body.client);
-    return c.json(
-      { ...issued, owner: await shownOwner(control, owner) } satisfies ServerSessionResponse,
-      201,
-    );
+    return c.json({ ...issued, owner: shownOwner(owner) } satisfies ServerSessionResponse, 201);
   });
 
   const authenticate: MiddlewareHandler<Env> = async (c, next) => {
@@ -146,7 +169,7 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
   app.get("/", async (c) =>
     c.json({
       version: options.version,
-      owner: await shownOwner(control, c.var.owner),
+      owner: shownOwner(c.var.owner),
       assistants: await listAssistants(control),
       ...(control.updates === undefined ? {} : { updates: control.updates.state() }),
     } satisfies ServerInfoResponse),
@@ -318,22 +341,41 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
 
   app.get("/owners", async (c) =>
     c.json({
-      owners: await Promise.all(control.owners.list().map((owner) => shownOwner(control, owner))),
+      owners: control.owners.list().map(shownOwner),
     } satisfies ServerOwnersResponse),
   );
 
   app.post("/owners", async (c) => {
     const body = await readJson(c, AddOwnerRequest);
+    if (body.address !== undefined) {
+      const home = parseAddress(body.address);
+      if (home === undefined) throw new HttpError(400, `Not an address: ${body.address}`);
+      return c.json(shownOwner(await addFromHome(home)), 201);
+    }
+    if (body.assistant === undefined || body.playerId === undefined)
+      throw new HttpError(400, "Give an address, or an assistant and a player there");
     const nudge = control.assistants.running.get(body.assistant);
     if (nudge === undefined) throw new HttpError(404, `No assistant "${body.assistant}"`);
-    if ((await nudge.players.get(body.playerId, context)) === undefined)
+    const player = await nudge.players.get(body.playerId, context);
+    if (player === undefined)
       throw new HttpError(404, `No player "${body.playerId}" in ${body.assistant}`);
     if (body.admin === true) await nudge.players.setAdmin(body.playerId, true, context);
-    return c.json(
-      await shownOwner(control, control.owners.add(body.assistant, body.playerId)),
-      201,
-    );
+    // Someone who joined from their home elsewhere owns the server by their address.
+    const owner =
+      player.home === undefined
+        ? control.owners.add(body.assistant, body.playerId)
+        : await addFromHome(player.home);
+    return c.json(shownOwner(owner), 201);
   });
+
+  /** Makes the person at `home` an owner, with their home's keys pinned. */
+  const addFromHome = async (home: PlayerHome): Promise<ServerOwner> => {
+    const known = control.owners.ownerAt(home);
+    if (known !== undefined) return known;
+    const keys = await fetchKeys(home, control.fetch ?? fetch);
+    if (keys === undefined) throw new HttpError(502, `Could not reach ${home.server}`);
+    return control.owners.addAddress(addressOf(home), keys)!;
+  };
 
   app.delete("/owners/:id", (c) => {
     let removed: boolean;
@@ -413,10 +455,14 @@ function bearer(c: HonoContext): string | undefined {
   return /^Bearer\s+(\S+)$/i.exec(c.req.header("authorization") ?? "")?.[1];
 }
 
-/** An owner as the API shows them: with their address when their home is elsewhere. */
-async function shownOwner(control: ServerControl, owner: ServerOwner): Promise<ShownOwner> {
-  const home = (
-    await control.assistants.running.get(owner.assistant)?.players.get(owner.playerId, context)
-  )?.home;
-  return home === undefined ? owner : { ...owner, address: addressOf(home) };
+/** An owner as the API shows them: without their home's keys. */
+function shownOwner(owner: ServerOwner): ShownOwner {
+  const { id, addedAt, assistant, playerId, address } = owner;
+  return {
+    id,
+    addedAt,
+    ...(assistant === undefined ? {} : { assistant }),
+    ...(playerId === undefined ? {} : { playerId }),
+    ...(address === undefined ? {} : { address }),
+  };
 }

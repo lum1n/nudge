@@ -704,9 +704,14 @@ fn http_bodies_match_the_schema() {
         &OwnedServersResponse {
             servers: vec![OwnedServer {
                 server: "https://robin.exe.xyz".into(),
-                assistant: "robin".into(),
                 since: 1.0,
             }],
+        },
+    );
+    check(
+        "ServerRequest",
+        &ServerRequest {
+            server: "https://robin.exe.xyz".into(),
         },
     );
     check("JoinRequest", &JoinRequest { assertion: sealed });
@@ -803,10 +808,10 @@ fn server_and_setup_bodies_match_the_schema() {
     };
     let owner = ServerOwner {
         id: "o1".into(),
-        assistant: "robin".into(),
-        player_id: "ann".into(),
-        added_at: 1.0,
+        assistant: Some("robin".into()),
+        player_id: Some("ann".into()),
         address: Some("ann@home.example/robin".into()),
+        added_at: 1.0,
     };
     check(
         "AdminPlayer",
@@ -898,9 +903,10 @@ fn server_and_setup_bodies_match_the_schema() {
     check(
         "AddOwnerRequest",
         &AddOwnerRequest {
-            assistant: "robin".into(),
-            player_id: "bo".into(),
+            assistant: Some("robin".into()),
+            player_id: Some("bo".into()),
             admin: Some(true),
+            address: Some("ann@home.example/robin".into()),
         },
     );
     check(
@@ -918,7 +924,7 @@ fn server_and_setup_bodies_match_the_schema() {
     check(
         "ServerSessionRequest",
         &ServerSessionRequest {
-            assistant: "robin".into(),
+            assistant: Some("robin".into()),
             client: client.clone(),
             assertion: Some(Sealed {
                 v: 1,
@@ -927,6 +933,13 @@ fn server_and_setup_bodies_match_the_schema() {
                 data: "d".into(),
                 tag: "t".into(),
             }),
+        },
+    );
+    check(
+        "ServerKeyResponse",
+        &ServerKeyResponse {
+            signing_key: "s".into(),
+            encryption_key: "e".into(),
         },
     );
     check(
@@ -1051,6 +1064,7 @@ fn server_and_setup_bodies_match_the_schema() {
             },
             public_url: Some("https://robin.exe.xyz".into()),
             backups: Some(true),
+            federation: Some(true),
         },
     );
     check(

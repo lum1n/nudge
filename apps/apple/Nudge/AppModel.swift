@@ -12,6 +12,11 @@ struct Account: Codable, Equatable, Hashable {
     var assistant: String
     /// The assistant's display name, for titles.
     var assistantName: String
+    /// Signed in as a person of its own there, not joined from home: a standalone server, outside
+    /// the person's cluster, which home's memberships never name.
+    var standalone: Bool?
+
+    var isStandalone: Bool { standalone == true }
 
     var keychainAccount: String { "\(server)|\(assistant)" }
 
@@ -144,11 +149,23 @@ final class AppModel {
 
     /// Sets a server up with what the wizard asked (ADR 11), and signs in as its owner. Signed out,
     /// its new assistant becomes the person's home. Signed in at home, it is joined from there
-    /// instead, so they keep one home.
+    /// instead, so they keep one home; or, set up without federation, it stays standalone, and
+    /// this device signs in as the person it made there.
     func setUpServer(_ server: String, choices: SetupChoices) async throws -> SetUpServer {
-        if session != nil, let problem = homeProblem { throw problem }
+        if session != nil, choices.federation, let problem = homeProblem { throw problem }
         let done = try await setUp(server: server, choices: choices, clientName: "nudge-apple", platform: Push.platformName)
         servers.remember(server, token: done.serverToken)
+        if session != nil, !choices.federation {
+            let account = Account(
+                server: server, assistant: done.assistant,
+                assistantName: choices.displayName ?? done.assistant, standalone: true)
+            KeychainTokens(account: account.keychainAccount).set(token: done.token)
+            if let place = open(account) {
+                places.append(place)
+                savePlaces()
+            }
+            return .standalone
+        }
         if session != nil {
             // The owner API invites and joins from here on; the setup player's token isn't needed.
             var setupConfig = config(for: Account(server: server, assistant: done.assistant, assistantName: done.assistant))
@@ -268,8 +285,9 @@ final class AppModel {
     }
 
     /// Joins an assistant on a server this device owns from home, as its owner: invites the home's
-    /// address, joins, and makes that guest an admin there and an owner of the server. A home on
-    /// Wired needs the server in its network, which this does when it can.
+    /// address, joins, and makes that guest an admin there; the server makes the person an owner by
+    /// their address, so deleting the assistant later leaves them its owner. A home on Wired needs
+    /// the server in its network, which this does when it can.
     func joinFromHome(server: String, assistant: String) async throws {
         guard session != nil else { return }
         if let homeProblem { throw homeProblem }
@@ -288,8 +306,7 @@ final class AppModel {
         place.me = (try? await place.client.me()) ?? place.me
         // On the list at home, for the person's other devices; the next sync puts it there otherwise.
         if let home = session,
-            let listed = try? await home.client.addOwnedServer(
-                server: server.trimmingCharacters(in: ["/"]), assistant: assistant)
+            let listed = try? await home.client.addOwnedServer(server: server.trimmingCharacters(in: ["/"]))
         {
             servers.setAtHome(Set(listed.map(\.server)))
         }
@@ -358,17 +375,28 @@ final class AppModel {
             }
             guard let owner = try? await servers.client(server).info().owner, owner.address == address
             else { continue }
-            if (try? await home.client.addOwnedServer(server: key, assistant: owner.assistant)) != nil {
+            if (try? await home.client.addOwnedServer(server: key)) != nil {
                 atHome.insert(key)
             }
         }
-        for owned in listed where !servers.owned.contains(where: { $0.trimmingCharacters(in: ["/"]) == owned.server }) {
+        for owned in listed {
+            let local = servers.owned.first { $0.trimmingCharacters(in: ["/"]) == owned.server }
+            if let local {
+                // Still signed in, unless its token was revoked, as with the player it was through.
+                do {
+                    _ = try await servers.client(local).info()
+                    continue
+                } catch NudgeError.Status(401, _) {
+                } catch {
+                    continue
+                }
+            }
+            let server = local ?? owned.server
             do {
-                let assertion = try await home.client.ownerAssertion(server: owned.server, assistant: owned.assistant)
+                let assertion = try await home.client.ownerAssertion(server: owned.server)
                 // The client keeps the server token it gets.
-                _ = try await servers.client(owned.server).signInFromHome(
-                    assistant: owned.assistant, assertion: assertion)
-                servers.remember(owned.server)
+                _ = try await servers.client(server).signInFromHome(assertion: assertion)
+                servers.remember(server)
             } catch {
                 // Unreachable for now, or no longer theirs: tried again next time.
             }
@@ -494,6 +522,13 @@ final class AppModel {
         memberships = try? await home.client.memberships()
     }
 
+    /// Signs this device out of a standalone assistant; nothing at home changes.
+    func signOut(of place: Session) async {
+        places.removeAll { $0 === place }
+        savePlaces()
+        await forget(place)
+    }
+
     private func start(_ account: Account, client existing: NudgeClient? = nil) {
         guard let session = open(account, client: existing) else { return }
         self.session = session
@@ -549,7 +584,7 @@ final class AppModel {
         memberships = found
         homeFederation = true
         let gone = before.filter { place in
-            places.contains { $0 === place }
+            !place.account.isStandalone && places.contains { $0 === place }
                 && !found.memberships.contains { place.account.isAt(server: $0.server, assistant: $0.assistant) }
         }
         places.removeAll { place in gone.contains { $0 === place } }
@@ -575,7 +610,8 @@ final class AppModel {
     /// signed out.
     func rejoinSignedOut() async {
         guard let home = session else { return }
-        for place in places where place.signedOut && !rejoining.contains(place.account.keychainAccount) {
+        for place in places
+        where place.signedOut && !place.account.isStandalone && !rejoining.contains(place.account.keychainAccount) {
             let key = place.account.keychainAccount
             rejoining.insert(key)
             defer { rejoining.remove(key) }
@@ -672,6 +708,8 @@ enum SetUpServer: Equatable {
     case home
     /// Joined from home.
     case joined
+    /// Outside the person's cluster: signed in to as a person of its own.
+    case standalone
 }
 
 enum ServerProblem: LocalizedError {

@@ -59,6 +59,28 @@ export {
   Assistants,
   type AssistantsOptions,
 } from "./server/assistants.ts";
+export {
+  ASSERTION_TTL_MS,
+  federationEndpoint,
+  fetchKeys,
+  HomeBody,
+  type Keys,
+  KeysBody,
+  KeysClaim,
+  OwnerClaim,
+  SKEW_MS,
+} from "./federation/keys.ts";
+export {
+  checkSigned,
+  newKey,
+  open,
+  peek,
+  publicKeyOf,
+  seal,
+  type Sealed,
+  type Signed,
+  signPayload,
+} from "./federation/signing.ts";
 export { defaultExtensions } from "./server/defaults.ts";
 export { defaultConfigPath, serverHome } from "./server/home.ts";
 export {
@@ -75,6 +97,12 @@ export {
   ServerOwners,
   serverOwnersFile,
 } from "./server/owners.ts";
+export {
+  ownerFromHome,
+  type OwnerSignIn,
+  ServerIdentity,
+  serverIdentityDir,
+} from "./server/identity.ts";
 export { openRecoveryKit, RecoveryKitError, sealRecoveryKit } from "./server/recovery.ts";
 export {
   canonicalJson,

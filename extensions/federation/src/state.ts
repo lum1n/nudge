@@ -46,8 +46,11 @@ export type Membership = Place &
     origins?: Record<string, string>;
   };
 
-/** Here as a home: a server one of its players owns, through their player of `assistant` there. */
-export type OwnedServer = Place & { since: number };
+/**
+ * Here as a home: a server one of its players owns. Lists kept before servers had keys of their
+ * own (v0.6.0) also name an assistant there, which nothing reads.
+ */
+export type OwnedServer = { server: string; since: number };
 
 // Stored in a document, so plain JSON.
 export type FederationState = {

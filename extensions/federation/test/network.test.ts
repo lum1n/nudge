@@ -3,7 +3,14 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
 import { Api, ApiError, memoryTokens, ServerApi } from "@nudge/client";
-import { type Assistants, createNudge, type Nudge, ServerKeys, ServerOwners } from "@nudge/core";
+import {
+  type Assistants,
+  createNudge,
+  type Nudge,
+  ServerIdentity,
+  ServerKeys,
+  ServerOwners,
+} from "@nudge/core";
 import { type RunningServer, type ServerControl, serveNudge } from "@nudge/server";
 import { afterEach, describe, expect, it } from "vitest";
 import { federationExtension } from "../src/index.ts";
@@ -67,6 +74,7 @@ describe("federation over the network", () => {
             assistants: { running: assistants, list: async () => [] } as unknown as Assistants,
             keys: new ServerKeys(undefined, () => []),
             owners,
+            identity: new ServerIdentity(undefined),
             backupBeforeDelete: async () => "",
             testKey: async () => {},
             backupKey: async () => Buffer.alloc(32),
@@ -74,7 +82,7 @@ describe("federation over the network", () => {
     servers.push(
       await serveNudge({ assistants, port, ...(server === undefined ? {} : { server }) }),
     );
-    return { nudge, url };
+    return { nudge, url, assistants };
   };
 
   it("joins from home through the client, and manages the membership there", async () => {
@@ -129,23 +137,22 @@ describe("federation over the network", () => {
     const home = await start("robin");
     const owners = new ServerOwners(undefined);
     const away = await start("team", owners);
+    const other = await start("crew", new ServerOwners(undefined));
     const vegard = new Api({
       server: home.url,
       assistant: "robin",
       tokens: memoryTokens((await home.nudge.players.invite("Vegard", context)).token),
     });
-    const ann = new Api({
+    const ann = await away.nudge.players.invite("Ann", context);
+    const asAnn = new ServerApi({
       server: away.url,
-      assistant: "team",
-      tokens: memoryTokens((await away.nudge.players.invite("Ann", context)).token),
+      tokens: memoryTokens(owners.issue(owners.add("team", ann.player.id).id).token),
     });
     const address = `vegard@${home.url}/robin`;
-    const place = { server: away.url, assistant: "team" };
     const client = { name: "test", platform: "node" };
     const signIn = async (assertion: Awaited<ReturnType<Api["ownerAssertion"]>>) => {
       const tokens = memoryTokens();
       const session = await new ServerApi({ server: away.url, tokens }).signInFromHome(
-        "team",
         assertion,
         client,
       );
@@ -160,42 +167,39 @@ describe("federation over the network", () => {
 
     // The list, kept once per server, with a trailing slash or not.
     expect(await vegard.ownedServers()).toEqual([]);
-    const since = (await vegard.addOwnedServer({ ...place, server: `${away.url}/` }))[0]!.since;
-    expect(await vegard.addOwnedServer(place)).toEqual([{ ...place, since }]);
-    expect(await vegard.ownedServers()).toEqual([{ ...place, since }]);
+    const since = (await vegard.addOwnedServer(`${away.url}/`))[0]!.since;
+    expect(await vegard.addOwnedServer(away.url)).toEqual([{ server: away.url, since }]);
+    expect(await vegard.ownedServers()).toEqual([{ server: away.url, since }]);
 
-    // No player there with that home yet: the assertion names no one, and makes no membership.
-    expect(await status(signIn(await vegard.ownerAssertion(place)))).toBe(401);
+    // Not an owner there yet; no membership is made.
+    expect(await status(signIn(await vegard.ownerAssertion(away.url)))).toBe(403);
     expect((await vegard.memberships()).memberships).toEqual([]);
 
-    // Joined from home and made an owner, as the app does for a new server.
-    await ann.invite(address);
-    await new Api({ ...place, tokens: memoryTokens() }).join(await vegard.vouchFor(place));
-    // A player, but not yet an owner.
-    expect(await status(signIn(await vegard.ownerAssertion(place)))).toBe(403);
-    owners.add("team", "vegard");
+    // Made an owner by their address, with their home's keys pinned: no assistant there needed.
+    const added = await asAnn.addOwnerAt(address);
+    expect(added).toEqual({ id: expect.any(String), address, addedAt: expect.any(Number) });
+    expect(await asAnn.addOwnerAt(address)).toEqual(added);
 
-    const assertion = await vegard.ownerAssertion(place);
+    const assertion = await vegard.ownerAssertion(away.url);
     const session = await signIn(assertion);
-    expect(session.owner).toMatchObject({ assistant: "team", playerId: "vegard", address });
+    expect(session.owner).toEqual(added);
     expect(
       (await new ServerApi({ server: away.url, tokens: memoryTokens(session.token) }).info()).owner,
-    ).toMatchObject({ playerId: "vegard", address });
-    // Once only, and only for the assistant it names.
+    ).toEqual(added);
+    // Once only, and only on the server it was sealed for.
     expect(await status(signIn(assertion))).toBe(401);
-    const tokens = memoryTokens();
-    const wrong = new ServerApi({ server: away.url, tokens }).signInFromHome(
-      "nobody",
-      await vegard.ownerAssertion(place),
-      client,
-    );
-    expect(await status(wrong)).toBe(401);
+    expect(await status(signIn(await vegard.ownerAssertion(other.url)))).toBe(401);
     // A join assertion is no owner assertion.
+    const place = { server: away.url, assistant: "team" };
     expect(await status(signIn(await vegard.vouchFor(place)))).toBe(401);
 
-    // Left there, they are still its owner, and their home still vouches for them.
-    await vegard.leave(place);
-    expect((await signIn(await vegard.ownerAssertion(place))).owner.playerId).toBe("vegard");
+    // Joined there, then the assistant deleted: they are still its owner.
+    await new Api({ ...place, tokens: memoryTokens(ann.token) }).invite(address);
+    await new Api({ ...place, tokens: memoryTokens() }).join(await vegard.vouchFor(place));
+    await away.nudge.retire(context);
+    away.assistants.delete("team");
+    owners.forgetAssistant("team");
+    expect((await signIn(await vegard.ownerAssertion(away.url))).owner).toEqual(added);
 
     await vegard.removeOwnedServer(away.url);
     expect(await vegard.ownedServers()).toEqual([]);

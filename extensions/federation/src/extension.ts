@@ -3,19 +3,32 @@ import type { Context } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
   addressOf,
+  ASSERTION_TTL_MS,
   type Change,
+  checkSigned,
   defineNudgeExtension,
   type ExtensionHost,
+  federationEndpoint,
+  fetchKeys,
   type ExtensionRoute,
   InvalidProfile,
   isWiredHost,
   MAX_FACTS,
+  newKey,
   type Nudge,
+  open,
   parseAddress,
+  peek,
   PlayerMemoryDoc,
   type Profile,
   ProfileDoc,
+  publicKeyOf,
   sameHome,
+  seal,
+  type Sealed,
+  type Signed,
+  signPayload,
+  SKEW_MS,
   Type,
 } from "@nudge/core";
 import {
@@ -32,6 +45,8 @@ import {
   type OwnedServersResponse,
   type PairResponse,
   Sealed as SealedBody,
+  ServerKeyResponse,
+  ServerRequest,
 } from "@nudge/protocol";
 import type { Static, TSchema } from "typebox";
 import { Value } from "typebox/value";
@@ -50,17 +65,6 @@ import {
   ProfileClaim,
   RememberClaim,
 } from "./messages.ts";
-import {
-  checkSigned,
-  newKey,
-  open,
-  peek,
-  publicKeyOf,
-  seal,
-  type Sealed,
-  type Signed,
-  signPayload,
-} from "./signing.ts";
 import {
   emptyState,
   FederationDoc,
@@ -86,12 +90,8 @@ const Settings = Type.Object({
 
 /** Where the keys are kept in the extension's secrets. */
 const SCOPE = "assistant";
-/** How long a join assertion works. */
-const JOIN_TTL_MS = 5 * 60_000;
 /** How long an invite waits for its person. */
 const INVITE_TTL_MS = 7 * 24 * 60 * 60_000;
-/** How far apart two hosts' clocks may be. */
-const SKEW_MS = 60_000;
 /** How many rotations `GET /key` shows, and how many old encryption keys still open messages. */
 const MAX_ROTATIONS = 8;
 /** Sealed bodies carry a profile, with its avatar, or a whole memory. */
@@ -130,7 +130,6 @@ export function federationExtension(options: FederationOptions = {}) {
         routes: federation.routes(),
         close: () => federation.close(),
         retire: (context) => federation.retire(context),
-        identify: (assertion, context) => federation.identify(assertion, context),
       };
     },
   });
@@ -345,14 +344,14 @@ class Federation {
         path: "/servers",
         auth: "player",
         handle: async (request, { player, context }) => {
-          const place = trimmedPlace(await read(request, PlaceBody));
+          const server = trimmed((await read(request, ServerRequest)).server);
           if (player!.home !== undefined)
             return problem(403, "Only people who live here keep servers here");
           const servers = await this.commit((state) => {
             const all = (state.servers ??= {});
-            const list = (all[player!.id] ?? []).filter((owned) => owned.server !== place.server);
-            const known = all[player!.id]?.find((owned) => owned.server === place.server);
-            all[player!.id] = [...list, { ...place, since: known?.since ?? this.host.now() }].sort(
+            const list = (all[player!.id] ?? []).filter((owned) => owned.server !== server);
+            const known = all[player!.id]?.find((owned) => owned.server === server);
+            all[player!.id] = [...list, { server, since: known?.since ?? this.host.now() }].sort(
               (a, b) => a.server.localeCompare(b.server),
             );
             return all[player!.id]!.map(shownServer);
@@ -366,6 +365,8 @@ class Federation {
         auth: "player",
         handle: async (request, { player, context }) => {
           const server = trimmed(new URL(request.url).searchParams.get("server") ?? "");
+          if (player!.home !== undefined)
+            return problem(403, "Only people who live here keep servers here");
           const removed = await this.commit((state) => {
             const list = state.servers?.[player!.id];
             if (list === undefined || !list.some((owned) => owned.server === server)) return false;
@@ -380,10 +381,10 @@ class Federation {
         path: "/owner-assertion",
         auth: "player",
         handle: async (request, { player }) => {
-          const audience = trimmedPlace(await read(request, PlaceBody));
+          const server = trimmed((await read(request, ServerRequest)).server);
           if (player!.home !== undefined)
             return problem(403, "Only people who live here can be vouched for");
-          return this.assertOwner(player!.id, audience);
+          return this.assertOwner(player!.id, server);
         },
       },
       // As a place to join.
@@ -471,7 +472,7 @@ class Federation {
       audience,
       profile,
       issuedAt: now,
-      expiresAt: now + JOIN_TTL_MS,
+      expiresAt: now + ASSERTION_TTL_MS,
       nonce: randomUUID(),
     } satisfies Static<typeof JoinClaim>);
     // Kept before they join: the place refuses messages for someone who never did.
@@ -495,61 +496,40 @@ class Federation {
   }
 
   /**
-   * Signs that `playerId` lives here, for a server they own to give them a server token,
-   * encrypted for the assistant there they own it through. Nothing is kept: the server checks
-   * that they are an owner.
+   * Signs that `playerId` lives here, for a server they own to give them a server token (ADR 11):
+   * sealed for that server's own keys, so no assistant there is needed. Nothing is kept: the
+   * server checks that they are an owner.
    */
-  private async assertOwner(playerId: string, audience: Place): Promise<Response> {
-    if (samePlace(audience, this.self)) return problem(400, "That is this assistant");
-    if (!secureServer(audience.server) && secureServer(this.self.server))
-      return problem(400, "Other assistants are reached over HTTPS");
-    const keys = await this.keysOf(audience);
-    if (keys === undefined) return problem(502, `Could not reach ${audience.server}`);
+  private async assertOwner(playerId: string, server: string): Promise<Response> {
+    if (!secureServer(server) && secureServer(this.self.server))
+      return problem(400, "Other servers are reached over HTTPS");
+    const keys = await this.serverKeys(server);
+    if (keys === undefined) return problem(502, `Could not reach ${server}`);
     const now = this.host.now();
     const assertion = seal(this.signingKey, keys.encryptionKey, {
       kind: "nudge.owner",
       home: { ...this.self, playerId },
-      audience,
+      audience: { server, key: keys.signingKey },
       issuedAt: now,
-      expiresAt: now + JOIN_TTL_MS,
+      expiresAt: now + ASSERTION_TTL_MS,
       nonce: randomUUID(),
     } satisfies Static<typeof OwnerClaim>);
     return Response.json({ assertion } satisfies AssertResponse);
   }
 
-  /**
-   * The player here an owner assertion names, once their home's signature checks out and it
-   * wasn't used before (ADR 11). The home's keys are the ones pinned when they joined, or, once
-   * they left, fetched from it: the player here already has that home.
-   */
-  async identify(assertion: unknown, context: Context): Promise<string | undefined> {
-    if (!Value.Check(SealedBody, assertion)) return undefined;
-    const signed = this.open(assertion);
-    if (signed === undefined) return undefined;
-    const claim = peek(signed);
-    if (!Value.Check(OwnerClaim, claim) || !samePlace(claim.audience, this.self)) return undefined;
-    const now = this.host.now();
-    if (
-      now < claim.issuedAt - SKEW_MS ||
-      now > claim.expiresAt ||
-      claim.expiresAt - claim.issuedAt > JOIN_TTL_MS
-    )
+  /** A server's own keys, from its `GET /v1/server/key`. */
+  private async serverKeys(server: string): Promise<Keys | undefined> {
+    try {
+      const response = await this.fetch(`${server}/v1/server/key`);
+      if (!response.ok) return undefined;
+      const body: unknown = await response.json();
+      return Value.Check(ServerKeyResponse, body)
+        ? { signingKey: body.signingKey, encryptionKey: body.encryptionKey }
+        : undefined;
+    } catch (error) {
+      this.report(error);
       return undefined;
-    const player = await this.nudge().players.byHome(claim.home, context);
-    if (player === undefined) return undefined;
-    const pinned = (await this.state(context)).guests[player.id] ?? (await this.keysOf(claim.home));
-    if (pinned === undefined) return undefined;
-    const checked = await this.checkFrom(claim.home, pinned, signed, context);
-    const claimed = checked?.claim;
-    if (!Value.Check(OwnerClaim, claimed)) return undefined;
-    const fresh = await this.commit((state) => {
-      for (const [nonce, expiresAt] of Object.entries(state.used))
-        if (expiresAt < now) delete state.used[nonce];
-      if (claimed.nonce in state.used) return false;
-      state.used[claimed.nonce] = claimed.expiresAt;
-      return true;
-    }, context);
-    return fresh ? player.id : undefined;
+    }
   }
 
   /** Starts or stops carrying a player's own memory to one place they joined. */
@@ -609,7 +589,7 @@ class Federation {
     if (
       now < claim.issuedAt - SKEW_MS ||
       now > claim.expiresAt ||
-      claim.expiresAt - claim.issuedAt > JOIN_TTL_MS
+      claim.expiresAt - claim.issuedAt > ASSERTION_TTL_MS
     )
       return problem(401, "The assertion has expired");
     const home = claim.home;
@@ -1114,7 +1094,7 @@ class Federation {
    */
   private async send(place: Place, keys: Keys, claim: unknown): Promise<boolean | "gone"> {
     try {
-      const response = await this.fetch(endpoint(place, "/inbox"), {
+      const response = await this.fetch(federationEndpoint(place, "/inbox"), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ message: seal(this.signingKey, keys.encryptionKey, claim) }),
@@ -1177,35 +1157,11 @@ class Federation {
    * The keys `place` publishes, if it answers for itself. With `from`, only when its rotations
    * lead from that signing key to them.
    */
-  private async keysOf(place: Place, from?: string): Promise<Keys | undefined> {
-    let body: unknown;
-    try {
-      const response = await this.fetch(endpoint(place, "/key"));
-      if (!response.ok) return undefined;
-      body = await response.json();
-    } catch (error) {
-      this.report(error);
-      return undefined;
-    }
-    if (!Value.Check(KeysBody, body) || !samePlace(trimmedPlace(body), placeOf(place)))
-      return undefined;
-    const keys = { signingKey: body.signingKey, encryptionKey: body.encryptionKey };
-    if (from === undefined || from === keys.signingKey) return keys;
-    let signer: string | undefined;
-    let last: Keys | undefined;
-    for (const rotation of body.rotations ?? []) {
-      // The chain starts where the pinned key signed, and goes on unbroken from there.
-      const claim = checkSigned(signer ?? from, rotation);
-      if (!Value.Check(KeysClaim, claim) || !samePlace(trimmedPlace(claim), placeOf(place))) {
-        if (signer === undefined) continue;
-        return undefined;
-      }
-      signer = claim.signingKey;
-      last = { signingKey: claim.signingKey, encryptionKey: claim.encryptionKey };
-    }
-    return last?.signingKey === keys.signingKey && last.encryptionKey === keys.encryptionKey
-      ? keys
-      : undefined;
+  private keysOf(place: Place, from?: string): Promise<Keys | undefined> {
+    return fetchKeys(placeOf(place), this.fetch, {
+      ...(from === undefined ? {} : { from }),
+      report: this.report,
+    });
   }
 
   private nextSignedAt(): number {
@@ -1284,7 +1240,7 @@ function placeOf(place: Place): Place {
 
 /** A membership as its player sees it: without the keys. */
 function shownServer(owned: OwnedServer): ShownOwnedServer {
-  return { server: owned.server, assistant: owned.assistant, since: owned.since };
+  return { server: owned.server, since: owned.since };
 }
 
 function shown(membership: Membership): ShownMembership {
@@ -1294,11 +1250,6 @@ function shown(membership: Membership): ShownMembership {
     since: membership.since,
     carryMemory: membership.carry,
   };
-}
-
-/** The URL of the federation route `path` of the assistant at `place`. */
-function endpoint(place: Place, path: string): string {
-  return `${place.server}/v1/a/${encodeURIComponent(place.assistant)}/ext/federation${path}`;
 }
 
 function toInvite(invite: Invite): ShownInvite {

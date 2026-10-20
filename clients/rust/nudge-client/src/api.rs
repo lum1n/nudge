@@ -498,11 +498,18 @@ impl Api {
         Ok(response.servers)
     }
 
-    /// Keeps a server the caller owns at home: `place.assistant` is the one there they own it
-    /// through.
-    pub async fn add_owned_server(&self, place: &PlaceRequest) -> Result<Vec<OwnedServer>, ApiError> {
+    /// Keeps a server the caller owns at home.
+    pub async fn add_owned_server(&self, server: &str) -> Result<Vec<OwnedServer>, ApiError> {
+        let body = ServerRequest {
+            server: server.to_owned(),
+        };
         let response: OwnedServersResponse = self
-            .request(Method::PUT, &["ext", "federation", "servers"], &[], Some(place))
+            .request(
+                Method::PUT,
+                &["ext", "federation", "servers"],
+                &[],
+                Some(&body),
+            )
             .await?;
         Ok(response.servers)
     }
@@ -518,14 +525,17 @@ impl Api {
         .await
     }
 
-    /// Has the caller's home vouch for them to a server they own, through `place`'s assistant.
-    pub async fn owner_assertion(&self, place: &PlaceRequest) -> Result<Sealed, ApiError> {
+    /// Has the caller's home vouch for them to a server they own, sealed for that server.
+    pub async fn owner_assertion(&self, server: &str) -> Result<Sealed, ApiError> {
+        let body = ServerRequest {
+            server: server.to_owned(),
+        };
         let response: AssertResponse = self
             .request(
                 Method::POST,
                 &["ext", "federation", "owner-assertion"],
                 &[],
-                Some(place),
+                Some(&body),
             )
             .await?;
         Ok(response.assertion)

@@ -1,15 +1,9 @@
-import { Type } from "@nudge/core";
+import { HomeBody, Type } from "@nudge/core";
 import { PlaceRequest } from "@nudge/protocol";
 
 /** What goes between assistants. The bodies of the routes apps call are in `@nudge/protocol`. */
 
 export const PlaceBody = PlaceRequest;
-
-const HomeBody = Type.Object({
-  server: Type.String(),
-  assistant: Type.String(),
-  playerId: Type.String(),
-});
 
 export const ProfileBody = Type.Object({
   displayName: Type.String({ minLength: 1 }),
@@ -33,29 +27,7 @@ export const FactBody = Type.Object({
   ),
 });
 
-const SignedBody = Type.Object({ payload: Type.String(), signature: Type.String() });
-
-/** An assistant's old signing key → anyone: these are its keys now. */
-export const KeysClaim = Type.Object({
-  kind: Type.Literal("nudge.keys"),
-  server: Type.String(),
-  assistant: Type.String(),
-  signingKey: Type.String(),
-  encryptionKey: Type.String(),
-  issuedAt: Type.Number(),
-});
-
-/**
- * The keys an assistant publishes at `GET /key`, with its latest rotations, oldest first: each a
- * `KeysClaim` signed by the signing key before it, so whoever pinned an old key can follow it here.
- */
-export const KeysBody = Type.Object({
-  server: Type.String(),
-  assistant: Type.String(),
-  signingKey: Type.String(),
-  encryptionKey: Type.String(),
-  rotations: Type.Optional(Type.Array(SignedBody)),
-});
+export { KeysBody, KeysClaim, OwnerClaim } from "@nudge/core";
 
 /** Home → app → the assistant joined: who they are, and their profile. */
 export const JoinClaim = Type.Object({
@@ -63,19 +35,6 @@ export const JoinClaim = Type.Object({
   home: HomeBody,
   audience: PlaceBody,
   profile: ProfileBody,
-  issuedAt: Type.Number(),
-  expiresAt: Type.Number(),
-  nonce: Type.String({ minLength: 16 }),
-});
-
-/**
- * Home → app → a server one of its people owns: they are who the owner there is, for a server
- * token (ADR 11). Unlike a join, it makes no membership.
- */
-export const OwnerClaim = Type.Object({
-  kind: Type.Literal("nudge.owner"),
-  home: HomeBody,
-  audience: PlaceBody,
   issuedAt: Type.Number(),
   expiresAt: Type.Number(),
   nonce: Type.String({ minLength: 16 }),

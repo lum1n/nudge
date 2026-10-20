@@ -17,6 +17,7 @@ struct SettingsView: View {
     @State private var notifications: UNAuthorizationStatus?
     @State private var problem: String?
     @State private var confirmSignOut = false
+    @State private var signingOutOf: Session?
     @State private var leaving: Membership?
 
     var body: some View {
@@ -72,6 +73,26 @@ struct SettingsView: View {
                         Text("An admin of another assistant invites you by your address; the invite opens here. What only you see stays home.")
                     }
                 }
+                let standalone = model.places.filter(\.account.isStandalone)
+                if !standalone.isEmpty {
+                    Section {
+                        ForEach(standalone, id: \.account.keychainAccount) { place in
+                            LabeledContent(place.account.assistantName, value: place.account.server)
+                                .contextMenu {
+                                    Button("Sign out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
+                                        signingOutOf = place
+                                    }
+                                }
+                                .swipeActions {
+                                    Button("Sign out", role: .destructive) { signingOutOf = place }
+                                }
+                        }
+                    } header: {
+                        Text("On their own")
+                    } footer: {
+                        Text("Servers outside your cluster, without federation: you are a person of their own there, not joined from home.")
+                    }
+                }
                 if model.me?.admin == true {
                     Section {
                         NavigationLink { ExtensionsView(client: client) } label: {
@@ -95,8 +116,11 @@ struct SettingsView: View {
                         NavigationLink { ExtensionsView(client: place.client) } label: {
                             Label("Extensions", systemImage: "puzzlepiece.extension")
                         }
-                        NavigationLink { InvitesView(client: place.client, assistantName: place.account.assistantName) } label: {
-                            Label("Invites", systemImage: "person.badge.plus")
+                        // Invites go through federation, which a standalone assistant hasn't.
+                        if !place.account.isStandalone {
+                            NavigationLink { InvitesView(client: place.client, assistantName: place.account.assistantName) } label: {
+                                Label("Invites", systemImage: "person.badge.plus")
+                            }
                         }
                     } header: {
                         Text("\(place.account.assistantName) on \(URL(string: place.account.server)?.host() ?? place.account.server)")
@@ -207,6 +231,18 @@ struct SettingsView: View {
                 }
             } message: {
                 Text("Your home stops sending it your profile and memory, and this device signs out of it. You stay a member there.")
+            }
+            .confirmationDialog(
+                "Sign out of \(signingOutOf?.account.assistantName ?? "")?",
+                isPresented: Binding(get: { signingOutOf != nil }, set: { if !$0 { signingOutOf = nil } })
+            ) {
+                Button("Sign out", role: .destructive) {
+                    if let place = signingOutOf {
+                        Task { await model.signOut(of: place) }
+                    }
+                }
+            } message: {
+                Text("You'll need a new pairing code from it to sign in again.")
             }
             .task { await load() }
         }

@@ -607,13 +607,13 @@ export type AssertResponse = Static<typeof AssertResponse>;
 export const JoinRequest = Type.Object({ assertion: Sealed });
 export type JoinRequest = Static<typeof JoinRequest>;
 
-/**
- * A server the caller owns, kept at their home so all their devices see it (ADR 11): its address,
- * and the assistant there through whose player they own it.
- */
+/** A server, by its address: one the caller owns, or one to vouch for them to. */
+export const ServerRequest = Type.Object({ server: Type.String() });
+export type ServerRequest = Static<typeof ServerRequest>;
+
+/** A server the caller owns, kept at their home so all their devices see it (ADR 11). */
 export const OwnedServer = Type.Object({
   server: Type.String(),
-  assistant: Type.String(),
   since: Type.Number(),
 });
 export type OwnedServer = Static<typeof OwnedServer>;
@@ -916,39 +916,50 @@ export const SetProviderKeyRequest = Type.Object({
 });
 export type SetProviderKeyRequest = Static<typeof SetProviderKeyRequest>;
 
+/**
+ * Someone who runs the server: a person who lives on one of its assistants (`assistant` and
+ * `playerId`), or a person whose home is elsewhere (`address`), who signs in vouched for by it.
+ */
 export const ServerOwner = Type.Object({
   id: Type.String(),
-  /** The assistant they are a player of, and their id there. */
-  assistant: Type.String(),
-  playerId: Type.String(),
-  addedAt: Type.Number(),
-  /** Their address, when their home is elsewhere and they joined `assistant` from there. */
+  assistant: Type.Optional(Type.String()),
+  playerId: Type.Optional(Type.String()),
   address: Type.Optional(Type.String()),
+  addedAt: Type.Number(),
 });
 export type ServerOwner = Static<typeof ServerOwner>;
 
 export const ServerOwnersResponse = Type.Object({ owners: Type.Array(ServerOwner) });
 export type ServerOwnersResponse = Static<typeof ServerOwnersResponse>;
 
+/** A player of one of the server's assistants (`assistant` and `playerId`), or an `address`. */
 export const AddOwnerRequest = Type.Object({
-  assistant: Type.String(),
-  playerId: Type.String(),
-  /** Makes them an admin of `assistant` too. */
+  assistant: Type.Optional(Type.String()),
+  playerId: Type.Optional(Type.String()),
+  /** Makes the player an admin of `assistant` too. */
   admin: Type.Optional(Type.Boolean()),
+  address: Type.Optional(Type.String()),
 });
 export type AddOwnerRequest = Static<typeof AddOwnerRequest>;
 
 /**
  * An owner's server token for this client. Sent with the token of the owner's player of
- * `assistant`, or with `assertion`: their home vouching for them to `assistant`, from the home's
- * `POST /ext/federation/owner-assertion`.
+ * `assistant`, or with `assertion` alone: their home vouching for them to this server, from the
+ * home's `POST /ext/federation/owner-assertion`.
  */
 export const ServerSessionRequest = Type.Object({
-  assistant: Type.String(),
+  assistant: Type.Optional(Type.String()),
   client: ClientInfo,
   assertion: Type.Optional(Sealed),
 });
 export type ServerSessionRequest = Static<typeof ServerSessionRequest>;
+
+/** The server's own keys, as homes seal owner assertions to it (ADR 11). */
+export const ServerKeyResponse = Type.Object({
+  signingKey: Type.String(),
+  encryptionKey: Type.String(),
+});
+export type ServerKeyResponse = Static<typeof ServerKeyResponse>;
 
 /** `token` is shown only here; keep it like a password. */
 export const ServerSessionResponse = Type.Object({
@@ -1084,6 +1095,11 @@ export const SetupRequest = Type.Object({
   publicUrl: Type.Optional(Type.String({ pattern: "^https?://" })),
   /** Nightly backups beside the config; default true. */
   backups: Type.Optional(Type.Boolean()),
+  /**
+   * Whether its assistant has federation, so people can join it from their homes and it can be
+   * part of a cluster; default true, when it has a public address. False sets it up standalone.
+   */
+  federation: Type.Optional(Type.Boolean()),
 });
 export type SetupRequest = Static<typeof SetupRequest>;
 
@@ -1160,6 +1176,7 @@ export const SCHEMAS = {
   Sealed,
   AssertResponse,
   JoinRequest,
+  ServerRequest,
   OwnedServer,
   OwnedServersResponse,
   InviteRequest,
@@ -1210,6 +1227,7 @@ export const SCHEMAS = {
   ServerOwnersResponse,
   AddOwnerRequest,
   ServerSessionRequest,
+  ServerKeyResponse,
   ServerSessionResponse,
   UpdateState,
   SetUpdatesRequest,

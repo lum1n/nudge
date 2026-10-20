@@ -18,6 +18,9 @@ import {
   RESTART_EXIT_CODE,
   ServerKeys,
   serverKeysDir,
+  fetchKeys,
+  ServerIdentity,
+  serverIdentityDir,
   ServerOwners,
   serverOwnersFile,
   SetupCodes,
@@ -150,6 +153,7 @@ export async function serve(options: ServeOptions): Promise<number> {
   });
   const keys = new ServerKeys(serverKeysDir(configPath));
   const owners = new ServerOwners(serverOwnersFile(configPath));
+  const identity = new ServerIdentity(serverIdentityDir(configPath));
   const assistants = await Assistants.open({
     configPath,
     open: (config, assistant) =>
@@ -204,6 +208,7 @@ export async function serve(options: ServeOptions): Promise<number> {
       assistants,
       keys,
       owners,
+      identity,
       backupBeforeDelete: async (only) => {
         const dir = join(dirname(configPath), "server", "deleted");
         const file = await createBackup({
@@ -283,6 +288,15 @@ export async function serve(options: ServeOptions): Promise<number> {
     });
     apiAddr = loopbackOf(server.url);
     await wired.resume(serverWiredName(publicUrl()), apiAddr);
+    // Owners from before servers had keys of their own (v0.6.0) become owners by address.
+    void owners
+      .migrate(
+        async (owner) =>
+          (await assistants.running.get(owner.assistant!)?.players.get(owner.playerId!, context))
+            ?.home,
+        (home) => fetchKeys(home, (url) => fetch(url, { signal: AbortSignal.timeout(10_000) })),
+      )
+      .catch((error: unknown) => console.error("Moving owners over failed:", error));
     const lines =
       codes === undefined
         ? startupLines(server.url, options.host, [...assistants.running.keys()], web)

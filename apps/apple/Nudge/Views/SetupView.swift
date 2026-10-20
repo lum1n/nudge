@@ -66,6 +66,8 @@ struct SetupView: View {
     @State private var key = ""
     @State private var you = ""
     @State private var backups = true
+    /// Part of the person's cluster: federation on, and joined from home.
+    @State private var cluster = true
     @State private var busy = false
     @State private var problem: String?
 
@@ -146,6 +148,18 @@ struct SetupView: View {
                 }
                 Section {
                     Toggle("Back up every night, keeping two weeks, beside the data", isOn: $backups)
+                }
+                if model.session != nil {
+                    Section {
+                        Toggle("Part of my cluster", isOn: $cluster)
+                            .disabled(model.homeProblem != nil)
+                    } footer: {
+                        Text(model.homeProblem != nil
+                            ? "Your home has no federation, so this server stays on its own: you sign in to it as its first person. Turn federation on at home to join servers to it."
+                            : cluster
+                                ? "Joined from your home: its rooms show beside your home's, and your other devices list the server."
+                                : "On its own, without federation: you sign in to it as its first person, and it never talks to your other servers.")
+                    }
                 }
             }
             if let problem {
@@ -297,7 +311,8 @@ struct SetupView: View {
                             local: local?.id,
                             yourName: you.trimmed,
                             publicUrl: server,
-                            backups: backups))
+                            backups: backups,
+                            federation: model.session == nil || (cluster && model.homeProblem == nil)))
                     done()
                 }
             }

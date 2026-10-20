@@ -40,7 +40,7 @@ impl ServerApi {
         client: ClientInfo,
     ) -> Result<ServerSessionResponse, ApiError> {
         let body = ServerSessionRequest {
-            assistant: assistant.to_owned(),
+            assistant: Some(assistant.to_owned()),
             client,
             assertion: None,
         };
@@ -58,15 +58,14 @@ impl ServerApi {
     }
 
     /// Trades an assertion from the owner's home, from `Api::owner_assertion`, for a server token,
-    /// and stores it: for a device with no player token on `assistant`.
+    /// and stores it: for an owner whose home is elsewhere.
     pub async fn sign_in_from_home(
         &self,
-        assistant: &str,
         assertion: Sealed,
         client: ClientInfo,
     ) -> Result<ServerSessionResponse, ApiError> {
         let body = ServerSessionRequest {
-            assistant: assistant.to_owned(),
+            assistant: None,
             client,
             assertion: Some(assertion),
         };
@@ -191,9 +190,22 @@ impl ServerApi {
         admin: bool,
     ) -> Result<ServerOwner, ApiError> {
         let body = AddOwnerRequest {
-            assistant: assistant.to_owned(),
-            player_id: player_id.to_owned(),
+            assistant: Some(assistant.to_owned()),
+            player_id: Some(player_id.to_owned()),
             admin: admin.then_some(true),
+            address: None,
+        };
+        self.request(Method::POST, &["owners"], &[], Some(&body))
+            .await
+    }
+
+    /// Makes the person at `address` an owner too, vouched for by their home when they sign in.
+    pub async fn add_owner_at(&self, address: &str) -> Result<ServerOwner, ApiError> {
+        let body = AddOwnerRequest {
+            assistant: None,
+            player_id: None,
+            admin: None,
+            address: Some(address.to_owned()),
         };
         self.request(Method::POST, &["owners"], &[], Some(&body))
             .await
