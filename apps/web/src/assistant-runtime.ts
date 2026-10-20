@@ -46,6 +46,54 @@ export function transcript(
   });
 }
 
+/** When a transcript item happened: a message when it was sent, an answer when it started. */
+export function timeOf(item: TimelineItem): number | undefined {
+  switch (item.type) {
+    case "user":
+      return item.sentAt;
+    case "answer":
+      return item.startedAt;
+    case "nudge":
+      return item.firedAt;
+    default:
+      return undefined;
+  }
+}
+
+/** The items each day of the transcript starts with, by id, with their time; in local time. */
+export function dayStarts(items: readonly TimelineItem[]): Map<string, number> {
+  const starts = new Map<string, number>();
+  let day: string | undefined;
+  for (const item of items) {
+    const at = timeOf(item);
+    if (at === undefined) continue;
+    const its = new Date(at).toDateString();
+    if (its !== day) starts.set(item.id, at);
+    day = its;
+  }
+  return starts;
+}
+
+/** A day as a divider says it: "Today", "Yesterday", "Monday 14 October", with the year if not this one. */
+export function dayLabel(at: number, now: number = Date.now()): string {
+  const day = new Date(at);
+  const today = new Date(now);
+  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+  if (day.toDateString() === today.toDateString()) return "Today";
+  if (day.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return day.toLocaleDateString(undefined, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    ...(day.getFullYear() === today.getFullYear() ? {} : { year: "numeric" }),
+  });
+}
+
+/** A time of day, such as "14:32", the way the reader's locale writes it. */
+export function timeLabel(at: number): string {
+  return new Date(at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
 /** A tool the reader has to act on in the chat: the browser wants a login, or an approval. */
 function asksReader(part: ToolPart, pending: ReadonlySet<string>): boolean {
   const details = part.details as { needsLogin?: boolean; approval?: string } | undefined;
@@ -85,17 +133,18 @@ export function toThreadMessageLike(item: TimelineItem, me: string): ThreadMessa
         role: "user",
         content: item.text,
         ...(item.sentAt === undefined ? {} : { createdAt: new Date(item.sentAt) }),
-        ...(item.author === undefined
-          ? {}
-          : {
-              metadata: {
-                custom: {
+        metadata: {
+          custom: {
+            ...(item.author === undefined
+              ? {}
+              : {
                   author: item.author.displayName,
                   mine: item.author.id === me,
                   private: item.privateTo !== undefined,
-                },
-              },
-            }),
+                }),
+            ...(item.sentAt === undefined ? {} : { at: item.sentAt }),
+          },
+        },
       };
     // assistant-ui takes a system message with exactly one text part, so what kind of line it
     // is and its data ride along in `metadata.custom`.
@@ -148,7 +197,13 @@ export function toThreadMessageLike(item: TimelineItem, me: string): ThreadMessa
         // between our `unknown`-valued `Record` and assistant-ui's `ReadonlyJSONObject`.
         content: item.parts.map(toPart) as ThreadMessageLike["content"],
         status: toStatus(item),
-        ...(item.privateTo === undefined ? {} : { metadata: { custom: { private: true } } }),
+        // assistant-ui dates a message without `createdAt` now, so the time rides in `custom`.
+        metadata: {
+          custom: {
+            ...(item.privateTo === undefined ? {} : { private: true }),
+            ...(item.startedAt === undefined ? {} : { at: item.startedAt }),
+          },
+        },
       };
   }
 }

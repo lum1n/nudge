@@ -162,6 +162,7 @@ fn items() -> Vec<TimelineItem> {
                 Part::Reasoning { text: "b".into() },
                 Part::Tool(tool()),
             ],
+            started_at: Some(1.0),
             private_to: Some(ann()),
         }),
         TimelineItem::Marker(MarkerItem {

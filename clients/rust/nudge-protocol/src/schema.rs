@@ -159,6 +159,9 @@ pub struct AnswerItem {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     pub parts: Vec<Part>,
+    /// When its first model response started, in ms since the epoch.
+    #[serde(default, rename = "startedAt", skip_serializing_if = "Option::is_none")]
+    pub started_at: Option<f64>,
     /// It answers something private: only this player sees its parts; everyone else gets none.
     #[serde(default, rename = "privateTo", skip_serializing_if = "Option::is_none")]
     pub private_to: Option<Player>,

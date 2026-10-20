@@ -1,3 +1,5 @@
+import Foundation
+
 extension Array where Element == TimelineItem {
     /// The chat itself: messages and what the assistant said. Tool calls, thinking, fired nudges
     /// and ended approvals are left to `activity`, except the browser waiting on a login; pending
@@ -8,7 +10,7 @@ extension Array where Element == TimelineItem {
             switch item {
             case .nudge, .approval:
                 return nil
-            case .answer(let id, let status, let error, let parts, let privateTo):
+            case .answer(let id, let status, let error, let parts, let startedAt, let privateTo):
                 let kept = parts.filter {
                     switch $0 {
                     case .text: true
@@ -19,7 +21,7 @@ extension Array where Element == TimelineItem {
                 // Someone else's private answer comes without parts, and stays as a line saying so.
                 let othersPrivate = privateTo != nil && parts.isEmpty
                 if kept.isEmpty && status == .done && !othersPrivate { return nil }
-                return .answer(id: id, status: status, error: error, parts: kept, privateTo: privateTo)
+                return .answer(id: id, status: status, error: error, parts: kept, startedAt: startedAt, privateTo: privateTo)
             case .user, .marker:
                 return item
             }
@@ -33,15 +35,42 @@ extension Array where Element == TimelineItem {
             switch item {
             case .nudge, .approval:
                 return item
-            case .answer(let id, let status, let error, let parts, let privateTo):
+            case .answer(let id, let status, let error, let parts, let startedAt, let privateTo):
                 let kept = parts.filter {
                     if case .text = $0 { return false }
                     return true
                 }
-                return kept.isEmpty ? nil : .answer(id: id, status: status, error: error, parts: kept, privateTo: privateTo)
+                return kept.isEmpty ? nil : .answer(id: id, status: status, error: error, parts: kept, startedAt: startedAt, privateTo: privateTo)
             case .user, .marker:
                 return nil
             }
+        }
+    }
+
+    /// The items each day of the transcript starts with, by id, with their time in ms since the
+    /// epoch; days in `calendar`'s time zone. Items without a time don't start one.
+    public func dayStarts(in calendar: Calendar = .current) -> [String: Double] {
+        var starts: [String: Double] = [:]
+        var day: Date?
+        for item in self {
+            guard let at = item.time else { continue }
+            let its = calendar.startOfDay(for: Date(timeIntervalSince1970: at / 1000))
+            if its != day { starts[item.id] = at }
+            day = its
+        }
+        return starts
+    }
+}
+
+extension TimelineItem {
+    /// When it happened, in ms since the epoch: a message when it was sent, an answer when it
+    /// started, a nudge when it fired.
+    public var time: Double? {
+        switch self {
+        case .user(_, _, _, let sentAt, _, _, _): sentAt
+        case .answer(_, _, _, _, let startedAt, _): startedAt
+        case .nudge(_, _, let firedAt, _): firedAt
+        case .approval, .marker: nil
         }
     }
 }

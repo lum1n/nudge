@@ -1,8 +1,45 @@
 package nudge.client
 
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import nudge.ffi.AnswerStatus
 import nudge.ffi.Part
 import nudge.ffi.TimelineItem
+
+val TimelineItem.itemId: String
+    get() = when (this) {
+        is TimelineItem.User -> id
+        is TimelineItem.Nudge -> id
+        is TimelineItem.Approval -> id
+        is TimelineItem.Answer -> id
+        is TimelineItem.Marker -> id
+    }
+
+/** When it happened, in ms since the epoch: a message when it was sent, an answer when it started, a nudge when it fired. */
+val TimelineItem.time: Double?
+    get() = when (this) {
+        is TimelineItem.User -> sentAt
+        is TimelineItem.Answer -> startedAt
+        is TimelineItem.Nudge -> firedAt
+        is TimelineItem.Approval, is TimelineItem.Marker -> null
+    }
+
+/**
+ * The items each day of the transcript starts with, by id, with their time in ms since the epoch;
+ * days in [zone]. Items without a time don't start one.
+ */
+fun List<TimelineItem>.dayStarts(zone: ZoneId = ZoneId.systemDefault()): Map<String, Double> {
+    val starts = mutableMapOf<String, Double>()
+    var day: LocalDate? = null
+    for (item in this) {
+        val at = item.time ?: continue
+        val its = Instant.ofEpochMilli(at.toLong()).atZone(zone).toLocalDate()
+        if (its != day) starts[item.itemId] = at
+        day = its
+    }
+    return starts
+}
 
 /**
  * The chat itself: messages and what the assistant said. Tool calls, thinking, fired nudges and

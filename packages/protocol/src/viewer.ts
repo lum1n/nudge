@@ -100,6 +100,7 @@ export class Viewer {
             type: "answer",
             id: item.id,
             status: item.status,
+            ...(item.startedAt === undefined ? {} : { startedAt: item.startedAt }),
             parts: [],
             privateTo: item.privateTo!,
           };

@@ -1,8 +1,10 @@
 package app.nudge.ui
 
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,9 +12,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -39,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -48,7 +53,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import java.text.DateFormat
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Date
+import java.util.Locale
 import nudge.client.needsLogin
 import nudge.ffi.AnswerStatus
 import nudge.ffi.ApprovalStatus
@@ -60,23 +70,15 @@ import nudge.ffi.TimelineItem
 import nudge.ffi.ToolPart
 import nudge.ffi.ToolStatus
 
-val TimelineItem.itemId: String
-    get() = when (this) {
-        is TimelineItem.User -> id
-        is TimelineItem.Nudge -> id
-        is TimelineItem.Approval -> id
-        is TimelineItem.Answer -> id
-        is TimelineItem.Marker -> id
-    }
-
 /**
  * One item of a room's transcript: a message, an answer or a marker; nudges and ended approvals
- * are in the activity ([ActivityRow]). `openBrowser` opens the room's browser, to log in where it
- * asks; `openActivity` shows what a working answer is doing.
+ * are in the activity ([ActivityRow]). `assistant` is the assistant's display name, over its answers;
+ * `openBrowser` opens the room's browser, to log in where it asks; `openActivity` shows what a
+ * working answer is doing.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun TimelineRow(item: TimelineItem, me: String?, openBrowser: () -> Unit, openActivity: () -> Unit) {
+fun TimelineRow(item: TimelineItem, me: String?, assistant: String, openBrowser: () -> Unit, openActivity: () -> Unit) {
     when (item) {
         // Someone else's private message: the server sent it empty, so it is a line, not a bubble.
         is TimelineItem.User -> if (item.privateTo != null && item.text.isEmpty()) {
@@ -85,14 +87,14 @@ fun TimelineRow(item: TimelineItem, me: String?, openBrowser: () -> Unit, openAc
             val mine = item.author == null || item.author?.id == me
             Column(Modifier.fillMaxWidth(), horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
                 if (item.privateTo != null) OnlyYou()
-                Bubble(item.text, mine, if (mine) null else item.author?.displayName)
+                Bubble(item.text, mine, if (mine) null else item.author?.displayName, sentAt = item.sentAt)
             }
         }
         is TimelineItem.Nudge, is TimelineItem.Approval -> {}
         is TimelineItem.Answer -> when (val owner = item.privateTo) {
-            null -> Answer(item, openBrowser, openActivity)
+            null -> AnswerCard(item, assistant, mine = false, openBrowser, openActivity)
             else -> if (owner.id == me) {
-                Column { OnlyYou(); Answer(item, openBrowser, openActivity) }
+                AnswerCard(item, assistant, mine = true, openBrowser, openActivity)
             } else {
                 PrivateLine(
                     if (item.status == AnswerStatus.RUNNING) "Answering ${owner.displayName} privately…"
@@ -113,8 +115,74 @@ fun TimelineRow(item: TimelineItem, me: String?, openBrowser: () -> Unit, openAc
     }
 }
 
+/**
+ * An answer on a surface of its own, under the assistant's name and when it started, so it reads
+ * apart from the messages around it and from the answer before. `mine`: it answers the reader's
+ * private message.
+ */
 @Composable
-fun Bubble(text: String, mine: Boolean, author: String?, faded: Boolean = false) {
+private fun AnswerCard(
+    answer: TimelineItem.Answer,
+    assistant: String,
+    mine: Boolean,
+    openBrowser: () -> Unit,
+    openActivity: () -> Unit,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = MaterialTheme.shapes.extraLarge,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(
+                    Modifier.size(22.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onPrimary)
+                }
+                Text(assistant, style = MaterialTheme.typography.titleSmall)
+                answer.startedAt?.let {
+                    Text(timeOfDay(it), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            if (mine) OnlyYou()
+            Answer(answer, openBrowser, openActivity)
+        }
+    }
+}
+
+/** A time of day, such as 14:32, the way the reader's locale writes it. */
+fun timeOfDay(at: Double): String = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(at.toLong()))
+
+/** Where a new day starts in the transcript: "Today", "Yesterday" or the date. */
+@Composable
+fun DayDivider(at: Double) {
+    val day = Instant.ofEpochMilli(at.toLong()).atZone(ZoneId.systemDefault()).toLocalDate()
+    val today = LocalDate.now()
+    val label = when (day) {
+        today -> "Today"
+        today.minusDays(1) -> "Yesterday"
+        else -> {
+            val skeleton = if (day.year == today.year) "EEEEdMMMM" else "EEEEdMMMMy"
+            val pattern = android.text.format.DateFormat.getBestDateTimePattern(Locale.getDefault(), skeleton)
+            DateTimeFormatter.ofPattern(pattern).format(day)
+        }
+    }
+    Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        HorizontalDivider(Modifier.weight(1f))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 10.dp),
+        )
+        HorizontalDivider(Modifier.weight(1f))
+    }
+}
+
+@Composable
+fun Bubble(text: String, mine: Boolean, author: String?, faded: Boolean = false, sentAt: Double? = null) {
     Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
         author?.let {
             Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -133,6 +201,14 @@ fun Bubble(text: String, mine: Boolean, author: String?, faded: Boolean = false)
             SelectionContainer {
                 Text(withHidden(text), Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
             }
+        }
+        sentAt?.let {
+            Text(
+                timeOfDay(it),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            )
         }
     }
 }

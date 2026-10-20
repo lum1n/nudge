@@ -113,6 +113,8 @@ pub enum TimelineItem {
         status: AnswerStatus,
         error: Option<String>,
         parts: Vec<Part>,
+        /// When its first model response started, in ms since the epoch.
+        started_at: Option<f64>,
         /// Only this player sees it; everyone else gets it emptied.
         private_to: Option<Player>,
     },
@@ -507,6 +509,7 @@ pub fn timeline_item(item: &p::TimelineItem) -> Option<TimelineItem> {
             },
             error: answer.error.clone(),
             parts: answer.parts.iter().filter_map(part).collect(),
+            started_at: answer.started_at,
             private_to: answer.private_to.clone().map(Into::into),
         },
         p::TimelineItem::Marker(marker) => TimelineItem::Marker {

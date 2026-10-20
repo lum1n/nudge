@@ -358,10 +358,12 @@ function buildAnswer(
 ): TimelineItem {
   const slots = new Map((live?.tools ?? []).map((slot) => [slot.callId, slot]));
   const parts: Part[] = [];
+  let first: AssistantMessage | undefined;
   let last: AssistantMessage | undefined;
   for (const entry of entries)
     for (const message of entry.model ?? [])
       if (message.role === "assistant") {
+        first ??= message;
         last = message;
         for (const content of message.content) {
           const part = toPart(content, results, slots);
@@ -373,17 +375,19 @@ function buildAnswer(
       const part = toPart(content, results, slots);
       if (part !== undefined) parts.push(part);
     }
-  if (live !== undefined) return { type: "answer", id, status: "running", parts };
-  if (last?.stopReason === "aborted") return { type: "answer", id, status: "stopped", parts };
+  // When it started: its first model response; a live one's first token, before that's saved.
+  const startedAt = (first ?? generated)?.timestamp;
+  const base = { type: "answer" as const, id, ...(startedAt === undefined ? {} : { startedAt }) };
+  if (live !== undefined) return { ...base, status: "running", parts };
+  if (last?.stopReason === "aborted") return { ...base, status: "stopped", parts };
   if (last?.stopReason === "error")
     return {
-      type: "answer",
-      id,
+      ...base,
       status: "failed",
       ...(last.errorMessage === undefined ? {} : { error: last.errorMessage }),
       parts,
     };
-  return { type: "answer", id, status: "done", parts };
+  return { ...base, status: "done", parts };
 }
 
 function toPart(

@@ -115,6 +115,8 @@ export const TimelineItem = Type.Union([
     ]),
     error: Type.Optional(Type.String()),
     parts: Type.Array(Part),
+    /** When its first model response started, in ms since the epoch. */
+    startedAt: Type.Optional(Type.Number()),
     /** It answers something private: only this player sees its parts; everyone else gets none. */
     privateTo: Type.Optional(Player),
   }),

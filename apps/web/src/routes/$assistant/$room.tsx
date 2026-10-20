@@ -35,12 +35,15 @@ import { clientFor, forgetToken, useConnection, useRoom } from "../../api.ts";
 import {
   appendText,
   buildQueueAdapter,
+  dayLabel,
+  dayStarts,
   type Lane,
   PLACEHOLDER,
+  timeLabel,
   toThreadMessageLike,
   transcript,
 } from "../../assistant-runtime.ts";
-import { meQuery } from "../../queries.ts";
+import { assistantsQuery, meQuery } from "../../queries.ts";
 
 export const Route = createFileRoute("/$assistant/$room")({ component: Room });
 
@@ -293,6 +296,9 @@ function RoomName({ view }: { view: RoomView }) {
 function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view: RoomView }) {
   const { assistant, room } = Route.useParams();
   const me = useQuery(meQuery(assistant)).data?.player.id ?? "";
+  const name =
+    useQuery(assistantsQuery()).data?.assistants.find((item) => item.name === assistant)
+      ?.displayName ?? assistant;
   // Only in a shared room is there anyone to keep a message from.
   const shared = view.room.kind !== "personal";
   const [secret, setSecret] = useState(false);
@@ -320,6 +326,7 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
     () => transcript(state.timeline, view.approvals),
     [state.timeline, view.approvals],
   );
+  const days = useMemo(() => dayStarts(messages), [messages]);
   const runtime = useExternalStoreRuntime({
     messages,
     convertMessage,
@@ -337,7 +344,7 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
     <AssistantRuntimeProvider runtime={runtime}>
       <div className="flex h-full min-h-0 flex-col gap-3">
         <StatusLine status={view.live.status} />
-        <ThreadPrimitive.Viewport className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-x-hidden overflow-y-auto">
+        <ThreadPrimitive.Viewport className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto">
           <ThreadPrimitive.LoadEarlier className="self-center text-sm text-stone-500 underline disabled:text-stone-300 disabled:no-underline">
             Load earlier
           </ThreadPrimitive.LoadEarlier>
@@ -345,7 +352,12 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
             <p className="self-center text-sm text-red-700">{state.earlierError}</p>
           )}
           <ThreadPrimitive.Messages>
-            {({ message }) => <MessageRow message={message} />}
+            {({ message }) => (
+              <>
+                {days.has(message.id) && <DayDivider at={days.get(message.id)!} />}
+                <MessageRow message={message} assistant={name} />
+              </>
+            )}
           </ThreadPrimitive.Messages>
         </ThreadPrimitive.Viewport>
         <FailedSends store={store} pending={state.pending} />
@@ -452,12 +464,28 @@ function StatusLine({ status }: { status?: Status }) {
   }
 }
 
-function MessageRow({ message }: { message: MessageState }) {
+/** Where a new day starts in the chat. */
+function DayDivider({ at }: { at: number }) {
+  return (
+    <div className="my-2 flex items-center gap-3 text-xs font-medium text-stone-500">
+      <hr className="flex-1 border-stone-200" />
+      {dayLabel(at)}
+      <hr className="flex-1 border-stone-200" />
+    </div>
+  );
+}
+
+/** When a message was sent or an answer started, from `metadata.custom.at`. */
+function timeOfMessage(message: MessageState): number | undefined {
+  return (message.metadata.custom as { at?: number } | undefined)?.at;
+}
+
+function MessageRow({ message, assistant }: { message: MessageState; assistant: string }) {
   switch (message.role) {
     case "user":
       return <UserMessage message={message} />;
     case "assistant":
-      return <AssistantMessage message={message} />;
+      return <AssistantMessage message={message} name={assistant} />;
     case "system":
       return <SystemMessage message={message} />;
   }
@@ -468,9 +496,10 @@ function UserMessage({ message }: { message: MessageState }) {
     | { author?: string; mine?: boolean; private?: boolean }
     | undefined;
   const mine = custom?.mine ?? false;
+  const at = timeOfMessage(message);
   return (
     <MessagePrimitive.Root>
-      <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+      <div className={`flex flex-col ${mine ? "items-end" : "items-start"}`}>
         <div
           className={`max-w-[85%] min-w-0 rounded-2xl px-3 py-2 [overflow-wrap:anywhere] md:max-w-[75%] ${
             mine ? "bg-sky-600 text-white" : "bg-stone-200 text-stone-900"
@@ -484,18 +513,46 @@ function UserMessage({ message }: { message: MessageState }) {
           {custom?.private === true && <OnlyYou light={mine} />}
           <MessagePrimitive.Parts components={{ Text: TextPart }} />
         </div>
+        {at !== undefined && (
+          <time
+            dateTime={new Date(at).toISOString()}
+            className="mt-0.5 px-1 text-xs text-stone-400"
+          >
+            {timeLabel(at)}
+          </time>
+        )}
       </div>
     </MessagePrimitive.Root>
   );
 }
 
-function AssistantMessage({ message }: { message: Extract<MessageState, { role: "assistant" }> }) {
+function AssistantMessage({
+  message,
+  name,
+}: {
+  message: Extract<MessageState, { role: "assistant" }>;
+  name: string;
+}) {
   const { assistant, room } = Route.useParams();
   const secret = (message.metadata.custom as { private?: boolean } | undefined)?.private === true;
+  const at = timeOfMessage(message);
   return (
     <MessagePrimitive.Root>
       <div className="flex justify-start">
-        <div className="max-w-full min-w-0 rounded-2xl border border-stone-200 bg-white px-3 py-2 [overflow-wrap:anywhere] md:max-w-[85%]">
+        <div className="max-w-full min-w-0 rounded-2xl border border-stone-200 border-l-4 border-l-teal-500 bg-white px-3 py-2 [overflow-wrap:anywhere] md:max-w-[85%]">
+          <p className="mb-1 flex items-baseline gap-2 text-xs">
+            <span className="font-semibold text-stone-700">
+              <span aria-hidden className="text-teal-600">
+                ✦{" "}
+              </span>
+              {name}
+            </span>
+            {at !== undefined && (
+              <time dateTime={new Date(at).toISOString()} className="text-stone-400">
+                {timeLabel(at)}
+              </time>
+            )}
+          </p>
           {secret && <OnlyYou />}
           <MessagePrimitive.Parts
             components={{

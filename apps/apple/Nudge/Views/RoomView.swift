@@ -6,6 +6,8 @@ struct RoomView: View {
     let client: NudgeClient
     let roomId: String
     let me: String?
+    /// The assistant's display name, over its answers.
+    let assistant: String
     @State private var observed: ObservedRoom?
     @State private var draft = ""
     @State private var secret = false
@@ -117,8 +119,11 @@ struct RoomView: View {
                         Text(error).font(.footnote).foregroundStyle(.red)
                     }
                     // Tool calls, nudges and ended approvals are in the activity.
+                    let transcript = transcript
+                    let days = transcript.dayStarts()
                     ForEach(transcript, id: \.id) { item in
-                        TimelineRow(item: item, me: me)
+                        if let day = days[item.id] { DayDivider(at: day) }
+                        TimelineRow(item: item, me: me, assistant: assistant)
                     }
                     ForEach(queued, id: \.id) { message in
                         let mine = message.author == nil || message.author?.id == me
@@ -164,7 +169,7 @@ struct RoomView: View {
     }
 
     private func answerLength(_ item: TimelineItem) -> String {
-        guard case .answer(let id, _, _, let parts, _) = item else { return item.id }
+        guard case .answer(let id, _, _, let parts, _, _) = item else { return item.id }
         return "\(id):\(parts.count):\(parts.last.map(partLength) ?? 0)"
     }
 

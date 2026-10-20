@@ -64,6 +64,8 @@ import kotlinx.coroutines.launch
 import nudge.client.ObservedRoom
 import nudge.client.RoomState
 import nudge.client.activity
+import nudge.client.dayStarts
+import nudge.client.itemId
 import nudge.client.observeRoomState
 import nudge.client.transcript
 import nudge.ffi.ApprovalStatus
@@ -199,7 +201,7 @@ fun RoomScreen(
                 state == null || (state.room == null && state.status == SyncStatus.SYNCING) ->
                     LoadingIndicator(Modifier.align(Alignment.Center))
                 else -> Timeline(
-                    state, me?.player?.id,
+                    state, me?.player?.id, session.account.assistantName,
                     loadEarlier = { scope.launch { room?.loadEarlier() } },
                     retry = { requestId -> attempt { client.resend(roomId, requestId) } },
                     dismiss = { requestId -> client.dismiss(roomId, requestId) },
@@ -232,6 +234,7 @@ fun RoomScreen(
 private fun Timeline(
     state: RoomState,
     me: String?,
+    assistant: String,
     loadEarlier: () -> Unit,
     retry: (String) -> Unit,
     dismiss: (String) -> Unit,
@@ -243,6 +246,8 @@ private fun Timeline(
     val pending = state.pending.reversed()
     val pendingIds = state.pending.map { it.requestId }.toSet()
     val queued = state.queue.filter { !it.nudge && it.requestId !in pendingIds }.reversed()
+    val transcript = state.timeline.transcript
+    val days = remember(transcript) { transcript.dayStarts() }
     LazyColumn(
         state = listState,
         reverseLayout = true,
@@ -265,8 +270,11 @@ private fun Timeline(
             }
         }
         // Tool calls, nudges and ended approvals are in the activity.
-        items(state.timeline.transcript.asReversed(), key = { it.itemId }) { item ->
-            TimelineRow(item, me, openBrowser, openActivity)
+        items(transcript.asReversed(), key = { it.itemId }) { item ->
+            Column {
+                days[item.itemId]?.let { DayDivider(it) }
+                TimelineRow(item, me, assistant, openBrowser, openActivity)
+            }
         }
         if (state.canLoadEarlier || state.loadingEarlier) {
             item(key = "earlier") {

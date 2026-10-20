@@ -185,6 +185,7 @@ describe("per-person visibility", () => {
       id: answer!.id,
       status: "done",
       parts: [],
+      startedAt: expect.any(Number),
       privateTo: { id: "ann", displayName: "Ann" },
     });
     expect(boView.memory).toEqual([]);

@@ -84,7 +84,7 @@ struct ActivityRow: View {
         case .approval(_, _, let summary, let status, let decidedBy, _):
             // Ended: nothing left to decide.
             ApprovalCard(summary: summary, status: status, decidedBy: decidedBy) { _ in }
-        case .answer(_, let status, let error, let parts, _):
+        case .answer(_, let status, let error, let parts, _, _):
             AnswerView(status: status, error: error, parts: parts)
         case .user, .marker:
             EmptyView()

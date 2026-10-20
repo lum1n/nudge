@@ -4,6 +4,8 @@ import {
   activity,
   appendText,
   buildQueueAdapter,
+  dayLabel,
+  dayStarts,
   progressLine,
   toThreadMessageLike,
   transcript,
@@ -50,7 +52,7 @@ describe("toThreadMessageLike", () => {
     expect(toThreadMessageLike(message, "ann")).toMatchObject({
       role: "user",
       content: "hi",
-      metadata: { custom: { author: "Ann", mine: true } },
+      metadata: { custom: { author: "Ann", mine: true, at: 1000 } },
     });
     expect(toThreadMessageLike(message, "bo")).toMatchObject({
       metadata: { custom: { author: "Ann", mine: false } },
@@ -267,5 +269,49 @@ describe("buildQueueAdapter", () => {
     adapter.enqueue(message);
     adapter.steer(message);
     expect(calls).toEqual(["queue", "steer"]);
+  });
+});
+
+describe("dayStarts", () => {
+  const at = (day: number, hour: number) => new Date(2026, 9, day, hour).getTime();
+  const user = (id: string, sentAt?: number): TimelineItem => ({
+    type: "user",
+    id,
+    text: id,
+    ...(sentAt === undefined ? {} : { sentAt }),
+  });
+  const answer = (id: string, startedAt?: number): TimelineItem => ({
+    type: "answer",
+    id,
+    status: "done",
+    parts: [{ type: "text", text: id }],
+    ...(startedAt === undefined ? {} : { startedAt }),
+  });
+
+  it("marks the first item of each local day, skipping items without a time", () => {
+    const items = [
+      user("a", at(18, 9)),
+      answer("b", at(18, 9)),
+      { type: "marker", id: "m", kind: "compacted" } satisfies TimelineItem,
+      user("c", at(19, 23)),
+      answer("d"),
+      answer("e", at(20, 0)),
+    ];
+    expect([...dayStarts(items)]).toEqual([
+      ["a", at(18, 9)],
+      ["c", at(19, 23)],
+      ["e", at(20, 0)],
+    ]);
+  });
+});
+
+describe("dayLabel", () => {
+  const now = new Date(2026, 9, 20, 12).getTime();
+
+  it("says today and yesterday, and the date otherwise, with the year when it isn't this one", () => {
+    expect(dayLabel(new Date(2026, 9, 20, 1).getTime(), now)).toBe("Today");
+    expect(dayLabel(new Date(2026, 9, 19, 23).getTime(), now)).toBe("Yesterday");
+    expect(dayLabel(new Date(2026, 9, 14).getTime(), now)).not.toMatch(/2026/);
+    expect(dayLabel(new Date(2025, 9, 14).getTime(), now)).toMatch(/2025/);
   });
 });
