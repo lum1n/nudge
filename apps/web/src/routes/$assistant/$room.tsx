@@ -164,6 +164,14 @@ function Room() {
               Connectors
             </Link>
             <Link
+              to="/$assistant/$room/mcp"
+              params={{ assistant, room }}
+              title="MCP servers the assistant uses in this room"
+              className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
+            >
+              MCP
+            </Link>
+            <Link
               to="/$assistant/$room/lists"
               params={{ assistant, room }}
               className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"

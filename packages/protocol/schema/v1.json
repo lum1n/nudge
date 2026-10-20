@@ -858,6 +858,9 @@
               "type": "string"
             }
           }
+        },
+        "adminOnly": {
+          "type": "boolean"
         }
       }
     },
@@ -1656,6 +1659,9 @@
                     "type": "string"
                   }
                 }
+              },
+              "adminOnly": {
+                "type": "boolean"
               }
             }
           }
@@ -3203,6 +3209,9 @@
                                 "type": "string"
                               }
                             }
+                          },
+                          "adminOnly": {
+                            "type": "boolean"
                           }
                         }
                       }

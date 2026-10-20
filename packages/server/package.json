@@ -35,6 +35,7 @@
     "@nudge/ext-federation": "workspace:*",
     "@nudge/ext-lists": "workspace:*",
     "@nudge/ext-mail": "workspace:*",
+    "@nudge/ext-mcp": "workspace:*",
     "@types/ws": "8.18.2",
     "undici": "7.30.1"
   }

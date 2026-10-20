@@ -15,6 +15,7 @@ import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.DesktopWindows
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Psychology
@@ -59,9 +60,9 @@ import nudge.ffi.NudgeClient
 import nudge.ffi.RoomExtension
 
 /**
- * About a room: its documents, connectors, browser and desktop, who is in it, what the assistant
- * remembers here, its nudges, which extensions it uses, and what the model saw. Opens in the third
- * pane, or full screen on a phone.
+ * About a room: its documents, connectors, MCP servers, browser and desktop, who is in it, what the
+ * assistant remembers here, its nudges, which extensions it uses, and what the model saw. Opens in
+ * the third pane, or full screen on a phone.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -71,6 +72,7 @@ fun RoomInfoScreen(
     close: () -> Unit,
     documents: () -> Unit,
     connectors: () -> Unit,
+    mcp: () -> Unit,
     browser: () -> Unit,
     desktop: () -> Unit,
 ) {
@@ -128,6 +130,7 @@ fun RoomInfoScreen(
             val panels: List<GroupRow> = listOf(
                 Triple("documents", "Documents", Icons.Outlined.Description to documents),
                 Triple("connectors", "Connectors", Icons.Outlined.Api to connectors),
+                Triple("mcp", "MCP servers", Icons.Outlined.Hub to mcp),
                 Triple("browser", "Browser", Icons.Outlined.Language to browser),
                 Triple("desktop", "Desktop", Icons.Outlined.DesktopWindows to desktop),
             ).filter { it.first in on }.map { (_, title, action) ->

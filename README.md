@@ -320,6 +320,13 @@ An entry's `rooms` lists the kinds of room it is on in by default (`"lobby"`, `"
 - Results reach the model through the same redaction as everything else. Images in results are left out unless a server sets `"images": true`, since redaction only reads text.
 - The tool lists are read when the extension is installed; `nudge reload` reads them again. A server that can't be reached then is left out and reported. Connections close after `idleMinutes` (default 5) unused, and on reload and shutdown.
 
+Rooms can also add servers from the chat ("add the Linear MCP server, https://mcp.linear.app/mcp"):
+
+- `add_mcp_server` asks the room to approve the exact URL or command line. A remote server needs anyone in the room; a program, which runs on the server as Nudge's user, needs an admin. A room's servers are its own, like its connectors.
+- Keys never go in the chat. The assistant names the headers or variables a server needs, and people set them on the room's **MCP** page (web) or **MCP servers** in About this room (apps). A remote server that signs in with OAuth gets a **Sign in** button there: it opens the server's sign-in page, which comes back to this server's `/v1/a/<assistant>/ext/mcp/oauth/callback`, so the browser you sign in with must reach the server at the address your app uses. Keys and tokens are kept encrypted in the extension's secrets, and scrubbed from results.
+- The assistant sees a room's servers in its prompt, lists their tools with `mcp_tools` and calls them with `mcp_call`. Calls to tools that aren't read-only wait for approval; the page can make a server ask before every call, or never.
+- A started program gets only its variables plus `PATH`, `HOME` and the locale, and works in its own directory under the extension's data. It is not sandboxed.
+
 ### Web search
 
 `extensions/search` gives the model `web_search`, through a [SearXNG](https://docs.searxng.org) instance of your own, and `read_page`, which reads one page as text without starting a browser. Set `url` to the instance (default `http://127.0.0.1:8888`) and turn on its JSON output (`search: formats: [html, json]` in its `settings.yml`); `language` picks the results' language. `read_page` only reads public addresses, also after a redirect, unless `readLocalPages` is on. A connector the room added for the task still comes first, and pages that need a login or clicking around are the browser's.

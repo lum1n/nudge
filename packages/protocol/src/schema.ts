@@ -173,6 +173,8 @@ export const Approval = Type.Object({
   result: Type.Optional(Type.String()),
   /** Asked for in answer to something private: only this player sees and decides it. */
   privateTo: Type.Optional(Player),
+  /** Only an admin may decide it. */
+  adminOnly: Type.Optional(Type.Boolean()),
 });
 export type Approval = Static<typeof Approval>;
 

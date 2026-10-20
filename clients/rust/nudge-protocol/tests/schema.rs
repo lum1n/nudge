@@ -205,6 +205,7 @@ fn room_view() -> RoomView {
             decided_at: Some(2.0),
             result: Some("paid".into()),
             private_to: Some(ann()),
+            admin_only: Some(true),
         }],
         memory: vec![Fact {
             id: "f1".into(),

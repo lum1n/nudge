@@ -2,6 +2,7 @@ import type { Cursor, EntryId } from "@earendil-works/pi-durable";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
   addressOf,
+  AdminOnly,
   AlreadyDecided,
   ApprovalNotFound,
   BudgetReached,
@@ -552,6 +553,7 @@ export function restRoutes(options: RestOptions): Hono {
     } catch (error) {
       if (error instanceof ApprovalNotFound) throw new HttpError(404, error.message);
       if (error instanceof AlreadyDecided) throw new HttpError(409, error.message);
+      if (error instanceof AdminOnly) throw new HttpError(403, error.message);
       throw error;
     }
   });

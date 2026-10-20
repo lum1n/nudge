@@ -673,6 +673,9 @@ importers:
       '@nudge/ext-mail':
         specifier: workspace:*
         version: link:../../extensions/mail
+      '@nudge/ext-mcp':
+        specifier: workspace:*
+        version: link:../../extensions/mcp
       '@types/ws':
         specifier: 8.18.2
         version: 8.18.2

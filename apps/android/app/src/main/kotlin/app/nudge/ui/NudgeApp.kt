@@ -63,7 +63,8 @@ fun NudgeApp(model: AppModel, askForNotifications: () -> Unit) {
 
 /**
  * What the detail and extra panes show: a room of one of the signed-in assistants, and in the
- * extra pane its lists, its details, its documents, its connectors, its browser or its desktop.
+ * extra pane its lists, its details, its documents, its connectors, its MCP servers, its browser or
+ * its desktop.
  */
 private data class Destination(val account: String, val room: String, val extra: Extra? = null) {
     val ref get() = RoomRef(account, room)
@@ -82,7 +83,7 @@ private data class Destination(val account: String, val room: String, val extra:
     }
 }
 
-private enum class Extra { LISTS, INFO, DOCUMENTS, CONNECTORS, BROWSER, DESKTOP }
+private enum class Extra { LISTS, INFO, DOCUMENTS, CONNECTORS, MCP, BROWSER, DESKTOP }
 
 /**
  * The rooms beside the open room, the Android way: one pane on a phone, list and detail side by
@@ -179,7 +180,8 @@ private fun SignedIn(model: AppModel, session: Session) {
         },
         // Only while something is open there: on a wide screen an empty third pane still takes room.
         extraPane = shown?.extra?.let { extra ->
-            val client = model.sessionFor(shown.account)?.client ?: return@let null
+            val at = model.sessionFor(shown.account) ?: return@let null
+            val client = at.client
             {
                 AnimatedPane {
                     val close = { scope.launch { navigator.navigateBack() }; Unit }
@@ -190,11 +192,13 @@ private fun SignedIn(model: AppModel, session: Session) {
                             client, room.room, close,
                             documents = { open(Destination.of(room, Extra.DOCUMENTS)) },
                             connectors = { open(Destination.of(room, Extra.CONNECTORS)) },
+                            mcp = { open(Destination.of(room, Extra.MCP)) },
                             browser = { open(Destination.of(room, Extra.BROWSER)) },
                             desktop = { open(Destination.of(room, Extra.DESKTOP)) },
                         )
                         Extra.DOCUMENTS -> DocumentsScreen(client, room.room, close)
                         Extra.CONNECTORS -> ConnectorsScreen(client, room.room, close)
+                        Extra.MCP -> McpServersScreen(client, room.room, at.account.server, close)
                         Extra.BROWSER -> BrowserScreen(client, room.room, close)
                         Extra.DESKTOP -> DesktopScreen(client, room.room, close)
                     }

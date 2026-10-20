@@ -24,6 +24,7 @@ import { Route as AssistantRoomConnectorsRouteImport } from './routes/$assistant
 import { Route as AssistantRoomDesktopRouteImport } from './routes/$assistant/$room_.desktop'
 import { Route as AssistantRoomDocumentsRouteImport } from './routes/$assistant/$room_.documents'
 import { Route as AssistantRoomListsRouteImport } from './routes/$assistant/$room_.lists'
+import { Route as AssistantRoomMcpRouteImport } from './routes/$assistant/$room_.mcp'
 import { Route as AssistantRoomModelRouteImport } from './routes/$assistant/$room_.model'
 
 const IndexRoute = IndexRouteImport.update({
@@ -101,6 +102,11 @@ const AssistantRoomListsRoute = AssistantRoomListsRouteImport.update({
   path: '/$room/lists',
   getParentRoute: () => AssistantRouteRoute,
 } as any)
+const AssistantRoomMcpRoute = AssistantRoomMcpRouteImport.update({
+  id: '/$room_/mcp',
+  path: '/$room/mcp',
+  getParentRoute: () => AssistantRouteRoute,
+} as any)
 const AssistantRoomModelRoute = AssistantRoomModelRouteImport.update({
   id: '/$room_/model',
   path: '/$room/model',
@@ -123,6 +129,7 @@ export interface FileRoutesByFullPath {
   '/$assistant/$room/desktop': typeof AssistantRoomDesktopRoute
   '/$assistant/$room/documents': typeof AssistantRoomDocumentsRoute
   '/$assistant/$room/lists': typeof AssistantRoomListsRoute
+  '/$assistant/$room/mcp': typeof AssistantRoomMcpRoute
   '/$assistant/$room/model': typeof AssistantRoomModelRoute
 }
 export interface FileRoutesByTo {
@@ -140,6 +147,7 @@ export interface FileRoutesByTo {
   '/$assistant/$room/desktop': typeof AssistantRoomDesktopRoute
   '/$assistant/$room/documents': typeof AssistantRoomDocumentsRoute
   '/$assistant/$room/lists': typeof AssistantRoomListsRoute
+  '/$assistant/$room/mcp': typeof AssistantRoomMcpRoute
   '/$assistant/$room/model': typeof AssistantRoomModelRoute
 }
 export interface FileRoutesById {
@@ -159,6 +167,7 @@ export interface FileRoutesById {
   '/$assistant/$room_/desktop': typeof AssistantRoomDesktopRoute
   '/$assistant/$room_/documents': typeof AssistantRoomDocumentsRoute
   '/$assistant/$room_/lists': typeof AssistantRoomListsRoute
+  '/$assistant/$room_/mcp': typeof AssistantRoomMcpRoute
   '/$assistant/$room_/model': typeof AssistantRoomModelRoute
 }
 export interface FileRouteTypes {
@@ -179,6 +188,7 @@ export interface FileRouteTypes {
     | '/$assistant/$room/desktop'
     | '/$assistant/$room/documents'
     | '/$assistant/$room/lists'
+    | '/$assistant/$room/mcp'
     | '/$assistant/$room/model'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -196,6 +206,7 @@ export interface FileRouteTypes {
     | '/$assistant/$room/desktop'
     | '/$assistant/$room/documents'
     | '/$assistant/$room/lists'
+    | '/$assistant/$room/mcp'
     | '/$assistant/$room/model'
   id:
     | '__root__'
@@ -214,6 +225,7 @@ export interface FileRouteTypes {
     | '/$assistant/$room_/desktop'
     | '/$assistant/$room_/documents'
     | '/$assistant/$room_/lists'
+    | '/$assistant/$room_/mcp'
     | '/$assistant/$room_/model'
   fileRoutesById: FileRoutesById
 }
@@ -332,6 +344,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AssistantRoomListsRouteImport
       parentRoute: typeof AssistantRouteRoute
     }
+    '/$assistant/$room_/mcp': {
+      id: '/$assistant/$room_/mcp'
+      path: '/$room/mcp'
+      fullPath: '/$assistant/$room/mcp'
+      preLoaderRoute: typeof AssistantRoomMcpRouteImport
+      parentRoute: typeof AssistantRouteRoute
+    }
     '/$assistant/$room_/model': {
       id: '/$assistant/$room_/model'
       path: '/$room/model'
@@ -353,6 +372,7 @@ interface AssistantRouteRouteChildren {
   AssistantRoomDesktopRoute: typeof AssistantRoomDesktopRoute
   AssistantRoomDocumentsRoute: typeof AssistantRoomDocumentsRoute
   AssistantRoomListsRoute: typeof AssistantRoomListsRoute
+  AssistantRoomMcpRoute: typeof AssistantRoomMcpRoute
   AssistantRoomModelRoute: typeof AssistantRoomModelRoute
 }
 
@@ -367,6 +387,7 @@ const AssistantRouteRouteChildren: AssistantRouteRouteChildren = {
   AssistantRoomDesktopRoute: AssistantRoomDesktopRoute,
   AssistantRoomDocumentsRoute: AssistantRoomDocumentsRoute,
   AssistantRoomListsRoute: AssistantRoomListsRoute,
+  AssistantRoomMcpRoute: AssistantRoomMcpRoute,
   AssistantRoomModelRoute: AssistantRoomModelRoute,
 }
 

@@ -229,6 +229,7 @@ export class Nudge {
       changed,
       (text) => this.models.vault.rehydrate(text),
       (text) => this.redact(text),
+      (playerId, context) => this.players.isAdmin(playerId, context),
     );
   }
 

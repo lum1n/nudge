@@ -285,6 +285,9 @@ pub struct Approval {
     /// Only this player sees it; everyone else gets it emptied, so they know there was one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub private_to: Option<Player>,
+    /// Only an admin may decide it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub admin_only: Option<bool>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

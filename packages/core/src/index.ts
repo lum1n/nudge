@@ -33,6 +33,7 @@ export {
   type ServerSettings,
 } from "./config.ts";
 export {
+  AdminOnly,
   AlreadyDecided,
   APPROVAL_ENTRY,
   type Approval,

@@ -8,6 +8,7 @@ import {
 } from "@earendil-works/pi-ai/providers/faux";
 import { describe, expect, it } from "vitest";
 import {
+  AdminOnly,
   AlreadyDecided,
   APPROVAL_ENTRY,
   ApprovalsDoc,
@@ -48,6 +49,7 @@ function mailer(sent: string[]) {
                     kind: "send",
                     summary: `Send a mail to ${to}`,
                     payload: { to },
+                    adminOnly: to === "everyone@example.com",
                   },
                   now(),
                 ),
@@ -113,6 +115,29 @@ function lastInput(request: ModelContext | undefined): string {
 }
 
 describe("approvals", () => {
+  it("lets only an admin decide one that asks for an admin", async () => {
+    const sent: string[] = [];
+    const { options, askToSend } = setup(sent);
+    const nudge = await createNudge(options, context);
+    // The first player is an admin.
+    const admin = (await nudge.players.invite("Vegard", context)).player;
+    const ann = (await nudge.players.invite("Ann", context)).player;
+    askToSend("everyone@example.com");
+    await say(nudge, "Mail everyone");
+    const [pending] = await nudge.approvals.list(LOBBY, context);
+    expect(pending?.adminOnly).toBe(true);
+    const asAnn = { playerId: ann.id, displayName: ann.displayName };
+    await expect(
+      nudge.approvals.decide(LOBBY, "a1", { approve: true, by: asAnn }, context),
+    ).rejects.toThrow(AdminOnly);
+    expect(sent).toEqual([]);
+    const asAdmin = { playerId: admin.id, displayName: admin.displayName };
+    expect(
+      await nudge.approvals.decide(LOBBY, "a1", { approve: true, by: asAdmin }, context),
+    ).toMatchObject({ status: "done" });
+    expect(sent).toEqual(["everyone@example.com"]);
+  });
+
   it("waits for a person, then runs the action and tells the room", async () => {
     const sent: string[] = [];
     const { options, requests, askToSend } = setup(sent);

@@ -548,6 +548,7 @@ export function toApproval(approval: CoreApproval): Approval {
     ...(approval.decidedAt === undefined ? {} : { decidedAt: approval.decidedAt }),
     ...(approval.result === undefined ? {} : { result: approval.result }),
     ...(approval.privateTo === undefined ? {} : { privateTo: player(approval.privateTo) }),
+    ...(approval.adminOnly === true ? { adminOnly: true } : {}),
   };
 }
 
