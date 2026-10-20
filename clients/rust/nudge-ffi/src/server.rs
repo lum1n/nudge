@@ -121,6 +121,8 @@ pub struct ServerOwner {
     pub assistant: String,
     pub player_id: String,
     pub added_at: f64,
+    /// Their address, when their home is elsewhere and they joined `assistant` from there.
+    pub address: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
@@ -316,6 +318,7 @@ impl From<p::ServerOwner> for ServerOwner {
             assistant: o.assistant,
             player_id: o.player_id,
             added_at: o.added_at,
+            address: o.address,
         }
     }
 }
@@ -415,6 +418,23 @@ impl ServerClient {
         let (api, info) = (self.api.clone(), self.info.clone());
         let session =
             run(async move { api.sign_in(&assistant, &player_token, info).await }).await?;
+        Ok(session.owner.into())
+    }
+
+    /// Trades an assertion from the owner's home, from `NudgeClient::owner_assertion`, for a server
+    /// token, and stores it: for a device with no player token on `assistant`.
+    pub async fn sign_in_from_home(
+        &self,
+        assistant: String,
+        assertion: String,
+    ) -> Result<ServerOwner, NudgeError> {
+        let assertion: p::Sealed =
+            serde_json::from_str(&assertion).map_err(|error| NudgeError::Decode {
+                detail: format!("Not an assertion: {error}"),
+            })?;
+        let (api, info) = (self.api.clone(), self.info.clone());
+        let session =
+            run(async move { api.sign_in_from_home(&assistant, assertion, info).await }).await?;
         Ok(session.owner.into())
     }
 

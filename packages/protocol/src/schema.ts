@@ -607,6 +607,20 @@ export type AssertResponse = Static<typeof AssertResponse>;
 export const JoinRequest = Type.Object({ assertion: Sealed });
 export type JoinRequest = Static<typeof JoinRequest>;
 
+/**
+ * A server the caller owns, kept at their home so all their devices see it (ADR 11): its address,
+ * and the assistant there through whose player they own it.
+ */
+export const OwnedServer = Type.Object({
+  server: Type.String(),
+  assistant: Type.String(),
+  since: Type.Number(),
+});
+export type OwnedServer = Static<typeof OwnedServer>;
+
+export const OwnedServersResponse = Type.Object({ servers: Type.Array(OwnedServer) });
+export type OwnedServersResponse = Static<typeof OwnedServersResponse>;
+
 export const InviteRequest = Type.Object({ address: Type.String() });
 export type InviteRequest = Static<typeof InviteRequest>;
 
@@ -908,6 +922,8 @@ export const ServerOwner = Type.Object({
   assistant: Type.String(),
   playerId: Type.String(),
   addedAt: Type.Number(),
+  /** Their address, when their home is elsewhere and they joined `assistant` from there. */
+  address: Type.Optional(Type.String()),
 });
 export type ServerOwner = Static<typeof ServerOwner>;
 
@@ -922,8 +938,16 @@ export const AddOwnerRequest = Type.Object({
 });
 export type AddOwnerRequest = Static<typeof AddOwnerRequest>;
 
-/** Sent with the player's token of `assistant`: an owner's server token for this client. */
-export const ServerSessionRequest = Type.Object({ assistant: Type.String(), client: ClientInfo });
+/**
+ * An owner's server token for this client. Sent with the token of the owner's player of
+ * `assistant`, or with `assertion`: their home vouching for them to `assistant`, from the home's
+ * `POST /ext/federation/owner-assertion`.
+ */
+export const ServerSessionRequest = Type.Object({
+  assistant: Type.String(),
+  client: ClientInfo,
+  assertion: Type.Optional(Sealed),
+});
 export type ServerSessionRequest = Static<typeof ServerSessionRequest>;
 
 /** `token` is shown only here; keep it like a password. */
@@ -1136,6 +1160,8 @@ export const SCHEMAS = {
   Sealed,
   AssertResponse,
   JoinRequest,
+  OwnedServer,
+  OwnedServersResponse,
   InviteRequest,
   Invite,
   InviteResponse,

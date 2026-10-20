@@ -1,5 +1,5 @@
 // The servers this device owns (ADR 11), with a server token each, and the exe.dev key and token
-// servers are made with. Kept in the app's private preferences, like the player tokens; never sent to a
+// servers are made with. The list is kept at home too, so every device of the person's sees it. Kept in the app's private preferences, like the player tokens; never sent to a
 // server but the one each belongs to.
 package app.nudge
 
@@ -38,6 +38,18 @@ class Servers(private val preferences: SharedPreferences) {
         save()
     }
 
+    /**
+     * Whether the server was on the list at home when this device last looked, so one gone from
+     * there was taken off on another device, rather than not put there yet.
+     */
+    fun wasAtHome(server: String) = server.trimEnd('/') in atHome()
+
+    /** The servers on the list at home, as it just said. */
+    fun setAtHome(servers: Set<String>) =
+        preferences.edit().putStringSet(AT_HOME, servers.map { it.trimEnd('/') }.toSet()).apply()
+
+    private fun atHome(): Set<String> = preferences.getStringSet(AT_HOME, emptySet()).orEmpty()
+
     /** The exe.dev token the person pasted, to make and remove servers with. */
     var exeToken: String?
         get() = preferences.getString(EXE_TOKEN, null)
@@ -63,6 +75,7 @@ class Servers(private val preferences: SharedPreferences) {
 
     private companion object {
         const val OWNED = "servers"
+        const val AT_HOME = "servers.atHome"
         const val EXE_TOKEN = "exe.token"
         const val EXE_KEY = "exe.key"
     }

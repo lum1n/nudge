@@ -286,6 +286,13 @@ final class AppModel {
         _ = try await owner.addOwner(assistant: assistant, playerId: guest, admin: true)
         // An admin now: Settings shows its extensions and invites.
         place.me = (try? await place.client.me()) ?? place.me
+        // On the list at home, for the person's other devices; the next sync puts it there otherwise.
+        if let home = session,
+            let listed = try? await home.client.addOwnedServer(
+                server: server.trimmingCharacters(in: ["/"]), assistant: assistant)
+        {
+            servers.setAtHome(Set(listed.map(\.server)))
+        }
     }
 
     /// Makes an assistant on a server this device owns. One that is "for me" is joined from home
@@ -317,7 +324,56 @@ final class AppModel {
             _ = try? await servers.client(root).removeWiredMember(name: name)
         }
         try await ExeClient(token: token).delete(name: vm)
+        try await removeServer(server)
+    }
+
+    /// Takes a server off the person's list at home and signs this device out of it; their other
+    /// devices follow when they next look. They stay its owner, and nothing on the server changes.
+    func removeServer(_ server: String) async throws {
+        if let home = session {
+            do {
+                try await home.client.removeOwnedServer(server: server.trimmingCharacters(in: ["/"]))
+            } catch NudgeError.Status(404, _) {
+                // Not on the list, or no federation at home: there is nothing to take off.
+            }
+        }
         await servers.forget(server)
+    }
+
+    /// Matches the servers this device owns to the person's list at home (ADR 11): signs in to the
+    /// ones another device put there, with an assertion from home; puts there the ones only this
+    /// device knew, when their owner is the person at home; and forgets the ones taken off elsewhere.
+    private func syncServers(_ home: Session) async {
+        guard let address = memberships?.address, let listed = try? await home.client.ownedServers(),
+            session === home
+        else { return }
+        var atHome = Set(listed.map { $0.server.trimmingCharacters(in: ["/"]) })
+        let homeServer = home.account.server.trimmingCharacters(in: ["/"])
+        for server in servers.owned {
+            let key = server.trimmingCharacters(in: ["/"])
+            if atHome.contains(key) || key == homeServer { continue }
+            if servers.wasAtHome(key) {
+                await servers.forget(server)
+                continue
+            }
+            guard let owner = try? await servers.client(server).info().owner, owner.address == address
+            else { continue }
+            if (try? await home.client.addOwnedServer(server: key, assistant: owner.assistant)) != nil {
+                atHome.insert(key)
+            }
+        }
+        for owned in listed where !servers.owned.contains(where: { $0.trimmingCharacters(in: ["/"]) == owned.server }) {
+            do {
+                let assertion = try await home.client.ownerAssertion(server: owned.server, assistant: owned.assistant)
+                // The client keeps the server token it gets.
+                _ = try await servers.client(owned.server).signInFromHome(
+                    assistant: owned.assistant, assertion: assertion)
+                servers.remember(owned.server)
+            } catch {
+                // Unreachable for now, or no longer theirs: tried again next time.
+            }
+        }
+        servers.setAtHome(atHome)
     }
 
     /// Signs in to the home's server as its owner, when the player is one; quietly not otherwise.
@@ -511,6 +567,7 @@ final class AppModel {
         savePlaces()
         for place in gone { await forget(place) }
         await rejoinSignedOut()
+        await syncServers(home)
     }
 
     /// Joins again, with a fresh assertion from home, the assistants whose token stopped working

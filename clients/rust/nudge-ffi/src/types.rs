@@ -950,6 +950,25 @@ impl From<p::Membership> for Membership {
     }
 }
 
+/// A server the player owns, as their home keeps it (ADR 11): `assistant` is the one there they
+/// own it through.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct OwnedServer {
+    pub server: String,
+    pub assistant: String,
+    pub since: f64,
+}
+
+impl From<p::OwnedServer> for OwnedServer {
+    fn from(owned: p::OwnedServer) -> Self {
+        OwnedServer {
+            server: owned.server,
+            assistant: owned.assistant,
+            since: owned.since,
+        }
+    }
+}
+
 /// Where the player joined from here, their home, and their address to give to admins elsewhere.
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
 pub struct Memberships {

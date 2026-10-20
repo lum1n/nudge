@@ -68,6 +68,19 @@ export const JoinClaim = Type.Object({
   nonce: Type.String({ minLength: 16 }),
 });
 
+/**
+ * Home → app → a server one of its people owns: they are who the owner there is, for a server
+ * token (ADR 11). Unlike a join, it makes no membership.
+ */
+export const OwnerClaim = Type.Object({
+  kind: Type.Literal("nudge.owner"),
+  home: HomeBody,
+  audience: PlaceBody,
+  issuedAt: Type.Number(),
+  expiresAt: Type.Number(),
+  nonce: Type.String({ minLength: 16 }),
+});
+
 /** Home → an assistant one of its people joined: their profile, whole. */
 export const ProfileClaim = Type.Object({
   kind: Type.Literal("nudge.profile"),

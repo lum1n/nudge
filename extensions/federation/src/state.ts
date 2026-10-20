@@ -46,6 +46,9 @@ export type Membership = Place &
     origins?: Record<string, string>;
   };
 
+/** Here as a home: a server one of its players owns, through their player of `assistant` there. */
+export type OwnedServer = Place & { since: number };
+
 // Stored in a document, so plain JSON.
 export type FederationState = {
   /** Here as the place people join: open invites by id. */
@@ -56,6 +59,8 @@ export type FederationState = {
   memberships: Record<string, Membership[]>;
   /** Join assertions already used, until they expire, so none is used twice. */
   used: Record<string, number>;
+  /** Here as a home: the servers each of its players owns, by player id; absent in older state. */
+  servers?: Record<string, OwnedServer[]>;
 };
 
 export const FederationDoc = defineDoc<FederationState>({
@@ -66,7 +71,7 @@ export const FederationDoc = defineDoc<FederationState>({
 });
 
 export function emptyState(): FederationState {
-  return { invites: {}, guests: {}, memberships: {}, used: {} };
+  return { invites: {}, guests: {}, memberships: {}, used: {}, servers: {} };
 }
 
 export function samePlace(a: Place, b: Place): boolean {

@@ -4816,6 +4816,55 @@
         }
       }
     },
+    "OwnedServer": {
+      "type": "object",
+      "required": [
+        "server",
+        "assistant",
+        "since"
+      ],
+      "properties": {
+        "server": {
+          "type": "string"
+        },
+        "assistant": {
+          "type": "string"
+        },
+        "since": {
+          "type": "number"
+        }
+      }
+    },
+    "OwnedServersResponse": {
+      "type": "object",
+      "required": [
+        "servers"
+      ],
+      "properties": {
+        "servers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "server",
+              "assistant",
+              "since"
+            ],
+            "properties": {
+              "server": {
+                "type": "string"
+              },
+              "assistant": {
+                "type": "string"
+              },
+              "since": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      }
+    },
     "InviteRequest": {
       "type": "object",
       "required": [
@@ -6372,6 +6421,9 @@
         },
         "addedAt": {
           "type": "number"
+        },
+        "address": {
+          "type": "string"
         }
       }
     },
@@ -6403,6 +6455,9 @@
               },
               "addedAt": {
                 "type": "number"
+              },
+              "address": {
+                "type": "string"
               }
             }
           }
@@ -6451,6 +6506,34 @@
               "type": "string"
             }
           }
+        },
+        "assertion": {
+          "type": "object",
+          "required": [
+            "v",
+            "epk",
+            "iv",
+            "data",
+            "tag"
+          ],
+          "properties": {
+            "v": {
+              "type": "number",
+              "const": 1
+            },
+            "epk": {
+              "type": "string"
+            },
+            "iv": {
+              "type": "string"
+            },
+            "data": {
+              "type": "string"
+            },
+            "tag": {
+              "type": "string"
+            }
+          }
         }
       }
     },
@@ -6488,6 +6571,9 @@
             },
             "addedAt": {
               "type": "number"
+            },
+            "address": {
+              "type": "string"
             }
           }
         }
@@ -6667,6 +6753,9 @@
             },
             "addedAt": {
               "type": "number"
+            },
+            "address": {
+              "type": "string"
             }
           }
         },
@@ -7085,6 +7174,9 @@
             },
             "addedAt": {
               "type": "number"
+            },
+            "address": {
+              "type": "string"
             }
           }
         }

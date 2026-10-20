@@ -487,6 +487,50 @@ impl Api {
         .await
     }
 
+    // The servers the caller owns, kept at their home so all their devices see them (ADR 11). On
+    // another device, `owner_assertion` and `ServerApi::sign_in_from_home` give a server token.
+
+    /// The servers the caller owns, as their home keeps them.
+    pub async fn owned_servers(&self) -> Result<Vec<OwnedServer>, ApiError> {
+        let response: OwnedServersResponse = self
+            .request(Method::GET, &["ext", "federation", "servers"], &[], NO_BODY)
+            .await?;
+        Ok(response.servers)
+    }
+
+    /// Keeps a server the caller owns at home: `place.assistant` is the one there they own it
+    /// through.
+    pub async fn add_owned_server(&self, place: &PlaceRequest) -> Result<Vec<OwnedServer>, ApiError> {
+        let response: OwnedServersResponse = self
+            .request(Method::PUT, &["ext", "federation", "servers"], &[], Some(place))
+            .await?;
+        Ok(response.servers)
+    }
+
+    /// Takes a server off the caller's list at home; nothing on the server changes.
+    pub async fn remove_owned_server(&self, server: &str) -> Result<(), ApiError> {
+        self.request_empty(
+            Method::DELETE,
+            &["ext", "federation", "servers"],
+            &[("server", server)],
+            NO_BODY,
+        )
+        .await
+    }
+
+    /// Has the caller's home vouch for them to a server they own, through `place`'s assistant.
+    pub async fn owner_assertion(&self, place: &PlaceRequest) -> Result<Sealed, ApiError> {
+        let response: AssertResponse = self
+            .request(
+                Method::POST,
+                &["ext", "federation", "owner-assertion"],
+                &[],
+                Some(place),
+            )
+            .await?;
+        Ok(response.assertion)
+    }
+
     // Admin routes, for players with the admin flag.
 
     /// Gives a player the admin flag, or with `false` takes it; the first player keeps it.

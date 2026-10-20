@@ -902,6 +902,47 @@ impl NudgeClient {
         Ok(run(async move { api.leave(&place).await }).await?)
     }
 
+    // The servers the player owns, kept at their home so all their devices see them (ADR 11). On
+    // another device, `owner_assertion` and `ServerClient::sign_in_from_home` give a server token.
+
+    /// The servers the player owns, as their home keeps them.
+    pub async fn owned_servers(&self) -> Result<Vec<OwnedServer>, NudgeError> {
+        let api = self.client.api().clone();
+        let servers = run(async move { api.owned_servers().await }).await?;
+        Ok(servers.into_iter().map(Into::into).collect())
+    }
+
+    /// Keeps a server the player owns at home: `assistant` is the one there they own it through.
+    pub async fn add_owned_server(
+        &self,
+        server: String,
+        assistant: String,
+    ) -> Result<Vec<OwnedServer>, NudgeError> {
+        let api = self.client.api().clone();
+        let place = p::PlaceRequest { server, assistant };
+        let servers = run(async move { api.add_owned_server(&place).await }).await?;
+        Ok(servers.into_iter().map(Into::into).collect())
+    }
+
+    /// Takes a server off the player's list at home; nothing on the server changes.
+    pub async fn remove_owned_server(&self, server: String) -> Result<(), NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.remove_owned_server(&server).await }).await?)
+    }
+
+    /// Has the player's home vouch for them to a server they own, through its assistant
+    /// `assistant`: an assertion for `ServerClient::sign_in_from_home`, good for five minutes.
+    pub async fn owner_assertion(
+        &self,
+        server: String,
+        assistant: String,
+    ) -> Result<String, NudgeError> {
+        let api = self.client.api().clone();
+        let place = p::PlaceRequest { server, assistant };
+        let sealed = run(async move { api.owner_assertion(&place).await }).await?;
+        Ok(serde_json::to_string(&sealed).expect("JSON values serialize"))
+    }
+
     // Admin commands, for players with the admin flag.
 
     /// Gives a player the admin flag, or with `false` takes it; returns whether they have it now.

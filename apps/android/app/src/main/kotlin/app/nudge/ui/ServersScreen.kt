@@ -397,10 +397,21 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
                     }
                     add { shapes ->
                         SegmentedListItem(
-                            onClick = { scope.launch { model.servers.forget(server); close() } },
+                            onClick = {
+                                scope.launch {
+                                    try {
+                                        model.removeServer(server)
+                                        close()
+                                    } catch (error: Exception) {
+                                        problem = explain(error)
+                                    }
+                                }
+                            },
                             shapes = shapes,
-                            supportingContent = { Text("This device stops managing it. Nothing on the server changes.") },
-                        ) { Text("Sign out as owner") }
+                            supportingContent = {
+                                Text("Your devices stop managing it. You stay its owner, and nothing on the server changes.")
+                            },
+                        ) { Text("Remove from my servers") }
                     }
                     if (vm != null && model.servers.exeToken != null) {
                         add { shapes ->

@@ -139,14 +139,18 @@ private struct ServerView: View {
                     }
                 }
                 Section {
-                    Button("Sign out as owner", role: .destructive) {
+                    Button("Remove from my servers", role: .destructive) {
                         Task {
-                            await model.servers.forget(server)
-                            dismiss()
+                            do {
+                                try await model.removeServer(server)
+                                dismiss()
+                            } catch {
+                                problem = explain(error)
+                            }
                         }
                     }
                 } footer: {
-                    Text("This device stops managing it. Nothing on the server changes.")
+                    Text("Your devices stop managing it. You stay its owner, and nothing on the server changes.")
                 }
                 if let vm = exeVmName(server), model.servers.exeToken != nil {
                     Section {

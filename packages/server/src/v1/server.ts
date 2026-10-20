@@ -1,5 +1,6 @@
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
+  addressOf,
   type AssistantConfig,
   AssistantExists,
   AssistantNotFound,
@@ -30,6 +31,7 @@ import {
   type ServerAssistant,
   type ServerAssistantsResponse,
   type ServerInfoResponse,
+  type ServerOwner as ShownOwner,
   type ServerOwnersResponse,
   ServerSessionRequest,
   type ServerSessionResponse,
@@ -112,15 +114,23 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
     const body = await readJson(c, ServerSessionRequest);
     const nudge = control.assistants.running.get(body.assistant);
     const token = bearer(c);
-    const credential =
-      nudge === undefined || token === undefined
+    // A player's token, or their home vouching for them, the way joining from home works.
+    const playerId =
+      nudge === undefined
         ? undefined
-        : await nudge.players.authenticate(token, context);
-    if (credential === undefined) throw new HttpError(401, "Missing or unknown token");
-    const owner = control.owners.ownerOf(body.assistant, credential.player.id);
+        : token !== undefined
+          ? (await nudge.players.authenticate(token, context))?.player.id
+          : body.assertion !== undefined
+            ? await nudge.identify(body.assertion, context)
+            : undefined;
+    if (playerId === undefined) throw new HttpError(401, "Missing or unknown token");
+    const owner = control.owners.ownerOf(body.assistant, playerId);
     if (owner === undefined) throw new HttpError(403, "Only the server's owners may do that");
     const issued = control.owners.issue(owner.id, body.client);
-    return c.json({ ...issued, owner } satisfies ServerSessionResponse, 201);
+    return c.json(
+      { ...issued, owner: await shownOwner(control, owner) } satisfies ServerSessionResponse,
+      201,
+    );
   });
 
   const authenticate: MiddlewareHandler<Env> = async (c, next) => {
@@ -136,7 +146,7 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
   app.get("/", async (c) =>
     c.json({
       version: options.version,
-      owner: c.var.owner,
+      owner: await shownOwner(control, c.var.owner),
       assistants: await listAssistants(control),
       ...(control.updates === undefined ? {} : { updates: control.updates.state() }),
     } satisfies ServerInfoResponse),
@@ -306,8 +316,10 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
     return c.json({ kit } satisfies RecoveryKitResponse);
   });
 
-  app.get("/owners", (c) =>
-    c.json({ owners: control.owners.list() } satisfies ServerOwnersResponse),
+  app.get("/owners", async (c) =>
+    c.json({
+      owners: await Promise.all(control.owners.list().map((owner) => shownOwner(control, owner))),
+    } satisfies ServerOwnersResponse),
   );
 
   app.post("/owners", async (c) => {
@@ -317,7 +329,10 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
     if ((await nudge.players.get(body.playerId, context)) === undefined)
       throw new HttpError(404, `No player "${body.playerId}" in ${body.assistant}`);
     if (body.admin === true) await nudge.players.setAdmin(body.playerId, true, context);
-    return c.json(control.owners.add(body.assistant, body.playerId), 201);
+    return c.json(
+      await shownOwner(control, control.owners.add(body.assistant, body.playerId)),
+      201,
+    );
   });
 
   app.delete("/owners/:id", (c) => {
@@ -396,4 +411,12 @@ async function guard<T>(work: () => Promise<T>): Promise<T> {
 
 function bearer(c: HonoContext): string | undefined {
   return /^Bearer\s+(\S+)$/i.exec(c.req.header("authorization") ?? "")?.[1];
+}
+
+/** An owner as the API shows them: with their address when their home is elsewhere. */
+async function shownOwner(control: ServerControl, owner: ServerOwner): Promise<ShownOwner> {
+  const home = (
+    await control.assistants.running.get(owner.assistant)?.players.get(owner.playerId, context)
+  )?.home;
+  return home === undefined ? owner : { ...owner, address: addressOf(home) };
 }

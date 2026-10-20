@@ -28,6 +28,8 @@ import {
   type Invite as ShownInvite,
   type Membership as ShownMembership,
   type MembershipsResponse,
+  type OwnedServer as ShownOwnedServer,
+  type OwnedServersResponse,
   type PairResponse,
   Sealed as SealedBody,
 } from "@nudge/protocol";
@@ -42,6 +44,7 @@ import {
   KeysClaim,
   LeaveClaim,
   MemoryClaim,
+  OwnerClaim,
   PlaceBody,
   ProfileBody,
   ProfileClaim,
@@ -65,6 +68,7 @@ import {
   type Invite,
   type Keys,
   type Membership,
+  type OwnedServer,
   type Place,
   samePlace,
 } from "./state.ts";
@@ -126,6 +130,7 @@ export function federationExtension(options: FederationOptions = {}) {
         routes: federation.routes(),
         close: () => federation.close(),
         retire: (context) => federation.retire(context),
+        identify: (assertion, context) => federation.identify(assertion, context),
       };
     },
   });
@@ -321,6 +326,66 @@ class Federation {
           return new Response(null, { status: 204 });
         },
       },
+      // As a home: the servers its people own (ADR 11), for all their devices.
+      {
+        method: "GET",
+        path: "/servers",
+        auth: "player",
+        handle: async (_request, { player, context }) => {
+          if (player!.home !== undefined)
+            return problem(403, "Only people who live here keep servers here");
+          const servers = (await this.state(context)).servers?.[player!.id] ?? [];
+          return Response.json({
+            servers: servers.map(shownServer),
+          } satisfies OwnedServersResponse);
+        },
+      },
+      {
+        method: "PUT",
+        path: "/servers",
+        auth: "player",
+        handle: async (request, { player, context }) => {
+          const place = trimmedPlace(await read(request, PlaceBody));
+          if (player!.home !== undefined)
+            return problem(403, "Only people who live here keep servers here");
+          const servers = await this.commit((state) => {
+            const all = (state.servers ??= {});
+            const list = (all[player!.id] ?? []).filter((owned) => owned.server !== place.server);
+            const known = all[player!.id]?.find((owned) => owned.server === place.server);
+            all[player!.id] = [...list, { ...place, since: known?.since ?? this.host.now() }].sort(
+              (a, b) => a.server.localeCompare(b.server),
+            );
+            return all[player!.id]!.map(shownServer);
+          }, context);
+          return Response.json({ servers } satisfies OwnedServersResponse);
+        },
+      },
+      {
+        method: "DELETE",
+        path: "/servers",
+        auth: "player",
+        handle: async (request, { player, context }) => {
+          const server = trimmed(new URL(request.url).searchParams.get("server") ?? "");
+          const removed = await this.commit((state) => {
+            const list = state.servers?.[player!.id];
+            if (list === undefined || !list.some((owned) => owned.server === server)) return false;
+            state.servers![player!.id] = list.filter((owned) => owned.server !== server);
+            return true;
+          }, context);
+          return removed ? new Response(null, { status: 204 }) : problem(404, "No such server");
+        },
+      },
+      {
+        method: "POST",
+        path: "/owner-assertion",
+        auth: "player",
+        handle: async (request, { player }) => {
+          const audience = trimmedPlace(await read(request, PlaceBody));
+          if (player!.home !== undefined)
+            return problem(403, "Only people who live here can be vouched for");
+          return this.assertOwner(player!.id, audience);
+        },
+      },
       // As a place to join.
       {
         method: "POST",
@@ -427,6 +492,64 @@ class Federation {
           ];
       }, context);
     return Response.json({ assertion } satisfies AssertResponse);
+  }
+
+  /**
+   * Signs that `playerId` lives here, for a server they own to give them a server token,
+   * encrypted for the assistant there they own it through. Nothing is kept: the server checks
+   * that they are an owner.
+   */
+  private async assertOwner(playerId: string, audience: Place): Promise<Response> {
+    if (samePlace(audience, this.self)) return problem(400, "That is this assistant");
+    if (!secureServer(audience.server) && secureServer(this.self.server))
+      return problem(400, "Other assistants are reached over HTTPS");
+    const keys = await this.keysOf(audience);
+    if (keys === undefined) return problem(502, `Could not reach ${audience.server}`);
+    const now = this.host.now();
+    const assertion = seal(this.signingKey, keys.encryptionKey, {
+      kind: "nudge.owner",
+      home: { ...this.self, playerId },
+      audience,
+      issuedAt: now,
+      expiresAt: now + JOIN_TTL_MS,
+      nonce: randomUUID(),
+    } satisfies Static<typeof OwnerClaim>);
+    return Response.json({ assertion } satisfies AssertResponse);
+  }
+
+  /**
+   * The player here an owner assertion names, once their home's signature checks out and it
+   * wasn't used before (ADR 11). The home's keys are the ones pinned when they joined, or, once
+   * they left, fetched from it: the player here already has that home.
+   */
+  async identify(assertion: unknown, context: Context): Promise<string | undefined> {
+    if (!Value.Check(SealedBody, assertion)) return undefined;
+    const signed = this.open(assertion);
+    if (signed === undefined) return undefined;
+    const claim = peek(signed);
+    if (!Value.Check(OwnerClaim, claim) || !samePlace(claim.audience, this.self)) return undefined;
+    const now = this.host.now();
+    if (
+      now < claim.issuedAt - SKEW_MS ||
+      now > claim.expiresAt ||
+      claim.expiresAt - claim.issuedAt > JOIN_TTL_MS
+    )
+      return undefined;
+    const player = await this.nudge().players.byHome(claim.home, context);
+    if (player === undefined) return undefined;
+    const pinned = (await this.state(context)).guests[player.id] ?? (await this.keysOf(claim.home));
+    if (pinned === undefined) return undefined;
+    const checked = await this.checkFrom(claim.home, pinned, signed, context);
+    const claimed = checked?.claim;
+    if (!Value.Check(OwnerClaim, claimed)) return undefined;
+    const fresh = await this.commit((state) => {
+      for (const [nonce, expiresAt] of Object.entries(state.used))
+        if (expiresAt < now) delete state.used[nonce];
+      if (claimed.nonce in state.used) return false;
+      state.used[claimed.nonce] = claimed.expiresAt;
+      return true;
+    }, context);
+    return fresh ? player.id : undefined;
   }
 
   /** Starts or stops carrying a player's own memory to one place they joined. */
@@ -1160,6 +1283,10 @@ function placeOf(place: Place): Place {
 }
 
 /** A membership as its player sees it: without the keys. */
+function shownServer(owned: OwnedServer): ShownOwnedServer {
+  return { server: owned.server, assistant: owned.assistant, since: owned.since };
+}
+
 function shown(membership: Membership): ShownMembership {
   return {
     server: membership.server,

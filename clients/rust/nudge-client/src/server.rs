@@ -42,11 +42,37 @@ impl ServerApi {
         let body = ServerSessionRequest {
             assistant: assistant.to_owned(),
             client,
+            assertion: None,
         };
         let session: ServerSessionResponse = read(
             self.http
                 .post(endpoint(&self.base, &["session"]))
                 .bearer_auth(player_token)
+                .json(&body)
+                .send()
+                .await,
+        )
+        .await?;
+        self.tokens.set(Some(session.token.clone()));
+        Ok(session)
+    }
+
+    /// Trades an assertion from the owner's home, from `Api::owner_assertion`, for a server token,
+    /// and stores it: for a device with no player token on `assistant`.
+    pub async fn sign_in_from_home(
+        &self,
+        assistant: &str,
+        assertion: Sealed,
+        client: ClientInfo,
+    ) -> Result<ServerSessionResponse, ApiError> {
+        let body = ServerSessionRequest {
+            assistant: assistant.to_owned(),
+            client,
+            assertion: Some(assertion),
+        };
+        let session: ServerSessionResponse = read(
+            self.http
+                .post(endpoint(&self.base, &["session"]))
                 .json(&body)
                 .send()
                 .await,

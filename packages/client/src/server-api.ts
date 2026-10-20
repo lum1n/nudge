@@ -6,6 +6,7 @@ import type {
   ProviderKey,
   ProviderKeysResponse,
   RecoveryKitResponse,
+  Sealed,
   ServerAssistant,
   ServerAssistantsResponse,
   ServerInfoResponse,
@@ -106,6 +107,25 @@ export class ServerApi {
     return session;
   }
 
+  /**
+   * Trades an assertion from the owner's home, from `Api.ownerAssertion`, for a server token, and
+   * stores it: for a device with no player token on `assistant`.
+   */
+  async signInFromHome(
+    assistant: string,
+    assertion: Sealed,
+    client: ClientInfo,
+  ): Promise<ServerSessionResponse> {
+    const session = await this.request<ServerSessionResponse>(
+      "POST",
+      "/session",
+      { assistant, client, assertion },
+      null,
+    );
+    this.tokens.set(session.token);
+    return session;
+  }
+
   /** Revokes this client's server token, and forgets it. */
   async signOut(): Promise<void> {
     await this.request("DELETE", "/session");
@@ -179,10 +199,11 @@ export class ServerApi {
     method: string,
     path: string,
     body?: unknown,
-    token = this.tokens.get(),
+    /** Null sends none. */
+    token: string | null | undefined = this.tokens.get(),
   ): Promise<T> {
     const headers: Record<string, string> = {};
-    if (token !== undefined) headers.authorization = `Bearer ${token}`;
+    if (token !== undefined && token !== null) headers.authorization = `Bearer ${token}`;
     if (body !== undefined) headers["content-type"] = "application/json";
     return read(
       await this.fetcher(`${this.base}${path}`, {

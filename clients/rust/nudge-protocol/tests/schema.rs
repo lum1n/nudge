@@ -699,6 +699,16 @@ fn http_bodies_match_the_schema() {
             assertion: sealed.clone(),
         },
     );
+    check(
+        "OwnedServersResponse",
+        &OwnedServersResponse {
+            servers: vec![OwnedServer {
+                server: "https://robin.exe.xyz".into(),
+                assistant: "robin".into(),
+                since: 1.0,
+            }],
+        },
+    );
     check("JoinRequest", &JoinRequest { assertion: sealed });
     check(
         "InviteRequest",
@@ -796,6 +806,7 @@ fn server_and_setup_bodies_match_the_schema() {
         assistant: "robin".into(),
         player_id: "ann".into(),
         added_at: 1.0,
+        address: Some("ann@home.example/robin".into()),
     };
     check(
         "AdminPlayer",
@@ -909,6 +920,13 @@ fn server_and_setup_bodies_match_the_schema() {
         &ServerSessionRequest {
             assistant: "robin".into(),
             client: client.clone(),
+            assertion: Some(Sealed {
+                v: 1,
+                epk: "e".into(),
+                iv: "i".into(),
+                data: "d".into(),
+                tag: "t".into(),
+            }),
         },
     );
     check(

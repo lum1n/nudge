@@ -293,6 +293,11 @@ class AppModel(private val context: Context) {
         owner.addOwner(assistant, guest, true)
         // An admin now: Settings shows its extensions and invites.
         place.me.value = runCatching { place.client.me() }.getOrNull() ?: place.me.value
+        // On the list at home, for the person's other devices; the next sync puts it there otherwise.
+        mutableSession.value?.let { home ->
+            runCatching { home.client.addOwnedServer(server.trimEnd('/'), assistant) }
+                .onSuccess { listed -> servers.setAtHome(listed.map { it.server }.toSet()) }
+        }
     }
 
     /**
@@ -317,7 +322,63 @@ class AppModel(private val context: Context) {
             if (membership.server.trimEnd('/') == server.trimEnd('/')) runCatching { leave(membership) }
         }
         exe.delete(vm)
+        removeServer(server)
+    }
+
+    /**
+     * Takes a server off the person's list at home and signs this device out of it; their other
+     * devices follow when they next look. They stay its owner, and nothing on the server changes.
+     */
+    suspend fun removeServer(server: String) {
+        mutableSession.value?.let { home ->
+            try {
+                home.client.removeOwnedServer(server.trimEnd('/'))
+            } catch (error: NudgeException.Status) {
+                // Not on the list, or no federation at home: there is nothing to take off.
+                if (error.status.toInt() != 404) throw error
+            }
+        }
         servers.forget(server)
+    }
+
+    /**
+     * Matches the servers this device owns to the person's list at home (ADR 11): signs in to the
+     * ones another device put there, with an assertion from home; puts there the ones only this
+     * device knew, when their owner is the person at home; and forgets the ones taken off elsewhere.
+     */
+    private suspend fun syncServers(home: Session) {
+        val address = mutableMemberships.value?.address ?: return
+        val listed = try {
+            home.client.ownedServers()
+        } catch (_: NudgeException) {
+            return
+        }
+        if (mutableSession.value !== home) return
+        val atHome = listed.map { it.server.trimEnd('/') }.toMutableSet()
+        val homeServer = home.account.server.trimEnd('/')
+        for (server in servers.owned.value) {
+            val key = server.trimEnd('/')
+            if (key in atHome || key == homeServer) continue
+            if (servers.wasAtHome(key)) {
+                servers.forget(server)
+                continue
+            }
+            val owner = runCatching { servers.client(server).info().owner }.getOrNull() ?: continue
+            if (owner.address != address) continue
+            runCatching { home.client.addOwnedServer(key, owner.assistant) }.onSuccess { atHome += key }
+        }
+        for (owned in listed) {
+            if (servers.owned.value.any { it.trimEnd('/') == owned.server }) continue
+            try {
+                val assertion = home.client.ownerAssertion(owned.server, owned.assistant)
+                servers.client(owned.server).signInFromHome(owned.assistant, assertion)
+                // The client kept the token; remember the server.
+                servers.remember(owned.server, serverToken(owned.server) ?: continue)
+            } catch (_: NudgeException) {
+                // Unreachable for now, or no longer theirs: tried again next time.
+            }
+        }
+        servers.setAtHome(atHome)
     }
 
     /** Signs in to the home's server as its owner, when the player is one; quietly not otherwise. */
@@ -500,6 +561,7 @@ class AppModel(private val context: Context) {
             gone.forEach { forget(it) }
         }
         rejoinSignedOut()
+        syncServers(home)
     }
 
     /**

@@ -2,9 +2,9 @@ import { createServer } from "node:net";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
-import { Api, ApiError, memoryTokens } from "@nudge/client";
-import { createNudge, type Nudge } from "@nudge/core";
-import { type RunningServer, serveNudge } from "@nudge/server";
+import { Api, ApiError, memoryTokens, ServerApi } from "@nudge/client";
+import { type Assistants, createNudge, type Nudge, ServerKeys, ServerOwners } from "@nudge/core";
+import { type RunningServer, type ServerControl, serveNudge } from "@nudge/server";
 import { afterEach, describe, expect, it } from "vitest";
 import { federationExtension } from "../src/index.ts";
 
@@ -32,8 +32,11 @@ describe("federation over the network", () => {
     errors.length = 0;
   });
 
-  /** An assistant behind a real HTTP server, its federation reaching others with `fetch`. */
-  const start = async (name: string) => {
+  /**
+   * An assistant behind a real HTTP server, its federation reaching others with `fetch`; with
+   * `owners`, the server's own API too.
+   */
+  const start = async (name: string, owners?: ServerOwners) => {
     const port = await freePort();
     const url = `http://127.0.0.1:${port}`;
     const faux = fauxProvider();
@@ -56,7 +59,21 @@ describe("federation over the network", () => {
       context,
     );
     opened.push(nudge);
-    servers.push(await serveNudge({ assistants: new Map([[name, nudge]]), port }));
+    const assistants = new Map([[name, nudge]]);
+    const server: ServerControl | undefined =
+      owners === undefined
+        ? undefined
+        : {
+            assistants: { running: assistants, list: async () => [] } as unknown as Assistants,
+            keys: new ServerKeys(undefined, () => []),
+            owners,
+            backupBeforeDelete: async () => "",
+            testKey: async () => {},
+            backupKey: async () => Buffer.alloc(32),
+          };
+    servers.push(
+      await serveNudge({ assistants, port, ...(server === undefined ? {} : { server }) }),
+    );
     return { nudge, url };
   };
 
@@ -106,5 +123,84 @@ describe("federation over the network", () => {
       )
       .toBe(401);
     await expect(vegard.leave(place)).rejects.toEqual(new ApiError(404, "No such membership"));
+  });
+
+  it("keeps the servers someone owns at home, and signs them in there from any device", async () => {
+    const home = await start("robin");
+    const owners = new ServerOwners(undefined);
+    const away = await start("team", owners);
+    const vegard = new Api({
+      server: home.url,
+      assistant: "robin",
+      tokens: memoryTokens((await home.nudge.players.invite("Vegard", context)).token),
+    });
+    const ann = new Api({
+      server: away.url,
+      assistant: "team",
+      tokens: memoryTokens((await away.nudge.players.invite("Ann", context)).token),
+    });
+    const address = `vegard@${home.url}/robin`;
+    const place = { server: away.url, assistant: "team" };
+    const client = { name: "test", platform: "node" };
+    const signIn = async (assertion: Awaited<ReturnType<Api["ownerAssertion"]>>) => {
+      const tokens = memoryTokens();
+      const session = await new ServerApi({ server: away.url, tokens }).signInFromHome(
+        "team",
+        assertion,
+        client,
+      );
+      expect(tokens.get()).toBe(session.token);
+      return session;
+    };
+    const status = (work: Promise<unknown>) =>
+      work.then(
+        () => 200,
+        (error: ApiError) => error.status,
+      );
+
+    // The list, kept once per server, with a trailing slash or not.
+    expect(await vegard.ownedServers()).toEqual([]);
+    const since = (await vegard.addOwnedServer({ ...place, server: `${away.url}/` }))[0]!.since;
+    expect(await vegard.addOwnedServer(place)).toEqual([{ ...place, since }]);
+    expect(await vegard.ownedServers()).toEqual([{ ...place, since }]);
+
+    // No player there with that home yet: the assertion names no one, and makes no membership.
+    expect(await status(signIn(await vegard.ownerAssertion(place)))).toBe(401);
+    expect((await vegard.memberships()).memberships).toEqual([]);
+
+    // Joined from home and made an owner, as the app does for a new server.
+    await ann.invite(address);
+    await new Api({ ...place, tokens: memoryTokens() }).join(await vegard.vouchFor(place));
+    // A player, but not yet an owner.
+    expect(await status(signIn(await vegard.ownerAssertion(place)))).toBe(403);
+    owners.add("team", "vegard");
+
+    const assertion = await vegard.ownerAssertion(place);
+    const session = await signIn(assertion);
+    expect(session.owner).toMatchObject({ assistant: "team", playerId: "vegard", address });
+    expect(
+      (await new ServerApi({ server: away.url, tokens: memoryTokens(session.token) }).info()).owner,
+    ).toMatchObject({ playerId: "vegard", address });
+    // Once only, and only for the assistant it names.
+    expect(await status(signIn(assertion))).toBe(401);
+    const tokens = memoryTokens();
+    const wrong = new ServerApi({ server: away.url, tokens }).signInFromHome(
+      "nobody",
+      await vegard.ownerAssertion(place),
+      client,
+    );
+    expect(await status(wrong)).toBe(401);
+    // A join assertion is no owner assertion.
+    expect(await status(signIn(await vegard.vouchFor(place)))).toBe(401);
+
+    // Left there, they are still its owner, and their home still vouches for them.
+    await vegard.leave(place);
+    expect((await signIn(await vegard.ownerAssertion(place))).owner.playerId).toBe("vegard");
+
+    await vegard.removeOwnedServer(away.url);
+    expect(await vegard.ownedServers()).toEqual([]);
+    await expect(vegard.removeOwnedServer(away.url)).rejects.toEqual(
+      new ApiError(404, "No such server"),
+    );
   });
 });

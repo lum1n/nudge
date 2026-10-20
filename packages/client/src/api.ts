@@ -44,6 +44,8 @@ import type {
   TokensResponse,
   UpdateProfileRequest,
   UsageResponse,
+  OwnedServer,
+  OwnedServersResponse,
 } from "@nudge/protocol";
 
 /**
@@ -255,6 +257,32 @@ export class Api {
   leave(place: PlaceRequest): Promise<void> {
     const query = new URLSearchParams({ server: place.server, assistant: place.assistant });
     return this.request("DELETE", `/ext/federation/memberships?${query}`);
+  }
+
+  // The servers the caller owns, kept at their home so all their devices see them (ADR 11). On
+  // another device, `ownerAssertion` and `ServerApi.signInFromHome` give a server token for one.
+
+  /** The servers the caller owns, as their home keeps them. */
+  async ownedServers(): Promise<OwnedServer[]> {
+    return (await this.request<OwnedServersResponse>("GET", "/ext/federation/servers")).servers;
+  }
+
+  /** Keeps a server the caller owns at home: `assistant` is the one there they own it through. */
+  async addOwnedServer(place: PlaceRequest): Promise<OwnedServer[]> {
+    return (await this.request<OwnedServersResponse>("PUT", "/ext/federation/servers", place))
+      .servers;
+  }
+
+  /** Takes a server off the caller's list at home; nothing on the server changes. */
+  removeOwnedServer(server: string): Promise<void> {
+    const query = new URLSearchParams({ server });
+    return this.request("DELETE", `/ext/federation/servers?${query}`);
+  }
+
+  /** Has the caller's home vouch for them to a server they own, through `place`'s assistant. */
+  async ownerAssertion(place: PlaceRequest): Promise<Sealed> {
+    return (await this.request<AssertResponse>("POST", "/ext/federation/owner-assertion", place))
+      .assertion;
   }
 
   decide(room: string, approval: string, approve: boolean): Promise<Approval> {

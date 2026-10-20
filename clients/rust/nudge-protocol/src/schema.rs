@@ -1063,6 +1063,20 @@ pub struct Sealed {
     pub tag: String,
 }
 
+/// A server the caller owns, kept at their home so all their devices see it (ADR 11): its
+/// address, and the assistant there through whose player they own it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct OwnedServer {
+    pub server: String,
+    pub assistant: String,
+    pub since: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct OwnedServersResponse {
+    pub servers: Vec<OwnedServer>,
+}
+
 /// The caller's home vouching for them, for the assistant they asked about only.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AssertResponse {
@@ -1294,6 +1308,9 @@ pub struct ServerOwner {
     pub assistant: String,
     pub player_id: String,
     pub added_at: f64,
+    /// Their address, when their home is elsewhere and they joined `assistant` from there.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub address: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -1311,11 +1328,14 @@ pub struct AddOwnerRequest {
     pub admin: Option<bool>,
 }
 
-/// Sent with the player's token of `assistant`.
+/// Sent with the player's token of `assistant`, or with `assertion`: their home vouching for
+/// them to `assistant`, from the home's `POST /ext/federation/owner-assertion`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ServerSessionRequest {
     pub assistant: String,
     pub client: ClientInfo,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assertion: Option<Sealed>,
 }
 
 /// `token` is shown only here; keep it like a password.
