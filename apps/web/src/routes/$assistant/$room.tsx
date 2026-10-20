@@ -32,6 +32,9 @@ import {
   useState,
 } from "react";
 import { clientFor, forgetToken, useConnection, useRoom } from "../../api.ts";
+import { Avatar, Portrait } from "../../avatar/Avatar.tsx";
+import type { Mood } from "../../avatar/pose.ts";
+import { useRoomMood } from "../../avatar/use-room-mood.ts";
 import {
   appendText,
   buildQueueAdapter,
@@ -302,6 +305,7 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
   // Only in a shared room is there anyone to keep a message from.
   const shared = view.room.kind !== "personal";
   const [secret, setSecret] = useState(false);
+  const mood = useRoomMood(view);
   const dispatch = useCallback(
     (message: AppendMessage, lane: Lane) => {
       const text = appendText(message).trim();
@@ -351,6 +355,12 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
           {state.earlierError !== undefined && (
             <p className="self-center text-sm text-red-700">{state.earlierError}</p>
           )}
+          <ThreadPrimitive.Empty>
+            <div className="m-auto flex flex-col items-center gap-2 py-8 text-stone-500">
+              <Avatar mood={mood} size={160} title={name} />
+              <p>Say hello to {name}.</p>
+            </div>
+          </ThreadPrimitive.Empty>
           <ThreadPrimitive.Messages>
             {({ message }) => (
               <>
@@ -361,6 +371,7 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
           </ThreadPrimitive.Messages>
         </ThreadPrimitive.Viewport>
         <FailedSends store={store} pending={state.pending} />
+        {messages.length > 0 && <Presence mood={mood} view={view} name={name} />}
         <ComposerPrimitive.Root className="flex shrink-0 flex-col gap-2">
           <ComposerPrimitive.Queue>
             {({ queueItem }) => (
@@ -403,6 +414,42 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
       </div>
     </AssistantRuntimeProvider>
   );
+}
+
+/** The robot, live, and a word on what it is doing. */
+function Presence({ mood, view, name }: { mood: Mood; view: RoomView; name: string }) {
+  return (
+    <div className="flex shrink-0 items-center gap-2 text-sm text-stone-500">
+      <Avatar mood={mood} size={40} title={name} />
+      <span aria-live="polite">{presenceLabel(mood, view)}</span>
+    </div>
+  );
+}
+
+function presenceLabel(mood: Mood, view: RoomView): string {
+  switch (mood) {
+    case "working": {
+      const answer = view.timeline.findLast((item) => item.type === "answer");
+      const part = answer?.parts.at(-1);
+      return part?.type === "tool" ? `Using ${part.name}…` : "Working…";
+    }
+    case "thinking":
+      return view.live.status?.kind === "compacting" ? "Tidying up older messages…" : "Thinking…";
+    case "speaking":
+      return "Answering…";
+    case "waiting":
+      return "Waiting for an approval";
+    case "puzzled":
+      return "Trying again…";
+    case "sad":
+      return "That didn't work";
+    case "asleep":
+      return "Dozing";
+    case "happy":
+    case "idle":
+    case "listening":
+      return "";
+  }
 }
 
 /** Messages the server didn't take, with a way to send each again or let it go. */
@@ -567,9 +614,7 @@ function AssistantMessage({
         >
           <p className="mb-1 flex flex-wrap items-baseline gap-2 text-xs">
             <span className="font-semibold text-stone-700">
-              <span aria-hidden className="text-teal-600">
-                ✦{" "}
-              </span>
+              <Portrait size={18} className="mr-1 inline-block align-[-4px]" />
               {name}
             </span>
             {prompt !== undefined && (
