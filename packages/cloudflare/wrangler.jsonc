@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nudge",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [{ "name": "NUDGE_ASSISTANT", "class_name": "NudgeAssistant" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["NudgeAssistant"] }],
+  "vars": {
+    // The assistants, as in nudge.json, without databases or extensions.
+    "NUDGE_CONFIG": { "assistants": [{ "name": "nudge" }] },
+  },
+  // Secrets: ANTHROPIC_API_KEY (or another provider's key), and NUDGE_CLAIM_SECRET for the first player.
+}

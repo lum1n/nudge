@@ -1,0 +1,33 @@
+{
+  "name": "@nudge/cloudflare",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Runs Nudge assistants on Cloudflare: one Durable Object per assistant",
+  "type": "module",
+  "exports": {
+    ".": {
+      "@nudge/source": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "dev": "WRANGLER_BUILD_CONDITIONS=@nudge/source,workerd,worker,browser,import,default wrangler dev",
+    "deploy": "WRANGLER_BUILD_CONDITIONS=@nudge/source,workerd,worker,browser,import,default wrangler deploy",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@earendil-works/chord": "1.2.0",
+    "@earendil-works/pi-durable": "1.2.0",
+    "@nudge/core": "workspace:*",
+    "@nudge/protocol": "workspace:*",
+    "@nudge/server": "workspace:*",
+    "hono": "4.13.13"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.4.6",
+    "@cloudflare/workers-types": "5.20261019.1",
+    "@earendil-works/pi-ai": "1.2.0",
+    "wrangler": "4.151.3"
+  }
+}

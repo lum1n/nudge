@@ -70,6 +70,11 @@ export type NudgeOptions = {
   /** Where the assistant lives: a SQLite file path, or `":memory:"` for nothing persisted. */
   readonly database: string;
   /**
+   * Storage the host opened and keeps, such as a Durable Object's, used instead of `database`.
+   * Nothing is locked or written beside it: the host makes sure only one assistant has it open.
+   */
+  readonly storage?: Storage;
+  /**
    * Whether a database made now is encrypted, under a key of its own in `<database>.key`, when no
    * key is set. A server's are (ADR 11); an existing unencrypted one stays so.
    */
@@ -241,6 +246,11 @@ export class Nudge {
     const displayName = options.displayName ?? "Nudge";
     const timeZone = options.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
     const registry = createRegistry();
+    // The file the assistant keeps, when it keeps one.
+    const file =
+      options.storage === undefined && options.database !== ":memory:"
+        ? options.database
+        : undefined;
     let opened: Nudge | undefined;
     let resolveOpen: (nudge: Nudge) => void = () => {};
     const open = new Promise<Nudge>((resolve) => (resolveOpen = resolve));
@@ -280,13 +290,11 @@ export class Nudge {
       documents: () => whenOpen().harness,
       assistant: whenOpen,
       whenOpen: () => open,
-      ...(options.database === ":memory:" ? {} : { dataRoot: `${options.database}.extensions` }),
+      ...(file === undefined ? {} : { dataRoot: `${file}.extensions` }),
     };
-    if (options.database !== ":memory:")
-      await mkdir(dirname(options.database), { recursive: true });
+    if (file !== undefined) await mkdir(dirname(file), { recursive: true });
     // Locked first, so an assistant open elsewhere starts none of its extensions here.
-    const unlock =
-      options.database === ":memory:" ? async () => {} : await lockDatabase(options.database);
+    const unlock = file === undefined ? async () => {} : await lockDatabase(file);
     // Extensions are in the registry before the Harness opens, so their tasks resume with it.
     let installed: SetUpExtension[];
     try {
@@ -304,7 +312,7 @@ export class Nudge {
     let harness: Harness;
     try {
       harness = await Harness.open(
-        await openStorage(options.database, options.encryptNew),
+        options.storage ?? (await openStorage(options.database, options.encryptNew)),
         {
           models,
           registry,

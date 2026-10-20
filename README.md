@@ -8,6 +8,7 @@ An extendable, multiplayer personal assistant that keeps personal data away from
 
 - `@nudge/core`: the embeddable library. One `Nudge` is one assistant: one storage, one Harness, one registry.
 - `@nudge/server`: an HTTP and WebSocket API over one or more assistants.
+- `@nudge/cloudflare`: runs assistants on Cloudflare, one Durable Object each (`packages/cloudflare`).
 - `@nudge/protocol`: the types of [protocol v1](docs/protocol/v1.md), its JSON schema, and the room projector.
 - `@nudge/client`: the TypeScript client of protocol v1.
 - `clients/rust`: the Rust client of protocol v1 (`nudge-protocol`, `nudge-client`), and its UniFFI bindings for Swift, Kotlin and Python (`nudge-ffi`).
@@ -41,6 +42,21 @@ It installs the newest release with its own Node into `~/.local/share/nudge` (or
 A server updates itself: every hour it looks for a newer release, installs one the project signed, and starts it. If the new one stops with an error before it has run for 30 seconds, `nudge-server` goes back to the one before and doesn't try it again. Owners see this at `GET /v1/server` and can turn it off (`PUT /v1/server/updates`).
 
 Releases are made by pushing a tag such as `v0.2.0` ([`.github/workflows/release.yml`](.github/workflows/release.yml)): an archive per architecture from [`packages/release/scripts/bundle.sh`](packages/release/scripts/bundle.sh), a `manifest.json` signed with the `NUDGE_RELEASE_KEY` secret, and the image. Make that key once with `node packages/release/scripts/keygen.mjs`, and put its public half in `RELEASE_KEYS` (`packages/core/src/server/updates.ts`); until then servers don't update themselves.
+
+## Run on Cloudflare
+
+`packages/cloudflare` runs assistants as a Worker with one SQLite-backed Durable Object per assistant, with no machine to keep ([ADR 14](docs/adr/0014-durable-object-host.md)). Set the assistants in `NUDGE_CONFIG` in its `wrangler.jsonc`, as `nudge.json` has them but without databases or extensions, and deploy:
+
+```bash
+cd packages/cloudflare
+pnpm wrangler secret put ANTHROPIC_API_KEY     # or another provider's key
+pnpm wrangler secret put NUDGE_CLAIM_SECRET    # any long random string
+pnpm run deploy
+curl -X POST https://nudge.<you>.workers.dev/v1/a/nudge/claim \
+  -H "Authorization: Bearer <the claim secret>" -d '{"displayName":"Ann"}'
+```
+
+The claim makes the first player, an admin, and prints their token, once; then sign in from the apps or `nudge chat --url` with it, and invite the others with pairing codes. Nudges fire on time through the object's alarm, also when it was idle. Extensions are code here: subclass `NudgeAssistant`, return them from `options()`, and export the subclass from your own Worker. Ones that need the host, such as the browser, desktop and terminal, don't run, and there are no backups, server API or web UI: those are a server's. `pnpm run dev` runs it locally.
 
 ## Use
 
@@ -523,6 +539,8 @@ pnpm install
 pnpm check   # typecheck, lint, test
 pnpm build   # every package, and the web UI into apps/web/dist
 ```
+
+`pnpm test` also runs `packages/cloudflare`'s tests, in workerd through `@cloudflare/vitest-plugin`.
 
 The browser extension's tests on fixture pages (consent dialogs, hidden checkboxes, carousels, cards, logins) drive a real headless Chromium, so they run only when asked:
 

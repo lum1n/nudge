@@ -11,6 +11,11 @@
       "@nudge/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./v1": {
+      "@nudge/source": "./src/v1/routes.ts",
+      "types": "./dist/v1/routes.d.ts",
+      "default": "./dist/v1/routes.js"
     }
   },
   "scripts": {

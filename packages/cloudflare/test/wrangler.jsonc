@@ -1,0 +1,15 @@
+// The Worker the tests run: src/worker.ts with a scripted model instead of a provider's.
+{
+  "name": "nudge-test",
+  "main": "worker.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [{ "name": "NUDGE_ASSISTANT", "class_name": "NudgeAssistant" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["NudgeAssistant"] }],
+  "vars": {
+    "NUDGE_CONFIG": { "assistants": [{ "name": "robin", "timeZone": "Europe/Oslo" }] },
+    "NUDGE_CLAIM_SECRET": "claim-secret",
+  },
+}

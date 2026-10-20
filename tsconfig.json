@@ -16,5 +16,7 @@
     "extensions/*/test",
     "extensions/*/eval",
     "vitest.config.ts"
-  ]
+  ],
+  // Runs on workerd, with its own types: `pnpm -C packages/cloudflare typecheck`.
+  "exclude": ["packages/cloudflare"]
 }

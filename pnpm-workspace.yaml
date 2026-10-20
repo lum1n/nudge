@@ -5,7 +5,9 @@ packages:
 allowBuilds:
   "@google/genai": false
   better-sqlite3-multiple-ciphers: true
+  esbuild: true
   protobufjs: false
+  workerd: true
 minimumReleaseAgeExclude:
   - "@earendil-works/chord@1.2.0"
   - "@earendil-works/pi-ai@1.2.0"
@@ -14,3 +16,6 @@ minimumReleaseAgeExclude:
   - "@earendil-works/pi-mcp@1.2.0"
   - "@earendil-works/pi-telemetry@1.2.0"
   - "@hono/node-server@2.1.5"
+  - '@cloudflare/vitest-plugin@1.4.6'
+  - miniflare@5.20261019.1-beta
+  - wrangler@4.151.3
