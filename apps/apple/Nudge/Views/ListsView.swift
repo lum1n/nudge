@@ -3,7 +3,6 @@ import SwiftUI
 
 /// The room's shared lists, such as shopping and to-dos; the assistant edits them too.
 struct ListsView: View {
-    @Environment(\.dismiss) private var dismiss
     let client: NudgeClient
     let roomId: String
     @State private var lists: ObservedLists?
@@ -12,28 +11,20 @@ struct ListsView: View {
     @State private var newList = ""
 
     var body: some View {
-        NavigationStack {
-            content
-                .navigationTitle("Lists")
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+        content
+            .navigationTitle("Lists")
+            .onAppear {
+                guard lists == nil else { return }
+                do {
+                    lists = try client.observeLists(roomId)
+                } catch {
+                    openingError = explain(error)
                 }
-        }
-        .onAppear {
-            guard lists == nil else { return }
-            do {
-                lists = try client.observeLists(roomId)
-            } catch {
-                openingError = explain(error)
             }
-        }
-        .onDisappear {
-            lists?.close()
-            lists = nil
-        }
-        #if os(macOS)
-        .frame(minWidth: 420, minHeight: 480)
-        #endif
+            .onDisappear {
+                lists?.close()
+                lists = nil
+            }
     }
 
     @ViewBuilder private var content: some View {

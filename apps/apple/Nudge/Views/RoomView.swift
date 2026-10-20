@@ -16,7 +16,7 @@ struct RoomView: View {
     @State private var problem: String?
 
     enum Sheet: String, Identifiable {
-        case lists, info, browser
+        case info, browser
         var id: String { rawValue }
     }
 
@@ -30,23 +30,22 @@ struct RoomView: View {
                 ToolbarItemGroup(placement: .primaryAction) {
                     Button("Activity", systemImage: "list.bullet.rectangle") { activity.toggle() }
                         .help("Tool calls, nudges, watches and approvals")
-                    Button("Lists", systemImage: "checklist") { showing = .lists }
                     Button("Room", systemImage: "info.circle") { showing = .info }
                 }
             }
             .sheet(item: $showing) { sheet in
                 switch sheet {
-                case .lists: ListsView(client: client, roomId: roomId)
                 case .info: RoomInfoView(client: client, roomId: roomId, observed: observed)
                 case .browser: PanelSheet { BrowserView(client: client, roomId: roomId) }
                 }
             }
             // Behind the transcript: from the right on macOS, a sheet on iOS.
             .inspector(isPresented: $activity) {
-                ActivityView(observed: observed, isPresented: $activity)
+                ActivityView(observed: observed)
                     .inspectorColumnWidth(min: 300, ideal: 380, max: 560)
                     #if os(iOS)
                     .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
                     #endif
             }
             .environment(\.openBrowser, { showing = .browser })

@@ -6,26 +6,11 @@ import SwiftUI
 /// sliding in from the right on macOS, a sheet on iOS.
 struct ActivityView: View {
     let observed: ObservedRoom?
-    @Binding var isPresented: Bool
 
     private var state: RoomState? { observed?.value }
 
+    // No navigation stack of its own: on iOS its title and toolbar ended up in the room's bar.
     var body: some View {
-        #if os(iOS)
-        NavigationStack {
-            list
-                .navigationTitle("Activity")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) { Button("Done") { isPresented = false } }
-                }
-        }
-        #else
-        list
-        #endif
-    }
-
-    private var list: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
                 let items = Array((state?.timeline ?? []).activity.reversed())
