@@ -659,6 +659,41 @@ fn http_bodies_match_the_schema() {
         .unwrap(),
         json!({ "avatar": null })
     );
+    check(
+        "PersonalDetails",
+        &PersonalDetails {
+            full_name: Some("Ann Berg".into()),
+            email: Some("ann@example.com".into()),
+            phone: Some("+47 912 34 567".into()),
+            address: Some("Storgata 5B, 0151 Oslo".into()),
+            location: Some(KnownLocation {
+                text: "Oslo S (59.9139, 10.7522)".into(),
+                at: 1_700_000_000_000.0,
+            }),
+        },
+    );
+    check(
+        "UpdatePersonalRequest",
+        &UpdatePersonalRequest {
+            full_name: Some(Some("Ann Berg".into())),
+            email: Some(None),
+            phone: Some(Some("+47 912 34 567".into())),
+            address: Some(None),
+            location: Some(Some(LocationRequest {
+                latitude: 59.9139,
+                longitude: 10.7522,
+                place: Some("Oslo S".into()),
+            })),
+        },
+    );
+    assert_eq!(
+        serde_json::to_value(UpdatePersonalRequest {
+            location: Some(None),
+            ..Default::default()
+        })
+        .unwrap(),
+        json!({ "location": null })
+    );
     let settings = PlayerSettingsSchema {
         name: "hello".into(),
         version: Some("1.0.0".into()),

@@ -1017,6 +1017,56 @@ pub struct UpdateProfileRequest {
     pub extensions: Option<Option<ExtensionSettingsUpdate>>,
 }
 
+/// A player's personal details, as they see them. Each value is theirs alone: the model and
+/// everyone else only ever see its placeholder. Kept by the assistant they were given to.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonalDetails {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub full_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phone: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub address: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub location: Option<KnownLocation>,
+}
+
+/// Where a player's device last said they were (`place (lat, lon)`), and when.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct KnownLocation {
+    pub text: String,
+    /// In ms since the epoch.
+    pub at: f64,
+}
+
+/// Where a device is, and the place it named, such as a street address.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct LocationRequest {
+    pub latitude: f64,
+    pub longitude: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub place: Option<String>,
+}
+
+/// The details to change: `None` leaves one as it is, `Some(None)` (or an empty string) clears it.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdatePersonalRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "nullable")]
+    pub full_name: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "nullable")]
+    pub email: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "nullable")]
+    pub phone: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "nullable")]
+    pub address: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "nullable")]
+    pub location: Option<Option<LocationRequest>>,
+}
+
 /// Each extension's new preferences for the player by name; `None` clears an extension's.
 pub type ExtensionSettingsUpdate =
     std::collections::BTreeMap<String, Option<serde_json::Map<String, Value>>>;

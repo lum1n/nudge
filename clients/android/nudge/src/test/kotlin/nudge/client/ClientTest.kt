@@ -18,6 +18,7 @@ import nudge.ffi.NudgeException
 import nudge.ffi.PanelStatus
 import nudge.ffi.Part
 import nudge.ffi.PendingState
+import nudge.ffi.PersonalUpdate
 import nudge.ffi.ProfileUpdate
 import nudge.ffi.Sent
 import nudge.ffi.SyncStatus
@@ -405,6 +406,18 @@ class ClientTest {
         )) {
             assertEquals(bad, null, JoinLink.parse(bad))
         }
+    }
+
+    @Test
+    fun keepsPersonalDetailsAndALocation() = runBlocking {
+        val home = client(MemoryTokens(ann))
+        val details = home.updatePersonal(PersonalUpdate(email = "ann@example.com", phone = "+47 912 34 567"))
+        assertEquals("ann@example.com", details.email)
+        assertEquals(null, home.updatePersonal(PersonalUpdate(phone = "")).phone)
+        val located = home.shareLocation(59.913868, 10.752245, "Oslo S")
+        assertEquals("Oslo S (59.9139, 10.7522)", located.location?.text)
+        assertEquals(null, home.forgetLocation().location)
+        assertEquals("ann@example.com", home.personal().email)
     }
 
     @Test

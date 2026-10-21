@@ -7,6 +7,7 @@ import {
   section,
 } from "@earendil-works/pi-durable";
 import { DirectoryDoc, type DirectoryState } from "../identity/directory.ts";
+import { personalSection } from "../identity/personal.ts";
 import { ProfileDoc, type ProfileState } from "../identity/profiles.ts";
 import { createMemoryTools, memorySection } from "../memory/memory.ts";
 import type { Nudges } from "../nudges/nudges.ts";
@@ -27,11 +28,14 @@ export type BuiltinOptions = {
   readonly turn: (conversationId: ConversationId, context: Context) => Promise<Turn>;
   /** An installed extension's description, looked up at render time, so it follows a reload. */
   readonly describe?: (extension: string) => string | undefined;
+  /** Whether the vault can still put a placeholder's value back, looked up at render time. */
+  readonly known: (placeholder: string) => boolean;
 };
 
 /**
- * The always-on `nudge` extension: who the assistant is, who is in the room, what it remembers there,
- * what time it is, and the nudge timer with its tools.
+ * The always-on `nudge` extension: who the assistant is, who is in the room, the personal details
+ * of whose room or private turn it is, what it remembers there, what time it is, and the nudge
+ * timer with its tools.
  */
 export function createBuiltinExtension(options: BuiltinOptions): Extension {
   return defineExtension({
@@ -55,6 +59,7 @@ export function createBuiltinExtension(options: BuiltinOptions): Extension {
         }
         return describeRoom(directory, input.conversationId, profiles);
       }),
+      personalSection(options.turn, options.known, options.timeZone),
       memorySection(options.turn),
       section("extensions", (input) =>
         describeExtensions(

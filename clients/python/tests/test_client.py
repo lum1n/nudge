@@ -425,6 +425,22 @@ def test_extension_settings(server) -> None:
     run(test())
 
 
+def test_personal_details_and_a_location(server) -> None:
+    async def test() -> None:
+        async with Client(server.url, server.assistant, MemoryTokens(server.ann)) as home:
+            details = await home.update_personal(
+                nudge.PersonalUpdate(email="ann@example.com", phone="+47 912 34 567")
+            )
+            assert details.email == "ann@example.com"
+            assert (await home.update_personal(nudge.PersonalUpdate(phone=""))).phone is None
+            located = await home.share_location(59.913868, 10.752245, "Oslo S")
+            assert located.location.text == "Oslo S (59.9139, 10.7522)"
+            assert (await home.forget_location()).location is None
+            assert (await home.personal()).email == "ann@example.com"
+
+    asyncio.run(test())
+
+
 def test_profile_and_joining_another_assistant(server) -> None:
     async def test() -> None:
         async with Client(server.url, server.assistant, MemoryTokens(server.ann)) as home:

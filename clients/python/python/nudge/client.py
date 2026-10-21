@@ -33,6 +33,8 @@ from nudge._ffi import (
     PairingCode,
     PanelStatus,
     PendingMessage,
+    PersonalDetails,
+    PersonalUpdate,
     Player,
     PlayerMemory,
     PlayerSettings,
@@ -573,6 +575,27 @@ class Client:
         """Changes the fields `update` sets; an empty string clears one. `NudgeError.Status` 400
         for a value that isn't one, such as a time zone."""
         return await self.ffi.update_profile(update)
+
+    async def personal(self) -> PersonalDetails:
+        """The player's full name, e-mail, phone, address and location. Only they see the values;
+        the model gets placeholders, in their own room and private messages."""
+        return await self.ffi.personal()
+
+    async def update_personal(self, update: PersonalUpdate) -> PersonalDetails:
+        """Changes the details `update` sets; an empty string clears one. `NudgeError.Status` 400
+        for one that isn't one, such as an e-mail address, 403 for a player whose home is elsewhere."""
+        return await self.ffi.update_personal(update)
+
+    async def share_location(
+        self, latitude: float, longitude: float, place: str | None = None
+    ) -> PersonalDetails:
+        """Tells the assistant where the player is; a spot within 100 m of the last keeps its
+        placeholder. `place` is what the device calls it, such as a street address."""
+        return await self.ffi.share_location(latitude, longitude, place)
+
+    async def forget_location(self) -> PersonalDetails:
+        """Forgets where the player was."""
+        return await self.ffi.forget_location()
 
     async def profile_extensions(self) -> list[PlayerSettings]:
         """The extensions that take settings from each player, their JSON Schemas as JSON text."""

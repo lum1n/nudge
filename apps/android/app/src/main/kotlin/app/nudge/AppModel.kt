@@ -133,6 +133,9 @@ class AppModel(private val context: Context) {
     /** Speech to text for the composer, and the player's speech languages on this device. */
     val dictation = Dictation(context, preferences)
 
+    /** Where the player is, told to home while the app is on screen, if they turned it on. */
+    val location = LocationSharing(context, preferences, scope)
+
     /** Whether the app is on screen; pushes for the open room aren't shown then. */
     @Volatile var foreground = false
         private set
@@ -498,6 +501,7 @@ class AppModel(private val context: Context) {
         // Cleared first: revoking the token closes the socket with 4401, which mustn't sign out
         // a second time.
         mutableSession.value = null
+        location.setClient(null)
         val places = mutablePlaces.value
         mutablePlaces.value = emptyList()
         mutableMemberships.value = null
@@ -522,6 +526,7 @@ class AppModel(private val context: Context) {
             }
         }
         if (foreground) scope.launch { syncPlaces() }
+        location.setForeground(foreground)
     }
 
     /** An FCM registration token, new or again: register it with every server once signed in. */
@@ -604,6 +609,8 @@ class AppModel(private val context: Context) {
     private fun start(account: Account, made: NudgeClient? = null) {
         val session = open(account, made) ?: return
         mutableSession.value = session
+        // Only home learns where the player is, never the assistants they joined.
+        location.setClient(session.client)
         // The assistants joined, as this device last knew them, until home says.
         mutablePlaces.value = savedPlaces().mapNotNull { place ->
             if (tokens(place).get() == null) null else open(place)?.also { watch(it) }

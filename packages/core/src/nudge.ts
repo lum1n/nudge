@@ -42,6 +42,7 @@ import { attach, MESSAGE_ENTRY, type MessageDraft, submitMessage } from "./host-
 import { DirectoryDoc, type Room } from "./identity/directory.ts";
 import { Players } from "./identity/players.ts";
 import { Looks } from "./identity/appearance.ts";
+import { Personal } from "./identity/personal.ts";
 import { Profiles } from "./identity/profiles.ts";
 import { Rooms } from "./identity/rooms.ts";
 import { Memory } from "./memory/memory.ts";
@@ -148,6 +149,8 @@ export class Nudge {
   readonly players: Players;
   /** What each player says about themselves: time zone, language, preferences. */
   readonly profiles: Profiles;
+  /** Each player's full name, e-mail, phone, address and location, kept as their private values. */
+  readonly personal: Personal;
   /** How its robot looks in the apps. */
   readonly appearance: Looks;
   readonly rooms: Rooms;
@@ -208,6 +211,18 @@ export class Nudge {
       (playerId) => changed({ kind: "profile", playerId }),
       (name, chosen) => checkPlayerSettings(this.installed, name, chosen),
     );
+    this.personal = new Personal(
+      harness,
+      this.players,
+      {
+        protect: (value, kind, owner) => this.protect(value, kind, { owner }),
+        forget: async (placeholder) => {
+          await this.forgetValue(placeholder);
+        },
+        entry: (placeholder) => this.models.vault.get(placeholder),
+      },
+      now,
+    );
     this.appearance = new Looks(harness);
     this.rooms = new Rooms(
       harness,
@@ -267,6 +282,10 @@ export class Nudge {
           turn,
           describe: (name) =>
             whenOpen().installed.find(({ extension }) => extension.name === name)?.description,
+          known: (placeholder) => {
+            const entry = whenOpen().models.vault.get(placeholder);
+            return entry !== undefined && !entry.forgotten;
+          },
         }),
         values,
       ),

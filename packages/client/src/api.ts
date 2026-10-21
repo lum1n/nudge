@@ -30,6 +30,7 @@ import type {
   PrivateValuesResponse,
   PlayerSettingsResponse,
   PlayerSettingsSchema,
+  PersonalDetails,
   Profile,
   ProtectResponse,
   PushKeyResponse,
@@ -44,6 +45,7 @@ import type {
   TimelineResponse,
   TokenInfo,
   TokensResponse,
+  UpdatePersonalRequest,
   UpdateProfileRequest,
   UsageResponse,
   OwnedServer,
@@ -195,6 +197,16 @@ export class Api {
   /** Changes the fields given; `null` clears one. */
   updateProfile(update: UpdateProfileRequest): Promise<Profile> {
     return this.request("PATCH", "/me/profile", update);
+  }
+
+  /** The caller's full name, e-mail, phone, address and location; only they see the values. */
+  personal(): Promise<PersonalDetails> {
+    return this.request("GET", "/me/personal");
+  }
+
+  /** Changes the details given; `null` or `""` clears one. */
+  updatePersonal(update: UpdatePersonalRequest): Promise<PersonalDetails> {
+    return this.request("PATCH", "/me/personal", update);
   }
 
   /** The installed extensions that take settings from each player, with their schemas. */
