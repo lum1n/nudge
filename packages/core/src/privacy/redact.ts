@@ -18,8 +18,10 @@ export function mapStrings<T extends JsonValue | undefined>(value: T, change: Te
 
 /**
  * A copy of a request with personal values replaced by placeholders. Covers the system prompt and
- * its sections, user and tool-result text, assistant text and tool-call arguments. Leaves alone:
- * thinking (providers replay it signed), images, and tool declarations.
+ * its sections, user and tool-result text, assistant text and tool-call arguments. Thinking can't
+ * be changed (providers replay it signed), so it is dropped instead where it could carry a value:
+ * before the newest user message, when unsigned (a provider then sends it as text), and when it
+ * holds a value the vault knows. Leaves alone: images, and tool declarations.
  */
 export function redactContext(
   context: Context,
@@ -27,14 +29,20 @@ export function redactContext(
   detectors: readonly PiiDetector[],
 ): Context {
   const redact: Text = (text) => vault.redact(text, detectors);
-  return {
+  const lastUser = context.messages.findLastIndex((message) => message.role === "user");
+  const pass = (): Context => ({
     ...context,
     ...(context.systemPrompt === undefined ? {} : { systemPrompt: redact(context.systemPrompt) }),
-    messages: context.messages.map((message) => redactMessage(message, redact)),
-  };
+    messages: context.messages.map((message, i) => redactMessage(message, redact, i < lastUser)),
+  });
+  // A value first found late in the request ("Vethjem dyreklinikk" in a tool result) may be
+  // written out earlier in it too ("is Vethjem open?"); once the vault knows it, go again.
+  const before = vault.version;
+  const once = pass();
+  return vault.version === before ? once : pass();
 }
 
-function redactMessage(message: Message, redact: Text): Message {
+function redactMessage(message: Message, redact: Text, past: boolean): Message {
   switch (message.role) {
     case "system":
       return {
@@ -63,7 +71,7 @@ function redactMessage(message: Message, redact: Text): Message {
             : textBlocks(message.content, redact),
       };
     case "assistant":
-      return { ...message, content: assistantBlocks(message.content, redact) };
+      return { ...message, content: assistantBlocks(message.content, redact, past) };
     case "toolResult":
       return {
         ...message,
@@ -84,13 +92,26 @@ function textBlocks<T extends { type: string }>(blocks: readonly T[], change: Te
 function assistantBlocks(
   blocks: AssistantMessage["content"],
   change: Text,
+  past: boolean,
 ): AssistantMessage["content"] {
-  return blocks.map((block) => {
-    if (block.type === "text") return { ...block, text: change(block.text) };
+  const kept = blocks.flatMap((block): AssistantMessage["content"] => {
+    if (block.type === "text") return [{ ...block, text: change(block.text) }];
     if (block.type === "toolCall")
-      return { ...block, arguments: mapStrings(block.arguments, change) };
-    return block;
+      return [{ ...block, arguments: mapStrings(block.arguments, change) }];
+    if (block.type === "thinking" && !block.redacted) {
+      const safe =
+        !past &&
+        block.thinkingSignature !== undefined &&
+        block.thinkingSignature !== "" &&
+        change(block.thinking) === block.thinking;
+      return safe ? [block] : [];
+    }
+    return [block];
   });
+  // A message that was all thinking keeps it as redacted text, so it isn't left empty.
+  if (kept.length > 0 || blocks.length === 0) return kept;
+  const thinking = blocks.flatMap((block) => (block.type === "thinking" ? [block.thinking] : []));
+  return [{ type: "text", text: change(thinking.join("\n\n")) }];
 }
 
 /**

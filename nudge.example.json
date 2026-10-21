@@ -28,7 +28,7 @@
           "settings": { "preview": "room", "subject": "mailto:you@example.com" }
         },
         {
-          "$comment": "Optional: finds people's names and street addresses the regular detectors miss, with name lists and rules on the host. extraNames adds your own.",
+          "$comment": "Optional: names the built-in lists don't have, such as relatives'.",
           "from": "./extensions/ner",
           "settings": { "extraNames": ["Tiril", "Bestemor Gunn"] }
         },

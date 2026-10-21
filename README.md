@@ -190,9 +190,27 @@ Every model request's cost, as the model catalog prices it, is booked per month 
 
 ## Privacy
 
-The model provider never sees personal data. Before a request leaves, Nudge replaces e-mail addresses, phone numbers, IBANs, card numbers, Norwegian national identity and account numbers, and the names of the people chatting with placeholders such as `⟦EMAIL1⟧`. This covers every request, including tool rounds and the summaries made when a long conversation is compacted. A value keeps its placeholder for the life of the assistant.
+Nudge keeps what identifies you from the model provider. Before a request leaves, it replaces these with placeholders such as `⟦EMAIL1⟧` or `⟦PLACE2⟧`:
 
-The history is stored with the placeholders too: messages, answers, tool results, memory, approvals and nudges. The values are kept in one place, the vault, and put back only where a person sees them (and where a tool acts on them, such as sending a mail). So forgetting a value takes it out of all history at once ([ADR 9](docs/adr/0009-placeholders-at-rest-and-per-person-visibility.md)). A database from before this needs `nudge db redact` once, with `nudge serve` stopped.
+- e-mail addresses, phone numbers, IBANs, card numbers, Norwegian national identity and account numbers
+- people's names (the people chatting, by whole name, first name and family name, and names from Norwegian and English name lists) and street addresses
+- Norwegian places and rail stations
+- the kindergartens, schools, clinics and clubs you name, and their departments
+- your own hosts and domains, IP addresses, and user names in paths
+- licence plates, VINs and birth dates
+
+This covers every request, including tool rounds and the summaries made when a long conversation is compacted. Thinking that could hold a value is left out. A value keeps its placeholder for the life of the assistant. Tools still get the real values, so a journey planner gets the real station.
+
+What stays readable, on purpose:
+
+- what things are about ("has a dog", "selling the car")
+- each person's time zone and language
+- Oslo, Bergen, Trondheim and Stavanger
+- well-known public sites such as `yr.no` or `github.com`
+
+The rules miss names given without a cue, such as a shop's name alone. Check with **Model view**, and hide what slipped through with `/private` ([ADR 14](docs/adr/0014-quasi-identifiers-and-local-ner.md)).
+
+The history is stored with the placeholders too: messages, answers, tool results, memory, approvals and nudges. The values are kept in one place, the vault, and put back only where a person sees them (and where a tool acts on them, such as sending a mail). So forgetting a value takes it out of all history at once ([ADR 9](docs/adr/0009-placeholders-at-rest-and-per-person-visibility.md)). When the detectors learn more, the history is rewritten with them once, the next time the assistant opens.
 
 In a shared room, you can keep things to yourself:
 
@@ -207,7 +225,7 @@ More:
 - `NUDGE_DEBUG_REQUESTS=1 nudge chat` (or `nudge serve`) writes every request, exactly as the provider receives it, to `<database>.requests.jsonl`.
 - **Model view** on a room's page in the web UI (or `GET /rooms/<id>/model-view`) shows anyone in the room what its next request sends: the instructions and sections, every message and tool call, with placeholders where the values were.
 
-`extensions/ner` is optional and finds more: people's names (common Norwegian and English given names, a capitalized family name after one, a known family name after a capitalized word, and the name after a greeting, sign-off or title such as "Mvh" or "Dr.") and Norwegian street addresses ("Storgata 5B, 0151 Oslo"). It uses name lists and rules on the host, no model. Words that are also names, like "Per" or "Liv", count at the start of a sentence only next to a family name. Town names on their own are left alone, so tools still know where things are. `extraNames` adds names the lists don't have, such as relatives'; `names` and `addresses` turn either part off. It will miss some names and catch some words that aren't names; check with **Model view**.
+`extensions/ner` adds names the lists don't have, such as relatives' (`extraNames`).
 
 Display names of players are always protected. Images are passed through unchanged. Extensions keep their own data (connector notes, browser site notes, uploaded documents) as they stored it.
 

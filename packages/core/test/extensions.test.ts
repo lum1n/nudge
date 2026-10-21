@@ -134,7 +134,8 @@ describe("extensions", () => {
   });
 
   it("reloads in place: replaces, adds and removes, and changes nothing when one fails", async () => {
-    const { options, requests, last } = setup({ extensions: [hello] });
+    // Without the built-in detectors, which find plates too, so hello's detector is seen leaving.
+    const { options, requests, last } = setup({ extensions: [hello], privacy: { detectors: [] } });
     const nudge = await createNudge(options, context);
     const extra = defineNudgeExtension({
       name: "extra",

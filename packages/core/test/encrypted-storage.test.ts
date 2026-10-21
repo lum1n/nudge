@@ -17,7 +17,7 @@ import {
 } from "../src/index.ts";
 
 const context = BACKGROUND_CONTEXT;
-const SECRET = "Kari wants the Lillehammer cabin on the 3rd";
+const SECRET = "Kari wants the lighthouse cabin on the 3rd";
 
 function options(database: string, extra: Partial<NudgeOptions> = {}): NudgeOptions {
   const faux = fauxProvider();
@@ -78,8 +78,8 @@ describe("encrypted storage", () => {
     process.env.NUDGE_DB_KEY = Buffer.alloc(32, 9).toString("base64");
     await chat(database, SECRET);
     expect(await databaseEncryption(database)).toBe("encrypted");
-    expect(onDisk(dir)).not.toContain("Lillehammer");
-    expect(await transcript(database)).toContain("Lillehammer");
+    expect(onDisk(dir)).not.toContain("lighthouse");
+    expect(await transcript(database)).toContain("lighthouse");
 
     delete process.env.NUDGE_DB_KEY;
     await expect(createNudge(options(database), context)).rejects.toThrow(/is encrypted/);
@@ -93,7 +93,7 @@ describe("encrypted storage", () => {
     expect(await databaseEncryption(database)).toBe("encrypted");
     expect(statSync(keyFile(database)).mode & 0o777).toBe(0o600);
     await chat(database, SECRET);
-    expect(onDisk(dir)).not.toContain("Lillehammer");
+    expect(onDisk(dir)).not.toContain("lighthouse");
 
     const old = join(dir, "old.sqlite");
     await createNudge(options(old), context).then((plain) => plain.close(context));
@@ -105,15 +105,15 @@ describe("encrypted storage", () => {
   it("encrypts an existing database in place and decrypts it again", async () => {
     await chat(database, SECRET);
     expect(await databaseEncryption(database)).toBe("plain");
-    expect(onDisk(dir)).toContain("Lillehammer");
+    expect(onDisk(dir)).toContain("lighthouse");
 
     expect(await encryptDatabase(database)).toBe(keyFile(database));
     expect(statSync(keyFile(database)).mode & 0o777).toBe(0o600);
     expect(await databaseEncryption(database)).toBe("encrypted");
-    expect(onDisk(dir)).not.toContain("Lillehammer");
+    expect(onDisk(dir)).not.toContain("lighthouse");
     await chat(database, "and the 4th too");
     const text = await transcript(database);
-    expect(text).toContain("Lillehammer");
+    expect(text).toContain("lighthouse");
     expect(text).toContain("the 4th");
 
     await decryptDatabase(database);

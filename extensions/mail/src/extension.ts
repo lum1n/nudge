@@ -142,6 +142,16 @@ export function mailExtension(options: MailOptions = {}) {
           },
         };
       });
+      // The name on an account ("Kari Nordmann <kari@…>") goes in the prompt; keep it from the model.
+      void host
+        .whenOpen()
+        .then(async () => {
+          for (const account of accounts) {
+            const name = /^\s*"?([^"<]+?)"?\s*</.exec(account.from)?.[1]?.trim();
+            if (name !== undefined && name.length >= 2) await host.protect(name, "NAME");
+          }
+        })
+        .catch(() => {});
       const usableIn = (roomId: string) =>
         accounts.filter((account) => account.rooms.includes("*") || account.rooms.includes(roomId));
       const text = (value: string, isError = false) => ({

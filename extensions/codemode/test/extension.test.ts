@@ -98,8 +98,8 @@ describe("codemode", () => {
     );
     expect(offered(requests[0])).toContain("codemode");
     expect(offered(requests[0])).not.toContain("pi.codemode.models.classify");
-    expect(output).toContain("Ann: call ⟦PHONE1⟧");
-    expect(output).toContain("Bo: call ⟦PHONE1⟧");
+    // The names are found by the built-in name detector too.
+    expect(output).toContain("⟦NAME1⟧: call ⟦PHONE1⟧\n⟦NAME2⟧: call ⟦PHONE1⟧");
     expect(JSON.stringify(requests)).not.toContain("987 65 432");
   });
 

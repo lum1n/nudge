@@ -3,7 +3,11 @@ import type { Models } from "@earendil-works/pi-ai";
 import { type AssistantConfig, ConfigError, DEFAULT_MODEL, type NudgeConfig } from "./config.ts";
 import { loadExtensions } from "./extensions/loader.ts";
 import { buildModels } from "./models/providers.ts";
-import { type RedactedHistory, redactHistory } from "./privacy/redact-history.ts";
+import {
+  type RedactedHistory,
+  redactHistory,
+  redactWhenOutdated,
+} from "./privacy/redact-history.ts";
 import {
   ExtensionNotFound,
   type InstalledExtension,
@@ -287,6 +291,8 @@ export {
   regexDetector,
   type Span,
 } from "./privacy/detectors.ts";
+export { addressDetector, nameDetector } from "./privacy/people.ts";
+export { AMBIGUOUS, CUES, FIRST_NAMES, LAST_NAMES } from "./privacy/name-lists.ts";
 export { Vault, type VaultEntry } from "./privacy/vault.ts";
 export { keepsPlaceholders } from "./privacy/tool-values.ts";
 export type { RedactedHistory };
@@ -331,7 +337,7 @@ export function findAssistant(config: NudgeConfig, name?: string): AssistantConf
 
 /**
  * Opens one configured assistant with its extensions. Pass `models` to share one catalog between
- * assistants.
+ * assistants. History stored under older detectors is rewritten first (`redactWhenOutdated`).
  */
 export async function openAssistant(
   config: NudgeConfig,
@@ -339,7 +345,9 @@ export async function openAssistant(
   context: Context,
   overrides: Partial<NudgeOptions> & { models?: Models } = {},
 ): Promise<Nudge> {
-  return Nudge.open(await assistantOptions(config, assistant, overrides), context);
+  const options = await assistantOptions(config, assistant, overrides);
+  await redactWhenOutdated(options, (o, c) => Nudge.open(o, c), context);
+  return Nudge.open(options, context);
 }
 
 /**

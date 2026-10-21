@@ -1,3 +1,7 @@
+import { domainDetector, ipDetector, usernameDetector } from "./hosts.ts";
+import { addressDetector, nameDetector } from "./people.ts";
+import { orgDetector, placeDetector } from "./places.ts";
+
 /** A run of text a detector found: `text.slice(start, end)` is the personal value. */
 export type Span = { readonly start: number; readonly end: number };
 
@@ -70,6 +74,41 @@ export const norwegianAccountDetector = regexDetector(
   (match) => accountValid(digits(match)),
 );
 
+/** Norwegian licence plates (`AB 12345`), leaving codes such as `EN 12345` and `NO 12345` alone. */
+export const plateDetector = regexDetector(
+  "PLATE",
+  /(?<![\p{L}\p{N}])[A-Z]{2} ?\d{5}(?![\p{L}\p{N}])/u,
+  (match) =>
+    !["EN", "NO", "ID", "EU", "UK", "US", "PR", "NS", "IS", "ES"].includes(match.slice(0, 2)),
+);
+
+/** Vehicle identification numbers: 17 capitals and digits without I, O or Q, of both kinds. */
+export const vinDetector = regexDetector(
+  "VIN",
+  /(?<![\p{L}\p{N}])[A-HJ-NPR-Z0-9]{17}(?![\p{L}\p{N}])/u,
+  (match) => /[A-Z].*[A-Z]/.test(match) && /\d.*\d/.test(match),
+);
+
+const MONTHS =
+  "januar|februar|mars|april|mai|juni|juli|august|september|oktober|november|desember|january|february|march|may|june|july|october|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|okt|oct|nov|des|dec";
+const DATE = `\\d{1,2}\\.\\s?\\d{1,2}\\.\\s?(?:\\d{4}|\\d{2})|\\d{4}-\\d{2}-\\d{2}|\\d{1,2}\\.?\\s+(?:${MONTHS})\\.?(?:\\s+\\d{4})?|(?:${MONTHS})\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?,?(?:\\s+\\d{4})?|\\d{1,2}/\\d{1,2}/\\d{2,4}`;
+const BIRTH = new RegExp(
+  `(?<![\\p{L}])(?:født|f\\.|fødselsdato|fødselsdag|bursdag|born|dob|date of birth|birthday|birthdate)(?:\\s+(?:den|on|the|er|is|:))?[:\\s]+(?:[^\\n\\d]{0,12}?)(?<date>${DATE})(?![\\p{L}\\p{N}])`,
+  "giu",
+);
+
+/** Dates of birth: a date after "født", "bursdag", "born", "DOB" and the like. Other dates stay. */
+export const birthDateDetector: PiiDetector = {
+  kind: "BIRTHDATE",
+  *find(text) {
+    for (const match of text.matchAll(BIRTH)) {
+      const date = match.groups!.date!;
+      const start = match.index + match[0].length - date.length;
+      yield { start, end: start + date.length };
+    }
+  },
+};
+
 /** The detectors every assistant runs. Names come from the directory, not from a detector. */
 export const builtinDetectors: readonly PiiDetector[] = [
   emailDetector,
@@ -78,6 +117,16 @@ export const builtinDetectors: readonly PiiDetector[] = [
   norwegianIdDetector,
   norwegianAccountDetector,
   phoneDetector,
+  usernameDetector,
+  domainDetector,
+  ipDetector,
+  plateDetector,
+  vinDetector,
+  birthDateDetector,
+  addressDetector,
+  orgDetector,
+  placeDetector(),
+  nameDetector(),
 ];
 
 export function luhnValid(number: string): boolean {

@@ -49,7 +49,8 @@ import { Memory } from "./memory/memory.ts";
 import { Nudges } from "./nudges/nudges.ts";
 import { RedactingModels, type RedactionOptions } from "./models/redacting-models.ts";
 import { builtinDetectors, type PiiDetector } from "./privacy/detectors.ts";
-import { mapStrings } from "./privacy/redact.ts";
+import { mapStrings, redactContext } from "./privacy/redact.ts";
+import { nameParts } from "./privacy/people.ts";
 import { type ToolValues, withToolValues } from "./privacy/tool-values.ts";
 import { type Owner, turnOf } from "./privacy/turn.ts";
 import { PLACEHOLDER, Vault, type VaultEntry } from "./privacy/vault.ts";
@@ -208,7 +209,7 @@ export class Nudge {
     this.spending = parts.spending;
     this.timeZone = parts.timeZone;
     this.events.subscribe((event) => this.deliver(event));
-    this.players = new Players(harness, (name) => this.protect(name, "NAME").then(() => {}), now);
+    this.players = new Players(harness, (name) => this.protectName(name), now);
     const changed = (change: Change) => this.changes.emit(change);
     this.profiles = new Profiles(
       harness,
@@ -400,7 +401,7 @@ export class Nudge {
       const directory = await harness.snapshot(DirectoryDoc, context);
       // Names stored before redaction existed, or before a vault was lost, go back in.
       for (const player of Object.values(directory?.players ?? {}))
-        models.vault.protect(player.displayName, "NAME");
+        for (const part of nameParts(player.displayName)) models.vault.protect(part, "NAME");
       await models.flush();
       const conversationIds = [
         ...Object.values(directory?.rooms ?? {}).map((room) => room.conversationId),
@@ -683,7 +684,9 @@ export class Nudge {
         : this.spending.refusalFor(draft.author.playerId);
     if (refusal !== undefined) throw new BudgetReached(refusal);
     // The model sees "<name>: <text>"; the name is personal, so it goes to the vault first.
-    if (draft.author !== undefined) this.models.vault.protect(draft.author.displayName, "NAME");
+    if (draft.author !== undefined)
+      for (const part of nameParts(draft.author.displayName))
+        this.models.vault.protect(part, "NAME");
     // Stored with placeholders, so forgetting a value takes it out of history (ADR 9). What a
     // private message reveals for the first time is its author's alone.
     const vault = this.models.vault;
@@ -723,6 +726,12 @@ export class Nudge {
     if (options.owner !== undefined && vault.version !== before)
       this.changes.emit({ kind: "vault" });
     return placeholder;
+  }
+
+  /** Keeps a person's name from the model: the whole name, and its parts on their own. */
+  private async protectName(name: string): Promise<void> {
+    for (const part of nameParts(name)) this.models.vault.protect(part, "NAME");
+    await this.models.flush();
   }
 
   /**
@@ -813,9 +822,16 @@ export class Nudge {
   ): Promise<ModelViewMessage[]> {
     const conversation = await this.conversation(roomId, context);
     const view = await conversation.context(context);
+    // As a request redacts it, so thinking it leaves out isn't shown either.
+    const sent = redactContext(
+      { messages: [...view.messages] },
+      this.models.vault,
+      this.models.detectors,
+    );
+    const asSent = new Map(view.messages.map((message, i) => [message, sent.messages[i]!]));
     const shown = (message: Message) => ({
       role: message.role,
-      text: this.redact(messageText(message)),
+      text: this.redact(messageText(asSent.get(message) ?? message)),
     });
     if (viewer === undefined) return view.messages.map(shown);
     const out: ModelViewMessage[] = [];

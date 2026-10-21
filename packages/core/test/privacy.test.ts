@@ -8,6 +8,7 @@ import {
   fauxAssistantMessage,
   fauxProvider,
   fauxText,
+  fauxThinking,
   fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
 import { AssistantEntry, defineExtension, defineTool } from "@earendil-works/pi-durable";
@@ -15,7 +16,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { builtinDetectors, createNudge, LOBBY, type NudgeOptions, Vault } from "../src/index.ts";
 import { openRawDatabase } from "../src/encrypted-storage.ts";
 import { MemoryDoc } from "../src/memory/memory.ts";
-import { redactHistory } from "../src/privacy/redact-history.ts";
+import { redactHistory, redactWhenOutdated } from "../src/privacy/redact-history.ts";
 import { withoutPartialPlaceholder } from "../src/privacy/vault.ts";
 
 const context = BACKGROUND_CONTEXT;
@@ -249,6 +250,41 @@ describe("redaction in a running assistant", () => {
     expect(after + wal).not.toContain(EMAIL);
   });
 
+  it("rewrites history stored under older detectors once, thinking included", async () => {
+    const { faux, options } = setup();
+    faux.setResponses([
+      fauxAssistantMessage([
+        { ...fauxThinking("They live near ⟦PLACE1⟧."), thinkingSignature: "sig" },
+        fauxText("Noted."),
+      ]),
+    ]);
+    const first = await createNudge(options, context);
+    const text = "Barnet går i Skogkanten Barnehage på Sørumsand.";
+    await (await first.submit(LOBBY, { text }, context)).wait(context);
+    await first.close(context);
+    // As a Nudge with fewer detectors stored it.
+    const raw = await openRawDatabase(options.database);
+    for (const row of raw.all("SELECT id, record FROM entries") as { id: number; record: string }[])
+      raw.run(
+        "UPDATE entries SET record = ? WHERE id = ?",
+        row.record.replaceAll("⟦ORG1⟧", "Skogkanten").replaceAll("⟦PLACE1⟧", "Sørumsand"),
+        row.id,
+      );
+    raw.close();
+
+    expect(await redactWhenOutdated(options, createNudge, context)).toMatchObject({
+      entries: expect.any(Number),
+    });
+    expect(await redactWhenOutdated(options, createNudge, context)).toBeUndefined();
+    const check = await openRawDatabase(options.database);
+    const rows = JSON.stringify(check.all("SELECT record FROM entries"));
+    check.close();
+    for (const value of ["Skogkanten", "Sørumsand"]) expect(rows).not.toContain(value);
+    expect(rows).toContain("They live near ⟦PLACE1⟧.");
+    // Changed thinking can't be replayed as signed.
+    expect(rows).not.toContain('"thinkingSignature":"sig"');
+  });
+
   it("keeps placeholders across a restart", async () => {
     const { faux, options } = setup();
     faux.setResponses([fauxAssistantMessage("ok"), fauxAssistantMessage("ok")]);
@@ -303,5 +339,108 @@ describe("redaction in a running assistant", () => {
     expect(answer.startsWith(shown)).toBe(true);
     expect(nudge.showTo("p1", answer)).toBe(`Dear Vegard, your mail ${EMAIL} is set.`);
     await nudge.close(context);
+  });
+});
+
+describe("matching what the vault knows", () => {
+  it("falls back to a shorter value where a longer one doesn't fit", () => {
+    const vault = new Vault();
+    vault.protect("Ann", "NAME");
+    vault.protect("Ann Berg", "NAME");
+    expect(vault.redact("Ann Berg and Ann Bergen came.", [])).toBe(
+      "⟦NAME2⟧ and ⟦NAME1⟧ Bergen came.",
+    );
+  });
+
+  it("takes possessives and other whitespace", () => {
+    const vault = new Vault();
+    vault.protect("Ann Berg", "NAME");
+    vault.protect("Sørumsand", "PLACE");
+    vault.protect("kjeks", "PRIVATE");
+    expect(vault.redact("Anns bil, Ann  Berg, Ann\nBerg, Sørumsands skole, kjekss", [])).toBe(
+      "Anns bil, ⟦NAME1⟧, ⟦NAME1⟧, ⟦PLACE1⟧s skole, kjekss",
+    );
+  });
+
+  it("hides a player's first and family names on their own", async () => {
+    const nudge = await createNudge(
+      {
+        database: ":memory:",
+        models: createModels(),
+        model: { provider: "faux", modelId: "faux-1" },
+      },
+      context,
+    );
+    await nudge.players.invite("Vegard Svendsen", context);
+    expect(nudge.redact("Vegard sa at Svendsens bil står i /home/vegard.")).toBe(
+      "⟦NAME2⟧ sa at ⟦NAME3⟧s bil står i /home/⟦NAME2⟧.",
+    );
+    await nudge.close(context);
+  });
+});
+
+describe("thinking", () => {
+  const assistant = (thinking: string, signature?: string) => ({
+    role: "assistant" as const,
+    content: [
+      {
+        type: "thinking" as const,
+        thinking,
+        ...(signature === undefined ? {} : { thinkingSignature: signature }),
+      },
+      { type: "text" as const, text: "Ok." },
+    ],
+    api: "faux",
+    provider: "faux",
+    model: "faux-1",
+    usage: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+    stopReason: "stop" as const,
+    timestamp: 0,
+  });
+  const user = (text: string) => ({ role: "user" as const, content: text, timestamp: 0 });
+
+  it("hides a value found late in a request where it was written out earlier", async () => {
+    const { redactContext } = await import("../src/privacy/redact.ts");
+    const vault = new Vault();
+    const redacted = redactContext(
+      { messages: [user("Har Vethjem ledig tid?"), user("Vethjem dyreklinikk: åpent 8–16.")] },
+      vault,
+      builtinDetectors,
+    );
+    expect(JSON.stringify(redacted)).not.toContain("Vethjem");
+  });
+
+  it("drops thinking from earlier turns, unsigned thinking, and thinking with values", async () => {
+    const { redactContext } = await import("../src/privacy/redact.ts");
+    const vault = new Vault();
+    vault.protect("Sørumsand", "PLACE");
+    const redacted = redactContext(
+      {
+        messages: [
+          user("Hvor bor jeg?"),
+          assistant("He lives near Sørumsand.", "sig1"),
+          user("Og nå?"),
+          assistant("Plain thinking without a value.", "sig2"),
+          assistant("Unsigned thinking."),
+          assistant("Still near Sørumsand.", "sig3"),
+        ],
+      },
+      vault,
+      builtinDetectors,
+    );
+    const thinking = redacted.messages.map((message) =>
+      message.role === "assistant"
+        ? message.content.flatMap((block) => (block.type === "thinking" ? [block.thinking] : []))
+        : null,
+    );
+    expect(thinking).toEqual([null, [], null, ["Plain thinking without a value."], [], []]);
+    expect(JSON.stringify(redacted)).not.toContain("Sørumsand");
   });
 });

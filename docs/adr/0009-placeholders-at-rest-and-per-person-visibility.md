@@ -13,3 +13,5 @@ ADR 2 kept personal values from the model but stored them raw, and ADR 7 encrypt
 What this doesn't do: the model knows what it was told in a private turn and might bring it up later; it is asked not to, and anything it repeats that is a value shows as a placeholder to others, but its paraphrase of a private message isn't caught. Extensions keep their own data (connector notes, browser site notes, uploaded documents) as they stored it. Task inputs and checkpoints keep what was passed when they were made.
 
 Databases from before this change keep their raw history until `nudge db redact`, which rewrites every transcript entry and the current memory, approvals and nudges with placeholders, then vacuums the file.
+
+Amended by ADR 14: when the detectors find more, history is rewritten once, automatically, the next time an assistant opens.
