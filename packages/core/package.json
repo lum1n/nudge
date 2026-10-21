@@ -14,7 +14,8 @@
     }
   },
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "eval:privacy": "node eval/privacy/run.ts"
   },
   "dependencies": {
     "@earendil-works/chord": "1.2.0",

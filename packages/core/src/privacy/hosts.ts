@@ -37,7 +37,16 @@ const COMMON_GTLDS = new Set(
   "com net org info biz dev io xyz cloud online site tech page blog me co eu".split(" "),
 );
 /** Hosts that are never public, whatever comes before them. */
-const PRIVATE_SUFFIXES = ["local", "lan", "internal", "home.arpa", "localdomain", "ts.net"];
+const PRIVATE_SUFFIXES = [
+  "local",
+  "lan",
+  "home",
+  "internal",
+  "intranet",
+  "home.arpa",
+  "localdomain",
+  "ts.net",
+];
 
 const HOST =
   /(?<![\p{L}\p{N}_@.-])(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,23}[a-z0-9](?![\p{L}\p{N}_-]|\.[\p{L}\p{N}])/giu;

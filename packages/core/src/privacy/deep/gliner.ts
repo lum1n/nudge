@@ -128,3 +128,59 @@ export function decode(
       score: span.score,
     }));
 }
+
+/** Texts read in one model call: one text a line, and where each starts. */
+export type Pack = {
+  readonly text: string;
+  readonly members: readonly number[];
+  readonly starts: readonly number[];
+};
+
+/**
+ * Short texts together, up to `maxWords` words a call, one per line, so the model's fixed cost
+ * per call is paid once for many lines. A longer text goes alone.
+ */
+export function pack(texts: readonly string[], maxWords: number): Pack[] {
+  const packs: Pack[] = [];
+  let members: number[] = [];
+  let words = 0;
+  const flush = () => {
+    if (members.length === 0) return;
+    const starts: number[] = [];
+    let at = 0;
+    for (const i of members) {
+      starts.push(at);
+      at += texts[i]!.length + 1;
+    }
+    packs.push({ text: members.map((i) => texts[i]).join("\n"), members, starts });
+    members = [];
+    words = 0;
+  };
+  texts.forEach((text, i) => {
+    const count = splitWords(text).length;
+    if (members.length > 0 && words + count > maxWords) flush();
+    members.push(i);
+    words += count;
+  });
+  flush();
+  return packs;
+}
+
+/** The spans found in a pack, per text it holds; a span over a line break is cut there. */
+export function unpack(
+  spans: readonly GlinerSpan[],
+  packed: Pack,
+  texts: readonly string[],
+): GlinerSpan[][] {
+  return packed.members.map((i, n) => {
+    const start = packed.starts[n]!;
+    const end = start + texts[i]!.length;
+    return spans
+      .filter((span) => span.start < end && span.end > start)
+      .map((span) => ({
+        ...span,
+        start: Math.max(span.start, start) - start,
+        end: Math.min(span.end, end) - start,
+      }));
+  });
+}

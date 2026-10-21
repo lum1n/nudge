@@ -1,5 +1,6 @@
 import { NORWEGIAN_PLACES } from "./lists/places.ts";
 import type { PiiDetector, Span } from "./detectors.ts";
+import { isPublicName } from "./public-names.ts";
 
 /**
  * Places so large that naming them says little about anyone; they stay readable unless written as
@@ -86,6 +87,8 @@ export const orgDetector: PiiDetector = {
       while (skip < words.length && NOT_NAMES.has(words[skip]!.toLowerCase())) skip++;
       if (skip === words.length) continue;
       const name = words.slice(skip).join(" ");
+      // "Komplett AS" and "Rosenborg BK" are known to everyone.
+      if (isPublicName(name) || isPublicName(match[0].slice(match[0].indexOf(name)))) continue;
       const start = match.index + match[1]!.indexOf(name);
       spans.push({ start, end: start + name.length });
     }

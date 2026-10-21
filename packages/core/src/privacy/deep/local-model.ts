@@ -47,11 +47,30 @@ export const LOCAL_MODEL = {
 /** How long the model stays loaded with nothing to read; it starts again in about a second. */
 export const IDLE_MS = 2 * 60_000;
 
-export const DEFAULT_THRESHOLD = 0.5;
+/**
+ * The score a finding needs, per kind. Names lower: they matter most, and at 0.3 the model misses
+ * fewer without hiding much more; higher for the rest hides fewer shops and sights the model needs
+ * (packages/core/eval/privacy).
+ */
+export const THRESHOLDS: Readonly<Record<string, number>> = {
+  NAME: 0.3,
+  ADDRESS: 0.5,
+  PLACE: 0.5,
+  ORG: 0.5,
+};
 
-/** Names the model and its threshold, as `DeepDetector.id`. */
-export function localModelId(threshold = DEFAULT_THRESHOLD): string {
-  return `${LOCAL_MODEL.name}@${LOCAL_MODEL.files[0].sha256.slice(0, 12)}/${threshold}`;
+/**
+ * Words of short pieces read in one call. Its cost is mostly per call, so this reads twice as
+ * fast, and the lines around one help the model as much as they hurt (packages/core/eval/privacy).
+ */
+export const PACK_WORDS = 50;
+
+/** Names the model and how it reads, as `DeepDetector.id`, so a change reads text again. */
+export function localModelId(): string {
+  const thresholds = Object.entries(THRESHOLDS)
+    .map(([kind, score]) => `${kind}${score}`)
+    .join(",");
+  return `${LOCAL_MODEL.name}@${LOCAL_MODEL.files[0].sha256.slice(0, 12)}/${thresholds}/pack${PACK_WORDS}`;
 }
 
 /**
@@ -154,7 +173,6 @@ export async function openLocalModel(
   dir: string,
   options: {
     readonly threads?: number;
-    readonly threshold?: number;
     /** Stops the process after this long without a call; default `IDLE_MS`. */
     readonly idleMs?: number;
   } = {},
@@ -162,7 +180,7 @@ export async function openLocalModel(
   const idleMs = options.idleMs ?? IDLE_MS;
   let idle: NodeJS.Timeout | undefined;
   const threads = options.threads ?? Math.max(1, Math.min(4, availableParallelism() - 1));
-  const threshold = options.threshold ?? DEFAULT_THRESHOLD;
+  const lowest = Math.min(...Object.values(THRESHOLDS));
   const worker = new URL(
     import.meta.url.endsWith(".ts") ? "./worker.ts" : "./worker.js",
     import.meta.url,
@@ -176,7 +194,7 @@ export async function openLocalModel(
 
   const start = () =>
     new Promise<ChildProcess>((resolve, reject) => {
-      const process_ = fork(worker, [dir, String(threads), String(threshold)], {
+      const process_ = fork(worker, [dir, String(threads), String(lowest), String(PACK_WORDS)], {
         stdio: ["ignore", "ignore", "inherit", "ipc"],
         execArgv: [],
       });
@@ -220,7 +238,7 @@ export async function openLocalModel(
   await child;
   rest();
   return {
-    id: localModelId(threshold),
+    id: localModelId(),
     async find(texts) {
       if (texts.length === 0) return [];
       clearTimeout(idle);
@@ -235,7 +253,7 @@ export async function openLocalModel(
       return found.map((spans) =>
         spans.flatMap((span): DeepFinding[] => {
           const kind = LABEL_KINDS[span.label];
-          return kind === undefined
+          return kind === undefined || span.score < (THRESHOLDS[kind] ?? lowest)
             ? []
             : [{ start: span.start, end: span.end, kind, score: span.score }];
         }),

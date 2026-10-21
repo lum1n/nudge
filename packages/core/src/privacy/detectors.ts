@@ -46,6 +46,25 @@ export const phoneDetector = regexDetector(
   (match) => digits(match).length >= 8,
 );
 
+const PHONE_CUE =
+  /(?<![\p{L}])(?:tlf|tel|telefon|telefonnummer|telefonnummeret|nummer|nummeret|nr|mobil|mobilnummer|mobilnummeret|mob|phone|cell|mobile|call|ring|ringe|sms|text|vipps|vippse|whatsapp|kontakt)(?![\p{L}])[^\n\d]{0,30}?(?<![\p{N}+])(?<number>[2-9]\d{7})(?![\p{L}\p{N}])/giu;
+
+/**
+ * Norwegian eight-digit numbers written without spaces after a word that makes them a phone
+ * number: "Mobil: 90512477", "ring 41234567", "nummeret er 48219553". Without such a word they stay
+ * readable, as `phoneDetector` leaves them.
+ */
+export const phoneCueDetector: PiiDetector = {
+  kind: "PHONE",
+  *find(text) {
+    for (const match of text.matchAll(PHONE_CUE)) {
+      const number = match.groups!.number!;
+      const start = match.index + match[0].length - number.length;
+      yield { start, end: start + number.length };
+    }
+  },
+};
+
 /** IBANs, checked with mod 97. */
 export const ibanDetector = regexDetector(
   "IBAN",
@@ -93,11 +112,18 @@ const MONTHS =
   "januar|februar|mars|april|mai|juni|juli|august|september|oktober|november|desember|january|february|march|may|june|july|october|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|okt|oct|nov|des|dec";
 const DATE = `\\d{1,2}\\.\\s?\\d{1,2}\\.\\s?(?:\\d{4}|\\d{2})|\\d{4}-\\d{2}-\\d{2}|\\d{1,2}\\.?\\s+(?:${MONTHS})\\.?(?:\\s+\\d{4})?|(?:${MONTHS})\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?,?(?:\\s+\\d{4})?|\\d{1,2}/\\d{1,2}/\\d{2,4}`;
 const BIRTH = new RegExp(
-  `(?<![\\p{L}])(?:født|f\\.|fødselsdato|fødselsdag|bursdag|born|dob|date of birth|birthday|birthdate)(?:\\s+(?:den|on|the|er|is|:))?[:\\s]+(?:[^\\n\\d]{0,12}?)(?<date>${DATE})(?![\\p{L}\\p{N}])`,
+  `(?<![\\p{L}])(?:født|f\\.|fødselsdatoen|fødselsdato|fødselsdagen|fødselsdag|bursdagen|bursdag|born|dob|date of birth|birth date|birthday|birthdate)(?:\\s+(?:den|on|the|er|is|:))?[:\\s]+(?:[^\\n\\d]{0,12}?)(?<date>${DATE})(?![\\p{L}\\p{N}])`,
   "giu",
 );
+/** A list under a heading such as "Bursdager:", one person per line. */
+const BIRTH_LIST =
+  /(?<![\p{L}])(?:bursdager|bursdagar|fødselsdager|fødselsdatoer|birthdays|birth dates)[^\n]*:[ \t]*\n(?<lines>(?:[ \t]*[-*•][^\n]*(?:\n|$))+)/giu;
+const DATES = new RegExp(`(?<![\\p{L}\\p{N}])(?:${DATE})(?![\\p{L}\\p{N}])`, "giu");
 
-/** Dates of birth: a date after "født", "bursdag", "born", "DOB" and the like. Other dates stay. */
+/**
+ * Dates of birth: a date after "født", "bursdag", "born", "DOB" and the like, or in a list under
+ * "Bursdager:" or "Birthdays:". Other dates stay.
+ */
 export const birthDateDetector: PiiDetector = {
   kind: "BIRTHDATE",
   *find(text) {
@@ -105,6 +131,12 @@ export const birthDateDetector: PiiDetector = {
       const date = match.groups!.date!;
       const start = match.index + match[0].length - date.length;
       yield { start, end: start + date.length };
+    }
+    for (const list of text.matchAll(BIRTH_LIST)) {
+      const lines = list.groups!.lines!;
+      const offset = list.index + list[0].length - lines.length;
+      for (const date of lines.matchAll(DATES))
+        yield { start: offset + date.index, end: offset + date.index + date[0].length };
     }
   },
 };
@@ -117,6 +149,7 @@ export const builtinDetectors: readonly PiiDetector[] = [
   norwegianIdDetector,
   norwegianAccountDetector,
   phoneDetector,
+  phoneCueDetector,
   usernameDetector,
   domainDetector,
   ipDetector,

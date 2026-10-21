@@ -1,0 +1,1086 @@
+[
+  {
+    "id": "tools-001",
+    "source": "mail",
+    "lang": "nb",
+    "text": "From: Hilde Bakkerud <hilde.bakkerud@haugtun-skole.no>\nTo: foresatte-4b@haugtun-skole.no\nSubject: Turdag fredag og glemt gymtøy\nDate: Tue, 20 Oct 2026 14:12:09 +0200\n\nHei alle foresatte i 4B!\n\nPå fredag går vi tur til Mørkgonga. Husk matpakke, drikke og gode sko. Vi er tilbake på skolen ca. kl. 13.30.\n\nSander har glemt gymtøyet sitt i garderoben to uker på rad nå, det ligger i hylla ved kontoret.\n\nRing meg gjerne på 948 31 266 hvis noe er uklart.\n\nVennlig hilsen\nHilde Bakkerud\nKontaktlærer 4B\nHaugtun skole",
+    "hide": [
+      ["Hilde Bakkerud", "NAME", 1],
+      ["hilde.bakkerud@haugtun-skole.no", "EMAIL", 1],
+      ["foresatte-4b@haugtun-skole.no", "EMAIL", 1],
+      ["Haugtun", "ORG", 2],
+      ["Sander", "NAME", 2],
+      ["948 31 266", "PHONE", 1],
+      ["Mørkgonga", "PLACE", 2]
+    ],
+    "keep": ["fredag", "kl. 13.30", "4B"]
+  },
+  {
+    "id": "tools-002",
+    "source": "mail",
+    "lang": "nb",
+    "text": "From: Svein-Erik Holm <se.holm@holmror.no>\nTo: kunde.post@gmail.com\nSubject: Tilbud – nytt bad, Tomtebergveien 7\nDate: Mon, 19 Oct 2026 08:47:51 +0200\n\nHei,\n\nTakk for befaringen i går. Her er tilbudet for rørarbeid på badet i Tomtebergveien 7, 1914 Ytre Enebakk:\n\n- Riving og nye rør til servant og dusj: 18 400 kr\n- Varmekabler (Nexans) og sluk: 9 750 kr\n- Montering av Gustavsberg toalett: 4 200 kr\n\nSum eks. mva: 32 350 kr. Oppstart tidligst uke 46.\n\nMvh\nSvein-Erik Holm\nDaglig leder, Holm Rør AS\nMob: 415 87 093\nIndustriveien 3, 1914 Ytre Enebakk",
+    "hide": [
+      ["Svein-Erik Holm", "NAME", 1],
+      ["se.holm@holmror.no", "EMAIL", 1],
+      ["kunde.post@gmail.com", "EMAIL", 1],
+      ["Tomtebergveien 7, 1914 Ytre Enebakk", "ADDRESS", 1],
+      ["Holm Rør", "ORG", 2],
+      ["415 87 093", "PHONE", 1],
+      ["Industriveien 3, 1914 Ytre Enebakk", "ADDRESS", 1]
+    ],
+    "keep": ["Nexans", "Gustavsberg", "32 350 kr", "uke 46"]
+  },
+  {
+    "id": "tools-003",
+    "source": "mail",
+    "lang": "nb",
+    "text": "From: Elkjøp <nyhetsbrev@elkjop.no>\nSubject: Black Week starter NÅ – opptil 40 % på Samsung og Apple\nDate: Thu, 15 Oct 2026 06:00:00 +0200\n\nBlack Week er her!\n\nSamsung Galaxy S26 Ultra – nå 13 990,-\nApple AirPods Pro 3 – nå 2 790,-\nSony WH-1000XM6 – nå 3 490,-\nLG OLED evo C6 65\" – nå 21 990,-\n\nHent i butikk på Elkjøp Storo i Oslo eller få det levert med Posten.\nBetal med Klarna eller Vipps.\n\nDu får denne e-posten fordi du er Elkjøp Club-medlem. Meld deg av her.",
+    "hide": [],
+    "keep": [
+      "Elkjøp",
+      "Black Week",
+      "Samsung",
+      "Apple",
+      "Samsung Galaxy S26 Ultra",
+      "Apple AirPods Pro 3",
+      "Sony WH-1000XM6",
+      "LG OLED evo C6",
+      "Elkjøp Storo",
+      "Oslo",
+      "Posten",
+      "Klarna",
+      "Vipps",
+      "Elkjøp Club"
+    ]
+  },
+  {
+    "id": "tools-004",
+    "source": "mail",
+    "lang": "nb",
+    "text": "From: Komplett.no <ordre@komplett.no>\nSubject: Ordrebekreftelse 204881937\nDate: Sat, 17 Oct 2026 21:33:02 +0200\n\nTakk for bestillingen!\n\nOrdrenummer: 204881937\n1 x Logitech MX Master 3S          1 099,-\n1 x Samsung T9 SSD 2 TB            2 349,-\nFrakt (Helthjem)                       79,-\nTotalt inkl. mva                    3 527,-\n\nBetalt med Visa via Vipps.\nForventet levering: tirsdag 20. oktober.\n\nKomplett Services AS, Sandefjord",
+    "hide": [],
+    "keep": [
+      "Komplett.no",
+      "Logitech MX Master 3S",
+      "Samsung T9 SSD",
+      "Helthjem",
+      "Visa",
+      "Vipps",
+      "Komplett Services AS",
+      "Sandefjord",
+      "3 527,-",
+      "tirsdag 20. oktober"
+    ]
+  },
+  {
+    "id": "tools-005",
+    "source": "mail",
+    "lang": "en",
+    "text": "From: Anna Kowalski <anna.kowalski@fjordlinedata.no>\nTo: team-platform@fjordlinedata.no\nSubject: Re: Postgres upgrade window\nDate: Wed, 21 Oct 2026 09:05:44 +0200\n\nHi all,\n\nMikkel and I will do the Postgres 17 upgrade on Saturday between 06:00 and 08:00. Grafana alerts are muted for that window. If anything goes sideways, call me, not the AWS support line.\n\nThanks,\nAnna\n\n--\nAnna Kowalski\nStaff Engineer, Platform\nFjordline Data AS\n+47 452 19 877\nDronning Eufemias gate 16, 0191 Oslo",
+    "hide": [
+      ["Anna Kowalski", "NAME", 1],
+      ["anna.kowalski@fjordlinedata.no", "EMAIL", 1],
+      ["team-platform@fjordlinedata.no", "EMAIL", 1],
+      ["Mikkel", "NAME", 2],
+      ["Anna", "NAME", 2],
+      ["Fjordline Data", "ORG", 2],
+      ["+47 452 19 877", "PHONE", 1]
+    ],
+    "keep": ["Postgres 17", "Saturday", "Grafana", "AWS"]
+  },
+  {
+    "id": "tools-006",
+    "source": "mail",
+    "lang": "nb",
+    "text": "From: Merete Fjeld <merete.fjeld@solsikken-bhg.no>\nTo: Foreldre Maurtua\nSubject: Ukebrev avdeling Maurtua, uke 43\nDate: Fri, 16 Oct 2026 15:40:00 +0200\n\nHei alle sammen!\n\nDenne uka har vi jobbet med høst og farger. Ask og Frøya laget en kjempefin løvmus som henger i garderoben.\n\nNeste uke:\n- Mandag: tur til Fjellsrud-skogen, ta med sitteunderlag\n- Onsdag: planleggingsdag, barnehagen er stengt\n- Fredag: grøtfest\n\nHusk skiftetøy og ullsokker nå som det blir kaldere.\n\nHilsen Merete Fjeld, pedagogisk leder\nSolsikken barnehage, tlf. 63 87 44 10",
+    "hide": [
+      ["Merete Fjeld", "NAME", 1],
+      ["merete.fjeld@solsikken-bhg.no", "EMAIL", 1],
+      ["Maurtua", "ORG", 2],
+      ["Ask", "NAME", 2],
+      ["Frøya", "NAME", 2],
+      ["Fjellsrud", "PLACE", 2],
+      ["Solsikken", "ORG", 2],
+      ["63 87 44 10", "PHONE", 1]
+    ],
+    "keep": ["uke 43", "Mandag", "Onsdag", "Fredag"]
+  },
+  {
+    "id": "tools-007",
+    "source": "mail",
+    "lang": "nb",
+    "text": "From: Helsenorge <ikke-svar@helsenorge.no>\nSubject: Påminnelse: time hos fastlegen\nDate: Mon, 19 Oct 2026 07:00:12 +0200\n\nDu har time hos fastlege Anders Lien\nTorsdag 22. oktober kl. 10:20\nSted: Sørumsand legesenter, Kirkeveien 12, 1920 Sørumsand\n\nPasient: Tone Marie Haugli, født 14.03.1987\n\nAvbestill senest 24 timer før, ellers blir du belastet 350 kr.\nLogg inn på helsenorge.no for å se detaljer.",
+    "hide": [
+      ["Anders Lien", "NAME", 1],
+      ["Sørumsand", "ORG", 2],
+      ["Kirkeveien 12, 1920 Sørumsand", "ADDRESS", 1],
+      ["Tone Marie Haugli", "NAME", 1],
+      ["14.03.1987", "BIRTHDATE", 1]
+    ],
+    "keep": ["Helsenorge", "helsenorge.no", "Torsdag 22. oktober", "kl. 10:20", "350 kr"]
+  },
+  {
+    "id": "tools-008",
+    "source": "mail",
+    "lang": "nb",
+    "text": "From: Gunnhild Aas <gunnhild.aas@online.no>\nTo: naboen.i.nr7@gmail.com\nSubject: hekken mot gangveien\nDate: Sun, 18 Oct 2026 19:22:37 +0200\n\nhei! det er gunnhild i nr 9.\nLurte på om dere kunne tenke dere å dele på å klippe hekken mot gangveien før vinteren? Vi har fått en Stihl hekksaks av svigersønnen min, Rune, så vi kan låne den ut.\nKanskje lørdag hvis det er oppholdsvær?\n\nhilsen Gunnhild\nSletta 9, 2022 Gjerdrum\nmob 99 04 18 72",
+    "hide": [
+      ["Gunnhild Aas", "NAME", 1],
+      ["gunnhild.aas@online.no", "EMAIL", 1],
+      ["naboen.i.nr7@gmail.com", "EMAIL", 1],
+      ["gunnhild", "NAME", 2],
+      ["Gunnhild", "NAME", 2],
+      ["Rune", "NAME", 2],
+      ["Sletta 9, 2022 Gjerdrum", "ADDRESS", 1],
+      ["99 04 18 72", "PHONE", 1]
+    ],
+    "keep": ["Stihl", "lørdag"]
+  },
+  {
+    "id": "tools-009",
+    "source": "mail",
+    "lang": "en",
+    "text": "From: Airbnb <automated@airbnb.com>\nSubject: Your reservation in Lisbon is confirmed\nDate: Tue, 13 Oct 2026 11:02:58 +0000\n\nPack your bags! You're going to Lisbon.\n\nHost: Marco Bellini\nCheck-in: Thu, 5 Nov after 15:00\nCheckout: Mon, 9 Nov before 11:00\nAddress: Rua da Rosa 112, 2.º Esq, 1200-385 Lisboa\n\nMessage from Marco: \"Olá! The key box code will be sent the day before. If you get lost, WhatsApp me at +351 912 448 307.\"\n\nTotal paid: €612.40 (Mastercard •••• 4417)",
+    "hide": [
+      ["Marco Bellini", "NAME", 1],
+      ["Marco", "NAME", 2],
+      ["Rua da Rosa 112, 2.º Esq, 1200-385 Lisboa", "ADDRESS", 1],
+      ["+351 912 448 307", "PHONE", 1]
+    ],
+    "keep": ["Airbnb", "Lisbon", "WhatsApp", "Mastercard", "€612.40", "Thu, 5 Nov"]
+  },
+  {
+    "id": "tools-010",
+    "source": "mail",
+    "lang": "nb",
+    "text": "From: Ruter <noreply@ruter.no>\nSubject: Driftsmelding: Endringer på linje 300 og Flytoget\nDate: Wed, 21 Oct 2026 05:45:00 +0200\n\nFra mandag 26. oktober til fredag 30. oktober er det sporarbeid mellom Oslo S og Lillestrøm.\n\n- Flytoget kjører hver 20. minutt fra Oslo S til Oslo lufthavn Gardermoen.\n- Vy-togene L1 og R13 erstattes delvis av buss.\n- Linje 300 får ekstra avganger fra Oslo bussterminal.\n\nSe reiseplanleggeren i Ruter-appen eller på entur.no.",
+    "hide": [],
+    "keep": [
+      "Ruter",
+      "Flytoget",
+      "Oslo S",
+      "Lillestrøm",
+      "Oslo lufthavn Gardermoen",
+      "Vy",
+      "L1",
+      "R13",
+      "Linje 300",
+      "Oslo bussterminal",
+      "entur.no",
+      "mandag 26. oktober"
+    ]
+  },
+  {
+    "id": "tools-011",
+    "source": "mail",
+    "lang": "nb",
+    "text": "From: Kjetil Brennhovd <kjetil.b@fetsundil.no>\nTo: foreldre-g2015@fetsundil.no\nSubject: Kamp søndag – oppmøte og kjøring\nDate: Thu, 15 Oct 2026 20:14:40 +0200\n\nHei!\n\nSøndag spiller G11 borte mot Kløfta IL kl. 11.00 på Kløfta stadion. Oppmøte ved klubbhuset kl. 10.00.\n\nKjøring: Eline, Sofie og Nora sine foreldre kjører. Mats og Jonas må ha med leggskinn, de glemte det sist.\n\nGi beskjed til meg på sms innen fredag om noen ikke kan.\n\nKjetil\nTrener G11, Fetsund IL\ntlf 920 47 158",
+    "hide": [
+      ["Kjetil Brennhovd", "NAME", 1],
+      ["kjetil.b@fetsundil.no", "EMAIL", 1],
+      ["foreldre-g2015@fetsundil.no", "EMAIL", 1],
+      ["Kløfta", "ORG", 2],
+      ["Eline", "NAME", 2],
+      ["Sofie", "NAME", 2],
+      ["Nora", "NAME", 2],
+      ["Mats", "NAME", 2],
+      ["Jonas", "NAME", 2],
+      ["Kjetil", "NAME", 2],
+      ["Fetsund", "ORG", 2],
+      ["920 47 158", "PHONE", 1]
+    ],
+    "keep": ["Søndag", "kl. 11.00", "kl. 10.00", "fredag"]
+  },
+  {
+    "id": "tools-012",
+    "source": "mail",
+    "lang": "nb",
+    "text": "From: Møller Bil <service@mollerbil.no>\nSubject: Servicebekreftelse – EL 48213\nDate: Fri, 16 Oct 2026 12:30:11 +0200\n\nHei!\n\nBilen din er booket inn til 60 000 km-service.\n\nBil: Volkswagen ID.4 Pro\nReg.nr: EL 48213\nUnderstellsnr: WVGZZZE2ZNP041873\nTid: Tirsdag 27. oktober kl. 07:30\n\nServiceråd: Thomas Berg, direkte 466 21 905\nMøller Bil Lillestrøm\n\nLeiebil fra Hertz kan bestilles i Min Side.",
+    "hide": [
+      ["EL 48213", "PLATE", 1],
+      ["WVGZZZE2ZNP041873", "VIN", 1],
+      ["Thomas Berg", "NAME", 1],
+      ["466 21 905", "PHONE", 1]
+    ],
+    "keep": [
+      "Møller Bil",
+      "Volkswagen ID.4 Pro",
+      "Tirsdag 27. oktober",
+      "kl. 07:30",
+      "Hertz",
+      "60 000 km"
+    ]
+  },
+  {
+    "id": "tools-013",
+    "source": "mail",
+    "lang": "en",
+    "text": "From: Priya Raman <priya.raman@northwind-analytics.co.uk>\nTo: v.consult@protonmail.com\nSubject: Contract extension and invoice\nDate: Tue, 20 Oct 2026 16:58:03 +0100\n\nHello,\n\nLegal has signed off the extension through March. Please send November's invoice to accounts@northwind-analytics.co.uk and reference PO 77-4410.\n\nAlso, Oliver asked whether you could join the offsite in Manchester on 3 December.\n\nBest regards,\nPriya Raman\nHead of Data Engineering\nNorthwind Analytics Ltd\n+44 7700 900123\n12 Kingsland Road, London E2 8DA",
+    "hide": [
+      ["Priya Raman", "NAME", 1],
+      ["priya.raman@northwind-analytics.co.uk", "EMAIL", 1],
+      ["v.consult@protonmail.com", "EMAIL", 1],
+      ["accounts@northwind-analytics.co.uk", "EMAIL", 1],
+      ["Oliver", "NAME", 2],
+      ["Northwind Analytics", "ORG", 2],
+      ["+44 7700 900123", "PHONE", 1],
+      ["12 Kingsland Road, London E2 8DA", "ADDRESS", 1]
+    ],
+    "keep": ["March", "Manchester", "3 December", "PO 77-4410"]
+  },
+  {
+    "id": "tools-014",
+    "source": "mail",
+    "lang": "en",
+    "text": "From: Netflix <info@mailer.netflix.com>\nSubject: An update to your Netflix membership\nDate: Mon, 12 Oct 2026 18:00:00 +0000\n\nWe're updating our prices in Norway.\n\nStarting 12 November 2026, the Standard plan will cost 159 kr/month and the Premium plan 229 kr/month.\n\nNew this month: Stranger Things 5 – the final season, and the Norwegian thriller Kongen av Bergen.\n\nQuestions? Visit help.netflix.com.\nNetflix International B.V., Amsterdam",
+    "hide": [],
+    "keep": [
+      "Netflix",
+      "Norway",
+      "12 November 2026",
+      "Standard",
+      "Premium",
+      "159 kr/month",
+      "229 kr/month",
+      "Stranger Things 5",
+      "Kongen av Bergen",
+      "help.netflix.com",
+      "Netflix International B.V.",
+      "Amsterdam"
+    ]
+  },
+  {
+    "id": "tools-015",
+    "source": "mail",
+    "lang": "nb",
+    "text": "From: Siri Mo <siri.mo@klofta-dyrehospital.no>\nTo: hundeeier77@hotmail.com\nSubject: Prøvesvar for Bamse\nDate: Wed, 14 Oct 2026 13:11:29 +0200\n\nHei!\n\nBlodprøvene til Bamse er fine, nyreverdiene er normale. Fortsett med Rimadyl 75 mg i 7 dager til, så tar vi en ny kontroll om tre uker.\n\nRing resepsjonen på 63 98 70 15 for å bestille time.\n\nMed vennlig hilsen\nSiri Mo, veterinær\nKløfta Dyrehospital\nIndustrivegen 18, 2040 Kløfta",
+    "hide": [
+      ["Siri Mo", "NAME", 1],
+      ["siri.mo@klofta-dyrehospital.no", "EMAIL", 1],
+      ["hundeeier77@hotmail.com", "EMAIL", 1],
+      ["Kløfta", "ORG", 2],
+      ["63 98 70 15", "PHONE", 1],
+      ["Industrivegen 18, 2040 Kløfta", "ADDRESS", 1]
+    ],
+    "keep": ["Bamse", "Rimadyl 75 mg", "7 dager"]
+  },
+  {
+    "id": "tools-016",
+    "source": "mail",
+    "lang": "nb",
+    "text": "From: Bjørn Tore Kristiansen <styret@lahaugmoen-brl.no>\nTo: beboere@lahaugmoen-brl.no\nSubject: Innkalling til ekstraordinær generalforsamling\nDate: Thu, 08 Oct 2026 17:25:00 +0200\n\nTil andelseierne i Lahaugmoen borettslag\n\nStyret kaller inn til ekstraordinær generalforsamling tirsdag 3. november kl. 19.00 i fellesrommet, Lahaugmoen 41, 2013 Skjetten.\n\nSak: Utskifting av vinduer og balkongdører, kostnadsramme 14,2 mill. kr. Finansiering via OBOS Banken.\n\nFullmakt kan gis til et annet medlem eller til styreleder.\n\nFor styret\nBjørn Tore Kristiansen, styreleder\ntlf 913 66 402",
+    "hide": [
+      ["Bjørn Tore Kristiansen", "NAME", 1],
+      ["styret@lahaugmoen-brl.no", "EMAIL", 1],
+      ["beboere@lahaugmoen-brl.no", "EMAIL", 1],
+      ["Lahaugmoen", "ORG", 2],
+      ["Lahaugmoen 41, 2013 Skjetten", "ADDRESS", 1],
+      ["913 66 402", "PHONE", 1]
+    ],
+    "keep": ["tirsdag 3. november", "kl. 19.00", "OBOS Banken", "14,2 mill. kr"]
+  },
+  {
+    "id": "tools-017",
+    "source": "mail",
+    "lang": "mixed",
+    "text": "From: Tomasz Wiśniewski <t.wisniewski.bygg@gmail.com>\nTo: post.huset@outlook.com\nSubject: Re: terrasse / deck\nDate: Sat, 17 Oct 2026 10:03:15 +0200\n\nHei,\nsorry for my norsk. I can start with terrasse on monday 2. november. Materials from Maxbo, 28x120 royalimpregnert, I buy it and add on invoice.\nMy colleague Piotr come also, we are 2 person, maybe 4 days.\nAddress is Furuveien 22B, 1925 Blaker, yes?\n\nHilsen\nTomasz\nTW Bygg og Montering\n+48 601 234 567 / 476 02 311",
+    "hide": [
+      ["Tomasz Wiśniewski", "NAME", 1],
+      ["t.wisniewski.bygg@gmail.com", "EMAIL", 1],
+      ["post.huset@outlook.com", "EMAIL", 1],
+      ["Piotr", "NAME", 2],
+      ["Furuveien 22B, 1925 Blaker", "ADDRESS", 1],
+      ["Tomasz", "NAME", 2],
+      ["TW Bygg og Montering", "ORG", 2],
+      ["+48 601 234 567", "PHONE", 1],
+      ["476 02 311", "PHONE", 1]
+    ],
+    "keep": ["Maxbo", "monday 2. november", "4 days"]
+  },
+  {
+    "id": "tools-018",
+    "source": "mail",
+    "lang": "nb",
+    "text": "From: Skatteetaten <ikke-svar@skatteetaten.no>\nSubject: Skattemeldingen for 2025 – endelig skatteoppgjør\nDate: Tue, 20 Oct 2026 08:00:00 +0200\n\nSkatteoppgjøret ditt er klart.\n\nLogg inn med BankID, MinID eller Buypass via ID-porten for å se resultatet. Tilgodebeløp utbetales normalt innen tre uker.\n\nSkatteetaten sender aldri lenker til innlogging på SMS.\n\nLes mer på skatteetaten.no eller i Altinn.",
+    "hide": [],
+    "keep": [
+      "Skatteetaten",
+      "BankID",
+      "MinID",
+      "Buypass",
+      "ID-porten",
+      "skatteetaten.no",
+      "Altinn",
+      "2025"
+    ]
+  },
+  {
+    "id": "tools-019",
+    "source": "calendar",
+    "lang": "nb",
+    "text": "Hendelse: Foreldremøte 4B\nNår: torsdag 29. oktober 2026, 18:00–19:30\nSted: Haugtun skole, aula\nArrangør: hilde.bakkerud@haugtun-skole.no\nDeltakere: Hilde Bakkerud, Lars Ove Tangen (FAU), foresatte-4b@haugtun-skole.no\nNotater: Agenda – leirskole til Hurdal i mai, mobilbruk, valg av klassekontakt. Ta med forslag til dugnad.",
+    "hide": [
+      ["Haugtun", "ORG", 2],
+      ["hilde.bakkerud@haugtun-skole.no", "EMAIL", 1],
+      ["Hilde Bakkerud", "NAME", 1],
+      ["Lars Ove Tangen", "NAME", 1],
+      ["foresatte-4b@haugtun-skole.no", "EMAIL", 1],
+      ["Hurdal", "PLACE", 2]
+    ],
+    "keep": ["torsdag 29. oktober 2026", "18:00–19:30", "FAU", "mai"]
+  },
+  {
+    "id": "tools-020",
+    "source": "calendar",
+    "lang": "nb",
+    "text": "Hendelse: Tannlege – Ruth Ødegård\nNår: mandag 9. november 2026, 08:15–09:00\nSted: Tannhelse Hagan, Rådhusvegen 4, 1482 Nittedal\nNotater: Kontroll + rens. Husk frikort. Ring 67 07 21 90 ved forsinkelse.",
+    "hide": [
+      ["Ruth Ødegård", "NAME", 1],
+      ["Hagan", "ORG", 2],
+      ["Rådhusvegen 4, 1482 Nittedal", "ADDRESS", 1],
+      ["67 07 21 90", "PHONE", 1]
+    ],
+    "keep": ["mandag 9. november 2026", "08:15–09:00"]
+  },
+  {
+    "id": "tools-021",
+    "source": "calendar",
+    "lang": "en",
+    "text": "Event: Quarterly planning – Platform\nWhen: Thu 5 Nov 2026, 13:00–15:00 (CET)\nLocation: Microsoft Teams / Room Nordkapp, 4th floor\nOrganizer: Anna Kowalski <anna.kowalski@fjordlinedata.no>\nAttendees: mikkel.dahl@fjordlinedata.no, Rashid Ahmadi, Ellen Sæther (optional)\nNotes: Review Kubernetes migration, Datadog costs, on-call rota for Christmas.",
+    "hide": [
+      ["Anna Kowalski", "NAME", 1],
+      ["anna.kowalski@fjordlinedata.no", "EMAIL", 1],
+      ["mikkel.dahl@fjordlinedata.no", "EMAIL", 1],
+      ["Rashid Ahmadi", "NAME", 1],
+      ["Ellen Sæther", "NAME", 1]
+    ],
+    "keep": ["Thu 5 Nov 2026", "Microsoft Teams", "Kubernetes", "Datadog", "Christmas"]
+  },
+  {
+    "id": "tools-022",
+    "source": "calendar",
+    "lang": "nb",
+    "text": "Hendelse: Konsert – Sigrid\nNår: lørdag 14. november 2026, 20:00–22:30\nSted: Oslo Spektrum, Oslo\nNotater: Billetter i Ticketmaster-appen. Oppvarming: Aurora. Spis på Mathallen før? Siste tog fra Oslo S 00:12.",
+    "hide": [],
+    "keep": [
+      "Sigrid",
+      "lørdag 14. november 2026",
+      "Oslo Spektrum",
+      "Oslo",
+      "Ticketmaster",
+      "Aurora",
+      "Mathallen",
+      "Oslo S",
+      "00:12"
+    ]
+  },
+  {
+    "id": "tools-023",
+    "source": "calendar",
+    "lang": "nb",
+    "text": "Hendelse: Bursdag Mathilde 7 år\nNår: søndag 1. november 2026, 14:00–16:00\nSted: Elvegata 22, 1940 Bjørkelangen\nNotater: Gave ca 200 kr (Lego Friends?). Svar til mamma Yasmin på 934 51 288 innen onsdag. Hent igjen kl 16.",
+    "hide": [
+      ["Mathilde", "NAME", 2],
+      ["Elvegata 22, 1940 Bjørkelangen", "ADDRESS", 1],
+      ["Yasmin", "NAME", 2],
+      ["934 51 288", "PHONE", 1]
+    ],
+    "keep": ["søndag 1. november 2026", "Lego Friends", "200 kr", "onsdag"]
+  },
+  {
+    "id": "tools-024",
+    "source": "calendar",
+    "lang": "nb",
+    "text": "Hendelse: Svømmekurs Hai 2\nNår: hver tirsdag 17:15–18:00, fra 13. oktober til 15. desember\nSted: Sørumhallen, svømmebasseng\nDeltakere: Jonas Haugland (instruktør)\nNotater: Badehette påbudt. Inngang fra baksiden. Parkering ved Coop Extra.",
+    "hide": [
+      ["Sørumhallen", "PLACE", 2],
+      ["Jonas Haugland", "NAME", 1]
+    ],
+    "keep": ["tirsdag", "17:15–18:00", "15. desember", "Coop Extra"]
+  },
+  {
+    "id": "tools-025",
+    "source": "calendar",
+    "lang": "nb",
+    "text": "Hendelse: Fly SK 4417 Oslo – Tromsø\nNår: fredag 20. november 2026, 07:05–09:00\nSted: Oslo lufthavn Gardermoen\nNotater: SAS, bookingref K7QX9P. Innsjekking i SAS-appen. Leiebil hos Avis på Tromsø lufthavn. Nordlysbuss med Arctic Explorers kl 19.",
+    "hide": [],
+    "keep": [
+      "SK 4417",
+      "Oslo",
+      "Tromsø",
+      "fredag 20. november 2026",
+      "Oslo lufthavn Gardermoen",
+      "SAS",
+      "Avis",
+      "Tromsø lufthavn",
+      "Arctic Explorers"
+    ]
+  },
+  {
+    "id": "tools-026",
+    "source": "calendar",
+    "lang": "nb",
+    "text": "Hendelse: Vaksine Luna (katt)\nNår: onsdag 4. november 2026, 15:30\nSted: Ås Dyreklinikk, Moerveien 10, 1430 Ås\nDeltakere: veterinær Kristin Opsahl\nNotater: Årlig vaksine + kloklipp. Ta med vaksinekort. Bur står i boden.",
+    "hide": [
+      ["Ås", "ORG", 2],
+      ["Moerveien 10, 1430 Ås", "ADDRESS", 1],
+      ["Kristin Opsahl", "NAME", 1]
+    ],
+    "keep": ["onsdag 4. november 2026", "15:30", "Luna"]
+  },
+  {
+    "id": "tools-027",
+    "source": "calendar",
+    "lang": "nb",
+    "text": "Hendelse: Elektriker – ny kurs til varmepumpe\nNår: fredag 23. oktober 2026, 08:00–12:00\nSted: Hjemme\nDeltakere: Ahmed Hussein (Strøm & Lys AS), 478 12 290\nNotater: Mitsubishi Kirigamine monteres uka etter av Bravida. Ahmed trenger tilgang til sikringsskapet i kjelleren.",
+    "hide": [
+      ["Ahmed Hussein", "NAME", 1],
+      ["Strøm & Lys", "ORG", 2],
+      ["478 12 290", "PHONE", 1],
+      ["Ahmed", "NAME", 2]
+    ],
+    "keep": ["fredag 23. oktober 2026", "Mitsubishi Kirigamine", "Bravida"]
+  },
+  {
+    "id": "tools-028",
+    "source": "calendar",
+    "lang": "nb",
+    "text": "Hendelse: Middag hos Randi og Per\nNår: lørdag 31. oktober 2026, 18:00\nSted: Gamle Trondheimsvei 210, 2016 Frogner\nDeltakere: Vegard Svendsen, Ingrid Svendsen, randi.svendsen@gmail.com\nNotater: Ta med vin fra Vinmonopolet og dessert. Per fyller 70 i desember – spør om gaveønsker.",
+    "hide": [
+      ["Randi", "NAME", 2],
+      ["Per", "NAME", 2],
+      ["Gamle Trondheimsvei 210, 2016 Frogner", "ADDRESS", 1],
+      ["Vegard Svendsen", "NAME", 1],
+      ["Ingrid Svendsen", "NAME", 1],
+      ["randi.svendsen@gmail.com", "EMAIL", 1]
+    ],
+    "keep": ["lørdag 31. oktober 2026", "Vinmonopolet", "desember"]
+  },
+  {
+    "id": "tools-029",
+    "source": "contacts",
+    "lang": "nb",
+    "text": "Navn: Kari-Anne Johansen\nMobil: +47 917 30 554\nE-post: karianne.johansen@hotmail.no\nAdresse: Bjørnstjerne Bjørnsons vei 8, 1900 Fetsund\nBursdag: 02.11.1984\nFirma: Fetsund Regnskap AS, regnskapsfører\nNotat: Hjelper oss med skattemeldingen for ENK.",
+    "hide": [
+      ["Kari-Anne Johansen", "NAME", 1],
+      ["+47 917 30 554", "PHONE", 1],
+      ["karianne.johansen@hotmail.no", "EMAIL", 1],
+      ["Bjørnstjerne Bjørnsons vei 8, 1900 Fetsund", "ADDRESS", 1],
+      ["02.11.1984", "BIRTHDATE", 1],
+      ["Fetsund Regnskap", "ORG", 2]
+    ],
+    "keep": ["ENK"]
+  },
+  {
+    "id": "tools-030",
+    "source": "contacts",
+    "lang": "en",
+    "text": "BEGIN:VCARD\nVERSION:3.0\nFN:Liam O'Connor\nORG:Brightwave Labs\nTITLE:CTO\nTEL;TYPE=CELL:+353 87 415 2290\nEMAIL;TYPE=WORK:liam@brightwavelabs.ie\nADR;TYPE=WORK:;;14 Harcourt Street;Dublin 2;;D02 YX88;Ireland\nNOTE:Met at Web Summit Lisbon. Interested in the Home Assistant integration.\nEND:VCARD",
+    "hide": [
+      ["Liam O'Connor", "NAME", 1],
+      ["Brightwave Labs", "ORG", 2],
+      ["+353 87 415 2290", "PHONE", 1],
+      ["liam@brightwavelabs.ie", "EMAIL", 1],
+      ["14 Harcourt Street", "ADDRESS", 1]
+    ],
+    "keep": ["Web Summit", "Lisbon", "Home Assistant", "Ireland", "CTO"]
+  },
+  {
+    "id": "tools-031",
+    "source": "contacts",
+    "lang": "nb",
+    "text": "Navn: Nguyen Thi Lan\nMobil: 465 90 213\nE-post: lan.nguyen88@gmail.com\nNotat: Mor til Minh i 5A. Kan bytte på henting tirsdager. Snakker best engelsk.",
+    "hide": [
+      ["Nguyen Thi Lan", "NAME", 1],
+      ["465 90 213", "PHONE", 1],
+      ["lan.nguyen88@gmail.com", "EMAIL", 1],
+      ["Minh", "NAME", 2]
+    ],
+    "keep": ["5A", "tirsdager"]
+  },
+  {
+    "id": "tools-032",
+    "source": "contacts",
+    "lang": "nb",
+    "text": "Navn: Ola rør\nMobil: 90512477\nNotat: rørlegger, svoger av Arild. svarer bare på sms før kl 7",
+    "hide": [
+      ["Ola", "NAME", 2],
+      ["90512477", "PHONE", 1],
+      ["Arild", "NAME", 2]
+    ],
+    "keep": ["kl 7"]
+  },
+  {
+    "id": "tools-033",
+    "source": "contacts",
+    "lang": "nb",
+    "text": "Navn: Dr. Ingunn Myhre\nFirma: Hurdal legekontor\nTelefon (sentralbord): 63 98 81 00\nAdresse: Hurdalsvegen 1280, 2090 Hurdal\nNotat: Fastlege. Reseptfornyelse via Helsenorge.",
+    "hide": [
+      ["Ingunn Myhre", "NAME", 1],
+      ["Hurdal", "ORG", 2],
+      ["63 98 81 00", "PHONE", 1],
+      ["Hurdalsvegen 1280, 2090 Hurdal", "ADDRESS", 1]
+    ],
+    "keep": ["Helsenorge"]
+  },
+  {
+    "id": "tools-034",
+    "source": "contacts",
+    "lang": "nb",
+    "text": "Navn: Ingrid Svendsen\nKallenavn: Ingi\nMobil: 926 11 448\nE-post: ingrid.svendsen@icloud.com\nFødselsdato: 23.06.1989\nRelasjon: partner",
+    "hide": [
+      ["Ingrid Svendsen", "NAME", 1],
+      ["Ingi", "NAME", 2],
+      ["926 11 448", "PHONE", 1],
+      ["ingrid.svendsen@icloud.com", "EMAIL", 1],
+      ["23.06.1989", "BIRTHDATE", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "tools-035",
+    "source": "tool",
+    "lang": "mixed",
+    "text": "GET http://hass.lindgard.home:8123/api/states\n[\n  {\"entity_id\": \"binary_sensor.soverom_2_vindu\", \"state\": \"on\", \"attributes\": {\"friendly_name\": \"Emmas rom vindu\", \"device_class\": \"window\"}},\n  {\"entity_id\": \"person.child_2\", \"state\": \"not_home\", \"attributes\": {\"friendly_name\": \"Tobias\", \"source\": \"device_tracker.iphone_15\"}},\n  {\"entity_id\": \"sensor.stue_temperatur\", \"state\": \"21.4\", \"attributes\": {\"unit_of_measurement\": \"°C\", \"friendly_name\": \"Stue temperatur\"}},\n  {\"entity_id\": \"climate.mitsubishi_stue\", \"state\": \"heat\", \"attributes\": {\"temperature\": 22}},\n  {\"entity_id\": \"sensor.mqtt_broker_ip\", \"state\": \"192.168.1.42\"}\n]",
+    "hide": [
+      ["hass.lindgard.home", "DOMAIN", 1],
+      ["Emma", "NAME", 2],
+      ["Tobias", "NAME", 2],
+      ["192.168.1.42", "IP", 1]
+    ],
+    "keep": ["°C", "21.4"]
+  },
+  {
+    "id": "tools-036",
+    "source": "tool",
+    "lang": "en",
+    "text": "$ ssh mlyngstad@nas.local\nLinux nas 6.1.0-26-amd64 #1 SMP PREEMPT_DYNAMIC Debian 6.1.112-1 x86_64\nLast login: Tue Oct 20 22:14:03 2026 from 192.168.10.23\nmlyngstad@nas:~$ df -h /srv/backup\nFilesystem      Size  Used Avail Use% Mounted on\n/dev/md0        7.3T  5.9T  1.4T  82% /srv/backup\nmlyngstad@nas:~$ ls /srv/backup/borg\nlaptop-mlyngstad  phone-photos  hass-config",
+    "hide": [
+      ["mlyngstad", "USERNAME", 2],
+      ["nas.local", "DOMAIN", 1],
+      ["192.168.10.23", "IP", 1]
+    ],
+    "keep": ["Debian", "Tue Oct 20"]
+  },
+  {
+    "id": "tools-037",
+    "source": "tool",
+    "lang": "en",
+    "text": "$ git log --format=fuller -3\ncommit 8f2c1e9d4b7a0c3e5f6d2b1a9e8c7d6f5a4b3c2d\nAuthor:     Henrik Aasland <henrik@aasland.dev>\nAuthorDate: Mon Oct 19 21:44:10 2026 +0200\nCommit:     Henrik Aasland <henrik@aasland.dev>\n\n    Fix Zigbee2MQTT reconnect loop\n\ncommit 1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d\nAuthor:     Nadia Rahimi <nadia.rahimi@gmail.com>\nAuthorDate: Sun Oct 18 10:02:55 2026 +0200\n\n    Add Tibber price sensor\n\ncommit 0f9e8d7c6b5a49382716f5e4d3c2b1a0f9e8d7c6\nAuthor:     dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>\n\n    Bump vite from 6.2.1 to 6.3.0",
+    "hide": [
+      ["Henrik Aasland", "NAME", 1],
+      ["henrik@aasland.dev", "EMAIL", 1],
+      ["Nadia Rahimi", "NAME", 1],
+      ["nadia.rahimi@gmail.com", "EMAIL", 1]
+    ],
+    "keep": ["Zigbee2MQTT", "Tibber", "dependabot[bot]", "vite"]
+  },
+  {
+    "id": "tools-038",
+    "source": "tool",
+    "lang": "nb",
+    "text": "thale@thinkpad:~$ ls -la /home/thale/Dokumenter/Skatt\\ 2025/\ntotal 2184\ndrwxr-xr-x 2 thale thale    4096 okt. 20 21:10 .\n-rw-r--r-- 1 thale thale  812331 apr. 28 19:02 skattemelding_2025.pdf\n-rw-r--r-- 1 thale thale  402118 mars 14 11:47 lonnsslipp_desember_Visma.pdf\n-rw-r--r-- 1 thale thale  993004 okt. 20 21:10 kvittering_Elkjop_varmepumpe.pdf\nthale@thinkpad:~$ du -sh ~/Bilder/2026\n38G\t/home/thale/Bilder/2026",
+    "hide": [["thale", "USERNAME", 2]],
+    "keep": ["Visma", "Elkjop"]
+  },
+  {
+    "id": "tools-039",
+    "source": "tool",
+    "lang": "nb",
+    "text": "Entur – sanntid\nGET https://api.entur.io/journey-planner/v3/graphql\n{\"data\":{\"stopPlace\":{\"id\":\"NSR:StopPlace:337\",\"name\":\"Blaker stasjon\",\"estimatedCalls\":[\n {\"expectedDepartureTime\":\"2026-10-21T07:12:00+02:00\",\"destinationDisplay\":{\"frontText\":\"Oslo S\"},\"serviceJourney\":{\"line\":{\"publicCode\":\"R14\",\"operator\":{\"name\":\"Vy\"}}},\"realtime\":true,\"cancellation\":false},\n {\"expectedDepartureTime\":\"2026-10-21T07:42:00+02:00\",\"destinationDisplay\":{\"frontText\":\"Kongsvinger\"},\"serviceJourney\":{\"line\":{\"publicCode\":\"R14\",\"operator\":{\"name\":\"Vy\"}}},\"realtime\":true,\"cancellation\":true},\n {\"expectedDepartureTime\":\"2026-10-21T08:12:00+02:00\",\"destinationDisplay\":{\"frontText\":\"Oslo S\"},\"serviceJourney\":{\"line\":{\"publicCode\":\"R14\",\"operator\":{\"name\":\"Vy\"}}},\"realtime\":false,\"cancellation\":false}\n]}}}",
+    "hide": [["Blaker", "PLACE", 2]],
+    "keep": ["Entur", "Oslo S", "R14", "Vy", "Kongsvinger"]
+  },
+  {
+    "id": "tools-040",
+    "source": "tool",
+    "lang": "nb",
+    "text": "Vigilo – meldinger (2 nye)\n[\n {\"fra\": \"Øyvind Strand\", \"rolle\": \"kontaktlærer 5A\", \"skole\": \"Rudsløkka skole\", \"elev\": \"Selma Hagen\", \"dato\": \"2026-10-20\", \"tekst\": \"Selma var ikke på skolen i dag og vi har ikke fått fravær meldt. Gi gjerne beskjed.\"},\n {\"fra\": \"Rudsløkka skole\", \"dato\": \"2026-10-19\", \"tekst\": \"Høstferien er slutt – husk refleksvest på skoleveien. Skolefotografering med Fotograf Wangen 4. november.\"}\n]",
+    "hide": [
+      ["Øyvind Strand", "NAME", 1],
+      ["Rudsløkka", "ORG", 2],
+      ["Selma Hagen", "NAME", 1],
+      ["Selma", "NAME", 2]
+    ],
+    "keep": ["Vigilo", "5A", "Høstferien", "4. november"]
+  },
+  {
+    "id": "tools-041",
+    "source": "tool",
+    "lang": "nb",
+    "text": "MyKid – ny melding\nFra: Linn (ped.leder), avdeling Ekornet, Kløverenga barnehage\nTil: foresatte til Frøya\nTid: 21.10.2026 11:48\n\nHei! Frøya har sovet godt i dag, men hun har litt feber nå (38,4). Kan noen hente henne innen kl 13? Ring avdelingen på 941 22 870.",
+    "hide": [
+      ["Linn", "NAME", 2],
+      ["Ekornet", "ORG", 2],
+      ["Kløverenga", "ORG", 2],
+      ["Frøya", "NAME", 2],
+      ["941 22 870", "PHONE", 1]
+    ],
+    "keep": ["MyKid", "kl 13", "38,4"]
+  },
+  {
+    "id": "tools-042",
+    "source": "tool",
+    "lang": "en",
+    "text": "POST https://booking.vetsoft.no/api/v2/appointments\n{\n  \"status\": \"confirmed\",\n  \"clinic\": {\"name\": \"Eidsvoll Dyrlegesenter\", \"phone\": \"63 95 40 00\"},\n  \"owner\": {\"name\": \"Marius Engebretsen\", \"phone\": \"+47 98221034\", \"email\": \"marius.engebretsen@gmail.com\"},\n  \"patient\": {\"name\": \"Bamse\", \"species\": \"dog\", \"breed\": \"Golden Retriever\", \"chip\": \"578077000123456\"},\n  \"start\": \"2026-10-28T09:30:00+01:00\",\n  \"reason\": \"Annual vaccination (Nobivac DHPPi)\"\n}",
+    "hide": [
+      ["Eidsvoll", "ORG", 2],
+      ["Marius Engebretsen", "NAME", 1],
+      ["+47 98221034", "PHONE", 1],
+      ["marius.engebretsen@gmail.com", "EMAIL", 1]
+    ],
+    "keep": ["Golden Retriever", "Nobivac DHPPi", "Bamse"]
+  },
+  {
+    "id": "tools-043",
+    "source": "tool",
+    "lang": "nb",
+    "text": "Konto: Brukskonto 1503.44.21983 – Saldo 14 382,55\nDato        Tekst                                  Beløp\n20.10.2026  Vipps*Sander Moen                    -450,00\n20.10.2026  Rema 1000 Sørumsand                  -612,40\n19.10.2026  Overføring til 9710.05.33417       -5 000,00\n18.10.2026  Netflix.com                          -199,00\n17.10.2026  Ruter Billett                        -936,00\n15.10.2026  Lønn Fjordline Data AS            +41 280,00\n15.10.2026  Husleie Gunnar Bratli            -12 500,00",
+    "hide": [
+      ["1503.44.21983", "ACCOUNT", 1],
+      ["Sander Moen", "NAME", 1],
+      ["Sørumsand", "PLACE", 2],
+      ["9710.05.33417", "ACCOUNT", 1],
+      ["Fjordline Data", "ORG", 2],
+      ["Gunnar Bratli", "NAME", 1]
+    ],
+    "keep": ["Vipps", "Rema 1000", "Netflix.com", "Ruter", "14 382,55"]
+  },
+  {
+    "id": "tools-044",
+    "source": "tool",
+    "lang": "nb",
+    "text": "Utdrag fra PDF: Husleiekontrakt (Husleieloven)\n§1 Parter\nUtleier: Gunnar Bratli, f.nr. 12057843223\nLeietaker: Amira Haddad, f.nr. 30119254910\n§2 Leieobjekt\nLeilighet i Nedre Rommen 5C, 0988 Oslo, 3 rom, ca. 62 m².\n§4 Leie\nKr 12 500 per måned, forfall den 1. Innbetales til konto 0539.12.77828.\n§6 Depositum\nKr 37 500 settes inn på depositumskonto i DNB.",
+    "hide": [
+      ["Gunnar Bratli", "NAME", 1],
+      ["12057843223", "NATIONALID", 1],
+      ["Amira Haddad", "NAME", 1],
+      ["30119254910", "NATIONALID", 1],
+      ["Nedre Rommen 5C, 0988 Oslo", "ADDRESS", 1],
+      ["0539.12.77828", "ACCOUNT", 1]
+    ],
+    "keep": ["Husleieloven", "Kr 12 500", "DNB", "62 m²"]
+  },
+  {
+    "id": "tools-045",
+    "source": "tool",
+    "lang": "nb",
+    "text": "Utdrag fra PDF: Faktura 2026-118\nGrini Bygg AS, org.nr 921 554 330 MVA\nKunde: Hanne Sørlie, Vestbyveien 31, 1540 Vestby\nFakturadato: 15.10.2026   Forfall: 29.10.2026\n\nUtskifting av kledning, 42 timer à 690,-    28 980,00\nMaterialer (Byggmakker)                     16 412,50\nMVA 25 %                                    11 348,13\nÅ betale                                    56 740,63\n\nBetales til konto 1254.33.01998, KID 0011820261183\nSpørsmål: Rolf Grini, 924 30 117",
+    "hide": [
+      ["Grini Bygg", "ORG", 2],
+      ["Hanne Sørlie", "NAME", 1],
+      ["Vestbyveien 31, 1540 Vestby", "ADDRESS", 1],
+      ["1254.33.01998", "ACCOUNT", 1],
+      ["Rolf Grini", "NAME", 1],
+      ["924 30 117", "PHONE", 1]
+    ],
+    "keep": ["Byggmakker", "56 740,63", "29.10.2026"]
+  },
+  {
+    "id": "tools-046",
+    "source": "tool",
+    "lang": "nb",
+    "text": "Utdrag fra PDF: Lønnsslipp oktober 2026\nArbeidsgiver: Fjordline Data AS\nAnsatt: Kristoffer Nygård, ansattnr 1047\nFødselsnummer: 07089134573\nAvdeling: Plattform\nUtbetales til konto: 1207.58.44199\n\nFastlønn                         58 333,00\nOvertid 50 %                      3 120,00\nSkattetrekk (tabell 7100)       -19 410,00\nNetto utbetalt                   41 280,00",
+    "hide": [
+      ["Fjordline Data", "ORG", 2],
+      ["Kristoffer Nygård", "NAME", 1],
+      ["07089134573", "NATIONALID", 1],
+      ["1207.58.44199", "ACCOUNT", 1]
+    ],
+    "keep": ["oktober 2026", "41 280,00"]
+  },
+  {
+    "id": "tools-047",
+    "source": "tool",
+    "lang": "nb",
+    "text": "Home Assistant – states\nNord Pool (NO1): 1.84 NOK/kWh (min 0.62, max 2.91)\nTibber Pulse effekt: 2 140 W\nweather.met_no: Regn, 7 °C, vind 6 m/s fra sørvest (kilde: yr.no / Meteorologisk institutt)\nEasee Home lader: charging, 11 kW\nPanasonic varmtvannsbereder: off",
+    "hide": [],
+    "keep": [
+      "Home Assistant",
+      "Nord Pool",
+      "Tibber",
+      "yr.no",
+      "Meteorologisk institutt",
+      "Easee",
+      "Panasonic",
+      "1.84 NOK/kWh"
+    ]
+  },
+  {
+    "id": "tools-048",
+    "source": "tool",
+    "lang": "en",
+    "text": "$ pnpm install\nLockfile is up to date, resolution step is skipped\nPackages: +412\nProgress: resolved 412, reused 409, downloaded 3, added 412, done\n\ndependencies:\n+ react 19.2.0\n+ @tanstack/react-router 1.131.2\n+ zod 4.1.5\n\ndevDependencies:\n+ typescript 5.9.3\n+ vite 7.1.4\n+ vitest 3.2.4\n\nDone in 4.8s using pnpm v10.17.1",
+    "hide": [],
+    "keep": ["pnpm", "react", "@tanstack/react-router", "zod", "typescript", "vite", "vitest"]
+  },
+  {
+    "id": "tools-049",
+    "source": "tool",
+    "lang": "en",
+    "text": "$ tailscale status\n100.101.12.4    nas-hjemme           linnea.e@     linux   -\n100.88.204.17   linnea-macbook       linnea.e@     macOS   active; direct 84.212.47.190:41641\n100.64.3.99     pihole               linnea.e@     linux   idle\n100.120.7.55    pappas-ipad          tor.ekeberg@  iOS     offline\n\n# MagicDNS: pihole.tail3a9f.ts.net",
+    "hide": [
+      ["100.101.12.4", "IP", 1],
+      ["nas-hjemme", "DOMAIN", 2],
+      ["linnea.e", "USERNAME", 2],
+      ["100.88.204.17", "IP", 1],
+      ["linnea-macbook", "DOMAIN", 2],
+      ["84.212.47.190", "IP", 1],
+      ["100.64.3.99", "IP", 1],
+      ["100.120.7.55", "IP", 1],
+      ["tor.ekeberg", "USERNAME", 2],
+      ["pihole.tail3a9f.ts.net", "DOMAIN", 1]
+    ],
+    "keep": ["tailscale", "macOS", "iOS", "MagicDNS"]
+  },
+  {
+    "id": "tools-050",
+    "source": "tool",
+    "lang": "nb",
+    "text": "Spond – arrangement\n{\"group\": \"Nittedal IL Håndball J10\", \"title\": \"Seriekamp mot Lørenskog\", \"start\": \"2026-10-25T12:20:00+02:00\",\n \"location\": \"Nittedalshallen\", \"organizer\": {\"name\": \"Camilla Strøm\", \"phone\": \"+47 482 66 931\"},\n \"accepted\": [\"Ida\", \"Thea\", \"Maja\", \"Hedda\"], \"declined\": [\"Ingeborg\"], \"unanswered\": [\"Liv\"],\n \"description\": \"Oppmøte 11:50. Husk drakt og drikkeflaske. Kiosk-vakt: foreldre til Thea.\"}",
+    "hide": [
+      ["Nittedal", "ORG", 2],
+      ["Nittedalshallen", "PLACE", 2],
+      ["Camilla Strøm", "NAME", 1],
+      ["+47 482 66 931", "PHONE", 1],
+      ["Ida", "NAME", 2],
+      ["Thea", "NAME", 2],
+      ["Maja", "NAME", 2],
+      ["Hedda", "NAME", 2],
+      ["Ingeborg", "NAME", 2],
+      ["Liv", "NAME", 2]
+    ],
+    "keep": ["Spond", "Lørenskog", "11:50"]
+  },
+  {
+    "id": "tools-051",
+    "source": "tool",
+    "lang": "en",
+    "text": "Tesla Fleet API\nGET https://owner-api.teslamotors.com/api/1/vehicles\n{\"response\":[{\"id\":1492931234567,\"vin\":\"5YJ3E7EB2NF123456\",\"display_name\":\"Gråtass\",\"state\":\"online\",\n \"vehicle_config\":{\"car_type\":\"model3\",\"trim_badging\":\"74d\"},\n \"vehicle_state\":{\"odometer\":28411.6,\"locked\":true,\"vehicle_name\":\"Gråtass\"},\n \"charge_state\":{\"battery_level\":64,\"charge_limit_soc\":80,\"charging_state\":\"Disconnected\"},\n \"registration\":{\"plate\":\"EK 73519\",\"country\":\"NO\"}}]}",
+    "hide": [
+      ["5YJ3E7EB2NF123456", "VIN", 1],
+      ["EK 73519", "PLATE", 1]
+    ],
+    "keep": ["Tesla", "model3", "Gråtass"]
+  },
+  {
+    "id": "tools-052",
+    "source": "tool",
+    "lang": "nb",
+    "text": "Utdrag fra PDF: Innkalling – Akershus universitetssykehus (Ahus)\nPasient: Noah Eriksen-Lund\nFødselsnummer: 19041578230\nAdresse: Kongsvingervegen 455, 1930 Aurskog\nHenvist av: fastlege Bushra Iqbal, Aurskog legesenter\nTime: Barnepoliklinikken, mandag 16. november kl. 09:40\nTa med: liste over medisiner, Ventoline-inhalator.",
+    "hide": [
+      ["Noah Eriksen-Lund", "NAME", 1],
+      ["19041578230", "NATIONALID", 1],
+      ["Kongsvingervegen 455, 1930 Aurskog", "ADDRESS", 1],
+      ["Bushra Iqbal", "NAME", 1],
+      ["Aurskog", "ORG", 2]
+    ],
+    "keep": [
+      "Akershus universitetssykehus",
+      "Ahus",
+      "Barnepoliklinikken",
+      "mandag 16. november",
+      "Ventoline"
+    ]
+  },
+  {
+    "id": "tools-053",
+    "source": "web",
+    "lang": "nb",
+    "text": "Maaemo – Restaurant – Oslo\n★★★ Michelin · Nordisk · 4 800 kr per person\nSchweigaards gate 15B, 0191 Oslo · åpent onsdag–lørdag\nKjøkkensjef Esben Holmboe Bang. Bord bookes via maaemo.no, ofte fullt tre måneder frem.",
+    "hide": [],
+    "keep": [
+      "Maaemo",
+      "Oslo",
+      "Michelin",
+      "Schweigaards gate 15B",
+      "Esben Holmboe Bang",
+      "maaemo.no",
+      "4 800 kr"
+    ]
+  },
+  {
+    "id": "tools-054",
+    "source": "web",
+    "lang": "nb",
+    "text": "NRK – Nyheter, 20.10.2026\nStatsminister Jonas Gahr Støre møtte EU-kommisjonens president Ursula von der Leyen i Brussel tirsdag. Temaet var strømkabler til Tyskland og EØS-avtalen. Høyre-leder Ine Eriksen Søreide kritiserer regjeringen for å være for passiv.",
+    "hide": [],
+    "keep": [
+      "NRK",
+      "Jonas Gahr Støre",
+      "Ursula von der Leyen",
+      "Brussel",
+      "Tyskland",
+      "EØS-avtalen",
+      "Høyre",
+      "Ine Eriksen Søreide"
+    ]
+  },
+  {
+    "id": "tools-055",
+    "source": "web",
+    "lang": "nb",
+    "text": "Philips Hue White and Color Ambiance E27 – 3-pakning\nPris: 1 499,- hos Elkjøp (før 1 899,-)\nFungerer med Apple Home, Google Home, Amazon Alexa og Matter. Krever Hue Bridge for alle funksjoner.\nVurdering: 4,6 av 5 (1 238 anmeldelser) · På lager i 42 butikker, blant annet Elkjøp Lambertseter.",
+    "hide": [],
+    "keep": [
+      "Philips Hue White and Color Ambiance",
+      "Elkjøp",
+      "Apple Home",
+      "Google Home",
+      "Amazon Alexa",
+      "Matter",
+      "Hue Bridge",
+      "Elkjøp Lambertseter",
+      "1 499,-"
+    ]
+  },
+  {
+    "id": "tools-056",
+    "source": "web",
+    "lang": "nb",
+    "text": "Holmenkollbakken – Wikipedia\nHolmenkollbakken er en hoppbakke i Holmenkollen i Oslo. Den nåværende bakken ble åpnet i 2010 og har bakkerekord på 144 meter. Holmenkollrennet arrangeres hvert år i mars, og bakken var arena for VM i nordiske grener 2011. Like ved ligger Skimuseet.",
+    "hide": [],
+    "keep": [
+      "Holmenkollbakken",
+      "Wikipedia",
+      "Holmenkollen",
+      "Oslo",
+      "Holmenkollrennet",
+      "VM i nordiske grener 2011",
+      "Skimuseet",
+      "mars"
+    ]
+  },
+  {
+    "id": "tools-057",
+    "source": "web",
+    "lang": "nb",
+    "text": "Flytoget – rutetider\nOslo S → Oslo lufthavn: avgang hvert 10. minutt 05:35–00:35, reisetid 19 min.\nStopp: Nationaltheatret, Oslo S, Lillestrøm, Oslo lufthavn.\nPris voksen: 236 kr. Kjøp i Flytoget-appen, Vipps eller med Visa/Mastercard ved gaten.",
+    "hide": [],
+    "keep": [
+      "Flytoget",
+      "Oslo S",
+      "Oslo lufthavn",
+      "Nationaltheatret",
+      "Lillestrøm",
+      "Vipps",
+      "Visa",
+      "Mastercard",
+      "236 kr"
+    ]
+  },
+  {
+    "id": "tools-058",
+    "source": "web",
+    "lang": "nb",
+    "text": "Finn.no – Torget\nBrio togbane, stort sett, 120 deler\n900 kr\nLite brukt, alt følger med inkl. Brio Smart Tech-lok. Må hentes i Fetsund. Ingen frakt. Ring eller send SMS til Mona på 917 22 384 etter kl 16.\nAnnonse oppdatert 19. okt. 2026 · FINN-kode 381927445",
+    "hide": [
+      ["Fetsund", "PLACE", 2],
+      ["Mona", "NAME", 2],
+      ["917 22 384", "PHONE", 1]
+    ],
+    "keep": ["Finn.no", "Brio", "Brio Smart Tech", "900 kr"]
+  },
+  {
+    "id": "tools-059",
+    "source": "web",
+    "lang": "en",
+    "text": "Bergen – yr.no\nWeather forecast for Bergen, Vestland (Norway), provided by the Norwegian Meteorological Institute and NRK.\nWednesday: rain, 9°, 14 mm, wind 8 m/s from southwest.\nThursday: showers, 8°.\nWeekend: clearing up, chance of sun over Fløyen on Saturday.",
+    "hide": [],
+    "keep": [
+      "Bergen",
+      "yr.no",
+      "Vestland",
+      "Norway",
+      "Norwegian Meteorological Institute",
+      "NRK",
+      "Wednesday",
+      "Fløyen",
+      "Saturday"
+    ]
+  },
+  {
+    "id": "tools-060",
+    "source": "web",
+    "lang": "en",
+    "text": "BBC Sport – Premier League\nErling Haaland scored twice as Manchester City beat Arsenal 3-1 at the Etihad Stadium. Pep Guardiola praised Martin Ødegaard despite the defeat, and Bukayo Saka limped off injured. City move two points clear of Liverpool.",
+    "hide": [],
+    "keep": [
+      "BBC Sport",
+      "Premier League",
+      "Erling Haaland",
+      "Manchester City",
+      "Arsenal",
+      "Etihad Stadium",
+      "Pep Guardiola",
+      "Martin Ødegaard",
+      "Bukayo Saka",
+      "Liverpool"
+    ]
+  },
+  {
+    "id": "tools-061",
+    "source": "web",
+    "lang": "en",
+    "text": "github.com/Koenkk/zigbee2mqtt – README\nZigbee2MQTT allows you to use your Zigbee devices without the vendor's bridge or gateway. It bridges events and allows you to control your Zigbee devices via MQTT. Works with Home Assistant, Domoticz, openHAB and Node-RED. Supported adapters include the Sonoff ZBDongle-E and SLZB-06.",
+    "hide": [],
+    "keep": [
+      "github.com",
+      "Zigbee2MQTT",
+      "MQTT",
+      "Home Assistant",
+      "Domoticz",
+      "openHAB",
+      "Node-RED",
+      "Sonoff ZBDongle-E",
+      "SLZB-06"
+    ]
+  },
+  {
+    "id": "tools-062",
+    "source": "web",
+    "lang": "en",
+    "text": "Tripadvisor – Lofoten Fiskerestaurant, Oslo\n4.5 of 5 · 2 914 reviews · Seafood, Norwegian · $$$$\nStranden 75, Aker Brygge. \"The best fish soup in Oslo, ask for a table by the window facing the Oslofjord.\" Open daily from 11:00. Reservations through OpenTable.",
+    "hide": [],
+    "keep": [
+      "Tripadvisor",
+      "Lofoten Fiskerestaurant",
+      "Oslo",
+      "Stranden 75",
+      "Aker Brygge",
+      "Oslofjord",
+      "OpenTable"
+    ]
+  },
+  {
+    "id": "tools-063",
+    "source": "web",
+    "lang": "nb",
+    "text": "Tesla Model Y Long Range AWD – tesla.com/no_no\nFra 499 990 kr · Rekkevidde opptil 586 km (WLTP) · 0–100 km/t på 4,8 s\nLevering fra Tesla Center Oslo Bryn eller Tesla Bergen. Leasing via Santander Consumer Bank. Superlader-nettverk med over 70 stasjoner i Norge.",
+    "hide": [],
+    "keep": [
+      "Tesla Model Y Long Range AWD",
+      "tesla.com",
+      "499 990 kr",
+      "Tesla Center Oslo Bryn",
+      "Tesla Bergen",
+      "Santander Consumer Bank",
+      "Norge"
+    ]
+  },
+  {
+    "id": "tools-064",
+    "source": "web",
+    "lang": "nb",
+    "text": "Ruter – Linje 300 Oslo bussterminal – Lillestrøm\nAvganger hverdager: hvert 15. minutt 06:00–20:00, deretter hver halvtime.\nHoldeplasser: Oslo bussterminal, Helsfyr, Furuset, Lørenskog stasjon, Strømmen storsenter, Lillestrøm bussterminal.\nBillett: 2 soner, kjøpes i Ruter-appen.",
+    "hide": [],
+    "keep": [
+      "Ruter",
+      "Linje 300",
+      "Oslo bussterminal",
+      "Lillestrøm",
+      "Helsfyr",
+      "Furuset",
+      "Lørenskog stasjon",
+      "Strømmen storsenter",
+      "Lillestrøm bussterminal"
+    ]
+  },
+  {
+    "id": "tools-065",
+    "source": "web",
+    "lang": "nb",
+    "text": "Edvard Munch – Store norske leksikon\nEdvard Munch var en norsk maler og grafiker, best kjent for Skrik. Han regnes som en av ekspresjonismens pionerer. Store deler av samlingen hans vises i dag på MUNCH i Bjørvika i Oslo, mens Nasjonalmuseet har en av de malte versjonene av Skrik.",
+    "hide": [],
+    "keep": [
+      "Edvard Munch",
+      "Store norske leksikon",
+      "Skrik",
+      "MUNCH",
+      "Bjørvika",
+      "Oslo",
+      "Nasjonalmuseet"
+    ]
+  },
+  {
+    "id": "tools-066",
+    "source": "web",
+    "lang": "nb",
+    "text": "Savnet katt! – Facebook-gruppe «Kløfta – hva skjer»\nGrå og hvit hannkatt, svarer til navnet Pus, borte siden søndag fra området rundt Kløfta stasjon. Han har chip og blått halsbånd. Ring Eirik på 480 55 213 hvis du ser ham. Delt 64 ganger.",
+    "hide": [
+      ["Kløfta", "PLACE", 2],
+      ["Eirik", "NAME", 2],
+      ["480 55 213", "PHONE", 1]
+    ],
+    "keep": ["Facebook", "søndag"]
+  },
+  {
+    "id": "tools-067",
+    "source": "web",
+    "lang": "nb",
+    "text": "NTB – 20.10.2026\nKong Harald og dronning Sonja var til stede da Stortinget ble åpnet i Oslo mandag. Kronprins Haakon leste trontalen på vegne av kongen. Stortingspresident Masud Gharahkhani ledet åpningsmøtet.",
+    "hide": [],
+    "keep": [
+      "NTB",
+      "Kong Harald",
+      "dronning Sonja",
+      "Stortinget",
+      "Oslo",
+      "Kronprins Haakon",
+      "Masud Gharahkhani",
+      "mandag"
+    ]
+  },
+  {
+    "id": "tools-068",
+    "source": "web",
+    "lang": "nb",
+    "text": "IKEA KALLAX Hylle, hvit, 77x147 cm\n699,- · Art.nr. 802.758.87\nKan brukes som romdeler. Passer med DRÖNA-bokser og KALLAX innsats med dør. På lager hos IKEA Furuset og IKEA Slependen. Click & Collect: klar på 2 timer.",
+    "hide": [],
+    "keep": [
+      "IKEA",
+      "KALLAX",
+      "DRÖNA",
+      "IKEA Furuset",
+      "IKEA Slependen",
+      "Click & Collect",
+      "699,-"
+    ]
+  },
+  {
+    "id": "tools-069",
+    "source": "web",
+    "lang": "en",
+    "text": "Hurtigruten – The Classic Coastal Voyage\nBergen to Kirkenes in 7 days, calling at 34 ports including Ålesund, Trondheim, Bodø, Tromsø and Honningsvåg (for the North Cape). Ships on the route include MS Richard With and MS Trollfjord. Departures daily from Bergen at 20:30.",
+    "hide": [],
+    "keep": [
+      "Hurtigruten",
+      "Bergen",
+      "Kirkenes",
+      "Ålesund",
+      "Trondheim",
+      "Bodø",
+      "Tromsø",
+      "Honningsvåg",
+      "North Cape",
+      "MS Richard With",
+      "MS Trollfjord"
+    ]
+  },
+  {
+    "id": "tools-070",
+    "source": "web",
+    "lang": "nb",
+    "text": "Sørum Håndball – Kontakt\nKlubben er medlem av Norges Håndballforbund, region Øst.\nLeder: Trond Haugen, tlf 977 64 210, trond.haugen@sorumhandball.no\nTreninger i Sørumhallen og Frogner flerbrukshall. Sesongavgift betales med Vipps til 112233.",
+    "hide": [
+      ["Trond Haugen", "NAME", 1],
+      ["977 64 210", "PHONE", 1],
+      ["trond.haugen@sorumhandball.no", "EMAIL", 1],
+      ["Sørum", "ORG", 2],
+      ["Sørumhallen", "PLACE", 2],
+      ["Frogner", "PLACE", 2]
+    ],
+    "keep": ["Norges Håndballforbund", "Vipps"]
+  }
+]

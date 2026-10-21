@@ -1,7 +1,10 @@
 import { createHash } from "node:crypto";
 import type { Context } from "@earendil-works/pi-ai";
 import { defineDoc } from "@earendil-works/pi-durable";
+import { AMBIGUOUS, FIRST_NAMES } from "../name-lists.ts";
+import { nameParts } from "../people.ts";
 import { READABLE_PLACES, withoutOrgType } from "../places.ts";
+import { isPublicName, withoutPublicEnds } from "../public-names.ts";
 import { type Vault, vaultKey } from "../vault.ts";
 import { type DeepDetector, DeepUnavailable } from "./detector.ts";
 
@@ -46,6 +49,14 @@ const NOT_PERSONAL = new Set(
     "son daughter wife husband aunt uncle kids boss neighbour neighbor doctor " +
     "hei hallo heisann takk hilsen hi hello thanks dear"
   ).split(" "),
+);
+
+/**
+ * Given names typed in lower case ("hent emma kl 4") still count when the model takes them for a
+ * person; names that are also everyday words ("per", "liv") don't.
+ */
+const LOWER_FIRST_NAMES = new Set(
+  FIRST_NAMES.filter((name) => !AMBIGUOUS.has(name)).map((name) => name.toLowerCase()),
 );
 
 /** Titles before a name: "Dr. Hansen", "fru Berg". */
@@ -129,8 +140,11 @@ export class DeepScanner {
     [...pieces.values()].forEach((piece, i) => {
       for (const finding of found[i] ?? []) {
         for (const value of this.valuesOf(piece.slice(finding.start, finding.end), finding.kind))
-          // Only new values: an owner given here must not take a value others already saw.
-          vault.protect(value, finding.kind, vault.knows(value) ? undefined : options.owner);
+          // A person's given and family names on their own too, as players' are: "Torunn's".
+          for (const part of finding.kind === "NAME" ? nameParts(value) : [value])
+            if (!this.allow.has(vaultKey(part)))
+              // Only new values: an owner given here must not take a value others already saw.
+              vault.protect(part, finding.kind, vault.knows(part) ? undefined : options.owner);
       }
     });
     for (const key of pieces.keys()) this.remember(key);
@@ -148,6 +162,8 @@ export class DeepScanner {
   }
 
   private valueOf(raw: string, kind: string): string | undefined {
+    const lower = kind === "NAME" ? lowerCaseName(raw) : undefined;
+    if (lower !== undefined) return this.allow.has(vaultKey(lower)) ? undefined : lower;
     // The model's spans run long ("Vethjem for katten", "Søster Helene"): words in lower case
     // and titles at either end go.
     const words = raw.split(/\s+/u).filter((word) => word !== "");
@@ -160,6 +176,10 @@ export class DeepScanner {
       .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}.]+$/gu, "")
       .replace(/['’]s$/u, "");
     if (kind === "ORG") value = withoutOrgType(value);
+    // Well-known names stay readable, also at either end of a place or organisation: "Kiwi
+    // Sørumsand" hides "Sørumsand". Not of a person: "Aas" in "Gunnhild Aas" may be a company too.
+    if (isPublicName(value, kind)) return undefined;
+    if (kind === "ORG" || kind === "PLACE") value = withoutPublicEnds(value, kind);
     if (value.length < 2 || value.includes("⟦") || value.includes("⟧")) return undefined;
     // Names, places and organisations are written with a capital; "borettslaget" and "stranda"
     // are words. Addresses have a number.
@@ -195,15 +215,35 @@ export class DeepScanner {
   }
 }
 
+/** A name typed all in lower case that starts with a known given name: "hanne bø", "emma". */
+function lowerCaseName(raw: string): string | undefined {
+  const words = raw
+    .replace(/^[^\p{L}]+|[^\p{L}]+$/gu, "")
+    .split(/\s+/u)
+    .filter((word) => word !== "");
+  if (words.length === 0 || words.length > 3) return undefined;
+  if (!words.every((word) => /^[\p{Ll}][\p{Ll}'’-]*$/u.test(word))) return undefined;
+  if (!LOWER_FIRST_NAMES.has(words[0]!.split("-")[0]!)) return undefined;
+  if (words.slice(1).some((word) => NOT_PERSONAL.has(word))) return undefined;
+  return words.join(" ").replace(/['’]s$/u, "");
+}
+
+/** Whether a line can hold what the model looks for: a capital, a digit or a given name. */
+function mayHoldNames(line: string): boolean {
+  const text = line.replace(/⟦[A-Z]+\d+⟧/gu, "");
+  if (/\p{Lu}|\d/u.test(text)) return true;
+  return text.split(/[^\p{L}-]+/u).some((word) => LOWER_FIRST_NAMES.has(word));
+}
+
 /**
  * The pieces the model reads of a text: its lines, longer ones cut at sentences and then at
- * `MAX_WORDS`. Lines without a capital letter or a digit can't hold what it looks for and are
- * left out. Unchanged lines give the same pieces, so they are only read once.
+ * `MAX_WORDS`. Lines without a capital letter, a digit or a given name can't hold what it looks
+ * for and are left out. Unchanged lines give the same pieces, so they are only read once.
  */
 export function piecesOf(text: string): string[] {
   const pieces: string[] = [];
   for (const line of text.split(/\n+/u)) {
-    if (!/\p{Lu}|\d/u.test(line.replace(/⟦[A-Z]+\d+⟧/gu, ""))) continue;
+    if (!mayHoldNames(line)) continue;
     let current: string[] = [];
     const flush = () => {
       if (current.length > 0) pieces.push(current.join(" "));

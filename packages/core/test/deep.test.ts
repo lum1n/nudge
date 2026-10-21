@@ -13,6 +13,7 @@ import {
 import { defineTool } from "@earendil-works/pi-durable";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  builtinDetectors,
   createNudge,
   type DeepDetector,
   DeepScanner,
@@ -25,7 +26,7 @@ import {
   textsToScan,
   Vault,
 } from "../src/index.ts";
-import { decode, encode, MAX_WIDTH, splitWords } from "../src/privacy/deep/gliner.ts";
+import { decode, encode, MAX_WIDTH, pack, splitWords, unpack } from "../src/privacy/deep/gliner.ts";
 import { openLocalModel } from "../src/privacy/deep/local-model.ts";
 
 const context = BACKGROUND_CONTEXT;
@@ -104,6 +105,24 @@ describe("GLiNER inputs and outputs", () => {
       { start: 5, end: 18, label: "person", score: expect.closeTo(0.953, 3) },
     ]);
   });
+
+  it("reads short texts together, one per line, and gives each its own spans", () => {
+    const texts = ["Ring Kari", "Hent Ola Nordmann", "Fire fem seks sju"];
+    const packs = pack(texts, 5);
+    expect(packs.map((p) => p.text)).toEqual(["Ring Kari\nHent Ola Nordmann", "Fire fem seks sju"]);
+    const spans = [
+      { start: 5, end: 9, label: "person", score: 0.9 }, // "Kari"
+      { start: 5, end: 19, label: "person", score: 0.6 }, // "Kari\nHent Ola", over the line break
+      { start: 15, end: 27, label: "person", score: 0.8 }, // "Ola Nordmann"
+    ];
+    expect(unpack(spans, packs[0]!, texts)).toEqual([
+      [spans[0], { ...spans[1], end: 9 }],
+      [
+        { ...spans[1], start: 0, end: 9 },
+        { ...spans[2], start: 5, end: 17 },
+      ],
+    ]);
+  });
 });
 
 describe("DeepScanner", () => {
@@ -144,6 +163,35 @@ describe("DeepScanner", () => {
       "NAME Daniel",
       "NAME Hansen",
     ]);
+  });
+
+  it("protects given names typed in lower case, but not words", async () => {
+    const { detector, read } = fakeModel({
+      emma: "NAME",
+      "hanne bø": "NAME",
+      mamma: "NAME",
+      per: "NAME",
+    });
+    const vault = new Vault();
+    const scanner = new DeepScanner({ detector, mode: "required" });
+    await scanner.protectIn(
+      ["hent emma og mamma", "vipps hanne bø", "per dag", "ingen navn"],
+      vault,
+    );
+    expect(read).toEqual(["hent emma og mamma", "vipps hanne bø"]);
+    expect(vault.entries.map(({ value }) => value)).toEqual(["emma", "hanne bø", "hanne"]);
+  });
+
+  it("leaves well-known names readable, also at either end of a finding", async () => {
+    const { detector } = fakeModel({
+      "Rema 1000": "ORG",
+      "Jonas Gahr Støre": "NAME",
+      "IKEA Slependen": "ORG",
+    });
+    const vault = new Vault();
+    const scanner = new DeepScanner({ detector, mode: "required" });
+    await scanner.protectIn(["Rema 1000, Jonas Gahr Støre og IKEA Slependen."], vault);
+    expect(vault.entries.map(({ value }) => value)).toEqual(["Slependen"]);
   });
 
   it("reads each piece once, also after a restart, and gives new values to the owner", async () => {
@@ -378,10 +426,14 @@ describe.skipIf(modelDir === undefined)("the local model itself", () => {
       );
       const values = vault.entries.map(({ value }) => value);
       expect(values).toEqual(
-        expect.arrayContaining(["Vethjem", "Skogstjerna", "Vegard", "Sørumsand", "Oslo S"]),
+        expect.arrayContaining(["Vethjem", "Skogstjerna", "Vegard", "Sørumsand"]),
       );
       expect(values).not.toContain("Oslo");
       expect(values).not.toContain("Mamma");
+      // The rules know stations, whatever the model makes of them.
+      expect(vault.redact("Mamma går av på Oslo S. Været i Oslo?", builtinDetectors)).toBe(
+        "Mamma går av på ⟦PLACE2⟧. Været i Oslo?",
+      );
     } finally {
       await model.close?.();
     }

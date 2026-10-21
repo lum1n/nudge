@@ -1,16 +1,17 @@
 /**
  * The child process that runs the GLiNER model, so its native runtime and memory stay out of the
- * server's. Started by `openLocalModel` with the model's directory, threads and threshold; answers
- * `{ id, texts }` with `{ id, found }` (spans per text) or `{ id, error }`.
+ * server's. Started by `openLocalModel` with the model's directory, threads, lowest score and words
+ * per call; answers `{ id, texts }` with `{ id, found }` (spans per text) or `{ id, error }`. Short
+ * texts are read together, one per line.
  */
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { LABEL_KINDS } from "./detector.ts";
-import { decode, encode, type GlinerSpan, splitWords } from "./gliner.ts";
+import { decode, encode, type GlinerSpan, pack, splitWords, unpack } from "./gliner.ts";
 
 type Request = { readonly id: number; readonly texts: readonly string[] };
 
-const [dir = "", threads = "2", threshold = "0.5"] = process.argv.slice(2);
+const [dir = "", threads = "2", threshold = "0.5", packWords = "0"] = process.argv.slice(2);
 const labels = Object.keys(LABEL_KINDS);
 
 try {
@@ -73,8 +74,9 @@ try {
   process.on("message", (request: Request) => {
     queue = queue.then(async () => {
       try {
-        const found = [];
-        for (const text of request.texts) found.push(await find(text));
+        const found: GlinerSpan[][] = [];
+        for (const packed of pack(request.texts, Number(packWords)))
+          found.push(...unpack(await find(packed.text), packed, request.texts));
         process.send!({ id: request.id, found });
       } catch (error) {
         process.send!({ id: request.id, error: (error as Error).message });

@@ -4,6 +4,7 @@ import { domainDetector, ipDetector, usernameDetector } from "../src/privacy/hos
 import { orgDetector, placeDetector } from "../src/privacy/places.ts";
 import {
   birthDateDetector,
+  phoneCueDetector,
   type PiiDetector,
   plateDetector,
   vinDetector,
@@ -94,6 +95,37 @@ describe("quasi-identifiers", () => {
         "Mora er født 3. mai 1958. DOB: 1990-04-12. Bursdag 12.04. Møtet er 3. mai.",
       ),
     ).toEqual(["3. mai 1958", "1990-04-12"]);
+    expect(
+      found(
+        birthDateDetector,
+        "Fødselsdatoen min er 17.08.1987. Birth date: 1989-06-11\nBursdager:\n- Astrid: 4. mai 1962\n- Ole: 19.10\n\nMøte 1.11.2026",
+      ),
+    ).toEqual(["17.08.1987", "1989-06-11", "4. mai 1962"]);
+  });
+
+  it("finds unbroken phone numbers after a word that says so, not other numbers", () => {
+    expect(
+      found(
+        phoneCueDetector,
+        "Mobil: 90512477. Send sms til 41234567, nummeret er 48219553. Ordrenr 41234567, 12345678 kr, tlf 123456789",
+      ),
+    ).toEqual(["90512477", "41234567", "48219553"]);
+  });
+
+  it("leaves famous people and well-known companies readable", () => {
+    const vault = new Vault();
+    expect(
+      vault.redact(
+        "Erling Haaland og Kari Nordby så Rosenborg BK, så til Komplett AS og Lindeberg skole.",
+        builtinDetectors,
+      ),
+    ).toBe("Erling Haaland og ⟦NAME1⟧ så Rosenborg BK, så til Komplett AS og ⟦ORG1⟧ skole.");
+  });
+
+  it("hides home network names", () => {
+    expect(found(domainDetector, "GET http://hass.lindgard.home:8123/api og nas.intranet")).toEqual(
+      ["hass.lindgard.home", "nas.intranet"],
+    );
   });
 
   it("keeps the topic readable in a whole message", () => {

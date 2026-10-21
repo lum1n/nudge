@@ -1,0 +1,811 @@
+[
+  {
+    "id": "chat-en-001",
+    "source": "chat",
+    "lang": "en",
+    "text": "Remind me to pick up Theo from Rånåsfoss barnehage at 4, and text Hilde Aasen that he'll be late tomorrow.",
+    "hide": [
+      ["Theo", "NAME", 2],
+      ["Rånåsfoss", "ORG", 2],
+      ["Hilde Aasen", "NAME", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-en-002",
+    "source": "chat",
+    "lang": "en",
+    "text": "What time does the Vinmonopolet at Oslo S close on Saturdays? Want to grab a bottle of Barolo before the Norway vs Italy match.",
+    "hide": [],
+    "keep": ["Vinmonopolet", "Oslo S", "Saturdays", "Barolo", "Norway", "Italy"]
+  },
+  {
+    "id": "chat-en-003",
+    "source": "chat",
+    "lang": "en",
+    "text": "can you text ahmed and ask if he can take the kids to swimming at Sørumsand on thursday, his number is 934 22 718",
+    "hide": [
+      ["ahmed", "NAME", 2],
+      ["Sørumsand", "PLACE", 2],
+      ["934 22 718", "PHONE", 1]
+    ],
+    "keep": ["thursday"]
+  },
+  {
+    "id": "chat-en-004",
+    "source": "chat",
+    "lang": "en",
+    "text": "Compare the Tesla Model Y and the Volvo EX30 for winter range. We drive Oslo to Lillehammer most weekends in January.",
+    "hide": [],
+    "keep": ["Tesla", "Model Y", "Volvo", "EX30", "Oslo", "Lillehammer", "January"]
+  },
+  {
+    "id": "chat-en-005",
+    "source": "chat",
+    "lang": "en",
+    "text": "Rose and Liv are coming over Saturday for a sleepover with Ella. Can you add popcorn and Pepsi Max to the list?",
+    "hide": [
+      ["Rose", "NAME", 2],
+      ["Liv", "NAME", 2],
+      ["Ella", "NAME", 2]
+    ],
+    "keep": ["Saturday", "Pepsi Max"]
+  },
+  {
+    "id": "chat-en-006",
+    "source": "chat",
+    "lang": "en",
+    "text": "Our new address from 1 November is Bjørnstadveien 7, 1914 Ytre Enebakk. Please update it everywhere and remind me to tell Posten.",
+    "hide": [["Bjørnstadveien 7, 1914 Ytre Enebakk", "ADDRESS", 1]],
+    "keep": ["November", "Posten"]
+  },
+  {
+    "id": "chat-en-007",
+    "source": "chat",
+    "lang": "en",
+    "text": "Who won the Champions League final last year, Real Madrid or Dortmund? Also when does Erling Haaland play for Norway next?",
+    "hide": [],
+    "keep": ["Champions League", "Real Madrid", "Dortmund", "Erling Haaland", "Norway"]
+  },
+  {
+    "id": "chat-en-008",
+    "source": "chat",
+    "lang": "en",
+    "text": "Zofia said Nguyen Thi Lan can cover her shift on Friday, so update the rota and let Marek know.",
+    "hide": [
+      ["Zofia", "NAME", 2],
+      ["Nguyen Thi Lan", "NAME", 1],
+      ["Marek", "NAME", 2]
+    ],
+    "keep": ["Friday"]
+  },
+  {
+    "id": "chat-en-009",
+    "source": "chat",
+    "lang": "en",
+    "text": "The car (EV 48213) needs new tyres before winter. Book a slot at Dekkmann and remind me Tuesday.",
+    "hide": [["EV 48213", "PLATE", 1]],
+    "keep": ["Dekkmann", "Tuesday"]
+  },
+  {
+    "id": "chat-en-010",
+    "source": "chat",
+    "lang": "en",
+    "text": "Summarise the latest from NRK about the Statsbudsjett and what Jonas Gahr Støre said about electricity prices.",
+    "hide": [],
+    "keep": ["NRK", "Statsbudsjett", "Jonas Gahr Støre"]
+  },
+  {
+    "id": "chat-en-011",
+    "source": "chat",
+    "lang": "en",
+    "text": "Forward the invoice from the plumber to james.whitaker84@gmail.com and cc my accountant Sunniva Lie.",
+    "hide": [
+      ["james.whitaker84@gmail.com", "EMAIL", 1],
+      ["Sunniva Lie", "NAME", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-en-012",
+    "source": "chat",
+    "lang": "en",
+    "text": "Is Netflix or HBO Max better for kids' shows? Thinking Bluey and Paw Patrol, mostly dubbed in Norwegian.",
+    "hide": [],
+    "keep": ["Netflix", "HBO Max", "Bluey", "Paw Patrol", "Norwegian"]
+  },
+  {
+    "id": "chat-en-013",
+    "source": "chat",
+    "lang": "en",
+    "text": "Tor from next door wants to borrow the ladder. Ask is home sick so I can't drive to Kløfta today, remind me tomorrow instead.",
+    "hide": [
+      ["Tor", "NAME", 2],
+      ["Ask", "NAME", 2],
+      ["Kløfta", "PLACE", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-en-014",
+    "source": "chat",
+    "lang": "en",
+    "text": "Find a recipe for fårikål that works in an Instant Pot, and check if Meny or Kiwi has lamb on sale this week.",
+    "hide": [],
+    "keep": ["Instant Pot", "Meny", "Kiwi"]
+  },
+  {
+    "id": "chat-en-015",
+    "source": "chat",
+    "lang": "en",
+    "text": "For the passport application they need Mia's fødselsnummer, it's 14071845657. Can you fill in the form for the police station?",
+    "hide": [
+      ["Mia", "NAME", 2],
+      ["14071845657", "NATIONALID", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-en-016",
+    "source": "chat",
+    "lang": "en",
+    "text": "Book flights Oslo to London Heathrow with Norwegian or SAS around Easter, two adults and two kids.",
+    "hide": [],
+    "keep": ["Oslo", "London Heathrow", "Norwegian", "SAS", "Easter"]
+  },
+  {
+    "id": "chat-en-017",
+    "source": "chat",
+    "lang": "en",
+    "text": "Hope Mensah is the new coach for the under-10s at Nittedal IL. Add her number +47 46821390 to contacts.",
+    "hide": [
+      ["Hope Mensah", "NAME", 1],
+      ["Nittedal", "ORG", 2],
+      ["+47 46821390", "PHONE", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-en-018",
+    "source": "chat",
+    "lang": "en",
+    "text": "Explain how to set up Home Assistant with a Zigbee dongle on a Raspberry Pi 5. I'm using Philips Hue bulbs and an Aqara sensor.",
+    "hide": [],
+    "keep": ["Home Assistant", "Zigbee", "Raspberry Pi 5", "Philips Hue", "Aqara"]
+  },
+  {
+    "id": "chat-en-019",
+    "source": "chat",
+    "lang": "en",
+    "text": "My Home Assistant at 192.168.1.42 stopped responding, and hass.lundgaard.net gives a 502. Can you help me debug?",
+    "hide": [
+      ["192.168.1.42", "IP", 1],
+      ["hass.lundgaard.net", "DOMAIN", 1]
+    ],
+    "keep": ["Home Assistant"]
+  },
+  {
+    "id": "chat-en-020",
+    "source": "chat",
+    "lang": "en",
+    "text": "What's the difference between BSU and IPS for saving? I bank with DNB and use Nordnet for funds.",
+    "hide": [],
+    "keep": ["BSU", "IPS", "DNB", "Nordnet"]
+  },
+  {
+    "id": "chat-en-021",
+    "source": "chat",
+    "lang": "en",
+    "text": "Invite Oliver, Sebastian, Noor and little Joy to Theo's birthday on the 12th, the parents' group is on Spond.",
+    "hide": [
+      ["Oliver", "NAME", 2],
+      ["Sebastian", "NAME", 2],
+      ["Noor", "NAME", 2],
+      ["Joy", "NAME", 2],
+      ["Theo", "NAME", 2]
+    ],
+    "keep": ["Spond"]
+  },
+  {
+    "id": "chat-en-022",
+    "source": "chat",
+    "lang": "en",
+    "text": "Is it worth upgrading from the iPhone 13 to the iPhone 17, or should I wait for the Pixel 11? I mainly use it for Strava and Spotify.",
+    "hide": [],
+    "keep": ["iPhone 13", "iPhone 17", "Pixel 11", "Strava", "Spotify"]
+  },
+  {
+    "id": "chat-en-023",
+    "source": "chat",
+    "lang": "en",
+    "text": "Pay the kindergarten fee of 3 330 kr to account 1503.27.45811, reference is Elias Haugen-Berg.",
+    "hide": [
+      ["1503.27.45811", "ACCOUNT", 1],
+      ["Elias Haugen-Berg", "NAME", 1]
+    ],
+    "keep": ["3 330 kr"]
+  },
+  {
+    "id": "chat-en-024",
+    "source": "chat",
+    "lang": "en",
+    "text": "Plan a weekend in Bergen: Fløyen, Bryggen, and somewhere good for fish soup. We're taking the Bergensbanen from Oslo.",
+    "hide": [],
+    "keep": ["Bergen", "Fløyen", "Bryggen", "Bergensbanen", "Oslo"]
+  },
+  {
+    "id": "chat-en-025",
+    "source": "chat",
+    "lang": "en",
+    "text": "My GP Dr. Farah Siddiqui at Sørum legesenter wants a blood test before 3 December. Call them on 63 82 19 40 to book.",
+    "hide": [
+      ["Farah Siddiqui", "NAME", 1],
+      ["Sørum", "ORG", 2],
+      ["63 82 19 40", "PHONE", 1]
+    ],
+    "keep": ["3 December"]
+  },
+  {
+    "id": "chat-en-026",
+    "source": "chat",
+    "lang": "mixed",
+    "text": "Kan du minne meg på å hente emma på Skogsrud skole kl 14? Then text sondre that practice is cancelled.",
+    "hide": [
+      ["emma", "NAME", 2],
+      ["Skogsrud", "ORG", 2],
+      ["sondre", "NAME", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-en-027",
+    "source": "chat",
+    "lang": "mixed",
+    "text": "Sjekk om Elkjøp har PlayStation 5 på tilbud on Black Friday, ellers Komplett eller Power.",
+    "hide": [],
+    "keep": ["Elkjøp", "PlayStation 5", "Black Friday", "Komplett", "Power"]
+  },
+  {
+    "id": "chat-en-028",
+    "source": "chat",
+    "lang": "mixed",
+    "text": "Mormor Solveig Brekke har bursdag 23.03.1951, can you set a reminder a week before and suggest a gift?",
+    "hide": [
+      ["Solveig Brekke", "NAME", 1],
+      ["23.03.1951", "BIRTHDATE", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-en-029",
+    "source": "chat",
+    "lang": "mixed",
+    "text": "Hva sier yr.no om været i Holmenkollen on Sunday? Vi skal se Holmenkollen Skimaraton med ungene.",
+    "hide": [],
+    "keep": ["yr.no", "Holmenkollen", "Sunday", "Holmenkollen Skimaraton"]
+  },
+  {
+    "id": "chat-en-030",
+    "source": "chat",
+    "lang": "mixed",
+    "text": "Eik har fått plass på avdeling Blåveisen i Solsikken barnehage from August, kan du sende kontrakten til styrer.solsikken@outlook.com?",
+    "hide": [
+      ["Eik", "NAME", 2],
+      ["Blåveisen", "ORG", 2],
+      ["Solsikken", "ORG", 2],
+      ["styrer.solsikken@outlook.com", "EMAIL", 1]
+    ],
+    "keep": ["August"]
+  },
+  {
+    "id": "chat-en-031",
+    "source": "chat",
+    "lang": "mixed",
+    "text": "Can you translate this to engelsk: 'Vi ses på 17. mai-feiringen i Slottsparken, ta med flagg fra Clas Ohlson'?",
+    "hide": [],
+    "keep": ["17. mai", "Slottsparken", "Clas Ohlson"]
+  },
+  {
+    "id": "chat-en-032",
+    "source": "chat",
+    "lang": "mixed",
+    "text": "Naboen Kjell-Arne i Storgata 22 sier at bilen min blocks his driveway. Kan du drafte en sorry-melding?",
+    "hide": [
+      ["Kjell-Arne", "NAME", 2],
+      ["Storgata 22", "ADDRESS", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-en-033",
+    "source": "chat",
+    "lang": "mixed",
+    "text": "Lag en workout plan for meg, jeg har SATS membership og vil trene til Birkebeinerrittet i august.",
+    "hide": [],
+    "keep": ["SATS", "Birkebeinerrittet", "august"]
+  },
+  {
+    "id": "chat-en-034",
+    "source": "chat",
+    "lang": "mixed",
+    "text": "Jeg mistet kortet, siste kjøp var på Rema 1000. Kortnummer 4925 3810 6672 0192, can you tell me how to sperre it in the Sbanken app?",
+    "hide": [["4925 3810 6672 0192", "CARD", 1]],
+    "keep": ["Rema 1000", "Sbanken"]
+  },
+  {
+    "id": "chat-en-035",
+    "source": "chat",
+    "lang": "mixed",
+    "text": "ssh feiler: ssh mhauge@nas.local gir 'permission denied'. Mappa er /home/mhauge/backup, any ideas?",
+    "hide": [
+      ["mhauge", "USERNAME", 2],
+      ["nas.local", "DOMAIN", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-en-036",
+    "source": "chat",
+    "lang": "mixed",
+    "text": "Hvem spiller på Øyafestivalen i år? I saw Sigrid and Aurora were rumoured, og kanskje Karpe.",
+    "hide": [],
+    "keep": ["Øyafestivalen", "Sigrid", "Aurora", "Karpe"]
+  },
+  {
+    "id": "chat-en-037",
+    "source": "chat",
+    "lang": "mixed",
+    "text": "Spør Tobias om han kan kjøre Linnea og Selma til håndball i Bjørkelangen on Saturday, jeg sitter fast på jobb hos Fetsund Bygg.",
+    "hide": [
+      ["Tobias", "NAME", 2],
+      ["Linnea", "NAME", 2],
+      ["Selma", "NAME", 2],
+      ["Bjørkelangen", "PLACE", 2],
+      ["Fetsund Bygg", "ORG", 2]
+    ],
+    "keep": ["Saturday"]
+  },
+  {
+    "id": "chat-en-038",
+    "source": "chat",
+    "lang": "mixed",
+    "text": "hei, kan du sende en melding til frode.lindqvist@hotmail.no og si at the meeting moved til kontoret på Lillestrømveien 3, 2010 Strømmen?",
+    "hide": [
+      ["frode.lindqvist@hotmail.no", "EMAIL", 1],
+      ["Lillestrømveien 3, 2010 Strømmen", "ADDRESS", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-en-039",
+    "source": "chat",
+    "lang": "mixed",
+    "text": "Tante Grete i Gdańsk trenger IBAN for å sende penger: NO93 8601 1117 947. Hun heter Grete Wiśniewska-Holm på papiret. Translate a short note til polsk?",
+    "hide": [
+      ["Grete", "NAME", 2],
+      ["NO93 8601 1117 947", "IBAN", 1],
+      ["Grete Wiśniewska-Holm", "NAME", 1]
+    ],
+    "keep": ["Gdańsk"]
+  },
+  {
+    "id": "chat-en-040",
+    "source": "chat",
+    "lang": "mixed",
+    "text": "Er det lurt å kjøpe Equinor-aksjer nå, or should I just go for a global indeksfond like KLP AksjeGlobal?",
+    "hide": [],
+    "keep": ["Equinor", "KLP AksjeGlobal"]
+  },
+  {
+    "id": "chat-en-041",
+    "source": "memory",
+    "lang": "en",
+    "text": "Memory:\n- Vegard's son Theo plays football for Fet IL, practice Tuesdays 17:30\n- Theo's best friend is Jonas Berntsen, lives at Kirkeveien 18 in Fetsund\n- Coach: Håkon Rud, 917 45 302",
+    "hide": [
+      ["Vegard", "NAME", 2],
+      ["Theo", "NAME", 2],
+      ["Fet", "ORG", 2],
+      ["Jonas Berntsen", "NAME", 1],
+      ["Kirkeveien 18", "ADDRESS", 1],
+      ["Fetsund", "PLACE", 2],
+      ["Håkon Rud", "NAME", 1],
+      ["917 45 302", "PHONE", 1]
+    ],
+    "keep": ["Tuesdays", "17:30"]
+  },
+  {
+    "id": "chat-en-042",
+    "source": "memory",
+    "lang": "en",
+    "text": "Personal details:\nName: Ingrid Svendsen\nAddress: Furuveien 9, 1925 Blaker\nPhone: +47 48213976\nEmail: ingrid.svendsen@icloud.com\nBirth date: 1989-06-11",
+    "hide": [
+      ["Ingrid Svendsen", "NAME", 1],
+      ["Furuveien 9, 1925 Blaker", "ADDRESS", 1],
+      ["+47 48213976", "PHONE", 1],
+      ["ingrid.svendsen@icloud.com", "EMAIL", 1],
+      ["1989-06-11", "BIRTHDATE", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-en-043",
+    "source": "memory",
+    "lang": "mixed",
+    "text": "Handleliste:\n- melk, brød, egg\n- birthday cake for Sol (fredag)\n- gave til Amira fra klassen\n- hente pakke på Kiwi Sørumsand",
+    "hide": [
+      ["Sol", "NAME", 2],
+      ["Amira", "NAME", 2],
+      ["Sørumsand", "PLACE", 2]
+    ],
+    "keep": ["Kiwi"]
+  },
+  {
+    "id": "chat-en-044",
+    "source": "memory",
+    "lang": "en",
+    "text": "Preferences:\n- Likes coffee from Kaffebrenneriet, oat milk\n- Watches Premier League, supports Liverpool\n- Uses the Ruter app for tickets, prefers Flytoget to Gardermoen\n- Favourite artist: Kygo",
+    "hide": [],
+    "keep": [
+      "Kaffebrenneriet",
+      "Premier League",
+      "Liverpool",
+      "Ruter",
+      "Flytoget",
+      "Gardermoen",
+      "Kygo"
+    ]
+  },
+  {
+    "id": "chat-en-045",
+    "source": "memory",
+    "lang": "mixed",
+    "text": "Notater:\n- Datteren Frøya går i 2A på Fjellsrud skole, class teacher is Torunn Myhre\n- Torunn's email: torunn.myhre@fjellsrud.skole.no\n- Foreldremøte 14. november",
+    "hide": [
+      ["Frøya", "NAME", 2],
+      ["Fjellsrud", "ORG", 2],
+      ["Torunn Myhre", "NAME", 1],
+      ["Torunn", "NAME", 2],
+      ["torunn.myhre@fjellsrud.skole.no", "EMAIL", 1]
+    ],
+    "keep": ["14. november"]
+  },
+  {
+    "id": "chat-en-046",
+    "source": "memory",
+    "lang": "en",
+    "text": "Car:\n- Tesla Model 3, plate EL 73910, VIN 5YJ3E7EB2LF612847\n- Service at Tesla booked 3 March\n- Insurance with Gjensidige, policy holder Morten Aasheim",
+    "hide": [
+      ["EL 73910", "PLATE", 1],
+      ["5YJ3E7EB2LF612847", "VIN", 1],
+      ["Morten Aasheim", "NAME", 1]
+    ],
+    "keep": ["Tesla Model 3", "3 March", "Gjensidige"]
+  },
+  {
+    "id": "chat-en-047",
+    "source": "memory",
+    "lang": "mixed",
+    "text": "Contacts the assistant knows:\n- rørlegger: Bjørn Tangen, 951 20 448\n- elektriker: Rashid Al-Amin, rashid@alaminelektro.no\n- snow clearing: the neighbour's boy, Ask",
+    "hide": [
+      ["Bjørn Tangen", "NAME", 1],
+      ["951 20 448", "PHONE", 1],
+      ["Rashid Al-Amin", "NAME", 1],
+      ["rashid@alaminelektro.no", "EMAIL", 1],
+      ["Ask", "NAME", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-en-048",
+    "source": "memory",
+    "lang": "mixed",
+    "text": "Health notes:\n- Ella is allergic to peanuts, EpiPen in the blue bag\n- Fastlege: Dr. Kristoffer Ødegård, Blaker legekontor\n- Vaksine for Ella booked at helsestasjonen 9 January",
+    "hide": [
+      ["Ella", "NAME", 2],
+      ["Kristoffer Ødegård", "NAME", 1],
+      ["Blaker", "ORG", 2]
+    ],
+    "keep": ["EpiPen", "9 January"]
+  },
+  {
+    "id": "chat-en-049",
+    "source": "memory",
+    "lang": "en",
+    "text": "Pet:\n- Dog: golden retriever, 4 years\n- Vet: Hagan dyreklinikk, Dr. Ingvild Sæther, 67 06 21 33\n- Chip registered to Hanne Krog, Lerkeveien 4B, 1482 Nittedal",
+    "hide": [
+      ["Hagan", "ORG", 2],
+      ["Ingvild Sæther", "NAME", 1],
+      ["67 06 21 33", "PHONE", 1],
+      ["Hanne Krog", "NAME", 1],
+      ["Lerkeveien 4B, 1482 Nittedal", "ADDRESS", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-en-050",
+    "source": "memory",
+    "lang": "en",
+    "text": "- Work: Vegard works at Kjeks AS as a developer, manager is Siri Vang\n- Work laptop login: vsvendsen\n- VPN: vpn.kjeks.dev",
+    "hide": [
+      ["Vegard", "NAME", 2],
+      ["Kjeks", "ORG", 2],
+      ["Siri Vang", "NAME", 1],
+      ["vsvendsen", "USERNAME", 2],
+      ["vpn.kjeks.dev", "DOMAIN", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-en-051",
+    "source": "memory",
+    "lang": "mixed",
+    "text": "Ukeplan:\n- Mandag: Liv has swimming at Sørumshallen 17:00\n- Onsdag: Oskar på korps, picked up by bestefar Arild\n- Fredag: Middag hos Mona og Petter Lysaker, Sagveien 31",
+    "hide": [
+      ["Liv", "NAME", 2],
+      ["Sørumshallen", "PLACE", 2],
+      ["Oskar", "NAME", 2],
+      ["Arild", "NAME", 2],
+      ["Mona", "NAME", 2],
+      ["Petter Lysaker", "NAME", 1],
+      ["Sagveien 31", "ADDRESS", 1]
+    ],
+    "keep": ["Mandag", "Onsdag", "Fredag", "17:00"]
+  },
+  {
+    "id": "chat-en-052",
+    "source": "memory",
+    "lang": "mixed",
+    "text": "Personal details:\nNavn: Yusuf Demir (brother-in-law)\nTelefon: 47719283\nAdresse: Trondheimsveien 112, 0570 Oslo\nFødselsdato: 02.09.1984\nKonto: 1206.44.71935",
+    "hide": [
+      ["Yusuf Demir", "NAME", 1],
+      ["47719283", "PHONE", 1],
+      ["Trondheimsveien 112, 0570 Oslo", "ADDRESS", 1],
+      ["02.09.1984", "BIRTHDATE", 1],
+      ["1206.44.71935", "ACCOUNT", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-en-053",
+    "source": "memory",
+    "lang": "en",
+    "text": "Memory:\n- Kari-Anne (Ella's dance teacher) prefers SMS, 922 18 054\n- Dance school: Danseloftet Kløfta\n- Christmas show on 6 December at Kløfta kulturhus",
+    "hide": [
+      ["Kari-Anne", "NAME", 2],
+      ["Ella", "NAME", 2],
+      ["922 18 054", "PHONE", 1],
+      ["Danseloftet", "ORG", 2],
+      ["Kløfta", "PLACE", 2]
+    ],
+    "keep": ["6 December"]
+  },
+  {
+    "id": "chat-en-054",
+    "source": "memory",
+    "lang": "en",
+    "text": "Smart home:\n- Home Assistant: hass.svendsen.home, 10.0.0.15\n- MQTT broker at 10.0.0.20, user mqtt_vegard\n- Doorbell: Aqara G4",
+    "hide": [
+      ["hass.svendsen.home", "DOMAIN", 1],
+      ["10.0.0.15", "IP", 1],
+      ["10.0.0.20", "IP", 1],
+      ["mqtt_vegard", "USERNAME", 2]
+    ],
+    "keep": ["Home Assistant", "MQTT", "Aqara G4"]
+  },
+  {
+    "id": "chat-en-055",
+    "source": "memory",
+    "lang": "mixed",
+    "text": "Gaveliste jul:\n- Mamma: Kindle Paperwhite\n- Bror Henrik og Saba: gavekort Vinmonopolet\n- Nephew little Bjørk: LEGO Duplo\n- Secret Santa at work: Tiril Strand",
+    "hide": [
+      ["Henrik", "NAME", 2],
+      ["Saba", "NAME", 2],
+      ["Bjørk", "NAME", 2],
+      ["Tiril Strand", "NAME", 1]
+    ],
+    "keep": ["Kindle Paperwhite", "Vinmonopolet", "LEGO Duplo"]
+  },
+  {
+    "id": "chat-en-056",
+    "source": "memory",
+    "lang": "en",
+    "text": "Travel:\n- Flight with Norwegian to Lisbon 14 April, passengers Daniel Okafor and Grace Okafor\n- Airbnb host: João Ferreira, +351 912 445 806\n- Taxi pickup from home: Gamle Kongevei 5, 1929 Auli",
+    "hide": [
+      ["Daniel Okafor", "NAME", 1],
+      ["Grace Okafor", "NAME", 1],
+      ["João Ferreira", "NAME", 1],
+      ["+351 912 445 806", "PHONE", 1],
+      ["Gamle Kongevei 5, 1929 Auli", "ADDRESS", 1]
+    ],
+    "keep": ["Norwegian", "Lisbon", "14 April", "Airbnb"]
+  },
+  {
+    "id": "chat-en-057",
+    "source": "memory",
+    "lang": "mixed",
+    "text": "Notes from chat:\n- noah og william skal ha sleepover hos oss lørdag\n- mamma til william: line, 404 77 812\n- husk pizza fra Dolly Dimple's",
+    "hide": [
+      ["noah", "NAME", 2],
+      ["william", "NAME", 2],
+      ["line", "NAME", 2],
+      ["404 77 812", "PHONE", 1]
+    ],
+    "keep": ["lørdag", "Dolly Dimple's"]
+  },
+  {
+    "id": "chat-en-058",
+    "source": "memory",
+    "lang": "mixed",
+    "text": "Pakkeliste hytta i Hurdal:\n- key: pick up from Odd Erik Bråten, Hurdalsvegen 640\n- ved, sengetøy, kortstokk\n- Yatzy and the Bluetooth speaker",
+    "hide": [
+      ["Hurdal", "PLACE", 2],
+      ["Odd Erik Bråten", "NAME", 1],
+      ["Hurdalsvegen 640", "ADDRESS", 1]
+    ],
+    "keep": ["Yatzy", "Bluetooth"]
+  },
+  {
+    "id": "chat-en-059",
+    "source": "memory",
+    "lang": "en",
+    "text": "Personal details:\nName: Linh Tran\nEmployer: Romerike Regnskap AS\nWork email: linh.tran@romerikeregnskap.no\nMobile: 976 31 205\nUsername: ltran",
+    "hide": [
+      ["Linh Tran", "NAME", 1],
+      ["Romerike Regnskap", "ORG", 2],
+      ["linh.tran@romerikeregnskap.no", "EMAIL", 1],
+      ["976 31 205", "PHONE", 1],
+      ["ltran", "USERNAME", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-en-060",
+    "source": "memory",
+    "lang": "en",
+    "text": "- Ingrid wants to repaint the hallway, colour Jotun Lady Kalkhvit\n- Quote from painter Stian Holte: 18 500 kr\n- Pay to 9710.05.33298 by 30 November",
+    "hide": [
+      ["Ingrid", "NAME", 2],
+      ["Stian Holte", "NAME", 1],
+      ["9710.05.33298", "ACCOUNT", 1]
+    ],
+    "keep": ["Jotun Lady", "18 500 kr", "30 November"]
+  },
+  {
+    "id": "chat-en-061",
+    "source": "memory",
+    "lang": "en",
+    "text": "Memory:\n- Sophie (au pair from Manila) starts 1 February, full name Maria Sophia Reyes\n- Her phone: +63 917 552 0184\n- She needs an appointment at Skatteetaten for a D-number",
+    "hide": [
+      ["Sophie", "NAME", 2],
+      ["Maria Sophia Reyes", "NAME", 1],
+      ["+63 917 552 0184", "PHONE", 1]
+    ],
+    "keep": ["Manila", "1 February", "Skatteetaten"]
+  },
+  {
+    "id": "chat-en-062",
+    "source": "memory",
+    "lang": "mixed",
+    "text": "Bursdager:\n- Astrid Holm: 4. mai 1962\n- Ole Kristian: 19.10\n- Fatima Rahimi: 1990-12-03 (send flowers via Interflora)",
+    "hide": [
+      ["Astrid Holm", "NAME", 1],
+      ["4. mai 1962", "BIRTHDATE", 1],
+      ["Ole Kristian", "NAME", 2],
+      ["19.10", "BIRTHDATE", 2],
+      ["Fatima Rahimi", "NAME", 1],
+      ["1990-12-03", "BIRTHDATE", 1]
+    ],
+    "keep": ["Interflora"]
+  },
+  {
+    "id": "chat-en-063",
+    "source": "memory",
+    "lang": "mixed",
+    "text": "Kindergarten info:\n- Ask går på Haugtun barnehage, avdeling Maurtua\n- Staff: Jorunn, Kim og Eskil\n- Pickup: mormor Randi Fossum (tlf 905 66 213)",
+    "hide": [
+      ["Ask", "NAME", 2],
+      ["Haugtun", "ORG", 2],
+      ["Maurtua", "ORG", 2],
+      ["Jorunn", "NAME", 2],
+      ["Kim", "NAME", 2],
+      ["Eskil", "NAME", 2],
+      ["Randi Fossum", "NAME", 1],
+      ["905 66 213", "PHONE", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-en-064",
+    "source": "memory",
+    "lang": "mixed",
+    "text": "Economy:\n- Lønnskonto DNB: 1210.18.40288\n- Savings: NO22 1503 9928 117\n- Card ending 4471 (Visa)\n- Rent to landlord Thomas Grøndahl, 14 200 kr/mnd",
+    "hide": [
+      ["1210.18.40288", "ACCOUNT", 1],
+      ["NO22 1503 9928 117", "IBAN", 1],
+      ["Thomas Grøndahl", "NAME", 1]
+    ],
+    "keep": ["DNB", "Visa", "14 200 kr"]
+  },
+  {
+    "id": "chat-en-065",
+    "source": "memory",
+    "lang": "mixed",
+    "text": "Påminnelser:\n- hent rose og tor after football at Fetsund kunstgress\n- ring helene om dugnaden\n- send vipps to jens 250 kr",
+    "hide": [
+      ["rose", "NAME", 2],
+      ["tor", "NAME", 2],
+      ["Fetsund", "PLACE", 2],
+      ["helene", "NAME", 2],
+      ["jens", "NAME", 2]
+    ],
+    "keep": ["vipps", "250 kr"]
+  },
+  {
+    "id": "chat-en-066",
+    "source": "memory",
+    "lang": "en",
+    "text": "House and network:\n- Router admin page: 192.168.0.1, login admin\n- NAS: diskstation.local, user kjetilb\n- Printer: HP OfficeJet, ink from Komplett",
+    "hide": [
+      ["192.168.0.1", "IP", 1],
+      ["diskstation.local", "DOMAIN", 1],
+      ["kjetilb", "USERNAME", 2]
+    ],
+    "keep": ["HP OfficeJet", "Komplett"]
+  },
+  {
+    "id": "chat-en-067",
+    "source": "memory",
+    "lang": "en",
+    "text": "Memory:\n- Neighbour Agnieszka Nowak waters the plants when we travel, key under the pot\n- Her son Kacper is in Theo's class\n- Her address: Rugdalen 12",
+    "hide": [
+      ["Agnieszka Nowak", "NAME", 1],
+      ["Kacper", "NAME", 2],
+      ["Theo", "NAME", 2],
+      ["Rugdalen 12", "ADDRESS", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-en-068",
+    "source": "memory",
+    "lang": "mixed",
+    "text": "Kontakter (utdrag):\nSigurd Moen, 913 04 557, sigurd.moen@gmail.com\nHelga og Per Aune, Vestbygdveien 88, 1930 Aurskog\nDr. Amir Karimi, dentist at Aurskog tannklinikk",
+    "hide": [
+      ["Sigurd Moen", "NAME", 1],
+      ["913 04 557", "PHONE", 1],
+      ["sigurd.moen@gmail.com", "EMAIL", 1],
+      ["Helga", "NAME", 2],
+      ["Per Aune", "NAME", 1],
+      ["Vestbygdveien 88, 1930 Aurskog", "ADDRESS", 1],
+      ["Amir Karimi", "NAME", 1],
+      ["Aurskog", "ORG", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-en-069",
+    "source": "memory",
+    "lang": "mixed",
+    "text": "Jobb-notater:\n- Client: Nordby Eiendom, contact Kaja Lund (kaja@nordbyeiendom.no)\n- Møte på Teams torsdag 10:00\n- Code is on github.com, deploy to Vercel",
+    "hide": [
+      ["Nordby Eiendom", "ORG", 2],
+      ["Kaja Lund", "NAME", 1],
+      ["kaja@nordbyeiendom.no", "EMAIL", 1]
+    ],
+    "keep": ["Teams", "torsdag", "10:00", "github.com", "Vercel"]
+  },
+  {
+    "id": "chat-en-070",
+    "source": "memory",
+    "lang": "en",
+    "text": "Personal details:\nName: Emily Carter-Haugen\nAddress: Solbergliveien 3A, 1920 Sørumsand\nPhone: 455 12 908\nNational ID: 21048936137\nPlate: DN 55120",
+    "hide": [
+      ["Emily Carter-Haugen", "NAME", 1],
+      ["Solbergliveien 3A, 1920 Sørumsand", "ADDRESS", 1],
+      ["455 12 908", "PHONE", 1],
+      ["21048936137", "NATIONALID", 1],
+      ["DN 55120", "PLATE", 1]
+    ],
+    "keep": []
+  }
+]

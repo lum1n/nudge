@@ -1,0 +1,772 @@
+[
+  {
+    "id": "chat-nb-001",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Minn meg på å ringe Jonas Aamodt-Berg på 917 45 203 i morgen tidlig, han skal se på taket",
+    "hide": [
+      ["Jonas Aamodt-Berg", "NAME", 1],
+      ["917 45 203", "PHONE", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-nb-002",
+    "source": "chat",
+    "lang": "nb",
+    "text": "hent emma på skogly barnehagn kl 4 i dag",
+    "hide": [
+      ["emma", "NAME", 2],
+      ["skogly", "ORG", 2]
+    ],
+    "keep": ["kl 4"]
+  },
+  {
+    "id": "chat-nb-003",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Hva koster en Tesla Model Y nå sammenlignet med Volkswagen ID.4? Sjekk Finn.no også",
+    "hide": [],
+    "keep": ["Tesla Model Y", "Volkswagen ID.4", "Finn.no"]
+  },
+  {
+    "id": "chat-nb-004",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Spør Tobias om han kan kjøre til fotballtreninga på torsdag",
+    "hide": [["Tobias", "NAME", 2]],
+    "keep": ["torsdag"]
+  },
+  {
+    "id": "chat-nb-005",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Fødselsnummeret til Nora er 14031854351, kan du fylle det inn i passøknaden?",
+    "hide": [
+      ["Nora", "NAME", 2],
+      ["14031854351", "NATIONALID", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-nb-006",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Book vaksine for katten hos Tyrili dyreklinikk tirsdag kl 14:30",
+    "hide": [["Tyrili", "ORG", 2]],
+    "keep": ["tirsdag", "14:30"]
+  },
+  {
+    "id": "chat-nb-007",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Kontonummeret til snekkeren er 1503 22 87465, overfør 18 400 kr på fredag og skriv «faktura 2291» i meldingen",
+    "hide": [["1503 22 87465", "ACCOUNT", 1]],
+    "keep": ["18 400 kr", "fredag"]
+  },
+  {
+    "id": "chat-nb-008",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Hvem vant Melodi Grand Prix i fjor, og skal Kygo spille på Øyafestivalen i august?",
+    "hide": [],
+    "keep": ["Melodi Grand Prix", "Kygo", "Øyafestivalen", "august"]
+  },
+  {
+    "id": "chat-nb-009",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Bilen min har skiltnummer EB 48213, kan du sjekke når neste EU-kontroll er hos Statens vegvesen?",
+    "hide": [["EB 48213", "PLATE", 1]],
+    "keep": ["EU-kontroll", "Statens vegvesen"]
+  },
+  {
+    "id": "chat-nb-010",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Adressen til bursdagsselskapet er Kirkeveien 7B, 1914 Ytre Enebakk. Lag rute dit fra jobben, vi må være der 17:00",
+    "hide": [["Kirkeveien 7B, 1914 Ytre Enebakk", "ADDRESS", 1]],
+    "keep": ["17:00"]
+  },
+  {
+    "id": "chat-nb-011",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Liv blir 40 på lørdag, minn meg på å kjøpe gave i morgen",
+    "hide": [["Liv", "NAME", 2]],
+    "keep": ["lørdag"]
+  },
+  {
+    "id": "chat-nb-012",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Send en mail til ahmed.hussein84@gmail.com og si at møtet flyttes til 13:00",
+    "hide": [["ahmed.hussein84@gmail.com", "EMAIL", 1]],
+    "keep": ["13:00"]
+  },
+  {
+    "id": "chat-nb-013",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Legg til Grandiosa, Tine Lettmelk og Kvikk Lunsj på handlelista til Rema 1000",
+    "hide": [],
+    "keep": ["Grandiosa", "Tine Lettmelk", "Kvikk Lunsj", "Rema 1000"]
+  },
+  {
+    "id": "chat-nb-014",
+    "source": "chat",
+    "lang": "nb",
+    "text": "kan du sjekke om tor har svart på meldinga om dugnaden lørdag",
+    "hide": [["tor", "NAME", 2]],
+    "keep": ["lørdag"]
+  },
+  {
+    "id": "chat-nb-015",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Lærer'n til Sofie heter Marte Kristiansen, mailen hennes er marte.kristiansen@ostbyskolen.no. Skriv et kort svar om at Sofie er syk i dag",
+    "hide": [
+      ["Sofie", "NAME", 2],
+      ["Marte Kristiansen", "NAME", 1],
+      ["marte.kristiansen@ostbyskolen.no", "EMAIL", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-nb-016",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Ring Zofia Kowalczyk på +47 46820317 og spør om hun kan vaske på onsdag i stedet",
+    "hide": [
+      ["Zofia Kowalczyk", "NAME", 1],
+      ["+47 46820317", "PHONE", 1]
+    ],
+    "keep": ["onsdag"]
+  },
+  {
+    "id": "chat-nb-017",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Hva er værmeldinga for Holmenkollen på søndag? Sjekk yr.no, vi skal gå på ski",
+    "hide": [],
+    "keep": ["Holmenkollen", "søndag", "yr.no"]
+  },
+  {
+    "id": "chat-nb-018",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Foreldremøte på avdeling Maurtua i Solsikken barnehage torsdag 18:00, legg det i kalenderen",
+    "hide": [
+      ["Maurtua", "ORG", 2],
+      ["Solsikken", "ORG", 2]
+    ],
+    "keep": ["torsdag", "18:00"]
+  },
+  {
+    "id": "chat-nb-019",
+    "source": "chat",
+    "lang": "nb",
+    "text": "jeg har flytta til Granåsen 22, 2080 Eidsvoll fra 1. november, oppdater adressen min",
+    "hide": [["Granåsen 22, 2080 Eidsvoll", "ADDRESS", 1]],
+    "keep": ["1. november"]
+  },
+  {
+    "id": "chat-nb-020",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Si til Ask at han må pakke gymtøy i kveld",
+    "hide": [["Ask", "NAME", 2]],
+    "keep": []
+  },
+  {
+    "id": "chat-nb-021",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Fødselsdatoen min er 17.08.1987 og personnummeret 17088734521, trenger det til skjemaet fra NAV",
+    "hide": [
+      ["17.08.1987", "BIRTHDATE", 1],
+      ["17088734521", "NATIONALID", 1]
+    ],
+    "keep": ["NAV"]
+  },
+  {
+    "id": "chat-nb-022",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Sammenlign iPhone 16 Pro og Samsung Galaxy S25 hos Elkjøp og Power, hvem har best Black Friday-tilbud?",
+    "hide": [],
+    "keep": ["iPhone 16 Pro", "Samsung Galaxy S25", "Elkjøp", "Power", "Black Friday"]
+  },
+  {
+    "id": "chat-nb-023",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Nguyen Thi Lan fra regnskap sa at lønna kommer en dag seinere denne måneden, minn meg på å sjekke kontoen fredag",
+    "hide": [["Nguyen Thi Lan", "NAME", 1]],
+    "keep": ["fredag"]
+  },
+  {
+    "id": "chat-nb-024",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Hva er raskeste vei til hytta i Hurdal på lørdag morgen?",
+    "hide": [["Hurdal", "PLACE", 2]],
+    "keep": ["lørdag"]
+  },
+  {
+    "id": "chat-nb-025",
+    "source": "chat",
+    "lang": "nb",
+    "text": "sjekk om sol og frøya kan komme på overnatting fredag",
+    "hide": [
+      ["sol", "NAME", 2],
+      ["frøya", "NAME", 2]
+    ],
+    "keep": ["fredag"]
+  },
+  {
+    "id": "chat-nb-026",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Hvor mange mål har Erling Haaland scoret for Manchester City denne sesongen, og spiller Norge mot Italia i november?",
+    "hide": [],
+    "keep": ["Erling Haaland", "Manchester City", "Norge", "Italia", "november"]
+  },
+  {
+    "id": "chat-nb-027",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Rørleggeren heter Stian Bråthen, nummer 41234598. Han kommer mandag mellom 8 og 10",
+    "hide": [
+      ["Stian Bråthen", "NAME", 1],
+      ["41234598", "PHONE", 1]
+    ],
+    "keep": ["mandag"]
+  },
+  {
+    "id": "chat-nb-028",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Bestill time hos fastlegen, dr. Hamid på Fetsund legesenter, helst før jul",
+    "hide": [
+      ["Hamid", "NAME", 2],
+      ["Fetsund", "ORG", 2]
+    ],
+    "keep": ["jul"]
+  },
+  {
+    "id": "chat-nb-029",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Kan du lage en pakkeliste til Kari, Per og Ola sin tur til fjellet? De drar i morgen",
+    "hide": [
+      ["Kari", "NAME", 2],
+      ["Per", "NAME", 2],
+      ["Ola", "NAME", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-nb-030",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Overfør 500 kr til Jørgen for pizza, kontoen hans er 9710.05.12347",
+    "hide": [
+      ["Jørgen", "NAME", 2],
+      ["9710.05.12347", "ACCOUNT", 1]
+    ],
+    "keep": ["500 kr"]
+  },
+  {
+    "id": "chat-nb-031",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Sett på Dagsrevyen på NRK1 klokka 19 og demp lyset i stua via Home Assistant",
+    "hide": [],
+    "keep": ["Dagsrevyen", "NRK1", "klokka 19", "Home Assistant"]
+  },
+  {
+    "id": "chat-nb-032",
+    "source": "chat",
+    "lang": "nb",
+    "text": "hva var nummeret til rørleggern igjen? tror det var 93 85 21 47",
+    "hide": [["93 85 21 47", "PHONE", 1]],
+    "keep": []
+  },
+  {
+    "id": "chat-nb-033",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Minn meg på at Ingrid har tannlege hos Tannhelse Kløfta på onsdag kl 11",
+    "hide": [
+      ["Ingrid", "NAME", 2],
+      ["Kløfta", "ORG", 2]
+    ],
+    "keep": ["onsdag", "kl 11"]
+  },
+  {
+    "id": "chat-nb-034",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Skriv en sms til Rose på 952 18 334 om at hun kan hente nøkkelen hos naboen",
+    "hide": [
+      ["Rose", "NAME", 2],
+      ["952 18 334", "PHONE", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-nb-035",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Bilen til svigerfar har reg.nr. DN 70421, han har mista vognkortet. Hva gjør han?",
+    "hide": [["DN 70421", "PLATE", 1]],
+    "keep": []
+  },
+  {
+    "id": "chat-nb-036",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Hvilke tog går fra Oslo S til Trondheim med Vy på fredag, og hva koster det på Entur?",
+    "hide": [],
+    "keep": ["Oslo S", "Trondheim", "Vy", "fredag", "Entur"]
+  },
+  {
+    "id": "chat-nb-037",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Skriv en oppsigelse for meg til Romerike Elektro AS, sjefen heter Trond Lien. Sist arbeidsdag 31. januar",
+    "hide": [
+      ["Romerike Elektro", "ORG", 2],
+      ["Trond Lien", "NAME", 1]
+    ],
+    "keep": ["31. januar"]
+  },
+  {
+    "id": "chat-nb-038",
+    "source": "chat",
+    "lang": "nb",
+    "text": "kan u sende adressen til jonas? det er Elvegata 3, 1920 Sørumsand",
+    "hide": [
+      ["jonas", "NAME", 2],
+      ["Elvegata 3, 1920 Sørumsand", "ADDRESS", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-nb-039",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Eik har fått plass i Bjørkelangen skolekorps, øvelse hver tirsdag. Legg inn i kalenderen",
+    "hide": [
+      ["Eik", "NAME", 2],
+      ["Bjørkelangen", "ORG", 2]
+    ],
+    "keep": ["tirsdag"]
+  },
+  {
+    "id": "chat-nb-040",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Lag en middagsplan for uka med oppskrifter fra Matprat og varer fra Kiwi og Meny",
+    "hide": [],
+    "keep": ["Matprat", "Kiwi", "Meny"]
+  },
+  {
+    "id": "chat-nb-041",
+    "source": "chat",
+    "lang": "nb",
+    "text": "IBAN-en til utleier i Spania er ES91 2100 0418 4502 0005 1332, betal husleia for desember",
+    "hide": [["ES91 2100 0418 4502 0005 1332", "IBAN", 1]],
+    "keep": ["Spania", "desember"]
+  },
+  {
+    "id": "chat-nb-042",
+    "source": "chat",
+    "lang": "nb",
+    "text": "mamma sitt nye nummer er 48 21 09 77, lagre det på kontakten hennes",
+    "hide": [["48 21 09 77", "PHONE", 1]],
+    "keep": []
+  },
+  {
+    "id": "chat-nb-043",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Kan du forklare hvordan BankID på mobil fungerer med Vipps og Altinn? Jeg får feilmelding fra Telenor",
+    "hide": [],
+    "keep": ["BankID", "Vipps", "Altinn", "Telenor"]
+  },
+  {
+    "id": "chat-nb-044",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Er det åpent på Vinmonopolet på Gardermoen på julaften? Vi lander med Norwegian fra London kl 14",
+    "hide": [],
+    "keep": ["Vinmonopolet", "Gardermoen", "julaften", "Norwegian", "London", "kl 14"]
+  },
+  {
+    "id": "chat-nb-045",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Ole-Martin Haugland ringte fra Nittedal Idrettslag, han lurer på om jeg kan være trener for G12. Lag et svar",
+    "hide": [
+      ["Ole-Martin Haugland", "NAME", 1],
+      ["Nittedal", "ORG", 2]
+    ],
+    "keep": ["G12"]
+  },
+  {
+    "id": "chat-nb-046",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Hvilket nummer har legevakta i Ås?",
+    "hide": [["Ås", "PLACE", 2]],
+    "keep": []
+  },
+  {
+    "id": "chat-nb-047",
+    "source": "chat",
+    "lang": "nb",
+    "text": "kortet mitt 4925 3301 8842 1171 blei avvist på Kiwi, sjekk om det er sperra",
+    "hide": [["4925 3301 8842 1171", "CARD", 1]],
+    "keep": ["Kiwi"]
+  },
+  {
+    "id": "chat-nb-048",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Skru på Philips Hue-lysene i gangen og spill Spotify-lista «Fredagsstemning» på Sonos i stua",
+    "hide": [],
+    "keep": ["Philips Hue", "Spotify", "Fredagsstemning", "Sonos"]
+  },
+  {
+    "id": "chat-nb-049",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Trollskogen barnehage har planleggingsdag 14. november. Kan farmor Gunnhild ta Mathias den dagen? Nummeret hennes er 913 02 774",
+    "hide": [
+      ["Trollskogen", "ORG", 2],
+      ["Gunnhild", "NAME", 2],
+      ["Mathias", "NAME", 2],
+      ["913 02 774", "PHONE", 1]
+    ],
+    "keep": ["14. november"]
+  },
+  {
+    "id": "chat-nb-050",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Sjekk hvem som eier bilen med skilt EV 33019, den står parkert foran garasjen vår hver dag",
+    "hide": [["EV 33019", "PLATE", 1]],
+    "keep": []
+  },
+  {
+    "id": "chat-nb-051",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Ring tannlegen til ungene, Kurt Ivar Solheim, på 64 87 22 10 og avlys timen til Ida",
+    "hide": [
+      ["Kurt Ivar Solheim", "NAME", 1],
+      ["64 87 22 10", "PHONE", 1],
+      ["Ida", "NAME", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-nb-052",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Hva sa Jonas Gahr Støre om strømprisene i Dagsnytt 18? Og hva er spotprisen i Oslo nå ifølge Tibber?",
+    "hide": [],
+    "keep": ["Jonas Gahr Støre", "Dagsnytt 18", "Oslo", "Tibber"]
+  },
+  {
+    "id": "chat-nb-053",
+    "source": "chat",
+    "lang": "nb",
+    "text": "stein sa at vi må ha med egen ved til hytta i vikersund",
+    "hide": [
+      ["stein", "NAME", 2],
+      ["vikersund", "PLACE", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-nb-054",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Garasjeporten er koblet til hass.lindgren.dev nå, kan du sjekke at automasjonen kl 07:00 virker?",
+    "hide": [["hass.lindgren.dev", "DOMAIN", 1]],
+    "keep": ["kl 07:00"]
+  },
+  {
+    "id": "chat-nb-055",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Svar på mailen fra Linnea Strand (linnea.strand@nordhavn-regnskap.no) og si at jeg er hjemme med syk unge",
+    "hide": [
+      ["Linnea Strand", "NAME", 1],
+      ["linnea.strand@nordhavn-regnskap.no", "EMAIL", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-nb-056",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Lag et budsjett: strøm fra Fjordkraft, forsikring i Gjensidige, lån i DNB og mobil fra Telia. Totalt ca 14 000 kr i måneden",
+    "hide": [],
+    "keep": ["Fjordkraft", "Gjensidige", "DNB", "Telia", "14 000 kr"]
+  },
+  {
+    "id": "chat-nb-057",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Hvordan søker jeg om SFO-plass på Lunden skole for Aisha Noor (født 03.02.2019) til høsten?",
+    "hide": [
+      ["Lunden", "ORG", 2],
+      ["Aisha Noor", "NAME", 1],
+      ["03.02.2019", "BIRTHDATE", 1]
+    ],
+    "keep": ["SFO"]
+  },
+  {
+    "id": "chat-nb-058",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Kan du finne ut om fru Brekke på Toppen 9 vil ha hjelp med snømåking? Hun har nummer 99 12 45 06",
+    "hide": [
+      ["Brekke", "NAME", 2],
+      ["Toppen 9", "ADDRESS", 1],
+      ["99 12 45 06", "PHONE", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-nb-059",
+    "source": "chat",
+    "lang": "nb",
+    "text": "i morra må jeg huske å vippse 350 kr til hanne bø for klasseturen til sondre, nummeret er 48219553",
+    "hide": [
+      ["hanne bø", "NAME", 1],
+      ["sondre", "NAME", 2],
+      ["48219553", "PHONE", 1]
+    ],
+    "keep": ["350 kr"]
+  },
+  {
+    "id": "chat-nb-060",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Skriv en kort tekst om Edvard Munch og Skrik til besøket på Nasjonalmuseet. Nevn også Henrik Ibsen",
+    "hide": [],
+    "keep": ["Edvard Munch", "Skrik", "Nasjonalmuseet", "Henrik Ibsen"]
+  },
+  {
+    "id": "chat-nb-061",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Faktura fra Elektriker Jansen AS til Haugvegen 41, 2164 Skogbygda – betal til konto 1207 45 98216 innen 25. oktober",
+    "hide": [
+      ["Jansen", "ORG", 2],
+      ["Haugvegen 41, 2164 Skogbygda", "ADDRESS", 1],
+      ["1207 45 98216", "ACCOUNT", 1]
+    ],
+    "keep": ["25. oktober"]
+  },
+  {
+    "id": "chat-nb-062",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Oppdater nummeret til Bjørn-Erik til 400 12 383",
+    "hide": [
+      ["Bjørn-Erik", "NAME", 2],
+      ["400 12 383", "PHONE", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-nb-063",
+    "source": "chat",
+    "lang": "nb",
+    "text": "eg skal møte kristoffer nygård på kløfta stasjon klokka halv åtte, minn meg på det kl sju",
+    "hide": [
+      ["kristoffer nygård", "NAME", 1],
+      ["kløfta", "PLACE", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-nb-064",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Hvordan kobler jeg Google Home til Home Assistant? Jeg har en Raspberry Pi 5 og en IKEA Dirigera-hub",
+    "hide": [],
+    "keep": ["Google Home", "Home Assistant", "Raspberry Pi 5", "IKEA", "Dirigera"]
+  },
+  {
+    "id": "chat-nb-065",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Hedda er født 09.05.2016 og går i 4B på Rasta skole. Planlegg et bursdagsselskap for klassen",
+    "hide": [
+      ["Hedda", "NAME", 2],
+      ["09.05.2016", "BIRTHDATE", 1],
+      ["Rasta", "ORG", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-nb-066",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Minn meg på å be Ingrid ringe Nils Petter Aune om vannlekkasjen i kjelleren",
+    "hide": [
+      ["Ingrid", "NAME", 2],
+      ["Nils Petter Aune", "NAME", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-nb-067",
+    "source": "chat",
+    "lang": "nb",
+    "text": "ssh inn på nas.local som admin_kaja og sjekk om backupen kjørte i natt",
+    "hide": [
+      ["nas.local", "DOMAIN", 1],
+      ["admin_kaja", "USERNAME", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-nb-068",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Lag en reiseplan for Bergen og Stavanger i juli: Fløibanen, Preikestolen og Bryggen. Fly med SAS",
+    "hide": [],
+    "keep": ["Bergen", "Stavanger", "juli", "Fløibanen", "Preikestolen", "Bryggen", "SAS"]
+  },
+  {
+    "id": "chat-nb-069",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Kan Mohammed Ali Rahimi låne tilhengeren vår til lørdag? Han bor i Fjellstuveien 2 på Fetsund",
+    "hide": [
+      ["Mohammed Ali Rahimi", "NAME", 1],
+      ["Fjellstuveien 2", "ADDRESS", 1],
+      ["Fetsund", "PLACE", 2]
+    ],
+    "keep": ["lørdag"]
+  },
+  {
+    "id": "chat-nb-070",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Hvilken dato var det Albert Wiik fyller 70 igjen? Tror det var 12.12.1956",
+    "hide": [
+      ["Albert Wiik", "NAME", 1],
+      ["12.12.1956", "BIRTHDATE", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-nb-071",
+    "source": "chat",
+    "lang": "nb",
+    "text": "ta med gymsko til maja og emil, de har kroppsøving i morgen",
+    "hide": [
+      ["maja", "NAME", 2],
+      ["emil", "NAME", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-nb-072",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Sjekk om Netflix, HBO Max og Viaplay har den nye sesongen av Exit, og hva koster abonnementene i Norge?",
+    "hide": [],
+    "keep": ["Netflix", "HBO Max", "Viaplay", "Exit", "Norge"]
+  },
+  {
+    "id": "chat-nb-073",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Send sms til 41234567: vi kommer 15 min seint, bare start uten oss",
+    "hide": [["41234567", "PHONE", 1]],
+    "keep": ["15 min"]
+  },
+  {
+    "id": "chat-nb-074",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Ellinor på Bunnpris Hvam sa at vi vant gavekortet, skriv et takkekort til henne",
+    "hide": [
+      ["Ellinor", "NAME", 2],
+      ["Hvam", "PLACE", 2]
+    ],
+    "keep": ["Bunnpris"]
+  },
+  {
+    "id": "chat-nb-075",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Kan du skrive en klage til Statsforvalteren om skoleskyss for Leo (f. 22.06.2015)? Vi bor i Bølerveien 118, 2016 Frogner",
+    "hide": [
+      ["Leo", "NAME", 2],
+      ["22.06.2015", "BIRTHDATE", 1],
+      ["Bølerveien 118, 2016 Frogner", "ADDRESS", 1]
+    ],
+    "keep": ["Statsforvalteren"]
+  },
+  {
+    "id": "chat-nb-076",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Hva er forskjellen på prisene hos Coop Extra og Rema 1000? Og har Obs eller Europris billigst bleier?",
+    "hide": [],
+    "keep": ["Coop Extra", "Rema 1000", "Obs", "Europris"]
+  },
+  {
+    "id": "chat-nb-077",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Påminnelse: hente pakken fra Posten på Kiwi Sørumsand før kl 20, hentekode 448812",
+    "hide": [["Sørumsand", "PLACE", 2]],
+    "keep": ["Posten", "Kiwi", "kl 20"]
+  },
+  {
+    "id": "chat-nb-078",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Lag julekortliste: Tante Wenche og onkel Arild i Hokksund, Gerd og Harald, og familien Johansen-Mæhle",
+    "hide": [
+      ["Wenche", "NAME", 2],
+      ["Arild", "NAME", 2],
+      ["Hokksund", "PLACE", 2],
+      ["Gerd", "NAME", 2],
+      ["Harald", "NAME", 2],
+      ["Johansen-Mæhle", "NAME", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "chat-nb-079",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Blir det sol i Trondheim på lørdag? Vi skal se Rosenborg mot Molde på Lerkendal",
+    "hide": [],
+    "keep": ["Trondheim", "lørdag", "Rosenborg", "Molde", "Lerkendal"]
+  },
+  {
+    "id": "chat-nb-080",
+    "source": "chat",
+    "lang": "nb",
+    "text": "IP-en til kameraet i garasjen er 192.168.1.47, og ruteren svarer på 10.0.0.1. Hvorfor faller kameraet ut hele tida?",
+    "hide": [
+      ["192.168.1.47", "IP", 1],
+      ["10.0.0.1", "IP", 1]
+    ],
+    "keep": []
+  }
+]

@@ -12,12 +12,12 @@ describe("names", () => {
       "Kari Nordmann",
       "Lars",
     ]);
-    expect(found(names, "Grete Waitz løp. Snakk med Anne-Lise Berg-Hansen om det.")).toEqual([
-      "Grete Waitz",
+    expect(found(names, "Grete Wiik løp. Snakk med Anne-Lise Berg-Hansen om det.")).toEqual([
+      "Grete Wiik",
       "Anne-Lise Berg-Hansen",
     ]);
-    expect(found(names, "Meeting with Elizabeth Warren and Tom.")).toEqual([
-      "Elizabeth Warren",
+    expect(found(names, "Meeting with Elizabeth Moreton and Tom.")).toEqual([
+      "Elizabeth Moreton",
       "Tom",
     ]);
   });

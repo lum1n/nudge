@@ -1,5 +1,6 @@
 import type { PiiDetector, Span } from "./detectors.ts";
 import { AMBIGUOUS, CUES, FIRST_NAMES, LAST_NAMES } from "./name-lists.ts";
+import { isPublicName } from "./public-names.ts";
 
 /** A capitalized word: a letter in upper case, then letters, with hyphenated parts. */
 const WORD = /\p{Lu}[\p{Ll}\p{Lu}'’]*(?:-\p{Lu}?[\p{Ll}'’]+)*/u;
@@ -7,7 +8,7 @@ const WORD = /\p{Lu}[\p{Ll}\p{Lu}'’]*(?:-\p{Lu}?[\p{Ll}'’]+)*/u;
 /**
  * Finds people's names: capitalized words that are known given names, with the capitalized words
  * right after them as family names; known family names after a capitalized word; whole names from
- * `extra`; and a capitalized word after a greeting, sign-off or title.
+ * `extra`; and a capitalized word after a greeting, sign-off or title. Famous people's names stay.
  */
 export function nameDetector(extra: readonly string[] = []): PiiDetector {
   const first = new Set(FIRST_NAMES);
@@ -78,7 +79,9 @@ export function nameDetector(extra: readonly string[] = []): PiiDetector {
           }
         }
       }
-      yield* merge(spans);
+      // "Erling Haaland" and "Jonas Gahr Støre" are known to everyone.
+      for (const span of merge(spans))
+        if (!isPublicName(text.slice(span.start, span.end))) yield span;
     },
   };
 }
