@@ -4,8 +4,8 @@
   "type": "module",
   "scripts": {
     "build": "pnpm -r build",
-    "typecheck": "tsc -p tsconfig.json && pnpm -C apps/web typecheck",
-    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json && pnpm -C apps/web typecheck && pnpm -C packages/cloudflare typecheck",
+    "test": "vitest run && pnpm -C packages/cloudflare test",
     "lint": "oxlint .",
     "format": "oxfmt .",
     "check": "pnpm typecheck && pnpm lint && pnpm test",

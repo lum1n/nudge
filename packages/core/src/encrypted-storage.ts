@@ -22,10 +22,16 @@ type CipherDatabase = {
   exec(sql: string): unknown;
   close(): void;
 };
-const Database = createRequire(import.meta.url)("better-sqlite3-multiple-ciphers") as new (
-  path: string,
-  options?: { timeout?: number; readonly?: boolean },
-) => CipherDatabase;
+type CipherOptions = { timeout?: number; readonly?: boolean };
+let Database: (new (path: string, options?: CipherOptions) => CipherDatabase) | undefined;
+
+/** Loaded on first use, so a host with storage of its own, such as a Durable Object, never needs it. */
+function openCipher(path: string, options?: CipherOptions): CipherDatabase {
+  Database ??= createRequire(import.meta.url)("better-sqlite3-multiple-ciphers") as NonNullable<
+    typeof Database
+  >;
+  return new Database(path, options);
+}
 
 /** Every unencrypted SQLite file starts with these 16 bytes; an encrypted one doesn't. */
 const SQLITE_HEADER = "SQLite format 3\0";
@@ -114,7 +120,7 @@ export async function encryptDatabase(database: string): Promise<string> {
   if (existing === undefined)
     await writeFile(key.source, key.key.toString("base64"), { mode: 0o600, flag: "wx" });
   try {
-    rekey(new Database(database), key.key);
+    rekey(openCipher(database), key.key);
   } catch (error) {
     if (existing === undefined) await unlink(key.source).catch(() => {});
     throw error;
@@ -132,7 +138,7 @@ export async function decryptDatabase(database: string): Promise<void> {
     throw new DatabaseKeyError(
       `${database} is encrypted, but there is no key: set NUDGE_DB_KEY or restore ${keyFile(database)}`,
     );
-  const db = new Database(database);
+  const db = openCipher(database);
   db.pragma(`hexkey='${key.key.toString("hex")}'`);
   rekey(db, undefined);
   if (key.source !== "NUDGE_DB_KEY") await unlink(key.source);
@@ -162,7 +168,7 @@ export async function snapshotDatabase(database: string, target: string): Promis
     throw new DatabaseKeyError(
       `${database} is encrypted, but there is no key: set NUDGE_DB_KEY or restore ${keyFile(database)}`,
     );
-  const db = new Database(database, { readonly: true, timeout: 5_000 });
+  const db = openCipher(database, { readonly: true, timeout: 5_000 });
   try {
     db.pragma(`hexkey='${key.key.toString("hex")}'`);
     db.exec(into);
@@ -193,7 +199,7 @@ export async function openRawDatabase(database: string): Promise<RawDatabase> {
       throw new DatabaseKeyError(
         `${database} is encrypted, but there is no key: set NUDGE_DB_KEY or restore ${keyFile(database)}`,
       );
-    const cipher = new Database(database, { timeout: 5_000 });
+    const cipher = openCipher(database, { timeout: 5_000 });
     cipher.pragma(`hexkey='${key.key.toString("hex")}'`);
     db = cipher;
   }
@@ -207,7 +213,7 @@ export async function openRawDatabase(database: string): Promise<RawDatabase> {
 
 async function openEncrypted(database: string, key: DatabaseKey): Promise<NodeSqliteDatabase> {
   await mkdir(dirname(database), { recursive: true });
-  const db = new Database(database, { timeout: 5_000 });
+  const db = openCipher(database, { timeout: 5_000 });
   try {
     db.pragma(`hexkey='${key.key.toString("hex")}'`);
     // A wrong key only shows when a page is read.

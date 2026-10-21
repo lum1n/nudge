@@ -14,7 +14,9 @@ export function decodeCursor(cursor: string): unknown {
   try {
     const binary = atob(cursor.replaceAll("-", "+").replaceAll("_", "/"));
     const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) as unknown;
+    return JSON.parse(
+      new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes),
+    ) as unknown;
   } catch {
     return undefined;
   }
