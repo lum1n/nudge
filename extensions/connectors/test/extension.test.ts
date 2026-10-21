@@ -318,6 +318,82 @@ describe("@nudge/ext-connectors", () => {
       await rm(room, { recursive: true, force: true });
     }
   });
+
+  it("puts connectors people want first ahead of the rest; the model only asks to change that", async () => {
+    const room = await mkdtemp(join(tmpdir(), "nudge-connectors-first-"));
+    try {
+      const { faux, options, requests, call, done, plain, outputs, say } = setup(room);
+      const nudge = await createNudge(options, context);
+      await nudge.harness.commit(
+        (tx) =>
+          addConnector(
+            tx,
+            LOBBY,
+            { name: "Other", baseUrl: `${base}/`, useFor: "Anything else" },
+            "Vegard",
+            0,
+          ),
+        context,
+      );
+      faux.setResponses([
+        call("add_connector", {
+          name: "Transit",
+          baseUrl: `${base}/`,
+          useFor: "Bus and train times",
+          alwaysFirst: true,
+        }),
+        done,
+        plain,
+      ]);
+      await say(nudge, "Add the transit API and always use it first for departures");
+      const [added] = await nudge.approvals.list(LOBBY, context);
+      expect(added!.summary).toMatch(/\(always first\)$/);
+      await nudge.approvals.decide(LOBBY, added!.id, { approve: true, by }, context);
+      await nudge.harness.waitForIdle(context);
+
+      faux.setResponses([plain]);
+      await say(nudge, "Hello");
+      const section = sections(requests.at(-1));
+      expect(section).toMatch(/always use first[^]*c2 Transit: Bus and train times[^]*Other APIs/);
+      expect(section.indexOf("c2 Transit")).toBeLessThan(section.indexOf("c1 Other"));
+
+      // Notes change at once; what a first connector is for, and whether it is, wait for approval.
+      faux.setResponses([
+        call("update_connector", { connector: "c2", notes: "Use /departures", useFor: "Trains" }),
+        done,
+      ]);
+      await say(nudge, "Learn it");
+      expect(outputs.at(-1)).toMatch(/^Updated connector c2\. Waiting for approval a\d+\.$/);
+      faux.setResponses([call("update_connector", { connector: "c2", alwaysFirst: false }), done]);
+      await say(nudge, "Stop using it first");
+      const pending = (await nudge.approvals.list(LOBBY, context)).filter(
+        (a) => a.status === "pending",
+      );
+      expect(pending.map((a) => a.summary)).toEqual([
+        'Stop using "Transit" first',
+        'Always use "Transit" first for: Trains (was: Bus and train times)',
+      ]);
+      faux.setResponses([plain]);
+      const decided = await nudge.approvals.decide(
+        LOBBY,
+        pending[0]!.id,
+        { approve: true, by },
+        context,
+      );
+      expect(decided).toMatchObject({
+        status: "done",
+        result: "Connector c2 no longer comes first.",
+      });
+      await nudge.harness.waitForIdle(context);
+      faux.setResponses([plain]);
+      await say(nudge, "Hello again");
+      expect(sections(requests.at(-1))).not.toContain("always use first");
+      expect(sections(requests.at(-1))).toContain("c2 Transit: Bus and train times");
+      await nudge.close(context);
+    } finally {
+      await rm(room, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("the connectors panel", () => {
@@ -414,6 +490,12 @@ describe("the connectors panel", () => {
       expect(list.connectors[0]!.readPaths).toEqual(["POST /graphql"]);
       ({ list } = await bo.send({ type: "setPrivateNetwork", connector: "c1", allow: true }));
       expect(list.connectors[0]!.allowPrivateNetwork).toBe(true);
+      ({ list } = await bo.send({ type: "setUseFor", connector: "c1", useFor: " Forecasts " }));
+      expect(list.connectors[0]!.useFor).toBe("Forecasts");
+      ({ reply } = await bo.send({ type: "setUseFor", connector: "c1", useFor: " " }));
+      expect(reply).toMatchObject({ type: "error", message: /what the connector is for/ });
+      ({ list } = await bo.send({ type: "setAlwaysFirst", connector: "c1", alwaysFirst: true }));
+      expect(list.connectors[0]!.alwaysFirst).toBe(true);
 
       ({ reply } = await bo.send({ type: "share", connector: "c2" }));
       expect(reply).toMatchObject({ type: "error", message: /Only an admin/ });

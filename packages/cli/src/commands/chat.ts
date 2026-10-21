@@ -36,7 +36,8 @@ const HELP =
   "change it, /approvals lists actions waiting for approval, /approve <id> and /deny <id> " +
   "decide one, /extensions lists the extensions and whether they are on here, " +
   "/extensions on|off|default <name> changes one, /connectors lists the APIs this room can " +
-  "call, /connector-key <id> sets one's API key, /quit leaves.";
+  "call, /connector-key <id> sets one's API key, /connector-first <id> on|off [use for] has " +
+  "the assistant try one first, before anything else, for what it's for, /quit leaves.";
 
 export async function chat(options: ChatOptions): Promise<void> {
   let rl: ReturnType<typeof createInterface> | undefined;
@@ -248,6 +249,29 @@ export async function chat(options: ChatOptions): Promise<void> {
             );
             console.log(key === "" ? "  Cleared." : "  Saved. The assistant never sees it.");
           }
+        }
+      } else if (/^\/connector-first(\s|$)/.test(line)) {
+        const [, id, verb, useFor] =
+          /^\/connector-first\s+(\S+)\s+(on|off)(?:\s+(.+))?$/.exec(line) ?? [];
+        if (id === undefined)
+          console.log("  Usage: /connector-first <id> on|off [what to use it for]");
+        else {
+          const channel = await panel();
+          if (useFor !== undefined)
+            await channel.request({ type: "setUseFor", connector: id, useFor });
+          await channel.request({
+            type: "setAlwaysFirst",
+            connector: id,
+            alwaysFirst: verb === "on",
+          });
+          const connector = (await listConnectors(channel)).find((c) => c.id === id);
+          console.log(
+            connector === undefined
+              ? "  Saved."
+              : verb === "on"
+                ? `  The assistant now tries ${connector.name} first for: ${connector.useFor}`
+                : `  ${connector.name} no longer comes first.`,
+          );
         }
       } else if (line.startsWith("/private ")) {
         const placeholder = await session.protect(line.slice("/private ".length));
