@@ -21,6 +21,7 @@
     "@nudge/ext-mcp": "workspace:*",
     "@nudge/ext-ner": "workspace:*",
     "@nudge/ext-push": "workspace:*",
+    "@nudge/ext-rss": "workspace:*",
     "@nudge/ext-search": "workspace:*",
     "@nudge/ext-signal": "workspace:*",
     "@nudge/ext-telegram": "workspace:*",

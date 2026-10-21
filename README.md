@@ -27,6 +27,7 @@ An extendable, multiplayer personal assistant that keeps personal data away from
 - `@nudge/ext-codemode`: lets the model run short scripts that call the room's tools (`extensions/codemode`).
 - `@nudge/ext-federation`: lets people from other assistants join, with their home vouching for them (`extensions/federation`).
 - `@nudge/ext-push`: notifications of answers and approvals, through Web Push, APNs and FCM (`extensions/push`).
+- `@nudge/ext-rss`: RSS and Atom feeds the assistant checks first for news (`extensions/rss`).
 - `@nudge/ext-acc`: lets the assistant start, watch and steer coding agents on your machines over SSH (`extensions/acc`).
 
 ## Install a server
@@ -388,6 +389,10 @@ Rooms can also add servers from the chat ("add the Linear MCP server, https://mc
 ### Web search
 
 `extensions/search` gives the model `web_search`, through a [SearXNG](https://docs.searxng.org) instance of your own, and `read_page`, which reads one page as text without starting a browser. Set `url` to the instance (default `http://127.0.0.1:8888`) and turn on its JSON output (`search: formats: [html, json]` in its `settings.yml`); `language` picks the results' language. `read_page` only reads public addresses, also after a redirect, unless `readLocalPages` is on. A connector the room added for the task still comes first, and pages that need a login or clicking around are the browser's.
+
+### News feeds
+
+`extensions/rss` lets people add RSS and Atom feeds for the assistant to check first when they ask for the latest news. In a conversation, "follow NRK's feed" makes it call `add_feed` with the feed's address, or a site's, whose `<link rel="alternate">` names the feed; `list_feeds` and `remove_feed` cover the rest, and each conversation keeps its own (at most `maxPerRoom`, default 20). Feeds for every conversation, or some, go in the settings' `feeds`, each with a `name`, `url` and `rooms`. When a conversation has feeds, the assistant reads them with `read_feeds` (newest first, at most `maxItems` stories, optionally one feed or only stories with some words) before it searches the web. Like `read_page`, it only reads public addresses, also after a redirect, unless `readLocalFeeds` is on.
 
 ### Code mode
 

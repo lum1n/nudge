@@ -276,8 +276,8 @@ export function searchExtension(options: SearchOptions = {}) {
             "search",
             () =>
               "For current facts (news, opening hours, prices, events), search with web_search and " +
-              "read a result with read_page rather than answer from memory. A connector the room " +
-              "added for the task comes first.",
+              "read a result with read_page rather than answer from memory. A connector or feed the " +
+              "room added for the task comes first.",
           ),
         ],
       };
