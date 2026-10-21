@@ -36,6 +36,7 @@ describe.skipIf(wired === undefined)("Wired between servers", () => {
     cleanup.length = 0;
     delete process.env.NUDGE_WIRED_INVITE;
     delete process.env.NUDGE_WIRED_RELAY_URL;
+    delete process.env.NUDGE_WIRED_NAME;
   });
 
   it("a home server and a server it launched reach each other, through the new server's relay", async () => {
@@ -46,7 +47,7 @@ describe.skipIf(wired === undefined)("Wired between servers", () => {
     const home = new ServerWired({ dir: join(dir, "home"), publicUrl: () => undefined });
     const homeApi = await serveNudge({ assistants: new Map(), port: 0 });
     cleanup.push(() => homeApi.close(), () => home.stop());
-    expect((await home.enableRoot("home", addr(homeApi))).state).toBe("root");
+    expect((await home.enableRoot(addr(homeApi), "home")).state).toBe("root");
 
     // A new server, as on exe.dev: one port, with the relay behind it. Home lists the relay
     // first and hands over the invite, as the launcher does.
@@ -54,6 +55,7 @@ describe.skipIf(wired === undefined)("Wired between servers", () => {
     const relayUrl = `http://127.0.0.1:${port}`;
     process.env.NUDGE_WIRED_INVITE = await home.addRelay(relayUrl);
     process.env.NUDGE_WIRED_RELAY_URL = relayUrl;
+    process.env.NUDGE_WIRED_NAME = "robin";
     const robin = new ServerWired({
       dir: join(dir, "robin"),
       publicUrl: () => undefined,
@@ -64,7 +66,7 @@ describe.skipIf(wired === undefined)("Wired between servers", () => {
     expect(front).toBeDefined();
     const robinApi = await serveNudge({ assistants: new Map(), port, ...(front ? { relay: front } : {}) });
     cleanup.push(() => robinApi.close(), () => robin.stop());
-    await robin.resume("robin", addr(robinApi));
+    await robin.resume(addr(robinApi));
     await until(() => robin.state().state !== "starting");
     expect(robin.state()).toMatchObject({ state: "member", name: "robin", relay: relayUrl });
 
@@ -86,6 +88,7 @@ describe.skipIf(wired === undefined)("Wired between servers", () => {
     // Restarting picks the same role and network up again, without the environment.
     delete process.env.NUDGE_WIRED_INVITE;
     delete process.env.NUDGE_WIRED_RELAY_URL;
+    delete process.env.NUDGE_WIRED_NAME;
     await robin.stop();
     const again = new ServerWired({
       dir: join(dir, "robin"),
@@ -94,10 +97,10 @@ describe.skipIf(wired === undefined)("Wired between servers", () => {
     });
     await again.load();
     expect(again.relayFront()).toBeDefined();
-    await again.resume("robin", addr(robinApi));
+    await again.resume(addr(robinApi));
     cleanup.push(() => again.stop());
     await until(() => again.state().state !== "starting");
-    expect(again.state().state).toBe("member");
+    expect(again.state()).toMatchObject({ state: "member", name: "robin" });
   }, 200_000);
 
   it("a running server joins later, and serves its relay without a restart", async () => {
@@ -106,7 +109,7 @@ describe.skipIf(wired === undefined)("Wired between servers", () => {
     const home = new ServerWired({ dir: join(dir, "home"), publicUrl: () => undefined });
     const homeApi = await serveNudge({ assistants: new Map(), port: 0 });
     cleanup.push(() => homeApi.close(), () => home.stop());
-    await home.enableRoot("home", addr(homeApi));
+    await home.enableRoot(addr(homeApi), "home");
 
     // Already running, with Wired available but off: its front forwards nothing yet.
     const port = await freePort();
@@ -124,21 +127,37 @@ describe.skipIf(wired === undefined)("Wired between servers", () => {
 
     // As `nudge wired add` at home, then `nudge wired join` on robin.
     const invite = await home.addRelay(relayUrl);
-    expect((await robin.join(invite, "robin", addr(robinApi))).state).toBe("starting");
+    // Without a name picked, the public address's first label.
+    expect(robin.state()).toEqual({ state: "off", name: "127" });
+    expect((await robin.join(invite, addr(robinApi), { name: "robin" })).state).toBe("starting");
     await until(() => robin.state().state !== "starting");
     expect(robin.state()).toMatchObject({ state: "member", relay: relayUrl });
     expect(front?.matches({ url: "/relay" })).toBe(true);
     const answer = await fetch("http://nudge.robin.wired/v1/nothing", { dispatcher: home.dispatcher() });
     expect(answer.status).toBe(404);
-    await expect(robin.join(invite, "robin", addr(robinApi))).rejects.toThrow(/already/);
+    await expect(robin.join(invite, addr(robinApi))).rejects.toThrow(/already/);
 
     // Turning it off leaves the network, stops the relay, and lets the server join again.
     await robin.forget();
-    expect(robin.state()).toEqual({ state: "off" });
+    expect(robin.state()).toEqual({ state: "off", name: "robin" });
     expect(front?.matches({ url: "/relay" })).toBe(false);
-    await robin.join(await home.addRelay(relayUrl), "robin", addr(robinApi));
+    await robin.join(await home.addRelay(relayUrl), addr(robinApi));
     await until(() => robin.state().state !== "starting");
     expect(robin.state(), JSON.stringify(robin.state())).toMatchObject({ state: "member" });
+
+    // Joining again under a name the owner picked: a new member, reached by that name, which it
+    // keeps across restarts.
+    await robin.forget();
+    await expect(robin.join(invite, addr(robinApi), { name: "Box" })).rejects.toThrow(/lowercase/);
+    await robin.join(await home.addRelay(relayUrl), addr(robinApi), { name: "box" });
+    await until(() => robin.state().state !== "starting");
+    expect(robin.state()).toMatchObject({ state: "member", name: "box" });
+    const boxed = await fetch("http://nudge.box.wired/v1/nothing", { dispatcher: home.dispatcher() });
+    expect(boxed.status).toBe(404);
+    await robin.stop();
+    const restarted = new ServerWired({ dir: join(dir, "robin"), publicUrl: () => relayUrl });
+    await restarted.load();
+    expect(restarted.name()).toBe("box");
   }, 200_000);
 
   it("a server that replaces a deleted one joins under its name once home removes the old one", async () => {
@@ -147,7 +166,7 @@ describe.skipIf(wired === undefined)("Wired between servers", () => {
     const home = new ServerWired({ dir: join(dir, "home"), publicUrl: () => undefined });
     const homeApi = await serveNudge({ assistants: new Map(), port: 0 });
     cleanup.push(() => homeApi.close(), () => home.stop());
-    await home.enableRoot("home", addr(homeApi));
+    await home.enableRoot(addr(homeApi), "home");
 
     const port = await freePort();
     const relayUrl = `http://127.0.0.1:${port}`;
@@ -164,7 +183,7 @@ describe.skipIf(wired === undefined)("Wired between servers", () => {
       return { wired, api };
     };
     const joined = async ({ wired, api }: Awaited<ReturnType<typeof server>>) => {
-      await wired.join(await home.addRelay(relayUrl), "robin", addr(api));
+      await wired.join(await home.addRelay(relayUrl), addr(api), { name: "robin" });
       await until(() => wired.state().state !== "starting");
       return wired.state();
     };
@@ -195,6 +214,6 @@ describe.skipIf(wired === undefined)("Wired between servers", () => {
     cleanup.push(() => rm(dir, { recursive: true, force: true }));
     const off = new ServerWired({ dir: join(dir, "x"), publicUrl: () => undefined });
     await expect(off.addRelay("https://robin.exe.xyz")).rejects.toThrow(/Only the server/);
-    expect(off.state()).toEqual({ state: "off" });
+    expect(off.state()).toMatchObject({ state: "off" });
   });
 });

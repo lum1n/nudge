@@ -68,7 +68,8 @@ Commands:
   wired [status|on|add <url>|join <invite>]
                      The server's Wired, a network between Nudge servers with no open port at
                      home: on (at home), add a server's https address there for its invite,
-                     then join with it on that server (--url, --token: an owner's)
+                     then join with it on that server (--url, --token: an owner's; --name
+                     for its name in the network, such as box)
   reload             Read the config again in the running server: new assistants open,
                      removed ones close, changed ones reopen, extensions reinstall
   doctor             Check Node, config, storage and model credentials;
@@ -83,7 +84,8 @@ Options:
   -c, --config <file>      Config file (default: ./nudge.json if there is one, else the data
                            directory's: $NUDGE_HOME, or ~/.local/share/nudge)
   -a, --assistant <name>   Assistant to use (default: the first one)
-  -n, --name <name>        Your display name in chat
+  -n, --name <name>        Your display name in chat; with wired on or join, the
+                           server's name in the network
   -p, --player <id>        Chat in this process as this player (default: owner)
   -m, --members <ids>      Comma-separated player ids for a new room
   -u, --url <url>          Chat through a server: http://host:port (-a picks the assistant)
@@ -248,6 +250,7 @@ async function main(argv: string[]): Promise<number> {
       await wired({
         ...(values.url === undefined ? {} : { url: values.url }),
         ...(values.token === undefined ? {} : { token: values.token }),
+        ...(values.name === undefined ? {} : { name: values.name }),
         ...(argument === undefined ? {} : { verb: argument }),
         ...(rest[0] === undefined ? {} : { arg: rest[0] }),
       });

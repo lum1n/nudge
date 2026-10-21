@@ -43,6 +43,7 @@ import {
   type ServerSessionResponse,
   SetProviderKeyRequest,
   SetUpdatesRequest,
+  WiredEnableRequest,
   WiredJoinRequest,
   WiredRelayRequest,
   type WiredRelayResponse,
@@ -82,12 +83,15 @@ export type ServerControl = {
 /** What owners see of and do with the server's Wired. */
 export type WiredControl = {
   state(): WiredState;
-  /** Makes this server the network's root. */
-  enable(): Promise<WiredState>;
+  /** Makes this server the network's root, as `name` when given. */
+  enable(name?: string): Promise<WiredState>;
   /** On the root: lists a new server's relay and answers with the invite it joins with. */
   addRelay(url: string): Promise<string>;
-  /** Joins the network an invite is for, serving a relay at the public address or `relayUrl`. */
-  join(invite: string, relayUrl?: string): Promise<WiredState>;
+  /**
+   * Joins the network an invite is for, as `name` when given, serving a relay at the public
+   * address or `relayUrl`.
+   */
+  join(invite: string, options: { name?: string; relayUrl?: string }): Promise<WiredState>;
   /** On the root: removes a server from the network, freeing its name. */
   remove(name: string): Promise<WiredState>;
   /** Leaves the network, or stops holding it, and forgets it. */
@@ -198,13 +202,23 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
 
   app.get("/wired", (c) => c.json(wired().state() satisfies WiredState));
 
-  app.post("/wired", async (c) => c.json((await wired().enable()) satisfies WiredState));
+  app.post("/wired", async (c) => {
+    // A body is optional: without one, the server takes its usual name.
+    const { name } = c.req.header("content-type")?.includes("json")
+      ? await readJson(c, WiredEnableRequest)
+      : {};
+    return c.json((await guard(() => wired().enable(name))) satisfies WiredState);
+  });
 
   app.delete("/wired", async (c) => c.json((await wired().disable()) satisfies WiredState));
 
   app.post("/wired/join", async (c) => {
-    const { invite, relayUrl } = await readJson(c, WiredJoinRequest);
-    return c.json((await guard(() => wired().join(invite, relayUrl))) satisfies WiredState);
+    const { invite, relayUrl, name } = await readJson(c, WiredJoinRequest);
+    const options = {
+      ...(name === undefined ? {} : { name }),
+      ...(relayUrl === undefined ? {} : { relayUrl }),
+    };
+    return c.json((await guard(() => wired().join(invite, options))) satisfies WiredState);
   });
 
   app.post("/wired/relays", async (c) => {

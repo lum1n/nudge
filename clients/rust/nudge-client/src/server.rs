@@ -239,21 +239,29 @@ impl ServerApi {
         self.request(Method::DELETE, &["wired"], &[], NO_BODY).await
     }
 
-    /// Makes the server the root of its own Wired network.
-    pub async fn enable_wired(&self) -> Result<WiredState, ApiError> {
-        self.request(Method::POST, &["wired"], &[], NO_BODY).await
+    /// Makes the server the root of its own Wired network, as `name` (such as `box`) when given;
+    /// else as its public address's first label, or its host's name.
+    pub async fn enable_wired(&self, name: Option<&str>) -> Result<WiredState, ApiError> {
+        let body = WiredEnableRequest {
+            name: name.map(str::to_owned),
+        };
+        self.request(Method::POST, &["wired"], &[], Some(&body))
+            .await
     }
 
-    /// Joins the network `invite` is for, serving a relay at the server's public HTTPS address (or
-    /// `relay_url`), which the root must have listed first (`add_wired_relay` there).
+    /// Joins the network `invite` is for, as `name` when given, serving a relay at the server's
+    /// public HTTPS address (or `relay_url`), which the root must have listed first
+    /// (`add_wired_relay` there).
     pub async fn join_wired(
         &self,
         invite: &str,
         relay_url: Option<&str>,
+        name: Option<&str>,
     ) -> Result<WiredState, ApiError> {
         let body = WiredJoinRequest {
             invite: invite.to_owned(),
             relay_url: relay_url.map(str::to_owned),
+            name: name.map(str::to_owned),
         };
         self.request(Method::POST, &["wired", "join"], &[], Some(&body))
             .await

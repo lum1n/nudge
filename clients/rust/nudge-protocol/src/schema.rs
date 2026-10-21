@@ -1532,6 +1532,8 @@ pub struct WiredMember {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct WiredState {
     pub state: WiredStatus,
+    /// Its name in the network. While off, the name it takes when turned on or joining, unless
+    /// the owner picks another.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1546,13 +1548,21 @@ pub struct WiredState {
     pub error: Option<String>,
 }
 
+/// Makes the server the root of its own network, as `name` (such as `box`) when given; else its
+/// public address's first label, or the host's name.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct WiredEnableRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
 /// A relay a new server will serve, such as `https://robin.exe.xyz`, added before it joins.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct WiredRelayRequest {
     pub url: String,
 }
 
-/// Joins the network `invite` is for. The server serves a relay at its public HTTPS address, or
+/// Joins the network `invite` is for, as `name` when given. The server serves a relay at its public HTTPS address, or
 /// `relay_url`, which the root must have listed first.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -1560,6 +1570,9 @@ pub struct WiredJoinRequest {
     pub invite: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub relay_url: Option<String>,
+    /// Its name in the network, such as `box`; see `WiredEnableRequest`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
 }
 
 /// The invite the new server joins with, in `NUDGE_WIRED_INVITE`. It is a credential.
