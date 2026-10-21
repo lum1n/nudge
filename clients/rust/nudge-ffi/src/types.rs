@@ -973,6 +973,8 @@ pub struct PersonalDetails {
     pub phone: Option<String>,
     pub address: Option<String>,
     pub location: Option<KnownLocation>,
+    /// The shared rooms where they let the model know where they are.
+    pub location_rooms: Vec<String>,
 }
 
 /// Where the player's device last said they were (`place (lat, lon)`), and when.
@@ -994,6 +996,7 @@ impl From<p::PersonalDetails> for PersonalDetails {
                 text: location.text,
                 at: location.at,
             }),
+            location_rooms: details.location_rooms.unwrap_or_default(),
         }
     }
 }

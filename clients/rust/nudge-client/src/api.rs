@@ -404,6 +404,18 @@ impl Api {
             .await
     }
 
+    /// Lets the model in a shared room know where the caller is, for anyone there, or stops it.
+    /// 400 for a room that isn't shared, 403 for a player whose home is another assistant.
+    pub async fn share_location_in(
+        &self,
+        room: &str,
+        shared: bool,
+    ) -> Result<PersonalDetails, ApiError> {
+        let body = ShareLocationRequest { shared };
+        self.request(Method::PUT, &["rooms", room, "location"], &[], Some(&body))
+            .await
+    }
+
     /// The caller's profile: name, avatar, time zone, language and preferences.
     pub async fn profile(&self) -> Result<Profile, ApiError> {
         self.request(Method::GET, &["me", "profile"], &[], NO_BODY)

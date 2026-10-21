@@ -731,6 +731,12 @@ async fn keeps_personal_details_and_a_location() {
         .unwrap();
     assert_eq!(cleared.location, None);
     assert_eq!(api.personal().await.unwrap(), cleared);
+    let shared = api.share_location_in("trip", true).await.unwrap();
+    assert_eq!(shared.location_rooms, Some(vec!["trip".to_owned()]));
+    let shared = api.share_location_in("trip", false).await.unwrap();
+    assert_eq!(shared.location_rooms, None);
+    let refused = api.share_location_in("lobby", true).await.unwrap_err();
+    assert_eq!(refused.status(), Some(400));
     let refused = api
         .update_personal(&UpdatePersonalRequest {
             email: Some(Some("nope".into())),

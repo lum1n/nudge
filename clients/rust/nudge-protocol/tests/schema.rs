@@ -222,6 +222,7 @@ fn room_view() -> RoomView {
             every: Some(60_000.0),
             private_to: Some(ann()),
         }],
+        sharing_location: Some(vec![ann()]),
     }
 }
 
@@ -670,7 +671,12 @@ fn http_bodies_match_the_schema() {
                 text: "Oslo S (59.9139, 10.7522)".into(),
                 at: 1_700_000_000_000.0,
             }),
+            location_rooms: Some(vec!["trip".into()]),
         },
+    );
+    check(
+        "ShareLocationRequest",
+        &ShareLocationRequest { shared: true },
     );
     check(
         "UpdatePersonalRequest",

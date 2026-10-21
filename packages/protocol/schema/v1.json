@@ -1784,6 +1784,27 @@
               }
             }
           }
+        },
+        "sharingLocation": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "displayName"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "displayName": {
+                "type": "string"
+              },
+              "address": {
+                "type": "string"
+              }
+            }
+          }
         }
       }
     },
@@ -3334,6 +3355,27 @@
                           }
                         }
                       }
+                    },
+                    "sharingLocation": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "displayName"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          },
+                          "address": {
+                            "type": "string"
+                          }
+                        }
+                      }
                     }
                   }
                 },
@@ -4760,6 +4802,12 @@
               "type": "number"
             }
           }
+        },
+        "locationRooms": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -4858,6 +4906,17 @@
               "type": "null"
             }
           ]
+        }
+      }
+    },
+    "ShareLocationRequest": {
+      "type": "object",
+      "required": [
+        "shared"
+      ],
+      "properties": {
+        "shared": {
+          "type": "boolean"
         }
       }
     },

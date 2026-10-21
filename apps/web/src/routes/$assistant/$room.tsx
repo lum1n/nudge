@@ -196,6 +196,7 @@ function Room() {
           </div>
           <ApprovalsPanel approvals={view.approvals} />
           <MemoryPanel view={view} />
+          <LocationPanel view={view} />
           <PrivateValuesPanel />
           <NudgesPanel view={view} />
           <ExtensionsPanel />
@@ -228,6 +229,7 @@ function Room() {
           ) : connection.kind === "closed" ? (
             <p className="text-sm text-red-700">Disconnected: {connection.reason}.</p>
           ) : null}
+          <SharingLocation view={view} />
           <Chat store={held.store} state={held.state} view={view} />
         </div>
       </div>
@@ -989,6 +991,87 @@ function MemoryPanel({ view }: { view: RoomView }) {
           />
           Share my own facts ({mine.data.facts.length}) with all my rooms
         </label>
+      )}
+      {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
+    </section>
+  );
+}
+
+/** Whose location the assistant knows here, above the chat, so everyone in the room sees it. */
+function SharingLocation({ view }: { view: RoomView }) {
+  const { assistant } = Route.useParams();
+  const me = useQuery(meQuery(assistant)).data?.player.id;
+  const sharing = view.sharingLocation ?? [];
+  if (sharing.length === 0) return null;
+  const names = sharing.map((player) => (player.id === me ? "you" : player.displayName));
+  return (
+    <p className="mb-2 rounded border border-sky-200 bg-sky-50 px-3 py-1 text-sm text-sky-900">
+      📍 The assistant knows where {names.join(" and ")}{" "}
+      {names.length === 1 && names[0] !== "you" ? "is" : "are"} here, as a hidden value.
+    </p>
+  );
+}
+
+/**
+ * Whether the assistant knows where the player is in this room. A personal room always has it
+ * once a device shared it; a shared room only once the player says so here, and then for anyone
+ * in the room.
+ */
+function LocationPanel({ view }: { view: RoomView }) {
+  const { assistant, room } = Route.useParams();
+  const me = useQuery(meQuery(assistant)).data?.player.id;
+  const personal = useQuery({
+    queryKey: [assistant, "personal"],
+    queryFn: () => clientFor(assistant).api.personal(),
+  });
+  const queryClient = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  if (view.room.kind === "lobby" || me === undefined) return null;
+  const sharing = (view.sharingLocation ?? []).some((player) => player.id === me);
+  const known = personal.data?.location !== undefined;
+
+  async function onShare(shared: boolean) {
+    setBusy(true);
+    setError(undefined);
+    try {
+      queryClient.setQueryData(
+        [assistant, "personal"],
+        await clientFor(assistant).api.shareLocation(room, shared),
+      );
+    } catch (caught) {
+      setError((caught as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="flex flex-col gap-2 rounded border border-stone-200 bg-white p-3">
+      <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">Location</h3>
+      {view.room.kind === "personal" ? (
+        <p className="text-sm text-stone-600">
+          {known
+            ? "The assistant knows where you are here, for the weather, the way somewhere and what is near."
+            : "Not shared. Turn on Share where I am in the apps, or share it once from your profile."}
+        </p>
+      ) : (
+        <>
+          <label className="flex items-center gap-2 text-sm text-stone-600">
+            <input
+              type="checkbox"
+              checked={sharing}
+              disabled={busy}
+              onChange={(event) => void onShare(event.target.checked)}
+            />
+            Let the assistant know where I am in this room
+          </label>
+          <p className="text-xs text-stone-500">
+            Anyone here can then ask it about what is near you. Everyone in the room sees that you
+            share it; the place itself stays hidden from them and the model.
+            {sharing && !known && " Your devices haven't shared where you are yet."}
+          </p>
+        </>
       )}
       {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
     </section>

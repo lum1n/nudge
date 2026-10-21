@@ -234,6 +234,35 @@ describe("v1 HTTP", () => {
     expect((await call("GET", "/me/personal", { token: tokens.Ann })).json).toEqual({});
   });
 
+  it("shares where the caller is in a shared room only when they say so", async () => {
+    const shared = await call("PUT", "/rooms/trip/location", {
+      token: tokens.Bo,
+      body: { shared: true },
+      schema: PersonalDetails,
+    });
+    expect(shared).toEqual({ status: 200, json: { locationRooms: ["trip"] } });
+    expect((await call("GET", "/me/personal", { token: tokens.Bo })).json).toEqual({
+      locationRooms: ["trip"],
+    });
+    // Not for someone outside the room, nor in rooms that aren't shared.
+    expect(
+      (await call("PUT", "/rooms/trip/location", { token: tokens.Cy, body: { shared: true } }))
+        .status,
+    ).toBe(404);
+    expect(
+      (await call("PUT", "/rooms/lobby/location", { token: tokens.Bo, body: { shared: true } }))
+        .status,
+    ).toBe(400);
+    expect(
+      (await call("PUT", "/rooms/trip/location", { token: tokens.Bo, body: { shared: "yes" } }))
+        .status,
+    ).toBe(400);
+    expect(
+      (await call("PUT", "/rooms/trip/location", { token: tokens.Bo, body: { shared: false } }))
+        .json,
+    ).toEqual({});
+  });
+
   it("reads and changes the caller's own profile", async () => {
     expect(await call("GET", "/me/profile", { token: tokens.Bo, schema: Profile })).toEqual({
       status: 200,

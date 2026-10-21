@@ -324,7 +324,8 @@ function Personal({ assistant }: { assistant: string }) {
         <p className="text-xs text-stone-500">
           For filling in forms, writing mail and finding what is near you. Only you see them: the
           model gets placeholders such as ⟦EMAIL1⟧, in your own room and your private messages only,
-          and tools get the real values when they act for you.
+          and tools get the real values when they act for you. Where you are also goes to shared
+          rooms where you turn it on, under Location in the room.
         </p>
       </div>
       {PERSONAL_FIELDS.map(({ field, label, type, autoComplete }) => (

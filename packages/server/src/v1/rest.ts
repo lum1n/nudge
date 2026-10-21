@@ -61,6 +61,7 @@ import {
   type RoomsResponse,
   SetAdminRequest,
   SetAppearanceRequest,
+  ShareLocationRequest,
   ShareMemoryRequest,
   SetRoomExtensionRequest,
   type TimelineResponse,
@@ -563,6 +564,27 @@ export function restRoutes(options: RestOptions): Hono {
       );
     } catch (error) {
       if (error instanceof ExtensionNotFound) throw new HttpError(404, error.message);
+      throw error;
+    }
+  });
+
+  // Consent: the model there may then know where the caller is, for anyone in the room.
+  api.put("/rooms/:room/location", async (c) => {
+    const room = await usableRoom(c);
+    const { player } = c.var.credential;
+    if (player.home !== undefined)
+      throw new HttpError(403, `Where you are stays at your home, ${addressOf(player.home)}`);
+    const body = await readJson(c, ShareLocationRequest);
+    try {
+      const details = await c.var.nudge.personal.shareLocation(
+        player.id,
+        room.id,
+        body.shared,
+        context,
+      );
+      return c.json(details satisfies PersonalDetails);
+    } catch (error) {
+      if (error instanceof InvalidPersonal) throw new HttpError(400, error.message);
       throw error;
     }
   });

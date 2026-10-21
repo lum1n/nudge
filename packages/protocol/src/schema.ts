@@ -216,6 +216,11 @@ export const RoomView = Type.Object({
   memory: Type.Array(Fact),
   /** Soonest first. */
   nudges: Type.Array(RoomNudge),
+  /**
+   * The members whose location the model may know here: a personal room's owner once their device
+   * shared one, and in a shared room those who chose to share it there (`PUT /rooms/<id>/location`).
+   */
+  sharingLocation: Type.Optional(Type.Array(Player)),
 });
 export type RoomView = Static<typeof RoomView>;
 
@@ -501,8 +506,14 @@ export const PersonalDetails = Type.Object({
   address: Type.Optional(Type.String()),
   /** Where their device last said they were (`place (lat, lon)`), and when, in ms. */
   location: Type.Optional(Type.Object({ text: Type.String(), at: Type.Number() })),
+  /** The shared rooms where they let the model know where they are. */
+  locationRooms: Type.Optional(Type.Array(Type.String())),
 });
 export type PersonalDetails = Static<typeof PersonalDetails>;
+
+/** Whether the model may know where the caller is in a shared room, for anyone there. */
+export const ShareLocationRequest = Type.Object({ shared: Type.Boolean() });
+export type ShareLocationRequest = Static<typeof ShareLocationRequest>;
 
 /** Where a device is, and the place it named, such as a street address. */
 export const LocationRequest = Type.Object({
@@ -1254,6 +1265,7 @@ export const SCHEMAS = {
   PersonalDetails,
   LocationRequest,
   UpdatePersonalRequest,
+  ShareLocationRequest,
   PlayerSettingsSchema,
   PlayerSettingsResponse,
   PushKeyResponse,

@@ -97,7 +97,9 @@ describe("personal details", () => {
       expect(request).toContain("personal details");
       expect(request).toMatch(/- E-mail: ⟦EMAIL\d+⟧/);
       expect(request).toMatch(/- Address: ⟦ADDRESS\d+⟧/);
-      expect(request).toMatch(/- Where they are now: ⟦LOCATION\d+⟧ \(as of Wednesday 21 October/);
+      expect(request).toMatch(
+        /- Where they are now: ⟦LOCATION\d+⟧ \(latitude ⟦LATITUDE\d+⟧, longitude ⟦LONGITUDE\d+⟧; as of Wednesday 21 October/,
+      );
     }
     expect(shared).not.toContain("personal details");
     for (const request of requests) {
@@ -138,8 +140,15 @@ describe("personal details", () => {
       context,
     );
     expect(far.location?.text).toBe("60.3930, 5.3242");
-    // Where she was is forgotten, not kept as a history of places.
+    // Where she was is forgotten, not kept as a history of places, coordinates included.
     expect(placeholder().map((v) => v.value)).toEqual(["60.3930, 5.3242"]);
+    expect(
+      nudge
+        .privateValues(ann.id)
+        .filter((v) => v.kind !== "LOCATION")
+        .map((v) => `${v.kind} ${v.value}`)
+        .sort(),
+    ).toEqual(["LATITUDE 60.3930", "LONGITUDE 5.3242"]);
     expect(nudge.redact(`at ${kept!.placeholder}`)).toBe(`at ${kept!.placeholder}`);
     expect(nudge.showTo(ann.id, kept!.placeholder)).toBe(kept!.placeholder);
 
@@ -147,7 +156,70 @@ describe("personal details", () => {
       undefined,
     );
     expect(placeholder()).toEqual([]);
+    expect(nudge.privateValues(ann.id)).toEqual([]);
     await nudge.close(context);
+  });
+
+  it("tells the model where someone is in a shared room only once they share it there", async () => {
+    const { faux, options, answer, requests } = setup();
+    faux.setResponses([answer("Ok."), answer("Ok."), answer("Ok.")]);
+    const nudge = await createNudge(options, context);
+    const ann = (await nudge.players.invite("Ann", context)).player;
+    const bo = (await nudge.players.invite("Bo", context)).player;
+    const cy = (await nudge.players.invite("Cy", context)).player;
+    await nudge.rooms.createShared({ id: "trip", name: "Trip", members: [ann.id, bo.id] }, context);
+    await nudge.rooms.createShared({ id: "work", name: "Work", members: [ann.id, cy.id] }, context);
+    await nudge.rooms.ensurePersonal(ann.id, context);
+    await nudge.personal.update(
+      ann.id,
+      { ...details, location: { latitude: 59.913868, longitude: 10.752245, place: "Oslo S" } },
+      context,
+    );
+    const author = { playerId: bo.id, displayName: "Bo" };
+    const ask = async (room: string) =>
+      (await nudge.submit(room, { text: "weather near Ann?", author }, context)).wait(context);
+
+    expect(await nudge.personal.sharingIn("trip", context)).toEqual([]);
+    expect(await nudge.personal.sharingIn("personal-ann", context)).toEqual([ann.id]);
+    await ask("trip");
+
+    const changes: string[] = [];
+    nudge.changes.subscribe((change) => changes.push(change.kind));
+    expect(
+      (await nudge.personal.shareLocation(ann.id, "trip", true, context)).locationRooms,
+    ).toEqual(["trip"]);
+    expect(changes).toContain("location");
+    expect(await nudge.personal.sharingIn("trip", context)).toEqual([ann.id]);
+    expect(await nudge.personal.sharingIn("work", context)).toEqual([]);
+    await ask("trip");
+    await (
+      await nudge.submit(
+        "work",
+        { text: "weather?", author: { playerId: cy.id, displayName: "Cy" } },
+        context,
+      )
+    ).wait(context);
+
+    // Only members, and only shared rooms.
+    await expect(nudge.personal.shareLocation(bo.id, "work", true, context)).rejects.toThrow();
+    await expect(nudge.personal.shareLocation(ann.id, "lobby", true, context)).rejects.toThrow();
+    await expect(
+      nudge.personal.shareLocation(ann.id, "personal-ann", true, context),
+    ).rejects.toThrow();
+    await nudge.close(context);
+
+    const [before, after, work] = requests;
+    expect(before).not.toContain("Where people here are");
+    expect(after).toContain("Where people here are now");
+    expect(after).toMatch(
+      /- ⟦NAME\d+⟧: ⟦LOCATION\d+⟧ \(latitude ⟦LATITUDE\d+⟧, longitude ⟦LONGITUDE\d+⟧; as of/,
+    );
+    // Her location only: not her other details.
+    expect(after).not.toContain("personal details");
+    expect(after).not.toMatch(/⟦EMAIL\d+⟧|⟦ADDRESS\d+⟧/);
+    expect(work).not.toContain("Where people here are");
+    for (const request of requests)
+      for (const value of ["59.91", "10.75", "Oslo S"]) expect(request).not.toContain(value);
   });
 
   it("leaves a full name that is also a display name visible to the others", async () => {

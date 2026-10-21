@@ -75,6 +75,8 @@ export type RoomSources = {
   readonly approvals: readonly CoreApproval[];
   readonly memory: readonly CoreRoomFact[];
   readonly nudges: readonly ScheduledNudge[];
+  /** Ids of the members whose location the model may know in the room. */
+  readonly sharingLocation?: readonly string[];
 };
 
 type Kept<T> = { readonly sources: readonly unknown[]; readonly value: T };
@@ -118,6 +120,18 @@ export class RoomProjector {
       nudges: this.part("nudges", [sources.nudges], () =>
         [...sources.nudges].sort((a, b) => a.fireAt - b.fireAt).map(toRoomNudge),
       ),
+      ...(sources.sharingLocation === undefined || sources.sharingLocation.length === 0
+        ? {}
+        : {
+            sharingLocation: this.part(
+              "sharingLocation",
+              [sources.sharingLocation, sources.room],
+              () =>
+                sources.room.members.filter((member) =>
+                  sources.sharingLocation!.includes(member.id),
+                ),
+            ),
+          }),
     };
   }
 

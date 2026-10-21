@@ -174,7 +174,11 @@ pub struct AnswerItem {
     /// When its first model response started, in ms since the epoch.
     #[serde(default, rename = "startedAt", skip_serializing_if = "Option::is_none")]
     pub started_at: Option<f64>,
-    #[serde(default, rename = "promptedBy", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        rename = "promptedBy",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub prompted_by: Option<PromptedBy>,
     /// It answers something private: only this player sees its parts; everyone else gets none.
     #[serde(default, rename = "privateTo", skip_serializing_if = "Option::is_none")]
@@ -344,6 +348,10 @@ pub struct RoomView {
     pub memory: Vec<Fact>,
     /// Soonest first.
     pub nudges: Vec<RoomNudge>,
+    /// The members whose location the model may know here: a personal room's owner once their
+    /// device shared one, and in a shared room those who chose to share it there.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sharing_location: Option<Vec<Player>>,
 }
 
 // The room list: the player's rooms and nudges.
@@ -1032,6 +1040,15 @@ pub struct PersonalDetails {
     pub address: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub location: Option<KnownLocation>,
+    /// The shared rooms where they let the model know where they are.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub location_rooms: Option<Vec<String>>,
+}
+
+/// Whether the model may know where the caller is in a shared room, for anyone there.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ShareLocationRequest {
+    pub shared: bool,
 }
 
 /// Where a player's device last said they were (`place (lat, lon)`), and when.

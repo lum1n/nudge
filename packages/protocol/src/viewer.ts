@@ -47,6 +47,13 @@ export class Viewer {
       nudges: this.kept(view.nudges, () =>
         this.mine(view.nudges).map((nudge) => this.texts(nudge)),
       ),
+      ...(view.sharingLocation === undefined
+        ? {}
+        : {
+            sharingLocation: this.kept(view.sharingLocation, () =>
+              view.sharingLocation!.map((player) => this.texts(player)),
+            ),
+          }),
     }));
   }
 

@@ -194,12 +194,15 @@ fun RoomScreen(
                 title = { Text(state?.room?.name ?: "", maxLines = 1) },
                 subtitle = {
                     val others = state?.room?.members.orEmpty().filter { it.id != me?.player?.id }
+                    // Whose location the assistant knows here, for everyone in the room to see.
+                    val located = state?.sharingLocation.orEmpty()
+                        .map { if (it.id == me?.player?.id) "you" else it.displayName }
                     Text(
                         when {
                             state?.live?.running == true -> "Answering…"
                             others.isEmpty() -> "Just you"
                             else -> others.joinToString { it.displayName }
-                        },
+                        } + if (located.isEmpty()) "" else " · 📍 knows where ${located.joinToString(" and ")} ${if (located == listOf("you") || located.size > 1) "are" else "is"}",
                         maxLines = 1,
                     )
                 },

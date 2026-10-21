@@ -387,6 +387,22 @@ describe("v1 stream", () => {
     });
     await eventually(() => ann.view<RoomListView>("rooms")?.rooms[1]?.pendingApprovals === 0);
 
+    // Who lets the model know where they are shows as they turn it on and off.
+    expect(ann.view<RoomView>("room:trip")?.sharingLocation).toBeUndefined();
+    const share = (shared: boolean) =>
+      fetch(`${server.url}/v1/a/robin/rooms/trip/location`, {
+        method: "PUT",
+        headers: { authorization: `Bearer ${tokens.Bo}`, "content-type": "application/json" },
+        body: JSON.stringify({ shared }),
+      });
+    expect((await share(true)).status).toBe(200);
+    await eventually(() => ann.view<RoomView>("room:trip")?.sharingLocation?.length === 1);
+    expect(ann.view<RoomView>("room:trip")?.sharingLocation).toEqual([
+      { id: "bo", displayName: "Bo" },
+    ]);
+    expect((await share(false)).status).toBe(200);
+    await eventually(() => ann.view<RoomView>("room:trip")?.sharingLocation === undefined);
+
     // A new room shows up in the room list.
     await post("/rooms", tokens.Bo!, { name: "Dinner", members: ["ann"] });
     await eventually(() =>

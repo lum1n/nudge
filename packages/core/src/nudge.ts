@@ -260,6 +260,7 @@ export class Nudge {
         entry: (placeholder) => this.models.vault.get(placeholder),
       },
       now,
+      (playerId) => changed({ kind: "location", playerId }),
     );
     this.appearance = new Looks(harness);
     this.rooms = new Rooms(

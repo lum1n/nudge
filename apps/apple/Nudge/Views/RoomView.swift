@@ -23,6 +23,14 @@ struct RoomView: View {
     /// The time, again every minute: enough to notice the room going quiet.
     @State private var now = Date.now
 
+    /// Whose location the assistant knows here, for everyone in the room to see; empty for none.
+    private var locationNote: String {
+        let names = (state?.sharingLocation ?? []).map { $0.id == me ? "you" : $0.displayName }
+        guard !names.isEmpty else { return "" }
+        let verb = names == ["you"] || names.count > 1 ? "are" : "is"
+        return "📍 Knows where \(names.joined(separator: " and ")) \(verb)"
+    }
+
     enum Sheet: String, Identifiable {
         case info, browser
         var id: String { rawValue }
@@ -31,6 +39,7 @@ struct RoomView: View {
     var body: some View {
         content
             .navigationTitle(state?.room?.name ?? "")
+            .navigationSubtitle(locationNote)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif

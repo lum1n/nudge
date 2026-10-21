@@ -14,6 +14,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.DesktopWindows
 import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.NotificationsActive
@@ -57,7 +58,9 @@ import nudge.client.observeRoomState
 import nudge.ffi.ModelMessage
 import nudge.ffi.ModelRole
 import nudge.ffi.NudgeClient
+import nudge.ffi.PersonalDetails
 import nudge.ffi.RoomExtension
+import nudge.ffi.RoomKind
 
 /**
  * About a room: its documents, connectors, MCP servers, browser and desktop, who is in it, what the
@@ -86,6 +89,7 @@ fun RoomInfoScreen(
     val room by observed.collectAsStateWithLifecycle()
     val state = room?.state?.collectAsStateWithLifecycle()?.value
     var extensions by remember { mutableStateOf<List<RoomExtension>?>(null) }
+    var personal by remember { mutableStateOf<PersonalDetails?>(null) }
     var modelView by remember { mutableStateOf<List<ModelMessage>?>(null) }
     var newFact by remember { mutableStateOf("") }
     var problem by remember { mutableStateOf<String?>(null) }
@@ -100,6 +104,7 @@ fun RoomInfoScreen(
     }
 
     LaunchedEffect(roomId) { run { extensions = client.roomExtensions(roomId) } }
+    LaunchedEffect(roomId) { personal = runCatching { client.personal() }.getOrNull() }
 
     Scaffold(
         containerColor = groupedBackground(),
@@ -191,6 +196,52 @@ fun RoomInfoScreen(
                     }),
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 )
+            }
+
+            // Whether the assistant knows where the player is here: always in their own room once
+            // a device shared it; in a shared room only once they turn it on, for anyone there.
+            val details = personal
+            when (state?.room?.kind) {
+                RoomKind.PERSONAL -> group(
+                    "Location",
+                    listOf { shapes ->
+                        SegmentedListItem(
+                            shapes = shapes,
+                            leadingContent = { Icon(Icons.Outlined.LocationOn, null) },
+                            supportingContent = {
+                                Text("Turn on Share where I am in your profile to change it.")
+                            },
+                        ) {
+                            Text(
+                                if (details?.location != null) "The assistant knows where you are here"
+                                else "Not shared",
+                            )
+                        }
+                    },
+                )
+                RoomKind.SHARED -> if (details != null) group(
+                    "Location",
+                    listOf { shapes ->
+                        val on = roomId in details.locationRooms
+                        SegmentedListItem(
+                            checked = on,
+                            onCheckedChange = { shared ->
+                                run { personal = client.shareLocationIn(roomId, shared) }
+                            },
+                            shapes = shapes,
+                            leadingContent = { Icon(Icons.Outlined.LocationOn, null) },
+                            supportingContent = {
+                                Text(
+                                    "Anyone here can then ask about what is near you. Everyone sees " +
+                                        "that you share it; the place stays hidden from them and the model." +
+                                        if (on && details.location == null) " Your devices haven't shared where you are yet." else "",
+                                )
+                            },
+                            trailingContent = { Switch(checked = on, onCheckedChange = null) },
+                        ) { Text("Let the assistant know where I am here") }
+                    },
+                )
+                else -> {}
             }
 
             val nudges = state?.nudges.orEmpty()

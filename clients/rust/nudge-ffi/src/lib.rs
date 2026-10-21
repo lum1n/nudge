@@ -206,6 +206,8 @@ pub struct RoomUpdate {
     pub approvals: Vec<Approval>,
     pub memory: Vec<Fact>,
     pub nudges: Vec<RoomNudge>,
+    /// The members whose location the model may know in the room.
+    pub sharing_location: Vec<Player>,
     /// Changes to the timeline: earlier items, then the view's, oldest first.
     pub timeline: Vec<TimelineChange>,
     pub can_load_earlier: bool,
@@ -875,6 +877,20 @@ impl NudgeClient {
             .into())
     }
 
+    /// Lets the model in a shared room know where the player is, for anyone there, or stops it.
+    pub async fn share_location_in(
+        &self,
+        room: String,
+        shared: bool,
+    ) -> Result<PersonalDetails, NudgeError> {
+        let api = self.client.api().clone();
+        Ok(
+            run(async move { api.share_location_in(&room, shared).await })
+                .await?
+                .into(),
+        )
+    }
+
     /// The player's profile: name, avatar, time zone, language and preferences.
     pub async fn profile(&self) -> Result<Profile, NudgeError> {
         let api = self.client.api().clone();
@@ -1232,6 +1248,11 @@ fn room_update(
         nudges: view.map_or_else(Vec::new, |view| {
             view.nudges.iter().cloned().map(Into::into).collect()
         }),
+        sharing_location: view
+            .and_then(|view| view.sharing_location.clone())
+            .map_or_else(Vec::new, |players| {
+                players.into_iter().map(Into::into).collect()
+            }),
         timeline: changes
             .into_iter()
             .map(|change| match change {

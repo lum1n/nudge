@@ -10,6 +10,7 @@ struct RoomInfoView: View {
     /// The room's view, kept by the room screen.
     let observed: ObservedRoom?
     @State private var extensions: [RoomExtension]?
+    @State private var personal: PersonalDetails?
     @State private var newFact = ""
     @State private var problem: String?
 
@@ -78,6 +79,37 @@ struct RoomInfoView: View {
                 } footer: {
                     Text("What the assistant knows in this room.")
                 }
+                // Whether the assistant knows where the player is here: always in their own room
+                // once a device shared it; in a shared room only once they turn it on.
+                if let personal, let kind = state?.room?.kind {
+                    switch kind {
+                    case .personal:
+                        Section {
+                            Label(
+                                personal.location == nil ? "Not shared" : "The assistant knows where you are here",
+                                systemImage: "location")
+                        } header: {
+                            Text("Location")
+                        } footer: {
+                            Text("Turn on Share where I am in your profile to change it.")
+                        }
+                    case .shared:
+                        let on = personal.locationRooms.contains(roomId)
+                        Section {
+                            Toggle(isOn: Binding(get: { on }, set: { shareLocation($0) })) {
+                                Label("Let the assistant know where I am here", systemImage: "location")
+                            }
+                        } header: {
+                            Text("Location")
+                        } footer: {
+                            Text(
+                                "Anyone here can then ask about what is near you. Everyone sees that you share it; the place stays hidden from them and the model."
+                                    + (on && personal.location == nil ? " Your devices haven't shared where you are yet." : ""))
+                        }
+                    default:
+                        EmptyView()
+                    }
+                }
                 if let nudges = state?.nudges, !nudges.isEmpty {
                     Section("Nudges") {
                         ForEach(nudges, id: \.id) { nudge in
@@ -128,6 +160,7 @@ struct RoomInfoView: View {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
             .task { await loadExtensions() }
+            .task { personal = try? await client.personal() }
         }
         #if os(macOS)
         .frame(minWidth: 460, minHeight: 520)
@@ -164,6 +197,10 @@ struct RoomInfoView: View {
 
     private func cancel(_ nudge: RoomNudge) {
         run { try await client.cancelNudge(nudgeId: nudge.id) }
+    }
+
+    private func shareLocation(_ shared: Bool) {
+        run { personal = try await client.shareLocationIn(room: roomId, shared: shared) }
     }
 
     private func set(_ ext: RoomExtension, _ enabled: Bool) {

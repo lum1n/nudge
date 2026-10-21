@@ -8,7 +8,7 @@ import {
 } from "@earendil-works/pi-durable";
 import type { Turn } from "../privacy/turn.ts";
 import type { VaultEntry } from "../privacy/vault.ts";
-import { DirectoryDoc } from "./directory.ts";
+import { DirectoryDoc, type DirectoryState } from "./directory.ts";
 import type { Players } from "./players.ts";
 import { ProfileDoc } from "./profiles.ts";
 
@@ -25,13 +25,18 @@ export type PersonalField = keyof typeof PERSONAL_FIELDS;
 // Stored in a document, so plain JSON. Placeholders only: the values are in the vault, owned by
 // the player (ADR 9).
 export type PersonalState = { [field in PersonalField]?: string } & {
-  location?: { placeholder: string; at: number };
+  /** The location's text, and its coordinates on their own, for tools that take them apart. */
+  location?: { placeholder: string; latitude?: string; longitude?: string; at: number };
+  /** Shared rooms where the player lets the model know where they are, for anyone there. */
+  rooms?: string[];
 };
 
 /** A player's details as they see them. */
 export type PersonalDetails = { [field in PersonalField]?: string } & {
   /** Where their device last said they were, and when. */
   location?: { text: string; at: number };
+  /** The shared rooms where they let the model know where they are. */
+  locationRooms?: string[];
 };
 
 /** Where a device is: coordinates, and the place it named, if any, such as a street address. */
@@ -86,6 +91,8 @@ export class Personal {
     private readonly players: Players,
     private readonly values: PersonalValues,
     private readonly now: () => number,
+    /** Who the model knows the location of changed in `playerId`'s rooms. */
+    private readonly changed: (playerId: string) => void = () => {},
   ) {}
 
   /** Undefined for a player who doesn't exist. */
@@ -100,7 +107,46 @@ export class Personal {
     const location = this.value(state.location?.placeholder);
     if (location !== undefined && state.location !== undefined)
       details.location = { text: location, at: state.location.at };
+    if (state.rooms !== undefined && state.rooms.length > 0)
+      details.locationRooms = [...state.rooms];
     return details;
+  }
+
+  /**
+   * Lets the model know where the player is in a shared room they are in, for anyone there, or
+   * stops it. Their personal room and private turns always have it; nowhere else does without this.
+   */
+  async shareLocation(
+    playerId: string,
+    roomId: string,
+    shared: boolean,
+    context: Context,
+  ): Promise<PersonalDetails> {
+    if ((await this.players.get(playerId, context)) === undefined)
+      throw new Error(`No player "${playerId}"`);
+    const room = (await this.harness.snapshot(DirectoryDoc, context))?.rooms[roomId];
+    if (room === undefined || !room.members.includes(playerId))
+      throw new InvalidPersonal(`You are not in a room "${roomId}"`);
+    if (room.kind !== "shared")
+      throw new InvalidPersonal("Where you are can be shared in shared rooms only");
+    await this.harness.commit(async (tx) => {
+      const state = await tx.doc(PersonalDoc, playerId, null);
+      const rooms = new Set(state.rooms ?? []);
+      if (shared) rooms.add(roomId);
+      else rooms.delete(roomId);
+      if (rooms.size === 0) delete state.rooms;
+      else state.rooms = [...rooms].sort();
+    }, context);
+    this.changed(playerId);
+    return (await this.get(playerId, context))!;
+  }
+
+  /** The members whose location the model may know in a room (see `sharersOf`). */
+  async sharingIn(roomId: string, context: Context): Promise<string[]> {
+    const directory = await this.harness.snapshot(DirectoryDoc, context);
+    return sharersOf(directory, roomId, (playerId) =>
+      this.harness.snapshot(PersonalDoc, playerId, context),
+    );
   }
 
   async update(
@@ -129,11 +175,28 @@ export class Personal {
     if (update.location === null) location = null;
     else if (update.location !== undefined) {
       const kept = this.samePlace(before.location?.placeholder, update.location);
-      location = {
-        placeholder:
-          kept ?? (await this.values.protect(locationText(update.location), "LOCATION", playerId)),
-        at: this.now(),
-      };
+      location =
+        kept !== undefined && before.location !== undefined
+          ? {
+              ...before.location,
+              // Kept before coordinates had values of their own.
+              ...(before.location.latitude === undefined
+                ? await this.coordinates(
+                    coordinatesIn(this.value(kept) ?? "") ?? update.location,
+                    playerId,
+                  )
+                : {}),
+              at: this.now(),
+            }
+          : {
+              placeholder: await this.values.protect(
+                locationText(update.location),
+                "LOCATION",
+                playerId,
+              ),
+              ...(await this.coordinates(update.location, playerId)),
+              at: this.now(),
+            };
     }
     await this.harness.commit(async (tx) => {
       const state = await tx.doc(PersonalDoc, playerId, null);
@@ -144,11 +207,30 @@ export class Personal {
       else if (location !== undefined) state.location = location;
     }, context);
     // Where someone was is not kept: an old location is forgotten once a new one takes its place.
-    const old = before.location?.placeholder;
-    if (old !== undefined && location !== undefined && location?.placeholder !== old) {
-      if (this.values.entry(old)?.owner === playerId) await this.values.forget(old);
+    const old = before.location;
+    if (old !== undefined && location !== undefined && location?.placeholder !== old.placeholder) {
+      for (const placeholder of [old.placeholder, old.latitude, old.longitude])
+        if (placeholder !== undefined && this.values.entry(placeholder)?.owner === playerId)
+          await this.values.forget(placeholder);
     }
+    // Rooms show whose location the model knows: one known or forgotten changes that.
+    const known = location === undefined ? before.location !== undefined : location !== null;
+    if ((before.location !== undefined) !== known) this.changed(playerId);
     return (await this.get(playerId, context))!;
+  }
+
+  /**
+   * The coordinates as values of their own, to the same four decimals as the text, so a tool that
+   * takes a latitude and a longitude, such as a weather service, gets numbers it can use.
+   */
+  private async coordinates(
+    location: { latitude: number; longitude: number },
+    playerId: string,
+  ): Promise<{ latitude: string; longitude: string }> {
+    return {
+      latitude: await this.values.protect(location.latitude.toFixed(4), "LATITUDE", playerId),
+      longitude: await this.values.protect(location.longitude.toFixed(4), "LONGITUDE", playerId),
+    };
   }
 
   private value(placeholder: string | undefined): string | undefined {
@@ -235,7 +317,8 @@ const LABELS: Record<PersonalField, string> = {
 /**
  * The `personal` section: the details of the player whose personal room this is, or whose
  * private turn it is, as placeholders. Nowhere else, so nobody can have the assistant hand them
- * to someone else, and not in side conversations, which talk to people outside.
+ * to someone else, and not in side conversations, which talk to people outside. In a shared room's
+ * other turns, only where the members who chose to share it there are.
  */
 export function personalSection(
   turn: (conversationId: ConversationId, context: Context) => Promise<Turn>,
@@ -251,13 +334,43 @@ export function personalSection(
       (r) => r.conversationId === input.conversationId,
     );
     if (room === undefined) return undefined;
+    const read = (playerId: string) => input.read.snapshot(PersonalDoc, playerId, context);
+    const locationLine = async (state: PersonalState, playerId: string) => {
+      const location = state.location;
+      if (location === undefined || !known(location.placeholder)) return undefined;
+      const profile = await input.read.snapshot(ProfileDoc, playerId, context);
+      const at = formatAt(location.at, profile?.timeZone ?? timeZone);
+      const { latitude, longitude } = location;
+      const coordinates =
+        latitude !== undefined && longitude !== undefined && known(latitude) && known(longitude)
+          ? `latitude ${latitude}, longitude ${longitude}; `
+          : "";
+      return `${location.placeholder} (${coordinates}as of ${at})`;
+    };
+
     const playerId =
       room.kind === "personal"
         ? room.members[0]
         : (await turn(input.conversationId, context)).privateTo?.playerId;
     const player = playerId === undefined ? undefined : directory?.players[playerId];
-    if (player === undefined) return undefined;
-    const state = await input.read.snapshot(PersonalDoc, player.id, context);
+    if (player === undefined) {
+      const lines: string[] = [];
+      for (const id of await sharersOf(directory, room.id, read)) {
+        const state = await read(id);
+        const line = state === undefined ? undefined : await locationLine(state, id);
+        const name = directory?.players[id]?.displayName;
+        if (line !== undefined && name !== undefined) lines.push(`- ${name}: ${line}`);
+      }
+      if (lines.length === 0) return undefined;
+      return [
+        `Where people here are now, as each chose to share it in this room, for what is near ` +
+          `them, the weather or the way somewhere. The values are kept from you: write the ` +
+          `placeholders as they are, and tools get the real values. Use them only for that.`,
+        ...lines,
+      ].join("\n");
+    }
+
+    const state = await read(player.id);
     if (state === undefined) return undefined;
     const lines: string[] = [];
     for (const field of Object.keys(PERSONAL_FIELDS) as PersonalField[]) {
@@ -265,11 +378,8 @@ export function personalSection(
       if (placeholder !== undefined && known(placeholder))
         lines.push(`- ${LABELS[field]}: ${placeholder}`);
     }
-    if (state.location !== undefined && known(state.location.placeholder)) {
-      const profile = await input.read.snapshot(ProfileDoc, player.id, context);
-      const at = formatAt(state.location.at, profile?.timeZone ?? timeZone);
-      lines.push(`- Where they are now: ${state.location.placeholder} (as of ${at})`);
-    }
+    const location = await locationLine(state, player.id);
+    if (location !== undefined) lines.push(`- Where they are now: ${location}`);
     if (lines.length === 0) return undefined;
     return [
       `${player.displayName}'s personal details, for filling in forms, writing to people and ` +
@@ -279,6 +389,28 @@ export function personalSection(
       ...lines,
     ].join("\n");
   });
+}
+
+/**
+ * The members whose location the model may know in a room: a personal room's owner once one is
+ * known, and in a shared room those who chose to share it there. The lobby has none.
+ */
+async function sharersOf(
+  directory: DirectoryState | undefined,
+  roomId: string,
+  read: (playerId: string) => Promise<PersonalState | undefined>,
+): Promise<string[]> {
+  const room = directory?.rooms[roomId];
+  if (room === undefined) return [];
+  if (room.kind === "personal") {
+    const owner = room.members[0];
+    return owner !== undefined && (await read(owner))?.location !== undefined ? [owner] : [];
+  }
+  if (room.kind !== "shared") return [];
+  const sharers: string[] = [];
+  for (const member of room.members)
+    if ((await read(member))?.rooms?.includes(roomId)) sharers.push(member);
+  return sharers;
 }
 
 /** To the hour, so a location that only moved a little doesn't change the prompt. */

@@ -209,6 +209,14 @@ export class Api {
     return this.request("PATCH", "/me/personal", update);
   }
 
+  /**
+   * Lets the model in a shared room know where the caller is, for anyone there, or stops it. The
+   * room view's `sharingLocation` shows who does.
+   */
+  shareLocation(room: string, shared: boolean): Promise<PersonalDetails> {
+    return this.request("PUT", `${roomPath(room)}/location`, { shared });
+  }
+
   /** The installed extensions that take settings from each player, with their schemas. */
   async playerSettings(): Promise<PlayerSettingsSchema[]> {
     return (await this.request<PlayerSettingsResponse>("GET", "/me/profile/extensions")).extensions;
