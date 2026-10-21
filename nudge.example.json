@@ -84,6 +84,11 @@
       "model": { "provider": "local", "modelId": "qwen2.5-3b" }
     }
   ],
+  "privacy": {
+    "$comment": "The local model that finds names, places and organisations the rules miss (ADR 14). deep: \"required\" (the default) refuses requests until it is downloaded and running, \"preferred\" sends them with the rules alone meanwhile, \"off\" never downloads it (about 260 MB, into server/models). allow lists words it should never hide, such as a shop it takes for a person.",
+    "deep": "required",
+    "allow": ["Kiwi"]
+  },
   "providers": [
     {
       "$comment": "Any OpenAI-compatible server, such as llama-server, Ollama or vLLM. apiKeyEnv names the environment variable holding its key; leave it out for keyless servers. Most local servers reject the developer role.",

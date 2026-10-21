@@ -294,6 +294,21 @@ export {
 export { addressDetector, nameDetector } from "./privacy/people.ts";
 export { AMBIGUOUS, CUES, FIRST_NAMES, LAST_NAMES } from "./privacy/name-lists.ts";
 export { Vault, type VaultEntry } from "./privacy/vault.ts";
+export {
+  type DeepDetector,
+  type DeepFinding,
+  DeepUnavailable,
+  pendingDeepDetector,
+} from "./privacy/deep/detector.ts";
+export { DeepScanner, type DeepMode, piecesOf, textsToScan } from "./privacy/deep/scanner.ts";
+export {
+  checkLocalModel,
+  ensureLocalModel,
+  LOCAL_MODEL,
+  localModelDir,
+  openLocalModel,
+  startLocalModel,
+} from "./privacy/deep/local-model.ts";
 export { keepsPlaceholders } from "./privacy/tool-values.ts";
 export type { RedactedHistory };
 export { currentTurn, inTurn, type Owner, type Turn } from "./privacy/turn.ts";
@@ -383,6 +398,11 @@ async function assistantOptions(
     extensions: await loadExtensions(assistant.extensions ?? []),
     ...(assistant.budget === undefined ? {} : { budget: assistant.budget }),
     ...overrides,
+    privacy: {
+      ...(config.privacy?.deep === undefined ? {} : { deepMode: config.privacy.deep }),
+      ...(config.privacy?.allow === undefined ? {} : { allow: config.privacy.allow }),
+      ...overrides.privacy,
+    },
   };
 }
 

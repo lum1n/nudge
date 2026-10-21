@@ -49,6 +49,14 @@ import { Memory } from "./memory/memory.ts";
 import { Nudges } from "./nudges/nudges.ts";
 import { RedactingModels, type RedactionOptions } from "./models/redacting-models.ts";
 import { builtinDetectors, type PiiDetector } from "./privacy/detectors.ts";
+import type { DeepDetector } from "./privacy/deep/detector.ts";
+import {
+  DeepScanner,
+  DeepSeenDoc,
+  type DeepMode,
+  MAX_SEEN,
+  textsToScan,
+} from "./privacy/deep/scanner.ts";
 import { mapStrings, redactContext } from "./privacy/redact.ts";
 import { nameParts } from "./privacy/people.ts";
 import { type ToolValues, withToolValues } from "./privacy/tool-values.ts";
@@ -66,6 +74,15 @@ export type PrivacyOptions = {
   /** Detectors to run instead of the built-in ones. Names are protected separately. */
   readonly detectors?: readonly PiiDetector[];
   readonly onRequest?: RedactionOptions["onRequest"];
+  /**
+   * The local model that reads requests first (ADR 14), shared by a host's assistants. Without
+   * one, as in tests and on Durable Objects, only the rules run.
+   */
+  readonly deep?: DeepDetector;
+  /** Default "required": requests are refused while `deep` can't run. */
+  readonly deepMode?: DeepMode;
+  /** Words the local model never hides, such as a shop's name it keeps taking for a person. */
+  readonly allow?: readonly string[];
 };
 
 export type NudgeOptions = {
@@ -141,6 +158,7 @@ type Parts = {
   readonly host: HostBase;
   readonly detectors: readonly PiiDetector[];
   readonly installed: readonly SetUpExtension[];
+  readonly scanner: DeepScanner | undefined;
   readonly report: (error: unknown) => void;
   readonly events: RoomEvents;
   readonly spending: Spending;
@@ -180,7 +198,13 @@ export class Nudge {
   /** The assistant's own detectors, without its extensions'. */
   private readonly detectors: readonly PiiDetector[];
   private installed: readonly SetUpExtension[];
+  private readonly scanner: DeepScanner | undefined;
   private readonly report: (error: unknown) => void;
+
+  /** Tools whose results the local model leaves to the rules; see `ExtensionParts.publicTools`. */
+  private publicTools(): ReadonlySet<string> {
+    return publicToolsOf(this.installed);
+  }
 
   /** What reloaded extensions' tools run with; see `withToolValues`. */
   private get toolValues(): ToolValues {
@@ -204,7 +228,15 @@ export class Nudge {
     this.host = parts.host;
     this.detectors = parts.detectors;
     this.installed = parts.installed;
+    this.scanner = parts.scanner;
     this.report = parts.report;
+    const scanner = this.scanner;
+    if (scanner !== undefined)
+      this.models.scan = (input) =>
+        scanner.protectIn(
+          "messages" in input ? textsToScan(input, this.publicTools()) : input,
+          this.models.vault,
+        );
     this.events = parts.events;
     this.spending = parts.spending;
     this.timeZone = parts.timeZone;
@@ -381,6 +413,29 @@ export class Nudge {
         context,
       );
       models.refuse = () => spending.refusal();
+      const deepMode = options.privacy?.deepMode ?? "required";
+      const deep = options.privacy?.deep;
+      const report = options.onReport ?? (() => {});
+      const scanner =
+        deep === undefined || deepMode === "off"
+          ? undefined
+          : new DeepScanner({
+              detector: deep,
+              mode: deepMode,
+              allow: [displayName, ...(options.privacy?.allow ?? [])],
+              seen: await harness.snapshot(DeepSeenDoc, context),
+              save: (model, keys) =>
+                harness.commit(async (tx) => {
+                  const doc = await tx.doc(DeepSeenDoc);
+                  if (doc.model !== model) {
+                    doc.model = model;
+                    doc.keys.splice(0);
+                  }
+                  doc.keys.push(...keys);
+                  if (doc.keys.length > MAX_SEEN) doc.keys.splice(0, doc.keys.length - MAX_SEEN);
+                }, BACKGROUND_CONTEXT),
+              report,
+            });
       const nudge = new Nudge({
         harness,
         displayName,
@@ -392,7 +447,8 @@ export class Nudge {
         host,
         detectors,
         installed,
-        report: options.onReport ?? (() => {}),
+        scanner,
+        report,
         events,
         spending,
         timeZone,
@@ -692,6 +748,12 @@ export class Nudge {
     const vault = this.models.vault;
     const before = vault.version;
     const owner = draft.private === true ? draft.author?.playerId : undefined;
+    // What the local model finds now is the author's when private. Without it the message is
+    // still stored; the request it leads to waits for the model, or is refused.
+    await this.scanner?.protectIn([draft.text], vault, {
+      ...(owner === undefined ? {} : { owner }),
+      quiet: true,
+    });
     const text = vault.redact(draft.text, this.models.detectors, owner);
     await this.models.flush();
     if (owner !== undefined && vault.version !== before) this.changes.emit({ kind: "vault" });
@@ -1066,6 +1128,10 @@ function onByDefault(room: Pick<Room, "kind">, installed: SetUpExtension): boole
 
 function enabledIn(room: Pick<Room, "kind" | "extensions">, installed: SetUpExtension): boolean {
   return room.extensions?.[installed.extension.name] ?? onByDefault(room, installed);
+}
+
+function publicToolsOf(installed: readonly SetUpExtension[]): Set<string> {
+  return new Set(installed.flatMap(({ publicTools }) => publicTools ?? []));
 }
 
 function withExtensionDetectors(

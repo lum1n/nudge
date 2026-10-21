@@ -136,6 +136,11 @@ export const MAX_ROUTE_BODY = 64 * 1024;
 export type ExtensionParts = Omit<Extension, "name"> & {
   /** Personal data the extension knows how to find; they run after the assistant's own. */
   readonly detectors?: readonly PiiDetector[];
+  /**
+   * Tools whose results are the public web, such as a web search: the local model doesn't read
+   * them, so the names of shops and places they return stay readable. Known values stay hidden.
+   */
+  readonly publicTools?: readonly string[];
   /** A WebSocket per room for the extension's own client UI. */
   readonly roomSocket?: RoomSocketHandler;
   /** HTTP routes of its own, such as for other assistants or webhooks to call. */
@@ -254,6 +259,7 @@ export type SetUpExtension = {
   /** Default every kind; see `ExtensionUse.rooms`. */
   readonly rooms?: readonly RoomKind[];
   readonly detectors: readonly PiiDetector[];
+  readonly publicTools?: readonly string[];
   readonly roomSocket?: RoomSocketHandler;
   readonly routes: readonly ExtensionRoute[];
   readonly models: readonly { readonly provider: string; readonly modelId: string }[];
@@ -299,6 +305,7 @@ export async function setUpExtension(
   const secrets = new SecretStore(dataDir === undefined ? undefined : join(dataDir, "secrets"));
   const {
     detectors = [],
+    publicTools,
     roomSocket,
     routes = [],
     models = [],
@@ -327,6 +334,7 @@ export async function setUpExtension(
     routes,
     models,
     approvals,
+    ...(publicTools === undefined ? {} : { publicTools }),
     ...(denials === undefined ? {} : { denials }),
     ...(problems === undefined ? {} : { problems }),
     ...(roomSocket === undefined ? {} : { roomSocket }),

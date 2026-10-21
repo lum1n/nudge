@@ -118,6 +118,11 @@ export class Vault {
     return true;
   }
 
+  /** Whether the vault hides `value` already. */
+  knows(value: string): boolean {
+    return this.byKey.has(vaultKey(value));
+  }
+
   /** The entry behind a placeholder, forgotten ones included. */
   get(placeholder: string): VaultEntry | undefined {
     return this.byPlaceholder.get(placeholder);

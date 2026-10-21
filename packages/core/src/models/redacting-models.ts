@@ -23,6 +23,7 @@ import {
   type ModelsSimpleStreamOptions,
 } from "@earendil-works/pi-ai";
 import type { PiiDetector } from "../privacy/detectors.ts";
+import { DeepUnavailable } from "../privacy/deep/detector.ts";
 import { mapStrings, redactContext, rehydrateMessage } from "../privacy/redact.ts";
 import type { Vault, VaultEntry } from "../privacy/vault.ts";
 
@@ -50,6 +51,7 @@ export class RedactingModels implements Models {
   private saving: Promise<void> = Promise.resolve();
   private ownDetectors: readonly PiiDetector[];
   private ownRefuse: () => string | undefined = () => undefined;
+  private ownScan: Scan = async () => {};
   private valued: RedactingModels | undefined;
 
   /**
@@ -81,6 +83,18 @@ export class RedactingModels implements Models {
 
   set refuse(refuse: () => string | undefined) {
     this.ownRefuse = refuse;
+  }
+
+  /**
+   * Has the local model read a request first, so what it finds is in the vault before redaction
+   * (ADR 14). Throws `DeepUnavailable` when the request must not go out without it.
+   */
+  get scan(): Scan {
+    return this.root?.scan ?? this.ownScan;
+  }
+
+  set scan(scan: Scan) {
+    this.ownScan = scan;
   }
 
   /**
@@ -163,6 +177,18 @@ export class RedactingModels implements Models {
     context: ClassifierContext,
     options?: ModelsClassifierOptions,
   ): Promise<ClassifierResult> {
+    this.checkAllowed();
+    const texts: string[] = [];
+    const collect = (text: string) => {
+      texts.push(text);
+      return text;
+    };
+    mapStrings(context.state, collect);
+    for (const question of Object.values(context.questions)) {
+      collect(question.instructions);
+      mapStrings(question.criteria, collect);
+    }
+    await this.scanFirst(texts);
     const redact = (text: string) => this.vault.redact(text, this.detectors);
     const redacted: ClassifierContext = {
       ...context,
@@ -178,7 +204,6 @@ export class RedactingModels implements Models {
         ]),
       ),
     };
-    this.checkAllowed();
     await this.flush();
     return this.inner.classify(model, redacted, options);
   }
@@ -188,6 +213,10 @@ export class RedactingModels implements Models {
     context: ImagesContext,
     options?: ModelsImagesOptions,
   ): Promise<AssistantImages> {
+    this.checkAllowed();
+    await this.scanFirst(
+      context.input.flatMap((block) => (block.type === "text" ? [block.text] : [])),
+    );
     const redacted: ImagesContext = {
       input: context.input.map((block) =>
         block.type === "text"
@@ -195,7 +224,6 @@ export class RedactingModels implements Models {
           : block,
       ),
     };
-    this.checkAllowed();
     await this.flush();
     const result = await this.inner.generateImages(model, redacted, options);
     return {
@@ -252,6 +280,7 @@ export class RedactingModels implements Models {
 
   private async prepare(model: Model<Api>, context: Context): Promise<Context> {
     this.checkAllowed();
+    await this.scanFirst(context);
     const redacted = redactContext(context, this.vault, this.detectors);
     await this.flush();
     this.options.onRequest?.({ model: `${model.provider}/${model.id}`, context: redacted });
@@ -329,6 +358,19 @@ export class RedactingModels implements Models {
     }
   }
 
+  /** Runs `scan`; a request it can't run for is refused, so nothing goes out unread. */
+  private async scanFirst(input: Context | readonly string[]): Promise<void> {
+    try {
+      await this.scan(input);
+    } catch (error) {
+      if (error instanceof DeepUnavailable)
+        throw new RequestRefused(
+          `${error.message}, so nothing was sent to the model. Try again soon.`,
+        );
+      throw error;
+    }
+  }
+
   private checkAllowed(): void {
     const refusal = this.refuse();
     if (refusal !== undefined) throw new RequestRefused(refusal);
@@ -338,6 +380,9 @@ export class RedactingModels implements Models {
     throw new Error("Redaction is not ready: the vault is not loaded yet");
   }
 }
+
+/** What `RedactingModels.scan` reads: a whole request, or the texts of a classifier or image one. */
+export type Scan = (input: Context | readonly string[]) => Promise<void>;
 
 /** Puts nothing back: what `rehydrateEvent` uses when placeholders are to stay. */
 const KEEP_PLACEHOLDERS = { rehydrate: (text: string) => text } as Vault;

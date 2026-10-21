@@ -25,10 +25,23 @@ A player's first name and family name are also protected on their own, so "/home
 
 **History is rewritten once when the detectors change.** `REDACTION_VERSION` goes up when they find more. Opening an assistant whose `<database>.redaction` holds an older number runs `redactHistory` first, so old messages, memory and thinking lose the values at rest too, not only in requests.
 
-**Next: a local model.** Rules miss names without a cue, such as "hos Vethjem". The plan is a small multilingual NER model (GLiNER-style, ONNX on the CPU) that reads each new message and personal tool result once, when it is stored, and adds what it finds to the vault. Exact matching then hides those values in every later request. Requests fail closed while the model is missing. That is not built yet.
+**A local model reads what the rules can't.** Rules miss names without a cue, such as "hos Vethjem". A GLiNER model (`urchade/gliner_multi-v2.1`, Apache-2.0, as onnx-community exports it to ONNX) runs on the CPU in a child process of the server, through `onnxruntime-node`. It is asked for people, street addresses, cities, locations, organisations, schools, kindergartens and companies, and they become `NAME`, `ADDRESS`, `PLACE` and `ORG`. What it finds goes into the vault, and exact matching hides it in every later request.
+
+- **Where it reads:** every request, before redaction: what people wrote, tool results, and prompt sections made from the assistant's data (memory, lists, calendar, personal details). What the model wrote itself only holds what it was shown, so it isn't read. A message is also read when it is sent, so what a private message reveals is its author's alone.
+- **Once:** text is read in lines of at most 200 words. Lines without a capital letter or a digit are skipped. Each line's hash is kept in `nudge.deepSeen`, so a restart doesn't read every room again.
+- **Public results stay readable:** an extension names its tools whose results are the public web (`publicTools`). Web search and `read_page` do, so restaurants in search results aren't hidden. Values the vault already knows are still hidden there.
+- **What it gets wrong:** its spans run long ("Vethjem for katten", "Søster Helene"), so words in lower case, family words and titles at either end are dropped, and lists are split ("Priya and Daniel"). Pronouns, family words, words without a capital, the big cities and the assistant's own name are never hidden, nor words in `privacy.allow`. Brands it takes for organisations ("Tesla", "Kiwi") are hidden; `allow` keeps them readable.
+- **Fail closed:** while the model is missing (downloading, or broken), requests are refused with a message saying so, and nothing is sent. `privacy.deep: "preferred"` sends them with the rules alone instead, and `"off"` never downloads it. Messages are stored either way and read once the model runs.
+- **Download:** `nudge serve` starts the download into `server/models` beside the config when it starts, even before the server is set up. `nudge chat` does it the first time. Each file is checked against the sha256 Nudge pins. `nudge doctor` checks the hashes again and that the model finds "Vethjem".
+- **Made smaller, not less accurate:** the original file is 1.2 GB and takes 1.7 GB of memory. onnx-community's int8 and uint8 exports, and dynamic int8 of our own, find nothing, because mDeBERTa's activations don't survive it; their 4-bit export misses "Vethjem". `packages/core/scripts/local-model.py` makes our own from the original instead. The vocabulary keeps the 135k of 250k pieces in Latin script, with the embedding and tokenizer renumbered; a piece with another script's letters can't match Latin text, so Norwegian and English tokenize exactly as before. The embedding is stored in 4 bits and the encoder's matrices in 8, weights only, so the activations stay in full precision. The result is 260 MB, finds the same 61 of 61, takes about 650 MB in memory and about 35 ms for a short message. Names in other scripts (Cyrillic, Chinese) aren't read. The files are published as assets of a GitHub release (`local-model-1`), pinned by hash.
+- **Only while there is reading to do:** the process stops after two minutes without a call and starts again in about a second, so an idle server holds none of that memory.
+- **Not on Cloudflare:** a Durable Object can't run it, so there only the rules run.
+
+On a test set of 36 Norwegian and English messages, the rules hide 38 of 61 names, places, addresses and organisations; with the model all 61 are hidden. Its false finds there were pronouns, family words and a shop chain.
 
 What this still doesn't do:
 
 - Images pass through as before.
 - The model can infer from topics.
-- Rules hide some public names, such as hosts below the top list. **Model view** shows what was hidden.
+- Rules and the model hide some public names, such as hosts below the top list and brands. **Model view** shows what was hidden.
+- Tool declarations aren't read.

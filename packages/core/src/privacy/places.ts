@@ -45,6 +45,13 @@ export function placeDetector(readable: readonly string[] = READABLE_PLACES): Pi
 /** What a named place of care, school or club is, after its name: "Skogkanten Barnehage". */
 const ORG_TYPES =
   "(?i:barnehagen?|barneskolen?|ungdomsskolen?|skolen?|skulen?|videregående|dyreklinikk(?:en)?|dyresykehus|veterinær(?:klinikk|kontor)?|legesenter(?:et)?|legekontor(?:et)?|tannlege(?:senter)?|tannklinikk|tannhelse|fysioterapi|kiropraktor|helsestasjon|sykehjem|menighet|idrettslag|kindergarten|preschool|school|clinic|veterinary)|VGS|SFO|AKS|IL|IF|FK|SK|AS|ASA|ANS|DA";
+const TRAILING_TYPE = new RegExp(`^(.*?\\S)[ \\t]+(?:${ORG_TYPES})$`, "u");
+
+/** An organisation's name without the kind of place after it: "Skogkanten Barnehage" → "Skogkanten". */
+export function withoutOrgType(name: string): string {
+  return TRAILING_TYPE.exec(name)?.[1] ?? name;
+}
+
 /** Capitalized words that start a phrase rather than a name: "Den barnehagen", "Our school". */
 const NOT_NAMES = new Set(
   "den det de denne dette disse min mitt mine din ditt dine vår vårt våre hans hennes deres en ei et ny nye gamle hver alle ingen noen hvilken hvilke the a an my our your his her their this that every any some which new old".split(

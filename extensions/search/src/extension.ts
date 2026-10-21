@@ -269,6 +269,8 @@ export function searchExtension(options: SearchOptions = {}) {
 
       return {
         tools: [search, read],
+        // The public web: shops and places in results stay readable (ADR 14).
+        publicTools: [search.name, read.name],
         sections: [
           section(
             "search",

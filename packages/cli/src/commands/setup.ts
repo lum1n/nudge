@@ -97,7 +97,7 @@ export async function setup(configPath: string): Promise<void> {
       configPath,
       open: (config, assistant) =>
         openAssistant(config, assistant, context, {
-          ...hostOptions(assistant),
+          ...hostOptions(assistant, config, configPath),
           models: buildModels(config.providers, keys.credentialsFor(assistant.name)),
         }),
       context,

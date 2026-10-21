@@ -6,6 +6,7 @@ allowBuilds:
   "@google/genai": false
   better-sqlite3-multiple-ciphers: true
   esbuild: true
+  onnxruntime-node: false
   protobufjs: false
   workerd: true
 minimumReleaseAgeExclude:

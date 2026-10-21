@@ -6,15 +6,20 @@ import {
   buildModels,
   builtinDetectors,
   checkExtensions,
+  checkLocalModel,
   databaseEncryption,
   databaseKey,
   DEFAULT_MODEL,
   keyFile,
   loadConfig,
+  LOCAL_MODEL,
+  localModelDir,
+  openLocalModel,
   ServerKeys,
   serverKeysDir,
   Vault,
 } from "@nudge/core";
+import { modelsDir } from "../host.ts";
 
 export type DoctorOptions = {
   readonly config: string;
@@ -58,6 +63,9 @@ export async function doctor(options: DoctorOptions): Promise<boolean> {
     check(false, `config ${options.config}: ${(error as Error).message}`);
     return false;
   }
+
+  const deep = config.privacy?.deep ?? "required";
+  if (deep !== "off") await checkDeep(check, modelsDir(options.config), deep);
 
   const keys = new ServerKeys(serverKeysDir(options.config));
   const ping = async (models: Models, label: string, provider: string, modelId: string) => {
@@ -137,6 +145,43 @@ export async function doctor(options: DoctorOptions): Promise<boolean> {
     if (options.ping && auth !== undefined) await ping(models, label, ref.provider, ref.modelId);
   }
   return ok;
+}
+
+/** The local model (ADR 14): its files, their hashes, and that it finds a name the rules miss. */
+async function checkDeep(
+  check: (passed: boolean, text: string) => void,
+  dir: string,
+  mode: "required" | "preferred",
+): Promise<void> {
+  const problems = await checkLocalModel(dir);
+  if (problems.length > 0) {
+    const missing = problems.every((problem) => problem.includes("missing"));
+    check(
+      mode === "preferred",
+      missing
+        ? `local name finder: not downloaded yet to ${localModelDir(dir)}; nudge serve and nudge chat download it (about 260 MB)${mode === "required" ? ", and refuse requests until then" : ""}`
+        : `local name finder: ${problems.join("; ")}`,
+    );
+    return;
+  }
+  try {
+    const model = await openLocalModel(localModelDir(dir));
+    try {
+      const sample = "Vi har time hos Vethjem på torsdag.";
+      const started = performance.now();
+      const [found = []] = await model.find([sample]);
+      const ms = Math.round(performance.now() - started);
+      const names = found.map((finding) => sample.slice(finding.start, finding.end));
+      check(
+        names.some((name) => name.includes("Vethjem")),
+        `local name finder: ${LOCAL_MODEL.name} found ${JSON.stringify(names)} in ${ms} ms`,
+      );
+    } finally {
+      await model.close?.();
+    }
+  } catch (error) {
+    check(false, `local name finder: ${(error as Error).message}`);
+  }
 }
 
 const PRIVACY_SAMPLES: readonly (readonly [string, string])[] = [
