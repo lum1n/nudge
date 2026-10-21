@@ -40,6 +40,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="nudge" android:host="pair" />
                 <data android:scheme="nudge" android:host="join" />
+                <data android:scheme="nudge" android:host="sign-in" />
             </intent-filter>
         </activity>
 

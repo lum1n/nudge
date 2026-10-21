@@ -148,6 +148,12 @@ impl Api {
         self.request(Method::GET, &["me"], &[], NO_BODY).await
     }
 
+    /// Signs in the browser whose QR code holds sign-in `id`, as the caller.
+    pub async fn approve_sign_in(&self, id: &str) -> Result<(), ApiError> {
+        self.request_empty(Method::POST, &["sign-in", id], &[], NO_BODY)
+            .await
+    }
+
     /// Revokes this client's own token, and forgets it.
     pub async fn sign_out(&self) -> Result<(), ApiError> {
         self.request_empty(Method::DELETE, &["me", "token"], &[], NO_BODY)

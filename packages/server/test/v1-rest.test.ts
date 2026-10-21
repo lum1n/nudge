@@ -28,6 +28,8 @@ import {
   RoomsResponse,
   type RoomView,
   ServerFrame,
+  SignInResponse,
+  SignInStatusResponse,
   type TimelineItem,
   TimelineResponse,
   TokensResponse,
@@ -495,6 +497,47 @@ describe("v1 HTTP", () => {
       },
     ]);
     expect((await call("GET", "/admin/tokens", { token: tokens.Ann })).json.tokens).toHaveLength(4);
+  });
+
+  it("signs a browser in when an app approves its QR code", async () => {
+    const at = async (method: string, path: string, token?: string) => {
+      const response = await fetch(`${server.url}/v1${path}`, {
+        method,
+        headers: token === undefined ? {} : { authorization: `Bearer ${token}` },
+      });
+      const text = await response.text();
+      return { status: response.status, json: (text === "" ? undefined : JSON.parse(text)) as any };
+    };
+    const started = await at("POST", "/sign-in");
+    expect(started.status).toBe(201);
+    expect(Value.Check(SignInResponse, started.json)).toBe(true);
+    const { id, secret, link } = started.json as SignInResponse;
+    expect(link.startsWith("nudge://sign-in?")).toBe(true);
+    expect(Object.fromEntries(new URL(link).searchParams)).toEqual({
+      server: "https://nudge.example",
+      request: id,
+    });
+    expect(link).not.toContain(secret);
+
+    // Only the browser, with its secret, learns the answer.
+    expect((await at("GET", `/sign-in/${id}`, secret)).json).toEqual({ status: "waiting" });
+    expect((await at("GET", `/sign-in/${id}`)).status).toBe(404);
+    expect((await at("GET", `/sign-in/${id}`, id)).status).toBe(404);
+
+    // An app approves it with its own token; only once.
+    expect((await call("POST", `/sign-in/${id}`)).status).toBe(401);
+    expect((await call("POST", `/sign-in/nope`, { token: tokens.Bo })).status).toBe(404);
+    expect((await call("POST", `/sign-in/${id}`, { token: tokens.Bo })).status).toBe(204);
+    expect((await call("POST", `/sign-in/${id}`, { token: tokens.Ann })).status).toBe(404);
+
+    const approved = await at("GET", `/sign-in/${id}`, secret);
+    expect(Value.Check(SignInStatusResponse, approved.json)).toBe(true);
+    expect(approved.json).toMatchObject({ status: "approved", assistant: "robin" });
+    const paired = await call("POST", "/pair", {
+      body: { code: approved.json.code, client: { name: "Firefox", platform: "web" } },
+      schema: PairResponse,
+    });
+    expect(paired.json.player).toEqual({ id: "bo", displayName: "Bo" });
   });
 
   it("keeps a player's own memory, shared with their rooms only when they say so", async () => {

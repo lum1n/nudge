@@ -87,6 +87,8 @@ final class AppModel {
     var pendingLink: PairingLink?
     /// A join link: an admin elsewhere invited the player.
     var pendingJoin: JoinLink?
+    /// A sign-in link from the QR code of a browser that shows the web UI.
+    var pendingSignIn: SignInLink?
     /// Why the app signed out on its own, for the sign-in screen.
     var signedOutBecause: String?
     /// The servers this device owns, and the exe.dev token it makes new ones with.
@@ -539,10 +541,32 @@ final class AppModel {
     }
 
     /// A `nudge://pair` link: sign in with it, or ask first when signed in elsewhere. A
-    /// `nudge://join` link: ask to join that assistant from home.
+    /// `nudge://join` link: ask to join that assistant from home. A `nudge://sign-in` link: ask to
+    /// sign in the browser that shows it.
     func handle(_ url: URL) {
         if let link = PairingLink(url) { pendingLink = link }
         if let link = JoinLink(url) { pendingJoin = link }
+        if let link = SignInLink(url) { pendingSignIn = link }
+    }
+
+    /// Signs in the browser that shows `link`'s QR code as the player, at an assistant on the server
+    /// the link names, home first; returns that assistant's name. A browser may reach the server by
+    /// another address than this device, so the other assistants are asked too: only the server that
+    /// made the QR code knows its request, and the others answer 404 or 401.
+    func approveSignIn(_ link: SignInLink) async throws -> String {
+        let sessions = (session.map { [$0] } ?? []) + places
+        let named = sessions.filter {
+            $0.account.server.trimmingCharacters(in: ["/"]) == link.server.trimmingCharacters(in: ["/"])
+        }
+        for candidate in named + sessions.filter({ place in !named.contains { $0 === place } }) {
+            do {
+                try await candidate.client.approveSignIn(request: link.request)
+                return candidate.account.assistantName
+            } catch NudgeError.Status(let status, _) where status == 401 || status == 404 {
+                continue
+            }
+        }
+        throw SignInProblem.unknown(host: URL(string: link.server)?.host() ?? link.server)
     }
 
     /// Joins the assistant a link names, with the home vouching for the player; an admin there
@@ -763,6 +787,17 @@ enum JoinProblem: LocalizedError {
     case home
 
     var errorDescription: String? { "That is your home." }
+}
+
+enum SignInProblem: LocalizedError {
+    case unknown(host: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .unknown(let host):
+            "That code has expired or was used, or none of your assistants is on \(host). Reload the sign-in page for a new one."
+        }
+    }
 }
 
 /// How setting a server up ended for this device.

@@ -222,6 +222,24 @@ final class ClientTests: XCTestCase {
         }
     }
 
+    func testSignInLinks() async throws {
+        let link = SignInLink(URL(string: "nudge://sign-in?server=https%3A%2F%2Fnudge.example%2Fx&request=r1")!)
+        XCTAssertEqual(link, SignInLink(server: "https://nudge.example/x", request: "r1"))
+        for bad in [
+            "nudge://sign-in?server=ftp%3A%2F%2Fx&request=r1",
+            "nudge://sign-in?server=https%3A%2F%2Fx",
+            "nudge://join?server=https%3A%2F%2Fx&request=r1",
+        ] {
+            XCTAssertNil(SignInLink(URL(string: bad)!), bad)
+        }
+        do {
+            try await client(MemoryTokens(server.ann)).approveSignIn(request: "expired")
+            XCTFail("not refused")
+        } catch NudgeError.Status(let status, _) {
+            XCTAssertEqual(status, 404)
+        }
+    }
+
     func testKeepsPersonalDetailsAndALocation() async throws {
         let home = try client(MemoryTokens(server.ann))
         let details = try await home.updatePersonal(

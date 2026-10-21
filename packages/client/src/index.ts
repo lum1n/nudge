@@ -4,6 +4,8 @@ export {
   type ApiOptions,
   listAssistants,
   memoryTokens,
+  signInStatus,
+  startSignIn,
   type TokenStore,
 } from "./api.ts";
 export {

@@ -44,6 +44,7 @@ import {
   type PairingCodeResponse,
   PairRequest,
   type PairResponse,
+  type SignInResponse,
   type PlayerMemoryResponse,
   type PlayerResponse,
   type PlayersResponse,
@@ -85,6 +86,7 @@ import { bodyLimit } from "hono/body-limit";
 import type { Static, TSchema } from "typebox";
 import { Value } from "typebox/value";
 import type { Hubs } from "./hub.ts";
+import { SignInRequests, signInLink } from "./sign-in.ts";
 
 const context = BACKGROUND_CONTEXT;
 
@@ -157,6 +159,28 @@ export function restRoutes(options: RestOptions): Hono {
       ),
     } satisfies AssistantsResponse),
   );
+
+  // The web UI's sign-in by QR code: the browser starts and asks without a token, an app that is
+  // signed in to one of the assistants approves.
+  const signIns = new SignInRequests();
+
+  app.post("/sign-in", (c) => {
+    const started = signIns.start();
+    if (started === undefined)
+      throw new HttpError(429, "Too many sign-ins waiting; try again soon");
+    const server = options.publicUrl() ?? requestOrigin(c.req.raw, options.trustProxy());
+    return c.json(
+      { ...started, link: signInLink(server, started.id) } satisfies SignInResponse,
+      201,
+    );
+  });
+
+  app.get("/sign-in/:id", (c) => {
+    const secret = /^Bearer\s+(\S+)$/i.exec(c.req.header("authorization") ?? "")?.[1];
+    const status = secret === undefined ? undefined : signIns.status(c.req.param("id"), secret);
+    if (status === undefined) throw new HttpError(404, "No such sign-in, or it expired");
+    return c.json(status);
+  });
 
   const findAssistant: MiddlewareHandler<Env> = async (c, next) => {
     const name = c.req.param("assistant") ?? "";
@@ -240,6 +264,17 @@ export function restRoutes(options: RestOptions): Hono {
   api.all("/ext/:extension/*", extensionRoute);
 
   api.use(authenticate);
+
+  // Signs in the browser that shows the QR code as the caller, with a pairing code it trades.
+  api.post("/sign-in/:id", async (c) => {
+    const id = c.req.param("id");
+    if (!signIns.pending(id))
+      throw new HttpError(404, "That QR code expired or was used; show a new one");
+    const { code } = await c.var.nudge.players.pairingCode(c.var.credential.player.id, context);
+    if (!signIns.approve(id, c.var.name, code))
+      throw new HttpError(409, "That QR code was used meanwhile");
+    return c.body(null, 204);
+  });
 
   api.get("/me", async (c) => {
     const { player, clientId } = c.var.credential;

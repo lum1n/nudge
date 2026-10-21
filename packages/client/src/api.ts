@@ -42,6 +42,8 @@ import type {
   RoomsResponse,
   SaveExtensionSetupsRequest,
   Sealed,
+  SignInResponse,
+  SignInStatusResponse,
   TimelineResponse,
   TokenInfo,
   TokensResponse,
@@ -98,6 +100,27 @@ export async function listAssistants(
   return read(await fetcher(`${trim(server)}/v1/a`));
 }
 
+/** Starts signing a browser in by QR code: an app signed in to `server` approves `link`. */
+export async function startSignIn(
+  server: string,
+  fetcher: typeof fetch = fetch,
+): Promise<SignInResponse> {
+  return read(await fetcher(`${trim(server)}/v1/sign-in`, { method: "POST" }));
+}
+
+/** Whether an app approved the sign-in yet; a 404 once it expired. */
+export async function signInStatus(
+  server: string,
+  started: Pick<SignInResponse, "id" | "secret">,
+  fetcher: typeof fetch = fetch,
+): Promise<SignInStatusResponse> {
+  return read(
+    await fetcher(`${trim(server)}/v1/sign-in/${encodeURIComponent(started.id)}`, {
+      headers: { authorization: `Bearer ${started.secret}` },
+    }),
+  );
+}
+
 /** Protocol v1's HTTP commands for one assistant, signed in with the token in `tokens`. */
 export class Api {
   readonly base: string;
@@ -119,6 +142,11 @@ export class Api {
 
   me(): Promise<MeResponse> {
     return this.request("GET", "/me");
+  }
+
+  /** Signs in the browser whose QR code holds sign-in `id`, as the caller. */
+  async approveSignIn(id: string): Promise<void> {
+    await this.request("POST", `/sign-in/${encodeURIComponent(id)}`);
   }
 
   /** Revokes this client's own token, and forgets it. */

@@ -4012,6 +4012,65 @@
         }
       }
     },
+    "SignInResponse": {
+      "type": "object",
+      "required": [
+        "id",
+        "secret",
+        "link",
+        "expiresAt"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "secret": {
+          "type": "string"
+        },
+        "link": {
+          "type": "string"
+        },
+        "expiresAt": {
+          "type": "number"
+        }
+      }
+    },
+    "SignInStatusResponse": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "waiting"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "assistant",
+            "code"
+          ],
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "approved"
+            },
+            "assistant": {
+              "type": "string"
+            },
+            "code": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
     "MeResponse": {
       "type": "object",
       "required": [

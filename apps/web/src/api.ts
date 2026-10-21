@@ -10,13 +10,16 @@ import {
   setUp,
   type SetupRequest,
   setupInfo,
+  signInStatus,
+  type SignInResponse,
+  startSignIn,
   type RoomState,
   type RoomStore,
   type TokenStore,
 } from "@nudge/client";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
-export { ApiError, checkSetupCode, checkSetupKey, listAssistants, setupInfo };
+export { ApiError, checkSetupCode, checkSetupKey, listAssistants, setupInfo, type SignInResponse };
 
 // One token per assistant, keyed by the assistant's URL name. They live for the browser tab only
 // (sessionStorage), unless "Remember this device" was ticked at sign-in (localStorage), so that a
@@ -179,6 +182,29 @@ export async function pair(code: string, remember: boolean): Promise<string | un
       platform: CLIENT.platform,
     });
   });
+}
+
+/** A QR code for the Nudge app to sign this browser in with. */
+export function startQrSignIn(): Promise<SignInResponse> {
+  return startSignIn("");
+}
+
+/**
+ * Once the app approved `started`, pairs with the code it left and names the assistant; undefined
+ * while it waits. A 404 once the QR code expired.
+ */
+export async function finishQrSignIn(
+  started: SignInResponse,
+  remember: boolean,
+): Promise<string | undefined> {
+  const status = await signInStatus("", started);
+  if (status.status === "waiting") return undefined;
+  const { assistant, code } = status;
+  await new Api({ server: "", assistant, tokens: tokenStore(assistant, remember) }).pair(code, {
+    name: CLIENT.name,
+    platform: CLIENT.platform,
+  });
+  return assistant;
 }
 
 /** Runs `attempt` for each assistant until one doesn't answer 401, and names that one. */
