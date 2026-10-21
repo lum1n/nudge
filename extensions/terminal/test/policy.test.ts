@@ -23,6 +23,10 @@ describe("judge", () => {
       "timeout 5 sleep 1",
       "env -i FOO=bar printenv FOO",
       "bash -c 'ls | wc -l'",
+      `python3 -c 'import json,sys; d = json.load(open("a.json")); d["x"].remove(1); print(d)'`,
+      `python3 -c 'from urllib.parse import quote; print(quote("a b"))'`,
+      "node -e 'console.log(`${1 + 1}`)'",
+      "perl -pe 's/a/b/' in.txt > out.txt",
     ])
       expect(kind(command), command).toBe("run");
   });
@@ -53,6 +57,17 @@ describe("judge", () => {
       ["echo rm x | sh", /sh runs commands from its input/],
       ["bash <<< 'rm x'", /bash runs commands from its input/],
       ["bash build.sh", /bash runs the script build.sh/],
+      [`python3 -c 'import os; os.remove("old.txt")'`, /python3 code deletes files/],
+      ["python3 -c 'import shutil; shutil.rmtree(\"out\")'", /deletes files/],
+      ["python3 -c 'from pathlib import Path; Path(\"a\").unlink()'", /deletes files/],
+      ['python3 -c \'import subprocess; subprocess.run(["rm", "x"])\'', /runs other commands/],
+      ["python3 -c 'import urllib.request as u; u.urlopen(\"https://x\")'", /connects/],
+      ['node -e \'require("fs").rmSync("out", { recursive: true })\'', /node code deletes/],
+      [`node -e 'fetch("https://x", { method: "POST" })'`, /connects elsewhere/],
+      ['node --eval=\'require("child_process").execSync("rm x")\'', /runs other commands/],
+      ["perl -e 'unlink \"a.txt\"'", /perl code deletes files/],
+      ["perl -ne 'print `rm x`'", /perl code runs other commands/],
+      ["ruby -e 'File.delete(\"a\")'", /ruby code deletes files/],
     ];
     for (const [command, reason] of cases) {
       const verdict = judge(command);
@@ -84,6 +99,8 @@ describe("judge", () => {
     expect(kind("mytool --go", { allow: ["mytool"] })).toBe("run");
     // An allowed wrapper still has its command read.
     expect(kind("xargs rm", { allow: ["xargs"] })).toBe("ask");
+    // An allowed interpreter runs any code it is given.
+    expect(kind(`python3 -c 'import os; os.remove("a")'`, { allow: ["python3"] })).toBe("run");
   });
 
   it("asks about commands it can't read", () => {

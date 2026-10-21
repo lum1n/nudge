@@ -8,6 +8,9 @@ import { posix } from "node:path";
 /** Where the workspace is inside the sandbox; commands see no other path of the machine. */
 export const WORKSPACE = "/workspace";
 
+/** Where commands in the sandbox find programs. */
+const SANDBOX_PATH = "/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin";
+
 export interface SandboxOptions {
   /** The room's workspace on this machine, mounted at /workspace. */
   workspace: string;
@@ -56,6 +59,12 @@ export function sandboxProblem(): string | undefined {
   return checked.problem;
 }
 
+/** Which of these programs commands in the sandbox find, in order. */
+export function installed(programs: readonly string[]): string[] {
+  const dirs = SANDBOX_PATH.split(":");
+  return programs.filter((program) => dirs.some((dir) => existsSync(`${dir}/${program}`)));
+}
+
 /** The working directory inside the sandbox for `cwd`, relative to /workspace or under it. */
 export function workingDirectory(cwd: string | undefined): string {
   const path = posix.resolve(WORKSPACE, cwd ?? ".");
@@ -80,7 +89,7 @@ export function sandboxArgs(options: SandboxOptions): string[] {
     "--clearenv",
     "--setenv",
     "PATH",
-    "/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin",
+    SANDBOX_PATH,
     "--setenv",
     "HOME",
     WORKSPACE,

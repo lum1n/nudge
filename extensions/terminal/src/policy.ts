@@ -512,8 +512,51 @@ function askedByArguments(program: string, args: readonly Word[]): string | unde
       return undefined;
     }
     default:
-      return undefined;
+      return askedByCode(program, texts);
   }
+}
+
+/** The options that hand an interpreter its code inline, as `python3 -c` and `node -e` do. */
+const INLINE_CODE: ReadonlyMap<string, RegExp> = new Map([
+  ...["python", "python3"].map((p) => [p, /^-[A-Za-z]*c$/] as const),
+  ...["node", "bun", "deno"].map((p) => [p, /^(-[ep]|--eval|--print|eval)$/] as const),
+  ...["perl", "ruby"].map((p) => [p, /^-[A-Za-z]*[eE]$/] as const),
+  ["php", /^-r$/],
+]);
+
+/** What inline code does that needs approval, by the calls it makes; read like a command is. */
+const CODE_ASKS: readonly [RegExp, string][] = [
+  [
+    /\bos\.(remove|unlink|rmdir|removedirs|truncate)\b|\bshutil\.rmtree\b|\.(unlink|rmdir|rmtree|truncate)\s*\(|\b(rmSync|unlinkSync|rmdirSync|truncateSync)\b|\bfs(\.promises)?\.(rm|unlink|rmdir|truncate)\b|\bDeno\.(remove|truncate)\b|\bFile(Utils)?\.(delete|unlink|rm\w*)\b|^\s*(unlink|rmdir)\b|[;{]\s*(unlink|rmdir)\b/,
+    "deletes files",
+  ],
+  [
+    /\b(socket|smtplib|ftplib|telnetlib|http\.client|urllib\.request|urlopen|httpx|aiohttp|paramiko|Net::\w+|LWP|IO::Socket|fsockopen|curl_exec)\b|\brequests\.(get|post|put|patch|delete|head|request|Session)\b|\bfetch\s*\(|\bhttps?\.(request|get)\b|\bnet\.(connect|createConnection)\b|['"](node:)?(https?|net|tls|dgram)['"]/,
+    "connects elsewhere",
+  ],
+  [
+    /\bsubprocess\b|\bos\.(system|popen|exec\w*|spawn\w*|fork)\b|\bchild_process\b|\b(execSync|spawnSync|execFile|shell_exec|passthru|proc_open|popen|Open3)\b|\bDeno\.(run|Command)\b|\bBun\.spawn|\b(system|exec)\s*\(|%x[({[]/,
+    "runs other commands",
+  ],
+];
+
+/** Why an interpreter's inline code needs approval, if it does. */
+function askedByCode(program: string, texts: readonly string[]): string | undefined {
+  const option = INLINE_CODE.get(program);
+  if (!option) return undefined;
+  const code: string[] = [];
+  texts.forEach((text, i) => {
+    if (option.test(text) && texts[i + 1] !== undefined) code.push(texts[i + 1]!);
+    else if (/^--(eval|print)=/.test(text)) code.push(text.replace(/^--\w+=/, ""));
+  });
+  // Perl's and Ruby's backticks run the shell; JavaScript's make strings.
+  const shell = (program === "perl" || program === "ruby" || program === "php") && /`/;
+  const found = CODE_ASKS.filter(([pattern]) => code.some((c) => pattern.test(c))).map(
+    ([, what]) => what,
+  );
+  if (shell && code.some((c) => shell.test(c)) && !found.includes("runs other commands"))
+    found.push("runs other commands");
+  return found.length ? `its ${program} code ${found.join(", ")}` : undefined;
 }
 
 /** Every program a command starts, in order, as far as it can be read. */

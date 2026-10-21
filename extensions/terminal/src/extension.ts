@@ -11,7 +11,13 @@ import {
   Type,
 } from "@nudge/core";
 import { judge, type PolicyLists } from "./policy.ts";
-import { type CommandResult, runSandboxed, sandboxProblem, WORKSPACE } from "./sandbox.ts";
+import {
+  type CommandResult,
+  installed,
+  runSandboxed,
+  sandboxProblem,
+  WORKSPACE,
+} from "./sandbox.ts";
 
 /** What a `run` approval holds: the command to run once approved, and where. */
 type RunPayload = { command: string; cwd?: string };
@@ -21,6 +27,20 @@ type Details = Record<string, string | number | boolean | null>;
 
 /** Most characters of a command's output the model gets: its start and its end. */
 const MAX_OUTPUT = 30_000;
+
+/** Bigger tools the model is told about when the server has them; servers differ the most here. */
+const NOTABLE = [
+  "git",
+  "python3",
+  "node",
+  "pandoc",
+  "ffmpeg",
+  "convert",
+  "pdftotext",
+  "sqlite3",
+  "jq",
+  "curl",
+];
 
 /**
  * Lets the assistant run shell commands in a terminal of the room's own: a bubblewrap sandbox with
@@ -113,6 +133,8 @@ export default defineNudgeExtension({
         ),
       );
 
+    const tools = installed(NOTABLE);
+
     return {
       problems: () => {
         const problem = sandboxProblem();
@@ -121,7 +143,7 @@ export default defineNudgeExtension({
       tools: [
         defineTool({
           name: "run_command",
-          description: `Run a shell command with bash in a terminal of this room's own: a sandboxed Linux workspace at ${WORKSPACE}, where files stay between commands. Each command starts a fresh shell in ${WORKSPACE} (or cwd), so chain steps with && or pass cwd. Common command-line tools are there: files and text, archives, git, Python, Node, pandoc, ffmpeg and others the server has. ${settings.network ? "It has the network." : "It has no network: downloads and installs fail."} Commands that delete files, send data or connect elsewhere, or run programs not on its list, wait for the room's approval; some, like sudo, never run. Output is cut to its start and end past ${MAX_OUTPUT} characters, so filter long output (grep, head, tail).`,
+          description: `Run a shell command with bash in a terminal of this room's own: a sandboxed Linux workspace at ${WORKSPACE}, where files stay between commands. Each command starts a fresh shell in ${WORKSPACE} (or cwd), so chain steps with && or pass cwd. The basic tools for files, text and archives are there${tools.length ? `; of bigger ones, ${tools.join(", ")}` : ", but no bigger ones such as Python, Node or pandoc"}. ${settings.network ? "It has the network." : "It has no network: downloads and installs fail."} Commands that delete files, send data or connect elsewhere, or run programs not on its list, wait for the room's approval; some, like sudo, never run. Output is cut to its start and end past ${MAX_OUTPUT} characters, so filter long output (grep, head, tail).`,
           parameters: Type.Object({
             command: Type.String({ minLength: 1, description: "The bash command to run" }),
             cwd: Type.Optional(

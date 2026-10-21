@@ -2,7 +2,13 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { runSandboxed, sandboxProblem, type SandboxOptions } from "../src/sandbox.ts";
+import { installed, runSandboxed, sandboxProblem, type SandboxOptions } from "../src/sandbox.ts";
+
+describe("installed", () => {
+  it("finds the programs on the sandbox's PATH, and only those", () => {
+    expect(installed(["no-such-program-here", "sh"])).toEqual(["sh"]);
+  });
+});
 
 // Needs bubblewrap and user namespaces; GitHub's Ubuntu runners, for one, don't allow them.
 describe.skipIf(sandboxProblem() !== undefined)("runSandboxed", () => {
