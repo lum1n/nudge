@@ -452,6 +452,9 @@ importers:
       '@nudge/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@nudge/ext-documents':
+        specifier: workspace:*
+        version: link:../documents
     devDependencies:
       '@earendil-works/chord':
         specifier: 1.2.0
