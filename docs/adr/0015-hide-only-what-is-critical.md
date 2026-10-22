@@ -22,3 +22,5 @@ What this doesn't do:
 - The model still can't read images.
 
 Supersedes the part of ADR 14 about quasi-identifiers. ADR 14's thinking, history rewrite and local model sections still hold where the local model is on.
+
+Amended by ADR 16: the `contacts` extension hides the address books' whole names, e-mail addresses and phone numbers.

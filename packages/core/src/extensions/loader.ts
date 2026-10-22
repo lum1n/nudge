@@ -64,6 +64,7 @@ export async function checkExtensions(entries: readonly ExtensionConfig[]): Prom
     timeZone: "UTC",
     now: Date.now,
     protect: () => Promise.reject(new Error("No assistant is open while checking")),
+    release: () => Promise.reject(new Error("No assistant is open while checking")),
     documents: () => {
       throw new Error("No assistant is open while checking");
     },

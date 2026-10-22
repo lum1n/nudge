@@ -1,0 +1,30 @@
+{
+  "name": "@nudge/ext-contacts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Look people up in CardDAV address books, and keep their names, e-mail addresses and phone numbers from the model",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "@nudge/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@earendil-works/chord": "1.2.0",
+    "@nudge/bridge": "workspace:*",
+    "@nudge/core": "workspace:*",
+    "ical.js": "2.2.1",
+    "tsdav": "2.4.0"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "1.2.0"
+  }
+}

@@ -12,6 +12,7 @@
     "@nudge/ext-calendar": "workspace:*",
     "@nudge/ext-codemode": "workspace:*",
     "@nudge/ext-connectors": "workspace:*",
+    "@nudge/ext-contacts": "workspace:*",
     "@nudge/ext-desktop": "workspace:*",
     "@nudge/ext-documents": "workspace:*",
     "@nudge/ext-federation": "workspace:*",

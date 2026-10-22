@@ -220,7 +220,7 @@ More:
 - `NUDGE_DEBUG_REQUESTS=1 nudge chat` (or `nudge serve`) writes every request, exactly as the provider receives it, to `<database>.requests.jsonl`.
 - **Model view** on a room's page in the web UI (or `GET /rooms/<id>/model-view`) shows anyone in the room what its next request sends: the instructions and sections, every message and tool call, with placeholders where the values were.
 
-`extensions/ner` adds names the lists don't have, such as relatives' (`extraNames`).
+`extensions/ner` adds names the lists don't have, such as relatives' (`extraNames`). `extensions/contacts` hides the whole names, e-mail addresses and phone numbers in your address books ([Contacts](#contacts), [ADR 16](docs/adr/0016-contacts-are-known-private-values.md)).
 
 Display names of players are always protected. Images are passed through unchanged. Extensions keep their own data (connector notes, browser site notes, uploaded documents) as they stored it.
 
@@ -454,6 +454,14 @@ To make it always come first ("always use the timetable API first for departures
 - `calendar_events` lists a span of days, recurring events expanded and moved occurrences shown where they moved, in the assistant's time zone. `calendar_add` (a day without a time makes an all-day event) and `calendar_remove` (a whole series for a recurring event) wait for approval.
 - For "remind us the evening before", the model schedules a nudge, say daily at 18:00, that looks at the next day's events.
 
+### Contacts
+
+`extensions/contacts` looks people up in CardDAV address books (Fastmail, iCloud, Nextcloud, Radicale, Google through its CardDAV address), so "send it to grandma" finds her address. Accounts are set like the calendar's: `{ "id": "family", "url": "https://carddav.example.org", "user": "…", "password": "${FAMILY_CARDDAV_PASSWORD}", "addressBooks": ["Family"], "rooms": ["family"] }`. Leave out `addressBooks` to use all of them.
+
+- `contacts_search` finds people by name, nickname, relation as the contact is saved ("Mormor"), company, e-mail address or phone number, across every account the room may use, and gives their e-mail addresses, phone numbers, postal addresses and birthdays. It only reads; nothing in the address books changes.
+- Every contact's e-mail addresses and phone numbers are hidden from the model wherever they show up, also a number written without spaces or without its country code (`91234567` for `+47 912 34 567`), which the built-in rules leave alone. So are whole names of two words or more, unless `hideNames` is `false`. Names of one word ("Mom") and companies' names stay readable, as do players' display names; a player who joins later gets theirs back readable ([ADR 16](docs/adr/0016-contacts-are-known-private-values.md)).
+- The address books are read when the assistant opens and again when they are more than 15 minutes old. A value that showed up once stays hidden after its contact is gone.
+
 ### Watches
 
 `extensions/watches` lets a room ask the assistant to keep an eye on something: "tell me when a 2027 GLC under 800 000 kr shows up on Finn", "when tomorrow's power price goes above 2 kr". The model adds a watch with `add_watch` (what to check, and how often), and `list_watches` and `remove_watch` show and stop them.
@@ -546,7 +554,7 @@ export default defineNudgeExtension({
 });
 ```
 
-- `setup` runs when the assistant opens and on every reload. It gets the settings (checked against the schema, defaults filled in), the assistant's `displayName`, `timeZone` and clock, and `protect(value, kind)` to keep a value from the model.
+- `setup` runs when the assistant opens and on every reload. It gets the settings (checked against the schema, defaults filled in), the assistant's `displayName`, `timeZone` and clock, `protect(value, kind)` to keep a value from the model and `release(value)` to make one readable again.
 - `playerSettings` is a schema of what each player chooses for themselves, such as hello's default number of sides. Players set it on their profile, and `playerSettings(playerId, context)` in `setup`'s host reads it with defaults filled in; a tool finds who asked in `currentTurn().by`. Every required one needs a default, for players who chose nothing.
 - `setup` can also return `routes`, HTTP routes under `/v1/a/<assistant>/ext/<name>/`. Each takes a standard `Request` and returns a `Response`, and says whether it needs a player's token (`auth: "player"`), an admin's (`"admin"`) or none (`"none"`); the server checks the token and the body's size (`maxBodyBytes`, default 64 KiB) first.
 - It returns a [Pi Durable extension](https://www.npmjs.com/package/@earendil-works/pi-durable) without its name (`tools`, `sections`, `hooks`, `wraps`, `tasks`) plus `detectors`, which run after the built-in ones.
