@@ -67,6 +67,20 @@ export function parseAddress(address: string): PlayerHome | undefined {
   return { server: `${url.origin}${url.pathname.replace(/\/+$/, "")}`, assistant, playerId };
 }
 
+/** How people write an assistant: `nudge.example.com/robin`, an address without the person. */
+export function assistantAddressOf(place: { server: string; assistant: string }): string {
+  return addressOf({ ...place, playerId: "x" }).slice("x@".length);
+}
+
+/** The server and assistant an assistant's address names; undefined when it isn't one. */
+export function parseAssistantAddress(
+  address: string,
+): { server: string; assistant: string } | undefined {
+  if (address.includes("@")) return undefined;
+  const home = parseAddress(`x@${address.trim()}`);
+  return home === undefined ? undefined : { server: home.server, assistant: home.assistant };
+}
+
 /** Whether two homes are the same person's. */
 export function sameHome(a: PlayerHome, b: PlayerHome): boolean {
   return a.server === b.server && a.assistant === b.assistant && a.playerId === b.playerId;

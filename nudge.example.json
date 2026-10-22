@@ -53,6 +53,12 @@
           "enabled": false
         },
         {
+          "$comment": "Talk to assistants on other servers once both sides' admins link them (link_assistant). Each thread runs in the background for a few rounds; a linked assistant speaks here as a guest in a room of its own and can use only what offer turns on there. Needs ./extensions/federation with its server address; off here so the example works without it.",
+          "from": "./extensions/peers",
+          "settings": { "maxRounds": 6, "replyHours": 24, "offer": ["calendar"] },
+          "enabled": false
+        },
+        {
           "$comment": "Web search through your own SearXNG (JSON output on), and reading a page as text.",
           "from": "./extensions/search",
           "settings": { "url": "http://127.0.0.1:8888", "language": "nb" },
