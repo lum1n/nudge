@@ -153,6 +153,11 @@ export class Vault {
     return this.byKey.has(vaultKey(value));
   }
 
+  /** The placeholder `value` is hidden under; undefined when it isn't hidden. */
+  placeholderOf(value: string): string | undefined {
+    return this.byKey.get(vaultKey(value))?.placeholder;
+  }
+
   /** The entry behind a placeholder, forgotten ones included. */
   get(placeholder: string): VaultEntry | undefined {
     return this.byPlaceholder.get(placeholder);

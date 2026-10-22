@@ -34,6 +34,8 @@ export type ExtensionHost<Settings, PlayerSettings = undefined> = {
   readonly now: () => number;
   /** Keeps a value from the model from now on; see `Nudge.protect`. Usable once the assistant is open. */
   readonly protect: (value: string, kind?: string) => Promise<string>;
+  /** Makes a hidden value readable again; see `Nudge.release`. Usable once the assistant is open. */
+  readonly release: (value: string) => Promise<boolean>;
   /** A directory of the extension's own next to the assistant's database; absent when nothing is persisted. */
   readonly dataDir?: string;
   /** Keys and passwords the extension keeps for itself, encrypted at rest; never reaches the model. */

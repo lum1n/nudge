@@ -353,6 +353,7 @@ export class Nudge {
       timeZone,
       now,
       protect: (value, kind) => whenOpen().protect(value, kind),
+      release: (value) => whenOpen().release(value),
       documents: () => whenOpen().harness,
       assistant: whenOpen,
       whenOpen: () => open,
@@ -805,6 +806,20 @@ export class Nudge {
     if (options.owner !== undefined && vault.version !== before)
       this.changes.emit({ kind: "vault" });
     return placeholder;
+  }
+
+  /**
+   * Makes a hidden value readable again, as names are (ADR 15): text no longer has it replaced,
+   * and where its placeholder is stored, the model reads the value. A value someone owns stays
+   * hidden. False when there was nothing to release.
+   */
+  async release(value: string): Promise<boolean> {
+    const vault = this.models.vault;
+    const placeholder = vault.placeholderOf(value.trim());
+    if (placeholder === undefined || !vault.release(placeholder)) return false;
+    await this.models.flush();
+    this.changes.emit({ kind: "vault" });
+    return true;
   }
 
   /**

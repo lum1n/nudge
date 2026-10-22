@@ -165,6 +165,7 @@ export const BUNDLED_EXTENSIONS: readonly string[] = [
   "@nudge/ext-calendar",
   "@nudge/ext-codemode",
   "@nudge/ext-connectors",
+  "@nudge/ext-contacts",
   "@nudge/ext-desktop",
   "@nudge/ext-documents",
   "@nudge/ext-federation",
