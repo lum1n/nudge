@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { ConfigError, ConfigMissing, formatHour, loadConfig, parseConfig } from "../src/index.ts";
+import { ConfigError, ConfigMissing, formatToday, loadConfig, parseConfig } from "../src/index.ts";
 
 describe("parseConfig", () => {
   it("resolves database paths against the config directory", () => {
@@ -37,12 +37,13 @@ describe("parseConfig", () => {
   });
 });
 
-describe("formatHour", () => {
-  it("rounds down to the hour so the prompt stays cacheable", () => {
-    const at = Date.UTC(2026, 9, 13, 9, 47, 12);
-    expect(formatHour(at, "Europe/Oslo")).toBe(
-      formatHour(Date.UTC(2026, 9, 13, 9, 0, 0), "Europe/Oslo"),
-    );
-    expect(formatHour(at, "Europe/Oslo")).toContain("11:00");
+describe("formatToday", () => {
+  it("changes only with the day so the prompt stays cacheable", () => {
+    const morning = Date.UTC(2026, 9, 13, 7, 5, 0);
+    const evening = Date.UTC(2026, 9, 13, 21, 47, 12);
+    expect(formatToday(morning, "Europe/Oslo")).toBe(formatToday(evening, "Europe/Oslo"));
+    expect(formatToday(morning, "Europe/Oslo")).toContain("Tuesday, 13 October 2026");
+    // Past midnight in Oslo, still the 13th in UTC.
+    expect(formatToday(Date.UTC(2026, 9, 13, 22, 30, 0), "Europe/Oslo")).toContain("14 October");
   });
 });

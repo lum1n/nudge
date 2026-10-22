@@ -65,17 +65,21 @@ describe("Nudge", () => {
     await reopened.close(context);
   });
 
-  it("tells the model who wrote a message and stores the author", async () => {
+  it("tells the model who wrote a message, and when, and stores the author", async () => {
     const { faux, models, model, answer, requests } = setup();
     faux.setResponses([answer("Hi Ann.")]);
-    const nudge = await createNudge({ database: ":memory:", models, model }, context);
+    const now = () => Date.UTC(2026, 9, 22, 12, 45);
+    const nudge = await createNudge(
+      { database: ":memory:", models, model, timeZone: "Europe/Oslo", now },
+      context,
+    );
     const author = { playerId: "p1", displayName: "Ann", clientId: "c1" };
     await (
       await nudge.submit(LOBBY, { text: "hello", author, requestId: "r1" }, context)
     ).wait(context);
 
     const users = requests[0]!.messages.filter((m) => m.role === "user");
-    expect(JSON.stringify(users.at(-1))).toContain("Ann: hello");
+    expect(JSON.stringify(users.at(-1))).toContain("Ann (14:45): hello");
     const lobby = await nudge.conversation(LOBBY, context);
     const entries = (await lobby.entries({}, 50, undefined, context)).items;
     const message = entries.find((entry) => entry.kind === MESSAGE_ENTRY);

@@ -47,7 +47,7 @@ export function createBuiltinExtension(options: BuiltinOptions): Extension {
         "identity",
         () =>
           `You are ${options.displayName}, a personal assistant. Be brief and concrete. ` +
-          `Several people may share a conversation; each message starts with the name of who wrote it.`,
+          `Several people may share a conversation; each message starts with the name of who wrote it and the time they sent it.`,
         { tag: false },
       ),
       section("members", async (input, context) => {
@@ -67,8 +67,9 @@ export function createBuiltinExtension(options: BuiltinOptions): Extension {
           options.describe,
         ),
       ),
-      // Rendered to the hour: a section that changes on every request defeats prompt caching.
-      section("time", () => formatHour(options.now(), options.timeZone)),
+      // The date only: a section that changes on every request defeats prompt caching. Messages
+      // carry the minute they were sent.
+      section("time", () => formatToday(options.now(), options.timeZone)),
     ],
   });
 }
@@ -95,19 +96,18 @@ export function describeExtensions(
   ].join("\n");
 }
 
-export function formatHour(now: number, timeZone: string): string {
-  const hour = new Date(Math.floor(now / 3_600_000) * 3_600_000);
-  const text = new Intl.DateTimeFormat("en-GB", {
+export function formatToday(now: number, timeZone: string): string {
+  const today = new Intl.DateTimeFormat("en-GB", {
     timeZone,
     weekday: "long",
     year: "numeric",
     month: "long",
     day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(hour);
-  return `It is ${text} (${timeZone}), give or take an hour.`;
+  }).format(now);
+  return (
+    `Today is ${today}, in the time zone ${timeZone}. Each message says the time it was sent; ` +
+    `the latest one is the time now.`
+  );
 }
 
 /**

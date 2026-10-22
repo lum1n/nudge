@@ -169,7 +169,7 @@ describe("matrix bridge", () => {
 
     homeserver.message("!dm:hs.example", "@ann:hs.example", "Hi Nudge");
     await until(() => homeserver.to("!dm:hs.example").length === 2);
-    expect(homeserver.to("!dm:hs.example")[1]).toBe("Answer to Ann: Hi Nudge");
+    expect(homeserver.to("!dm:hs.example")[1]).toMatch(/^Answer to Ann \(\d\d:\d\d\): Hi Nudge$/);
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect(homeserver.sent).toHaveLength(2);
 

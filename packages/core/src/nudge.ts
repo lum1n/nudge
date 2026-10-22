@@ -778,6 +778,7 @@ export class Nudge {
       room.conversationId as ConversationId,
       { ...draft, text },
       this.now(),
+      this.timeZone,
       context,
     );
   }

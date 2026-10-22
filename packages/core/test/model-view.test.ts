@@ -35,7 +35,9 @@ describe("model view", () => {
     expect(system).toContain("You are Nudge");
     expect(system).toContain("People who can read this conversation: Ann.");
     expect(system).toMatch(/\[tools added: .*schedule_nudge/);
-    expect(view.find((m) => m.role === "user")?.text).toBe(`Ann: I live at ${placeholder}`);
+    expect(view.find((m) => m.role === "user")?.text).toMatch(
+      new RegExp(`^Ann \\(\\d\\d:\\d\\d\\): I live at ${placeholder}$`),
+    );
     expect(view.find((m) => m.role === "assistant")?.text).toBe(
       `Noted, I'll remember ${placeholder}.`,
     );

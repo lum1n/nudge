@@ -50,12 +50,15 @@ export async function submitMessage(
   conversationId: ConversationId,
   draft: MessageDraft,
   now: number,
+  timeZone: string,
   context: Context,
 ): Promise<Submission> {
   const conversation = await harness.conversation(conversationId, context);
   if (conversation === undefined) throw new Error(`No conversation ${conversationId}`);
   const { author, requestId } = draft;
   const secret = draft.private === true && author !== undefined;
+  // The minute it was sent, so the model knows the time without a prompt that changes every minute.
+  const sent = author === undefined ? "" : `${author.displayName} (${formatClock(now, timeZone)})`;
   return conversation.submit(
     {
       type: "input",
@@ -63,8 +66,8 @@ export async function submitMessage(
         author === undefined
           ? draft.text
           : secret
-            ? `${author.displayName} (privately: only ${author.displayName} sees this message and your answer to it; don't bring it up with anyone else): ${draft.text}`
-            : `${author.displayName}: ${draft.text}`,
+            ? `${sent} (privately: only ${author.displayName} sees this message and your answer to it; don't bring it up with anyone else): ${draft.text}`
+            : `${sent}: ${draft.text}`,
       requestId:
         requestId === undefined || author?.clientId === undefined
           ? requestId
@@ -88,6 +91,16 @@ export async function submitMessage(
     },
     context,
   );
+}
+
+/** The time of day, as "14:45". */
+export function formatClock(time: number, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(time);
 }
 
 /** A snapshot of the conversation, then one batch of agent events per commit. */
