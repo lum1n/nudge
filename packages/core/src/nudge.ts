@@ -217,7 +217,7 @@ export class Nudge {
     return {
       turn: (id, context) => turnOf(this.harness, id, context),
       redact: (text) => this.redact(text),
-      rehydrate: (text) => this.models.vault.rehydrate(text),
+      rehydrate: (viewer, text) => this.models.vault.rehydrateFor(viewer, text),
       models: () => this.models.withValues(),
     };
   }
@@ -294,7 +294,7 @@ export class Nudge {
       (extension, kind) =>
         this.installed.find((installed) => installed.extension.name === extension)?.approvals[kind],
       changed,
-      (text) => this.models.vault.rehydrate(text),
+      (viewer, text) => this.models.vault.rehydrateFor(viewer, text),
       (text) => this.redact(text),
       (playerId, context) => this.players.isAdmin(playerId, context),
       (extension, kind) =>
@@ -325,7 +325,7 @@ export class Nudge {
     const values: ToolValues = {
       turn,
       redact: (text) => whenOpen().redact(text),
-      rehydrate: (text) => whenOpen().models.vault.rehydrate(text),
+      rehydrate: (viewer, text) => whenOpen().models.vault.rehydrateFor(viewer, text),
       models: () => whenOpen().models.withValues(),
     };
     registry.install(
