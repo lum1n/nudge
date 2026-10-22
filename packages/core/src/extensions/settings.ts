@@ -180,6 +180,7 @@ export const BUNDLED_EXTENSIONS: readonly string[] = [
   "@nudge/ext-signal",
   "@nudge/ext-telegram",
   "@nudge/ext-terminal",
+  "@nudge/ext-triggers",
   "@nudge/ext-watches",
 ];
 
