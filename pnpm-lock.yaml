@@ -371,6 +371,34 @@ importers:
         specifier: 1.2.0
         version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
 
+  extensions/peers:
+    dependencies:
+      '@earendil-works/chord':
+        specifier: 1.2.0
+        version: 1.2.0
+      '@earendil-works/pi-durable':
+        specifier: 1.2.0
+        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
+      '@nudge/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@nudge/ext-federation':
+        specifier: workspace:*
+        version: link:../federation
+      typebox:
+        specifier: 1.3.27
+        version: 1.3.27
+    devDependencies:
+      '@earendil-works/pi-ai':
+        specifier: 1.2.0
+        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
+      '@nudge/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      hono:
+        specifier: 4.13.13
+        version: 4.13.13
+
   extensions/push:
     dependencies:
       '@earendil-works/chord':
@@ -731,6 +759,9 @@ importers:
       '@nudge/ext-ner':
         specifier: workspace:*
         version: link:../../extensions/ner
+      '@nudge/ext-peers':
+        specifier: workspace:*
+        version: link:../../extensions/peers
       '@nudge/ext-push':
         specifier: workspace:*
         version: link:../../extensions/push
