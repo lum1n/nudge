@@ -412,6 +412,30 @@ final class AppModel {
         await servers.forget(server)
     }
 
+    /// The servers the person joined assistants on from home that this device doesn't manage:
+    /// ones they may own but took off their list, or that it couldn't sign in to.
+    var joinedServers: [String] {
+        let owned = Set(servers.owned.map { $0.trimmingCharacters(in: ["/"]) })
+        let joined = (memberships?.memberships ?? []).map { $0.server.trimmingCharacters(in: ["/"]) }
+        return Set(joined).subtracting(owned).sorted()
+    }
+
+    /// Signs this device in to a server as its owner, with home vouching for them, and puts it back
+    /// on their list at home; throws why not, as when they aren't its owner.
+    func manageServer(_ server: String) async throws {
+        guard let home = session else { throw ServerProblem.noFederation }
+        let assertion = try await home.client.ownerAssertion(server: server)
+        // The client keeps the server token it gets.
+        _ = try await servers.client(server).signInFromHome(assertion: assertion)
+        servers.remember(server)
+        do {
+            let listed = try await home.client.addOwnedServer(server: server)
+            servers.setAtHome(Set(listed.map(\.server)))
+        } catch NudgeError.Status(404, _) {
+            // No federation at home: this device keeps it to itself.
+        }
+    }
+
     /// Matches the servers this device owns to the person's list at home (ADR 11): signs in to the
     /// ones another device put there, with an assertion from home; puts there the ones only this
     /// device knew, when their owner is the person at home; and forgets the ones taken off elsewhere.
