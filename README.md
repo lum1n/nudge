@@ -315,11 +315,16 @@ An entry's `rooms` lists the kinds of room it is on in by default (`"lobby"`, `"
 `extensions/terminal` gives the model a `run_command` tool: a bash command, run in a terminal of the room's own, for command-line tools such as `pandoc`, `ffmpeg`, `jq`, `git` or a quick Python script.
 
 ```json
-{ "from": "./extensions/terminal", "settings": { "network": false, "timeoutSeconds": 60 } }
+{
+  "from": "./extensions/terminal",
+  "settings": { "network": false, "timeoutSeconds": 60, "desktopFiles": false }
+}
 ```
 
 - Every command runs in a bubblewrap sandbox. It sees the system's programs and libraries read-only, the room's workspace at `/workspace` (on the server `<database>.extensions/terminal/workspaces/conversation-<id>`, kept between commands), an empty `/tmp`, and nothing else of the machine: not your home, not Nudge's data or config, and none of Nudge's environment (its keys). It has its own processes, hostname and IPC. A command stops after `timeoutSeconds` (default 60, at most 600), and gets at most 512 processes and 1 GB per file it writes. The model gets the start and end of the output, past 30 000 characters, redacted like any tool's.
-- It has no network unless `"network": true`. Then commands reach what the server reaches: the internet, and also the local network and services on this machine, which the sandbox doesn't filter.
+- It has no network unless `"network": true`. Then commands reach the internet through [slirp4netns](https://github.com/rootless-containers/slirp4netns), without this machine's own services (`127.0.0.1`, such as signal-cli's daemon) or the local network: private, link-local and CGNAT (Tailscale) addresses are blocked in the sandbox's network, and it has a DNS server of its own. That needs `slirp4netns`, `nsenter` and `ip` on the server (in the Docker image); commands with that network run as root of their own user namespace, without any capabilities. With `"localNetwork": true` as well, commands reach what the server reaches, the local network and this machine's services too, and slirp4netns isn't needed.
+- Files move between the workspace and the room's documents (`extensions/documents`, when it is on in the room): `document_to_workspace` copies an uploaded document into `/workspace`, never over a file there, and `workspace_to_documents` adds a file from it to the room's documents, where people download it from the Documents page. Files of kinds the documents don't read, such as `.docx`, are kept without their text. Both go through the sandbox, so a link in the workspace leads nowhere a command couldn't go.
+- With `"desktopFiles": true`, commands read and write the room's desktop's home (`extensions/desktop`, its apps' files) at `/desktop`, such as to convert with `pandoc` what Writer saved there.
 - Each command is read before it runs, through pipes, `&&`, `$(…)`, `sh -c`, `xargs`, `find -exec` and wrappers like `env` or `timeout`:
   - Common tools that read, search, convert, build and fetch run at once.
   - Commands that delete files (`rm`, `find -delete`, `git clean`, `git reset --hard`), send data (`curl -d`, `curl -X POST`, `git push`, `ssh`, `scp`, mail), run a script of the workspace, run a program not on the list, or that it can't read for sure (a program named by a variable, `sh` reading its input) wait for someone in the room to approve that exact command, as an approval like any other. Approving it runs it, and the room hears the output.

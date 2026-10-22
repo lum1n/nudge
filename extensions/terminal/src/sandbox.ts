@@ -1,19 +1,52 @@
 // A command in a bubblewrap sandbox: the system's programs read-only, the room's workspace at
 // /workspace, an empty /tmp, none of Nudge's files or environment, and the network only when the
 // settings give it. Limits on time, CPU, processes and file size keep one command from the host.
-import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync } from "node:fs";
+import { type ChildProcess, spawn, spawnSync } from "node:child_process";
+import { existsSync, lstatSync, mkdirSync, readlinkSync } from "node:fs";
 import { posix } from "node:path";
+import type { Readable, Writable } from "node:stream";
 
 /** Where the workspace is inside the sandbox; commands see no other path of the machine. */
 export const WORKSPACE = "/workspace";
+
+/** Where the room's desktop's home is inside the sandbox, when the settings share it. */
+export const DESKTOP = "/desktop";
+
+/**
+ * What of the network commands reach: none; the internet only, through slirp4netns with this
+ * machine and private addresses blocked; or all of it, as the server does.
+ */
+export type Network = "off" | "internet" | "all";
+
+/**
+ * Addresses a command with the `internet` network never reaches: this machine (slirp4netns's
+ * 10.0.2.2), the local network, link-local (cloud metadata), CGNAT (Tailscale) and the rest of
+ * the private and reserved ranges. slirp4netns's own network, 10.0.2.0/24, is more specific than
+ * 10.0.0.0/8 and so stays reachable for its DNS at 10.0.2.3.
+ */
+export const BLOCKED = [
+  "10.0.2.2/32",
+  "0.0.0.0/8",
+  "10.0.0.0/8",
+  "100.64.0.0/10",
+  "127.0.0.0/8",
+  "169.254.0.0/16",
+  "172.16.0.0/12",
+  "192.0.0.0/24",
+  "192.168.0.0/16",
+  "198.18.0.0/15",
+  "224.0.0.0/4",
+  "240.0.0.0/4",
+];
 
 export interface SandboxOptions {
   /** The room's workspace on this machine, mounted at /workspace. */
   workspace: string;
   /** The working directory inside the sandbox, /workspace or under it. */
   cwd?: string;
-  network: boolean;
+  network: Network;
+  /** The room's desktop's home on this machine, mounted at /desktop when it exists. */
+  desktop?: string;
   /** More directories commands may read, at the same paths. */
   readable?: readonly string[];
   timeoutMs: number;
@@ -56,6 +89,20 @@ export function sandboxProblem(): string | undefined {
   return checked.problem;
 }
 
+let checkedNetwork: { problem: string | undefined } | undefined;
+
+/** Why commands can't have the `internet` network here, if they can't; checked once. */
+export function networkProblem(): string | undefined {
+  checkedNetwork ??= {
+    problem: ["slirp4netns", "nsenter", "ip"].some((program) => !onPath(program))
+      ? `The terminal's internet without this machine and the local network needs slirp4netns, nsenter (util-linux) and ip (iproute2) on this server. Install them, or turn the terminal's "localNetwork" setting on, or "network" off.`
+      : !existsSync("/dev/net/tun")
+        ? `The terminal's internet needs /dev/net/tun for slirp4netns, which this server or container doesn't have. In Docker, add the devices line from Nudge's compose.yaml; or turn the terminal's "localNetwork" setting on, or "network" off.`
+        : undefined,
+  };
+  return checkedNetwork.problem;
+}
+
 /** The working directory inside the sandbox for `cwd`, relative to /workspace or under it. */
 export function workingDirectory(cwd: string | undefined): string {
   const path = posix.resolve(WORKSPACE, cwd ?? ".");
@@ -74,7 +121,11 @@ export function sandboxArgs(options: SandboxOptions): string[] {
     // No TIOCSTI into Nudge's terminal.
     "--new-session",
     "--unshare-all",
-    ...(options.network ? ["--share-net"] : []),
+    ...(options.network === "all" ? ["--share-net"] : []),
+    // For the internet, root of its user namespace, so slirp4netns and `ip` can join it and set
+    // up its network (bubblewrap nests a second one for any other uid), with no capabilities, so
+    // its commands can't undo that.
+    ...(options.network === "internet" ? ["--uid", "0", "--gid", "0", "--cap-drop", "ALL"] : []),
     "--hostname",
     "nudge",
     "--clearenv",
@@ -106,6 +157,7 @@ export function sandboxArgs(options: SandboxOptions): string[] {
     "--bind",
     options.workspace,
     WORKSPACE,
+    ...(options.desktop ? ["--bind-try", options.desktop, DESKTOP] : []),
     "--chdir",
     workingDirectory(options.cwd),
   ];
@@ -116,6 +168,9 @@ export async function runSandboxed(
   command: string,
   options: SandboxOptions,
 ): Promise<CommandResult> {
+  const filtered = options.network === "internet";
+  const problem = filtered ? networkProblem() : undefined;
+  if (problem) throw new Error(problem);
   mkdirSync(options.workspace, { recursive: true });
   const cwd = workingDirectory(options.cwd);
   const fileBlocks = Math.ceil((options.maxFileBytes ?? 1024 ** 3) / 1024);
@@ -124,13 +179,29 @@ export async function runSandboxed(
   const script = `ulimit -t ${cpuSeconds} -f ${fileBlocks} -u 512 2>/dev/null\n${command}`;
   const child = spawn(
     "bwrap",
-    [...sandboxArgs({ ...options, cwd }), "--", "bash", "--noprofile", "--norc", "-c", script],
+    [
+      ...sandboxArgs({ ...options, cwd }),
+      // With the internet: its pid on 3, then it waits on 4 for its network; resolv.conf from 5.
+      ...(filtered
+        ? ["--info-fd", "3", "--block-fd", "4", "--ro-bind-data", "5", resolvConf()]
+        : []),
+      "--",
+      "bash",
+      "--noprofile",
+      "--norc",
+      "-c",
+      script,
+    ],
     // Nudge's environment, its keys included, stays out; bubblewrap clears it inside too.
-    { stdio: ["ignore", "pipe", "pipe"], detached: true, env: { PATH: process.env.PATH ?? "" } },
+    {
+      stdio: ["ignore", "pipe", "pipe", ...(filtered ? (["pipe", "pipe", "pipe"] as const) : [])],
+      detached: true,
+      env: { PATH: process.env.PATH ?? "" },
+    },
   );
   const output = new Output(options.maxOutput, options.onOutput);
-  child.stdout.setEncoding("utf8").on("data", (chunk: string) => output.add(chunk));
-  child.stderr.setEncoding("utf8").on("data", (chunk: string) => output.add(chunk));
+  child.stdout!.setEncoding("utf8").on("data", (chunk: string) => output.add(chunk));
+  child.stderr!.setEncoding("utf8").on("data", (chunk: string) => output.add(chunk));
   let timedOut = false;
   let aborted = false;
   const stop = () => {
@@ -141,6 +212,14 @@ export async function runSandboxed(
       child.kill("SIGKILL");
     }
   };
+  let failed: Error | undefined;
+  const network = filtered
+    ? connectToInternet(child).catch((error: Error) => {
+        failed = new Error(`It got no network: ${error.message}`);
+        stop();
+        return undefined;
+      })
+    : undefined;
   const timer = setTimeout(() => {
     timedOut = true;
     stop();
@@ -152,14 +231,18 @@ export async function runSandboxed(
   options.signal?.addEventListener("abort", onAbort, { once: true });
   if (options.signal?.aborted) onAbort();
   return new Promise((resolve, reject) => {
-    child.once("error", (error) => {
+    const done = () => {
       clearTimeout(timer);
       options.signal?.removeEventListener("abort", onAbort);
+      void network?.then((slirp) => slirp?.kill("SIGKILL"));
+    };
+    child.once("error", (error) => {
+      done();
       reject(error);
     });
     child.once("close", (code) => {
-      clearTimeout(timer);
-      options.signal?.removeEventListener("abort", onAbort);
+      done();
+      if (failed) return reject(failed);
       resolve({
         exitCode: timedOut || aborted || code === null ? undefined : code,
         output: output.text(),
@@ -167,6 +250,206 @@ export async function runSandboxed(
         timedOut,
         aborted,
       });
+    });
+  });
+}
+
+/**
+ * Gives a sandbox that waits on its block fd the internet: slirp4netns makes it a network that
+ * goes out through this machine's, without reaching this machine's own services, and `ip` blocks
+ * the private and reserved ranges in it. Resolves with slirp4netns, to stop once the command ends.
+ */
+async function connectToInternet(child: ChildProcess): Promise<ChildProcess> {
+  const [info, block, resolv] = [3, 4, 5].map((fd) => child.stdio[fd]) as [
+    Readable,
+    Writable,
+    Writable,
+  ];
+  // A sandbox that ends early closes these; that's for `close` to report, not a crash.
+  for (const stream of [info, block, resolv]) stream.on("error", () => {});
+  resolv.end("nameserver 10.0.2.3\n");
+  const pid = await sandboxPid(info);
+  const slirp = spawn(
+    "slirp4netns",
+    ["--configure", "--mtu=65520", "--disable-host-loopback", "--ready-fd=3", String(pid), "tap0"],
+    { stdio: ["ignore", "ignore", "pipe", "pipe"] },
+  );
+  try {
+    await slirpReady(slirp);
+    await runWith(
+      "nsenter",
+      ["--target", String(pid), "--user", "--net", "--preserve-credentials", "ip", "-batch", "-"],
+      ["link set lo up\n", ...BLOCKED.map((range) => `route add prohibit ${range}\n`)].join(""),
+    );
+    block.end("1");
+    return slirp;
+  } catch (error) {
+    slirp.kill("SIGKILL");
+    throw error;
+  }
+}
+
+/**
+ * Where /etc/resolv.conf's text is, for slirp4netns's DNS to take its place: bubblewrap can't mount
+ * on a link, and on systemd hosts it links to /run/systemd/resolve.
+ */
+function resolvConf(): string {
+  let path = "/etc/resolv.conf";
+  for (let links = 0; links < 10; links++) {
+    try {
+      if (!lstatSync(path).isSymbolicLink()) break;
+    } catch {
+      break;
+    }
+    path = posix.resolve(posix.dirname(path), readlinkSync(path));
+  }
+  return path;
+}
+
+/** The sandbox's pid, from bubblewrap's info fd. */
+function sandboxPid(info: Readable): Promise<number> {
+  return new Promise((resolve, reject) => {
+    let text = "";
+    const timer = setTimeout(() => reject(new Error("bubblewrap didn't start")), 5_000);
+    info.setEncoding("utf8").on("data", (chunk: string) => {
+      text += chunk;
+      try {
+        const pid = (JSON.parse(text) as { "child-pid"?: number })["child-pid"];
+        if (typeof pid === "number") {
+          clearTimeout(timer);
+          resolve(pid);
+        }
+      } catch {
+        // Not all of it yet.
+      }
+    });
+    info.once("close", () => {
+      clearTimeout(timer);
+      reject(new Error("bubblewrap ended before it started"));
+    });
+  });
+}
+
+/** Waits for slirp4netns to have set the network up. */
+function slirpReady(slirp: ChildProcess): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let errors = "";
+    slirp.stderr!.setEncoding("utf8").on("data", (chunk: string) => (errors += chunk));
+    const timer = setTimeout(() => reject(new Error("slirp4netns didn't start")), 5_000);
+    slirp.stdio[3]!.once("data", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+    slirp.once("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    slirp.once("exit", () => {
+      clearTimeout(timer);
+      reject(new Error(`slirp4netns failed: ${errors.trim() || "no reason given"}`));
+    });
+  });
+}
+
+/** Runs a program with `input`; rejects with what it said when it fails. */
+function runWith(program: string, args: string[], input: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(program, args, { stdio: ["pipe", "ignore", "pipe"] });
+    let errors = "";
+    child.stderr.setEncoding("utf8").on("data", (chunk: string) => (errors += chunk));
+    child.stdin.on("error", () => {});
+    child.stdin.end(input);
+    child.once("error", reject);
+    child.once("close", (code) =>
+      code === 0
+        ? resolve()
+        : reject(new Error(`${program} failed: ${errors.trim() || `exit code ${code}`}`)),
+    );
+  });
+}
+
+/** What of the sandbox moving a file in or out of it sees. */
+export type FileOptions = Pick<SandboxOptions, "workspace" | "desktop" | "readable">;
+
+/**
+ * A file's bytes, read in the sandbox, so a path or link in the workspace never reaches beyond
+ * what commands see. `path` is relative to /workspace or absolute in the sandbox.
+ */
+export async function readFromSandbox(
+  path: string,
+  options: FileOptions,
+  maxBytes: number,
+): Promise<Buffer> {
+  const script = `[ -f "$1" ] || { echo "$1 is not a file" >&2; exit 2; }
+size=$(stat -L -c %s -- "$1") || exit 2
+[ "$size" -le "$2" ] || { echo "$1 is $size bytes, over the $2 allowed" >&2; exit 3; }
+exec head -c "$2" -- "$1"`;
+  return (await inSandbox(script, [path, String(maxBytes)], options)).subarray(0, maxBytes);
+}
+
+/**
+ * Writes a new file in the sandbox, making its directory; never over a file that is there.
+ * Gives the file's path in the sandbox.
+ */
+export async function writeToSandbox(
+  path: string,
+  bytes: Uint8Array,
+  options: FileOptions,
+): Promise<string> {
+  const script = `mkdir -p -- "$(dirname -- "$1")" || exit 2
+set -o noclobber
+cat > "$1" || exit 2
+realpath -- "$1"`;
+  return (await inSandbox(script, [path], options, bytes)).toString("utf8").trim();
+}
+
+/** Runs a short bash script in the sandbox, without network; rejects with its errors. */
+function inSandbox(
+  script: string,
+  args: string[],
+  options: FileOptions,
+  input?: Uint8Array,
+): Promise<Buffer> {
+  mkdirSync(options.workspace, { recursive: true });
+  const child = spawn(
+    "bwrap",
+    [
+      ...sandboxArgs({ ...options, network: "off", timeoutMs: 0, maxOutput: 0 }),
+      "--",
+      "bash",
+      "--noprofile",
+      "--norc",
+      "-c",
+      script,
+      "bash",
+      ...args,
+    ],
+    { stdio: [input ? "pipe" : "ignore", "pipe", "pipe"], env: { PATH: process.env.PATH ?? "" } },
+  );
+  const out: Buffer[] = [];
+  let errors = "";
+  child.stdout!.on("data", (chunk: Buffer) => out.push(chunk));
+  child.stderr!.setEncoding("utf8").on("data", (chunk: string) => (errors += chunk));
+  if (input && child.stdin) {
+    child.stdin.on("error", () => {});
+    child.stdin.end(input);
+  }
+  const timer = setTimeout(() => child.kill("SIGKILL"), 60_000);
+  return new Promise((resolve, reject) => {
+    child.once("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.once("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve(Buffer.concat(out));
+      else
+        reject(
+          new Error(
+            errors.replace(/^bash: (line \d+: )?/gm, "").trim() ||
+              (code === null ? "it took too long" : `exit code ${code}`),
+          ),
+        );
     });
   });
 }

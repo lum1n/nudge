@@ -6,6 +6,8 @@ export {
   DocumentTextDoc,
   type PanelInput,
   type PanelOutput,
+  roomDocuments,
+  type RoomDocuments,
   searchTexts,
 } from "./extension.ts";
 export {

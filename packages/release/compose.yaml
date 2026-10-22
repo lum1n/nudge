@@ -9,12 +9,16 @@ services:
     # allows that only with these three loosened:
     # seccomp (unshare, mount), AppArmor (mount) and the masked /proc paths (bubblewrap mounts a
     # /proc of the sandbox's own). The container still runs as an unprivileged user without added
-    # capabilities. `docker compose exec nudge nudge doctor` says whether the sandbox works.
+    # capabilities. `docker compose exec nudge nudge doctor` says whether the sandbox works. The
+    # terminal's commands get the internet (its "network" setting) through slirp4netns, which also
+    # needs the tun device.
     # image: ghcr.io/lum1n/nudge:stable-desktop
     # security_opt:
     #   - seccomp=unconfined
     #   - apparmor=unconfined
     #   - systempaths=unconfined
+    # devices:
+    #   - /dev/net/tun
     restart: unless-stopped
     ports:
       - "8787:8787"
