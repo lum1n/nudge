@@ -496,6 +496,50 @@ async fn renames_a_room_keeping_its_id() {
     assert_eq!(ann.rename_room("lobby", "Hall").await.unwrap().name, "Hall");
 }
 
+#[tokio::test]
+async fn approves_a_browsers_sign_in_by_qr_code() {
+    let Some(server) = faux_server().await else {
+        return;
+    };
+    // What the web UI does: start a sign-in, and show its link as a QR code.
+    let http = reqwest::Client::new();
+    let started: Value = http
+        .post(format!("{}/v1/sign-in", server.url))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let id = started["id"].as_str().unwrap();
+    let status = || async {
+        http.get(format!("{}/v1/sign-in/{id}", server.url))
+            .bearer_auth(started["secret"].as_str().unwrap())
+            .send()
+            .await
+            .unwrap()
+            .json::<Value>()
+            .await
+            .unwrap()
+    };
+    assert_eq!(status().await["status"], "waiting");
+
+    let bo = Api::new(&server.url, "robin", tokens(Some(&server.bo))).unwrap();
+    bo.approve_sign_in(id).await.unwrap();
+    assert_eq!(
+        bo.approve_sign_in(id).await.unwrap_err().status(),
+        Some(404)
+    );
+    let approved = status().await;
+    assert_eq!(approved["assistant"], "robin");
+    let browser = Api::new(&server.url, "robin", tokens(None)).unwrap();
+    let paired = browser
+        .pair(approved["code"].as_str().unwrap(), client_info())
+        .await
+        .unwrap();
+    assert_eq!(paired.player.id, "bo");
+}
+
 /// Hears a panel socket, for the test.
 struct Panel(tokio::sync::mpsc::UnboundedSender<Result<Value, PanelStatus>>);
 

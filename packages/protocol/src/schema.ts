@@ -391,6 +391,25 @@ export const PairResponse = Type.Object({
 });
 export type PairResponse = Static<typeof PairResponse>;
 
+/** A browser asking at `POST /v1/sign-in` to be signed in by an app that already is. */
+export const SignInResponse = Type.Object({
+  /** What the app approves; in `link`, for anyone who sees the QR code. */
+  id: Type.String(),
+  /** Only for the browser, which shows it to the server to learn the answer; keep it secret. */
+  secret: Type.String(),
+  /** `nudge://sign-in?server=…&request=<id>`, for a QR code. */
+  link: Type.String(),
+  expiresAt: Type.Number(),
+});
+export type SignInResponse = Static<typeof SignInResponse>;
+
+/** Until an app approves, `waiting`; then the assistant and a pairing code to `POST /pair` with. */
+export const SignInStatusResponse = Type.Union([
+  Type.Object({ status: Type.Literal("waiting") }),
+  Type.Object({ status: Type.Literal("approved"), assistant: Type.String(), code: Type.String() }),
+]);
+export type SignInStatusResponse = Static<typeof SignInStatusResponse>;
+
 export const MeResponse = Type.Object({
   player: Player,
   clientId: Type.String(),
@@ -1267,6 +1286,8 @@ export const SCHEMAS = {
   ClientInfo,
   PairRequest,
   PairResponse,
+  SignInResponse,
+  SignInStatusResponse,
   MeResponse,
   CreateRoomRequest,
   RenameRoomRequest,

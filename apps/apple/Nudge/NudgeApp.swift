@@ -57,6 +57,78 @@ struct RootView: View {
         )) { link in
             JoinView(link: link)
         }
+        .sheet(item: Binding(
+            get: { model.session == nil ? nil : model.pendingSignIn },
+            set: { model.pendingSignIn = $0 }
+        )) { link in
+            SignInBrowserView(link: link)
+        }
+    }
+}
+
+/// The web UI's sign-in page showed a QR code: sign that browser in as the player.
+struct SignInBrowserView: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let link: SignInLink
+    @State private var busy = false
+    @State private var problem: String?
+    @State private var signedIn: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    LabeledContent("Server", value: URL(string: link.server)?.host() ?? link.server)
+                } footer: {
+                    if let signedIn {
+                        Text("The browser is signed in to \(signedIn) as you.")
+                    } else {
+                        Text("The browser that shows this code gets signed in as you. Only go on if you opened that page yourself.")
+                    }
+                }
+                if let problem {
+                    Section { Text(problem).foregroundStyle(.red) }
+                }
+            }
+            .formStyle(.grouped)
+            .navigationTitle(signedIn == nil ? "Sign in on the web?" : "Signed in")
+            .toolbar {
+                if signedIn == nil {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { close() }
+                            .disabled(busy)
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(problem == nil ? "Sign in" : "Try again") { Task { await approve() } }
+                            .disabled(busy)
+                    }
+                } else {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { close() }
+                    }
+                }
+            }
+        }
+        #if os(macOS)
+        .frame(minWidth: 380, minHeight: 200)
+        #endif
+    }
+
+    private func close() {
+        model.pendingSignIn = nil
+        dismiss()
+    }
+
+    private func approve() async {
+        busy = true
+        defer { busy = false }
+        do {
+            signedIn = try await model.approveSignIn(link)
+            problem = nil
+        } catch {
+            problem = explain(error)
+        }
     }
 }
 

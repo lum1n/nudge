@@ -21,6 +21,7 @@ import nudge.client.JoinLink
 import nudge.client.Observed
 import nudge.client.PairingLink
 import nudge.client.PreferencesTokens
+import nudge.client.SignInLink
 import nudge.client.observeConnectionState
 import nudge.client.observeRoomListState
 import nudge.client.saved
@@ -124,6 +125,8 @@ class AppModel(private val context: Context) {
     val pendingLink = MutableStateFlow<PairingLink?>(null)
     /** A join link: an admin elsewhere invited the player. */
     val pendingJoin = MutableStateFlow<JoinLink?>(null)
+    /** A sign-in link from the QR code of a browser that shows the web UI. */
+    val pendingSignIn = MutableStateFlow<SignInLink?>(null)
     /** Why the app signed out on its own, for the sign-in screen. */
     val signedOutBecause = MutableStateFlow<String?>(null)
 
@@ -577,6 +580,29 @@ class AppModel(private val context: Context) {
         mutableMemberships.value = runCatching { home.client.memberships() }.getOrNull()
     }
 
+    /**
+     * Signs in the browser that shows `link`'s QR code as the player, at an assistant on the server
+     * the link names, home first; returns that assistant's name. A browser may reach the server by
+     * another address than this device, so the other assistants are asked too: only the server that
+     * made the QR code knows its request, and the others answer 404 or 401.
+     */
+    suspend fun approveSignIn(link: SignInLink): String {
+        val sessions = listOfNotNull(mutableSession.value) + mutablePlaces.value
+        val named = sessions.filter { it.account.server.trimEnd('/') == link.server.trimEnd('/') }
+        for (session in named + (sessions - named.toSet())) {
+            try {
+                session.client.approveSignIn(link.request)
+                return session.account.assistantName
+            } catch (error: NudgeException.Status) {
+                if (error.status.toInt() != 401 && error.status.toInt() != 404) throw error
+            }
+        }
+        throw IllegalStateException(
+            "That code has expired or was used, or none of your assistants is on ${hostOf(link.server)}. " +
+                "Reload the sign-in page for a new one.",
+        )
+    }
+
     /** Starts or stops carrying the player's own memory to an assistant they joined. */
     suspend fun carryMemory(membership: Membership, carry: Boolean) {
         val home = mutableSession.value ?: return
@@ -827,6 +853,9 @@ fun exeVmName(server: String): String? {
 }
 
 /** What to tell the user. */
+/** The host of a server's address, for people to read. */
+fun hostOf(server: String): String = runCatching { java.net.URI(server).host }.getOrNull() ?: server
+
 fun explain(error: Throwable): String = when (error) {
     is NudgeException.Status ->
         if (error.status.toInt() == 401) {
