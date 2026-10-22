@@ -1045,6 +1045,12 @@ fn server_and_setup_bodies_match_the_schema() {
         },
     );
     check(
+        "WiredEnableRequest",
+        &WiredEnableRequest {
+            name: Some("box".into()),
+        },
+    );
+    check(
         "WiredRelayRequest",
         &WiredRelayRequest {
             url: "https://robin.exe.xyz".into(),
@@ -1055,6 +1061,7 @@ fn server_and_setup_bodies_match_the_schema() {
         &WiredJoinRequest {
             invite: "wired1abc".into(),
             relay_url: Some("https://robin.exe.xyz".into()),
+            name: Some("robin".into()),
         },
     );
     check(

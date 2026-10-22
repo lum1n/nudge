@@ -20,6 +20,8 @@ struct WiredSection: View {
     @State private var usingAddress: String?
     /// The member to remove from the network, while asking.
     @State private var removing: String?
+    /// The name this server takes in the network, as the owner typed it; the server's own until then.
+    @State private var name = ""
 
     var body: some View {
         // Always one section, so the task below runs: on a view with nothing in it, it wouldn't.
@@ -94,6 +96,20 @@ struct WiredSection: View {
     /// Whether this server has a public HTTPS address, which joining needs: it serves its relay there.
     private var isPublic: Bool { server.hasPrefix("https://") }
 
+    /// The name the owner typed, or nil to keep the server's own.
+    private var picked: String? {
+        let typed = name.trimmingCharacters(in: .whitespaces)
+        return typed.isEmpty || typed == state?.name ? nil : typed
+    }
+
+    private var nameIsValid: Bool { picked.map(isWiredName) ?? true }
+
+    /// A name Wired accepts as it is: 1–63 lowercase letters, digits and dashes, not starting or
+    /// ending with a dash.
+    private func isWiredName(_ name: String) -> Bool {
+        name.wholeMatch(of: /[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?/) != nil
+    }
+
     @ViewBuilder private func row(_ state: WiredState) -> some View {
         switch state.state {
         case .off, .error:
@@ -101,16 +117,33 @@ struct WiredSection: View {
                 Text(state.error ?? "Wired stopped.").foregroundStyle(.secondary)
                 Button("Turn off Wired", role: .destructive) { turningOff = true }.disabled(busy)
             }
+            LabeledContent("Name") {
+                TextField(state.name ?? "box", text: $name)
+                    .multilineTextAlignment(.trailing)
+                    .autocorrectionDisabled()
+                    #if os(iOS)
+                    .textInputAutocapitalization(.never)
+                    #endif
+            }
+            if let picked, !isWiredName(picked) {
+                Text("Lowercase letters, digits and dashes, such as box.")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            } else {
+                Text("Others reach it at http://nudge.\(picked ?? state.name ?? "box").wired")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             if let root, isPublic {
                 Button("Join \(host(root))'s network", systemImage: "point.3.connected.trianglepath.dotted") {
                     Task { await join(root) }
                 }
-                .disabled(busy)
+                .disabled(busy || !nameIsValid)
             }
             Button("Hold a network here", systemImage: "network") {
-                Task { await act { try await model.servers.client(server).enableWired() } }
+                Task { await act { try await model.servers.client(server).enableWired(name: picked) } }
             }
-            .disabled(busy)
+            .disabled(busy || !nameIsValid)
             if root == nil, isPublic {
                 Text("Or join one: hold a network on your home server first, then come back here.")
                     .font(.caption)
@@ -184,7 +217,8 @@ struct WiredSection: View {
     /// Home lists this server's relay and this server joins with home's invite, which stays in the app.
     private func join(_ root: String) async {
         await act {
-            try await model.servers.client(root).connectWired(other: try model.servers.client(server), otherUrl: server)
+            try await model.servers.client(root).connectWired(
+                other: try model.servers.client(server), otherUrl: server, name: picked)
         }
     }
 
@@ -228,6 +262,7 @@ struct WiredSection: View {
         unsupported = nil
         state = next
         problem = nil
+        if next.state == .root || next.state == .member { name = "" }
     }
 
     private func host(_ server: String) -> String {

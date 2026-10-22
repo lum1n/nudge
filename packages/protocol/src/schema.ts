@@ -1094,6 +1094,10 @@ export const WiredState = Type.Object({
     Type.Literal("member"),
     Type.Literal("error"),
   ]),
+  /**
+   * Its name in the network: others reach it at `http://nudge.<name>.wired`. While off, the name
+   * it takes when turned on or joining, unless the owner picks another.
+   */
   name: Type.Optional(Type.String()),
   members: Type.Optional(Type.Array(Type.Object({ name: Type.String(), anchor: Type.Boolean() }))),
   /** The network's relays: public addresses of servers every server reaches the others through. */
@@ -1104,17 +1108,31 @@ export const WiredState = Type.Object({
 });
 export type WiredState = Static<typeof WiredState>;
 
+/**
+ * A server's name in a Wired network, such as `box`: 1–63 lowercase letters, digits and dashes,
+ * starting and ending with a letter or digit. Absent, it is the public address's first label, or
+ * the host's name.
+ */
+export const WiredName = Type.String({ pattern: "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$" });
+
+/** Makes the server the root of its own network, as `name` when given. The body may be empty. */
+export const WiredEnableRequest = Type.Object({ name: Type.Optional(WiredName) });
+export type WiredEnableRequest = Static<typeof WiredEnableRequest>;
+
 /** A relay a new server will serve, such as `https://robin.exe.xyz`, added before it joins. */
 export const WiredRelayRequest = Type.Object({ url: Type.String({ pattern: "^https://" }) });
 export type WiredRelayRequest = Static<typeof WiredRelayRequest>;
 
 /**
- * Joins the network `invite` is for. The server serves a relay at its public HTTPS address, or
- * `relayUrl`, which the root must have listed first (`POST /server/wired/relays` there).
+ * Joins the network `invite` is for, as `name` when given. The server serves a relay at its
+ * public HTTPS address, or `relayUrl`, which the root must have listed first
+ * (`POST /server/wired/relays` there).
  */
 export const WiredJoinRequest = Type.Object({
   invite: Type.String({ pattern: "^wired1[a-z0-9]+$" }),
   relayUrl: Type.Optional(Type.String({ pattern: "^https://" })),
+  /** Its name in the network; see `WiredName`. */
+  name: Type.Optional(WiredName),
 });
 export type WiredJoinRequest = Static<typeof WiredJoinRequest>;
 
@@ -1338,6 +1356,7 @@ export const SCHEMAS = {
   UpdateState,
   SetUpdatesRequest,
   WiredState,
+  WiredEnableRequest,
   WiredJoinRequest,
   WiredRelayRequest,
   WiredRelayResponse,

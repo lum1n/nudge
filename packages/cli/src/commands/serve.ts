@@ -26,7 +26,6 @@ import {
   SetupCodes,
   routeOutgoing,
   ServerWired,
-  serverWiredName,
   testProviderKey,
   Updates,
   writeRawConfig,
@@ -227,9 +226,9 @@ export async function serve(options: ServeOptions): Promise<number> {
       ...(updates === undefined ? {} : { updates: updates.control }),
       wired: {
         state: () => wired.state(),
-        enable: async () => {
+        enable: async (name) => {
           if (apiAddr === undefined) throw new Error("The server isn't listening yet");
-          return wired.enableRoot(serverWiredName(publicUrl()), apiAddr);
+          return wired.enableRoot(apiAddr, name);
         },
         addRelay: (url) => wired.addRelay(url),
         remove: (name) => wired.remove(name),
@@ -237,9 +236,9 @@ export async function serve(options: ServeOptions): Promise<number> {
           await wired.forget();
           return wired.state();
         },
-        join: async (invite, relayUrl) => {
+        join: async (invite, options) => {
           if (apiAddr === undefined) throw new Error("The server isn't listening yet");
-          return wired.join(invite, serverWiredName(publicUrl()), apiAddr, relayUrl);
+          return wired.join(invite, apiAddr, options);
         },
       },
     };
@@ -289,7 +288,7 @@ export async function serve(options: ServeOptions): Promise<number> {
       },
     });
     apiAddr = loopbackOf(server.url);
-    await wired.resume(serverWiredName(publicUrl()), apiAddr);
+    await wired.resume(apiAddr);
     // Owners from before servers had keys of their own (v0.6.0) become owners by address.
     void owners
       .migrate(

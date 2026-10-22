@@ -631,10 +631,14 @@ impl ServerClient {
             .into())
     }
 
-    /// Makes the server the root of its own Wired network, as a home server is.
-    pub async fn enable_wired(&self) -> Result<WiredState, NudgeError> {
+    /// Makes the server the root of its own Wired network, as a home server is, as `name` (such
+    /// as `box`) when given; else as its public address's first label, or its host's name.
+    #[uniffi::method(default(name = None))]
+    pub async fn enable_wired(&self, name: Option<String>) -> Result<WiredState, NudgeError> {
         let api = self.api.clone();
-        Ok(run(async move { api.enable_wired().await }).await?.into())
+        Ok(run(async move { api.enable_wired(name.as_deref()).await })
+            .await?
+            .into())
     }
 
     /// On the root: lists the relay another server will serve at `url`, its public HTTPS address,
@@ -644,26 +648,36 @@ impl ServerClient {
         Ok(run(async move { api.add_wired_relay(&url).await }).await?)
     }
 
-    /// Joins the network `invite` is for, serving a relay at the server's public HTTPS address.
-    pub async fn join_wired(&self, invite: String) -> Result<WiredState, NudgeError> {
+    /// Joins the network `invite` is for, as `name` when given, serving a relay at the server's
+    /// public HTTPS address.
+    #[uniffi::method(default(name = None))]
+    pub async fn join_wired(
+        &self,
+        invite: String,
+        name: Option<String>,
+    ) -> Result<WiredState, NudgeError> {
         let api = self.api.clone();
-        Ok(run(async move { api.join_wired(&invite, None).await })
-            .await?
-            .into())
+        Ok(
+            run(async move { api.join_wired(&invite, None, name.as_deref()).await })
+                .await?
+                .into(),
+        )
     }
 
     /// Puts `other`, a server with a public HTTPS address, in this server's Wired network: this
-    /// one (the root) lists `other`'s relay, and `other` joins with the invite. The invite never
-    /// leaves this call.
+    /// one (the root) lists `other`'s relay, and `other` joins with the invite, as `name` when
+    /// given. The invite never leaves this call.
+    #[uniffi::method(default(name = None))]
     pub async fn connect_wired(
         &self,
         other: Arc<ServerClient>,
         other_url: String,
+        name: Option<String>,
     ) -> Result<WiredState, NudgeError> {
         let (home, other) = (self.api.clone(), other.api.clone());
         Ok(run(async move {
             let invite = home.add_wired_relay(&other_url).await?;
-            other.join_wired(&invite, None).await
+            other.join_wired(&invite, None, name.as_deref()).await
         })
         .await?
         .into())
