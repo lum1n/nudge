@@ -28,6 +28,7 @@ An extendable, multiplayer personal assistant that keeps personal data away from
 - `@nudge/ext-federation`: lets people from other assistants join, with their home vouching for them (`extensions/federation`).
 - `@nudge/ext-push`: notifications of answers and approvals, through Web Push, APNs and FCM (`extensions/push`).
 - `@nudge/ext-rss`: RSS and Atom feeds the assistant checks first for news (`extensions/rss`).
+- `@nudge/ext-triggers`: secret web addresses that let outside events start a turn in a room (`extensions/triggers`).
 - `@nudge/ext-acc`: lets the assistant start, watch and steer coding agents on your machines over SSH (`extensions/acc`).
 
 ## Install a server
@@ -461,6 +462,16 @@ To make it always come first ("always use the timetable API first for departures
 - Each check runs in a side conversation of the room, out of the room's sight but with its tools, connectors, logins and memory. The model replies with the items that match, each with a stable key such as its URL.
 - The room hears only about items it hasn't seen before. That arrives like a fired nudge, so push and chat bridges deliver it too.
 - Every check is a model run with tools, so it costs: `minMinutes` (default 30) caps how often, and `maxPerRoom` (default 10) how many.
+
+### Triggers
+
+`extensions/triggers` lets outside events start a turn. Watches can only check on a schedule. Ask "make a trigger for when the washing machine is done, and tell Ann" and the model calls `add_trigger` with a name and what to do. The room gets a secret web address, and calling it starts a turn. Good senders are a Home Assistant automation (`rest_command`), an Uptime Kuma webhook notification, a GitHub or Gitea webhook, a Paperless workflow, or an iPhone Shortcut ("Get contents of URL", method POST). `list_triggers` and `remove_trigger` show the triggers and turn them off.
+
+- Senders `POST` to `/v1/a/<assistant>/ext/triggers/hook/<secret>`. A JSON, form or text body and any query parameters come along, so `curl -X POST -d 'Washer done' <address>` works. The answer is `202` straight away. The room hears the reply like a fired nudge, so push and the chat bridges deliver it too.
+- Set `url` to the address senders reach the server at. Use the LAN or tailnet address for Home Assistant at home, and a public one for GitHub. Then the assistant gives the whole address. Without `url` it gives the part to put after the server's address.
+- The model never sees the address. It gets a placeholder, and in the room only the person who asked sees the real address. The database keeps only the secret's hash; the secret sits in the extension's encrypted secret store so the address can be shown again. A wrong secret, a removed trigger and a room that turned the extension off all get the same `404`.
+- What a call brings is untrusted: anyone with the address can send anything. The model gets it between two marked lines, with a random mark it can't fake, and is told to treat it as data, not instructions. The model reads at most `maxChars` (default 8000) of it. It passes redaction like any input. Actions that change things still wait for approval as always. This isn't proof against prompt injection, so give a trigger's room only the tools it needs.
+- Every call is a model run, so it costs. `maxPerHour` (default 12) caps the calls per trigger; past that the sender gets `429` with `Retry-After`. `maxPerRoom` (default 10) caps how many triggers a room can have. A sender's retry with the same `Idempotency-Key` or `X-GitHub-Delivery` doesn't start a second turn.
 
 ### Lists
 
