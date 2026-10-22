@@ -75,7 +75,7 @@ describe("Nudge", () => {
     ).wait(context);
 
     const users = requests[0]!.messages.filter((m) => m.role === "user");
-    expect(JSON.stringify(users.at(-1))).toContain("⟦NAME1⟧: hello");
+    expect(JSON.stringify(users.at(-1))).toContain("Ann: hello");
     const lobby = await nudge.conversation(LOBBY, context);
     const entries = (await lobby.entries({}, 50, undefined, context)).items;
     const message = entries.find((entry) => entry.kind === MESSAGE_ENTRY);

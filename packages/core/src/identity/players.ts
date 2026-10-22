@@ -39,8 +39,6 @@ export const PAIRING_TTL_MS = 10 * 60 * 1000;
 export class Players {
   constructor(
     private readonly harness: Harness,
-    /** Keeps a display name from the model before anything can mention it. */
-    private readonly protectName: (name: string) => Promise<void>,
     private readonly now: () => number,
   ) {}
 
@@ -69,7 +67,6 @@ export class Players {
   async addRoaming(home: PlayerHome, displayName: string, context: Context): Promise<Invitation> {
     const name = displayName.trim();
     if (name === "") throw new Error("A player needs a name");
-    await this.protectName(name);
     const token = newToken();
     const clientId = `client-${randomUUID()}`;
     const player = await this.harness.commit(async (tx) => {
@@ -150,7 +147,6 @@ export class Players {
   ): Promise<Player> {
     const name = displayName.trim();
     if (name === "") throw new Error("A player needs a name");
-    await this.protectName(name);
     return this.harness.commit(async (tx) => {
       const directory = await tx.doc(DirectoryDoc);
       const id = freeId(slug(name, "player"), (id) => id in directory.players);
@@ -170,7 +166,6 @@ export class Players {
   async ensure(id: string, displayName: string, context: Context): Promise<Player> {
     const name = displayName.trim();
     if (name === "") throw new Error("A player needs a name");
-    await this.protectName(name);
     return this.harness.commit(async (tx) => {
       const directory = await tx.doc(DirectoryDoc);
       const existing = directory.players[id];
@@ -188,7 +183,6 @@ export class Players {
   async rename(id: string, displayName: string, context: Context): Promise<Player> {
     const name = displayName.trim();
     if (name === "") throw new Error("A player needs a name");
-    await this.protectName(name);
     return this.harness.commit(async (tx) => {
       const player = (await tx.doc(DirectoryDoc)).players[id];
       if (player === undefined) throw new Error(`No player "${id}"`);

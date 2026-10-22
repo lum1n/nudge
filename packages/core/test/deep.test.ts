@@ -312,7 +312,7 @@ describe("the local model in a running assistant", () => {
       database: join(dir, "a.sqlite"),
       models,
       model: { provider: faux.provider.id, modelId: faux.getModel().id },
-      privacy: { deep },
+      privacy: { deep, deepMode: "required" },
       ...extra,
     };
     return { faux, options, sent };

@@ -288,7 +288,9 @@ export { RedactingModels, type RedactionOptions } from "./models/redacting-model
 export {
   builtinDetectors,
   type PiiDetector,
+  quasiIdentifierDetectors,
   regexDetector,
+  secretDetector,
   type Span,
 } from "./privacy/detectors.ts";
 export { addressDetector, nameDetector } from "./privacy/people.ts";

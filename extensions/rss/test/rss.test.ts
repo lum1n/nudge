@@ -14,7 +14,6 @@ import { discoverFeed, parseFeed, rssExtension } from "../src/index.ts";
 const context = BACKGROUND_CONTEXT;
 /** A public address as a literal, so checking it needs no DNS. */
 const SITE = "http://93.184.215.14";
-const HIDDEN = SITE.replace(/\d+(?:\.\d+){3}/, "⟦IP1⟧");
 
 const RSS = `<?xml version="1.0"?>
 <rss version="2.0"><channel><title>Byavisa</title><link>${SITE}/</link>
@@ -111,7 +110,7 @@ describe("rss", () => {
 
   it("adds a site's feed and reads every feed newest first", async () => {
     expect(await call("add_feed", { url: `${SITE}/` })).toBe(
-      `Added feed f1: Været (${HIDDEN}/atom), with 1 stories now.`,
+      `Added feed f1: Været (${SITE}/atom), with 1 stories now.`,
     );
     expect(asked).toEqual([`${SITE}/`, `${SITE}/atom`]);
     expect(await call("add_feed", { url: `${SITE}/rss` })).toMatch(/has that feed already: s1/);
@@ -120,15 +119,15 @@ describe("rss", () => {
       [
         "1. Ny bru åpnet",
         "   Byavisa, 2026-10-21 07:30",
-        `   ${HIDDEN}/bru`,
+        `   ${SITE}/bru`,
         "   Brua er åpen for trafikk.",
         "2. Storm på vei",
         "   Været, 2026-10-21 05:00",
-        `   ${HIDDEN}/storm`,
+        `   ${SITE}/storm`,
         "   Sterk vind i kveld.",
         "3. Ferja går igjen",
         "   Byavisa, 2026-10-20 06:00",
-        `   ${HIDDEN}/ferja`,
+        `   ${SITE}/ferja`,
         "   Ruta er tilbake & i rute.",
       ].join("\n"),
     );
@@ -141,9 +140,9 @@ describe("rss", () => {
 
     expect(await call("remove_feed", { feed: "s1" })).toMatch(/in the assistant's settings/);
     expect(await call("remove_feed", { feed: "Været" })).toBe(
-      `Removed feed f1: Været (${HIDDEN}/atom).`,
+      `Removed feed f1: Været (${SITE}/atom).`,
     );
-    expect(await call("list_feeds", {})).toBe(`s1: Byavisa (${HIDDEN}/rss)`);
+    expect(await call("list_feeds", {})).toBe(`s1: Byavisa (${SITE}/rss)`);
   });
 
   it("keeps feeds off local addresses", async () => {

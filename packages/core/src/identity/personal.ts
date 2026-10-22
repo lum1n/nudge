@@ -76,6 +76,8 @@ export class InvalidPersonal extends Error {
 export type PersonalValues = {
   /** Protects a value, as `owner`'s alone if given, and gives its placeholder. */
   readonly protect: (value: string, kind: string, owner?: string) => Promise<string>;
+  /** A placeholder for a value that stays readable everywhere, as names are (ADR 15). */
+  readonly readable: (value: string, kind: string) => Promise<string>;
   readonly forget: (placeholder: string) => Promise<void>;
   readonly entry: (placeholder: string) => VaultEntry | undefined;
 };
@@ -159,17 +161,25 @@ export class Personal {
     check(update);
     const before = (await this.harness.snapshot(PersonalDoc, playerId, context)) ?? {};
     // Everyone in a room sees who wrote what: a full name that is also someone's display name
-    // is protected, but not made private, which would hide the name from the others.
-    const names = new Set(
-      (await this.players.list(context)).map((player) => player.displayName.trim().toLowerCase()),
+    // stays as readable as the display name, written as it is there.
+    const names = new Map(
+      (await this.players.list(context)).map((player) => [
+        player.displayName.trim().toLowerCase(),
+        player.displayName.trim(),
+      ]),
     );
     const set: Partial<Record<PersonalField, string | null>> = {};
     for (const [field, kind] of Object.entries(PERSONAL_FIELDS) as [PersonalField, string][]) {
       const given = update[field];
       if (given === undefined) continue;
       const value = given?.trim() ?? "";
-      const owner = names.has(value.toLowerCase()) ? undefined : playerId;
-      set[field] = value === "" ? null : await this.values.protect(value, kind, owner);
+      const shown = names.get(value.toLowerCase());
+      set[field] =
+        value === ""
+          ? null
+          : shown === undefined
+            ? await this.values.protect(value, kind, playerId)
+            : await this.values.readable(shown, kind);
     }
     let location: PersonalState["location"] | null | undefined;
     if (update.location === null) location = null;

@@ -191,25 +191,19 @@ Every model request's cost, as the model catalog prices it, is booked per month 
 
 ## Privacy
 
-Nudge keeps what identifies you from the model provider. Before a request leaves, it replaces these with placeholders such as `⟦EMAIL1⟧` or `⟦PLACE2⟧`:
+Nudge keeps what could do harm on its own from the model provider. Before a request leaves, it replaces these with placeholders such as `⟦EMAIL1⟧` or `⟦PHONE2⟧`:
 
-- e-mail addresses, phone numbers, IBANs, card numbers, Norwegian national identity and account numbers
-- people's names (the people chatting, by whole name, first name and family name, and names from Norwegian and English name lists) and street addresses
-- Norwegian places and rail stations
-- the kindergartens, schools, clinics and clubs you name, and their departments
-- your own hosts and domains, IP addresses, and user names in paths
-- licence plates, VINs and birth dates
+- passwords, API keys, tokens and private keys
+- Norwegian national identity numbers
+- card numbers, IBANs and Norwegian account numbers
+- e-mail addresses and phone numbers
+- whatever someone makes private, and their personal details and location (below)
 
-This covers every request, including tool rounds and the summaries made when a long conversation is compacted. Thinking that could hold a value is left out. A value keeps its placeholder for the life of the assistant. Tools still get the real values, so a journey planner gets the real station.
+This covers every request, including tool rounds and the summaries made when a long conversation is compacted. Thinking that could hold a value is left out. A value keeps its placeholder for the life of the assistant. Tools still get the real values, so a mail goes to the real address.
 
-What stays readable, on purpose:
+Names, places, stations, organisations, addresses, hosts, plates and birth dates stay readable, so the assistant can plan a trip, call an API or tell people apart. Hide one yourself with `/private` ([ADR 15](docs/adr/0015-hide-only-what-is-critical.md)).
 
-- what things are about ("has a dog", "selling the car")
-- each person's time zone and language
-- Oslo, Bergen, Trondheim and Stavanger
-- well-known public sites such as `yr.no` or `github.com`
-
-A small model on the server finds what the rules miss, such as a vet's name on its own ("hos Vethjem"). It reads each message, tool result and data section once before the provider gets it, and what it finds goes into the vault. Web search results are left to the rules, so the shops and places in them stay readable. Well-known names stay readable everywhere: famous people's full names, companies, brands, programmes and sights from Wikidata, and countries and big cities abroad. The model is GLiNER (`urchade/gliner_multi-v2.1`, Apache-2.0), run on the CPU in a process of its own. `nudge serve` and `nudge chat` download it the first time: about 260 MB, into `server/models` beside `nudge.json`. While it reads it takes about 650 MB of memory; after two minutes with nothing to read it stops, and starts again in about a second. Until it runs, requests are refused, so nothing goes out unread. In `nudge.json`, `"privacy": { "deep": "preferred" }` sends requests with the rules alone while it is missing, `"deep": "off"` never downloads it, and `"allow": ["Kiwi"]` keeps words it hides by mistake readable. Assistants on Cloudflare run the rules alone. Check what a room sends with **Model view**, and hide what slipped through with `/private` ([ADR 14](docs/adr/0014-quasi-identifiers-and-local-ner.md)).
+For more, a small model on the server hides names, places and organisations too, such as a vet's name on its own ("hos Vethjem"), along with the rules for hosts, plates and birth dates. It is off unless `nudge.json` has `"privacy": { "deep": "required" }`, which refuses requests until the model runs, or `"deep": "preferred"`, which sends them with the rules alone meanwhile. `"allow": ["Kiwi"]` keeps words it hides by mistake readable. Famous people, companies, brands and big cities abroad stay readable either way. The model is GLiNER (`urchade/gliner_multi-v2.1`, Apache-2.0), run on the CPU in a process of its own. It is downloaded the first time: about 260 MB, into `server/models` beside `nudge.json`. While it reads it takes about 650 MB of memory; after two minutes with nothing to read it stops. Assistants on Cloudflare run the rules alone ([ADR 14](docs/adr/0014-quasi-identifiers-and-local-ner.md)). Check what a room sends with **Model view**.
 
 The history is stored with the placeholders too: messages, answers, tool results, memory, approvals and nudges. The values are kept in one place, the vault, and put back only where a person sees them (and where a tool acts on them, such as sending a mail). So forgetting a value takes it out of all history at once ([ADR 9](docs/adr/0009-placeholders-at-rest-and-per-person-visibility.md)). When the detectors learn more, the history is rewritten with them once, the next time the assistant opens.
 
@@ -222,7 +216,7 @@ Your personal details help the assistant fill in forms, write mail for you and f
 
 More:
 
-- `nudge doctor --privacy` checks the detectors against sample data. `pnpm -C packages/core eval:privacy` measures what the rules and the local model hide, and what they hide that the model needed, on 256 test messages. `nudge doctor` checks the local model's files and that it finds a name.
+- `nudge doctor --privacy` checks the detectors against sample data. `pnpm -C packages/core eval:privacy` measures what the rules and the local model hide, and what they hide that the model needed, on 256 test messages. With the local model on, `nudge doctor` checks its files and that it finds a name.
 - `NUDGE_DEBUG_REQUESTS=1 nudge chat` (or `nudge serve`) writes every request, exactly as the provider receives it, to `<database>.requests.jsonl`.
 - **Model view** on a room's page in the web UI (or `GET /rooms/<id>/model-view`) shows anyone in the room what its next request sends: the instructions and sections, every message and tool call, with placeholders where the values were.
 
@@ -450,7 +444,7 @@ To make it always come first ("always use the timetable API first for departures
 - The model gets `mail_search`, `mail_read` and `mail_send`. Reading opens the inbox read-only, so nothing is marked read. Sending, replies included (kept in their thread), waits for someone in the room to approve it.
 - SMTP defaults to the IMAP host with `imap.` changed to `smtp.`, port 465 and the same login; give `smtp` to set it.
 - `rooms` lists the rooms that may use the account, by id (`*` for every room). In Settings, on the web or in the apps, you pick them by name instead; `nudge room` lists the ids.
-- Mail goes to the model like any tool output: addresses, phone numbers and the like as placeholders. Other names in a message are not detected.
+- Mail goes to the model like any tool output: e-mail addresses, phone numbers and the like as placeholders. Names are readable.
 - Some servers don't keep a copy of sent mail in Sent by themselves.
 
 ### Calendar

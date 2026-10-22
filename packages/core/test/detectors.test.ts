@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { builtinDetectors, Vault } from "../src/index.ts";
+import { builtinDetectors, quasiIdentifierDetectors, Vault } from "../src/index.ts";
 import { domainDetector, ipDetector, usernameDetector } from "../src/privacy/hosts.ts";
 import { orgDetector, placeDetector } from "../src/privacy/places.ts";
 import {
   birthDateDetector,
   phoneCueDetector,
   type PiiDetector,
+  secretDetector,
   plateDetector,
   vinDetector,
 } from "../src/privacy/detectors.ts";
@@ -117,7 +118,7 @@ describe("quasi-identifiers", () => {
     expect(
       vault.redact(
         "Erling Haaland og Kari Nordby så Rosenborg BK, så til Komplett AS og Lindeberg skole.",
-        builtinDetectors,
+        quasiIdentifierDetectors,
       ),
     ).toBe("Erling Haaland og ⟦NAME1⟧ så Rosenborg BK, så til Komplett AS og ⟦ORG1⟧ skole.");
   });
@@ -132,8 +133,41 @@ describe("quasi-identifiers", () => {
     const vault = new Vault();
     const text =
       "Vi bor på Sørumsand, barnet går i Skogkanten Barnehage, HA er på hass.kjeks.dev, Tesla Model Y 2022 med 65 000 km, ISO 27001, år 2022.";
-    expect(vault.redact(text, builtinDetectors)).toBe(
+    expect(vault.redact(text, quasiIdentifierDetectors)).toBe(
       "Vi bor på ⟦PLACE1⟧, barnet går i ⟦ORG1⟧ Barnehage, HA er på ⟦DOMAIN1⟧, Tesla Model Y 2022 med 65 000 km, ISO 27001, år 2022.",
+    );
+  });
+});
+
+describe("what every assistant hides (ADR 15)", () => {
+  it("finds keys, tokens and passwords, not the words around them", () => {
+    expect(
+      found(
+        secretDetector,
+        [
+          "key sk-ant-api03-abcdefghijklmnopqrstuvwxyz012345 and ghp_abcdefghijklmnopqrstuvwxyz0123456789",
+          "AWS AKIAABCDEFGHIJKLMNOP, jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.c2lnbmF0dXJlLXZhbHVl",
+          "passord: Hemmelig123. password=hunter2! token er abc123def",
+          "the password is wrong, token expired, secret santa",
+        ].join("\n"),
+      ),
+    ).toEqual([
+      "sk-ant-api03-abcdefghijklmnopqrstuvwxyz012345",
+      "ghp_abcdefghijklmnopqrstuvwxyz0123456789",
+      "AKIAABCDEFGHIJKLMNOP",
+      "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.c2lnbmF0dXJlLXZhbHVl",
+      "Hemmelig123",
+      "hunter2",
+      "abc123def",
+    ]);
+  });
+
+  it("leaves names, places, hosts and API words readable", () => {
+    const vault = new Vault();
+    const text =
+      "Kari Nordby bor på Sørumsand, HA på hass.kjeks.dev, POST to NSR:StopPlace:58404, født 3. mai 1958, EL 12345. Ring +47 912 34 567.";
+    expect(vault.redact(text, builtinDetectors)).toBe(
+      "Kari Nordby bor på Sørumsand, HA på hass.kjeks.dev, POST to NSR:StopPlace:58404, født 3. mai 1958, EL 12345. Ring ⟦PHONE1⟧.",
     );
   });
 });

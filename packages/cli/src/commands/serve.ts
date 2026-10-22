@@ -40,7 +40,7 @@ import { renderUnicodeCompact } from "uqr";
 import { UsageError } from "../errors.ts";
 import { keyPath, scheduleBackups } from "./backup.ts";
 import { offeredProviders } from "./setup-offer.ts";
-import { hostOptions, reloadOnHangup, sharedLocalModel } from "../host.ts";
+import { hostOptions, localModelWanted, reloadOnHangup, sharedLocalModel } from "../host.ts";
 
 export type ServeOptions = {
   readonly config: string;
@@ -151,7 +151,7 @@ export async function serve(options: ServeOptions): Promise<number> {
     throw error;
   });
   // The local model is large: its download starts now, also while the server waits to be set up.
-  if (config?.privacy?.deep !== "off") sharedLocalModel(configPath);
+  if (localModelWanted(config)) sharedLocalModel(configPath);
   const keys = new ServerKeys(serverKeysDir(configPath));
   const owners = new ServerOwners(serverOwnersFile(configPath));
   const identity = new ServerIdentity(serverIdentityDir(configPath));

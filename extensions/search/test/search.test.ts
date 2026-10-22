@@ -102,8 +102,7 @@ describe("search", () => {
     ).toBe(
       [
         "1. Kiwi Storgata — opening hours",
-        // The site's address is hidden from the model like any other.
-        `   ${SITE.replace(/\d+(?:\.\d+){3}/, "⟦IP1⟧")}/kiwi`,
+        `   ${SITE}/kiwi`,
         "   2026-10-01",
         "   Open 07–23 on weekdays.",
       ].join("\n"),
@@ -118,7 +117,7 @@ describe("search", () => {
     });
 
     expect(await call("read_page", { url: `${SITE}/moved` })).toBe(
-      `Kiwi & co (${SITE.replace(/\d+(?:\.\d+){3}/, "⟦IP1⟧")}/kiwi), characters 0–35 of 35:\n\nKiwi\nWeekdays 07–23\n- Sunday closed`,
+      `Kiwi & co (${SITE}/kiwi), characters 0–35 of 35:\n\nKiwi\nWeekdays 07–23\n- Sunday closed`,
     );
   });
 
@@ -126,7 +125,9 @@ describe("search", () => {
     expect(await call("read_page", { url: "http://127.0.0.1:8787/v1" })).toMatch(
       /127\.0\.0\.1 is a local address/,
     );
-    expect(await call("read_page", { url: `${SITE}/inside` })).toMatch(/⟦IP\d⟧ is a local address/);
+    expect(await call("read_page", { url: `${SITE}/inside` })).toMatch(
+      /192\.168\.1\.1 is a local address/,
+    );
     expect(asked).toEqual([`${SITE}/inside`]);
     expect(await call("read_page", { url: "file:///etc/passwd" })).toBe(
       "Only http and https pages are read, not file:",

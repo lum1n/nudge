@@ -593,7 +593,7 @@ describe("memory", () => {
     await send(annsRoom.id, "My sister is Eli");
     expect(outputs).toEqual(["Remembered m1.", "Remembered m2."]);
     await send(annsRoom.id, "What do you know?");
-    expect(current(requests.at(-1)).prompt).toContain("- m1: ⟦NAME1⟧ is vegetarian");
+    expect(current(requests.at(-1)).prompt).toContain("- m1: Ann is vegetarian");
     await send(LOBBY, "What do you know?");
     expect(JSON.stringify(requests.at(-1))).not.toContain("vegetarian");
 

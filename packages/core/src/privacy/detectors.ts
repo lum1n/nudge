@@ -141,8 +141,44 @@ export const birthDateDetector: PiiDetector = {
   },
 };
 
-/** The detectors every assistant runs. Names come from the directory, not from a detector. */
+/**
+ * Secrets that let someone act as their owner: keys and tokens of well-known formats, private key
+ * blocks, JSON web tokens, bearer tokens, and what follows "password:" or "passord:".
+ */
+const SECRET = new RegExp(
+  [
+    // Provider keys: OpenAI and Anthropic, GitHub, GitLab, Slack, Stripe, Google, AWS, npm, HF.
+    String.raw`(?<![\w-])(?:sk-(?:ant-|proj-)?[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,}|glpat-[A-Za-z0-9_-]{20,}|xox[abposr]-[A-Za-z0-9-]{10,}|[rs]k_(?:live|test)_[A-Za-z0-9]{20,}|AIza[A-Za-z0-9_-]{35}|AKIA[A-Z0-9]{16}|npm_[A-Za-z0-9]{36}|hf_[A-Za-z0-9]{30,})(?![\w-])`,
+    String.raw`-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----`,
+    String.raw`(?<![\w-])eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}(?![\w-])`,
+  ].join("|"),
+  "g",
+);
+const SECRET_CUE =
+  /(?<![\p{L}])(?:password|passwd|passord|pwd|passphrase|api[ _-]?key|secret|token|bearer)(?:\s+(?:is|er))?(?:\s*[:=]\s*|\s+)(?<secret>[^\s"'`]{6,})/giu;
+
+export const secretDetector: PiiDetector = {
+  kind: "SECRET",
+  *find(text) {
+    for (const match of text.matchAll(SECRET))
+      yield { start: match.index, end: match.index + match[0].length };
+    for (const match of text.matchAll(SECRET_CUE)) {
+      const secret = match.groups!.secret!.replace(/[.,;:!?)]+$/u, "");
+      // A word, not a secret: "the password is wrong", "token expired".
+      if (!/\d|[^\p{L}\d]/u.test(secret)) continue;
+      const start = match.index + match[0].length - match.groups!.secret!.length;
+      yield { start, end: start + secret.length };
+    }
+  },
+};
+
+/**
+ * The detectors every assistant runs: only what does harm on its own (ADR 15). Names, places,
+ * organisations, hosts and the like stay readable; the detectors for them are here for the local
+ * model and for hosts that want them.
+ */
 export const builtinDetectors: readonly PiiDetector[] = [
+  secretDetector,
   emailDetector,
   ibanDetector,
   cardDetector,
@@ -150,6 +186,11 @@ export const builtinDetectors: readonly PiiDetector[] = [
   norwegianAccountDetector,
   phoneDetector,
   phoneCueDetector,
+];
+
+/** Everything ADR 14 hid: the built-in detectors and those for names, places and hosts. */
+export const quasiIdentifierDetectors: readonly PiiDetector[] = [
+  ...builtinDetectors,
   usernameDetector,
   domainDetector,
   ipDetector,

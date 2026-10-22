@@ -85,8 +85,8 @@
     }
   ],
   "privacy": {
-    "$comment": "The local model that finds names, places and organisations the rules miss (ADR 14). deep: \"required\" (the default) refuses requests until it is downloaded and running, \"preferred\" sends them with the rules alone meanwhile, \"off\" never downloads it (about 260 MB, into server/models). allow lists words it should never hide, such as a shop it takes for a person.",
-    "deep": "required",
+    "$comment": "Off by default: only secrets, ID, card and account numbers, e-mail addresses, phone numbers and what people make private are hidden (ADR 15). deep: \"required\" also hides names, places and organisations with a local model (about 260 MB, into server/models) and refuses requests until it runs, \"preferred\" sends them with the rules alone meanwhile. allow lists words it should never hide, such as a shop it takes for a person.",
+    "deep": "off",
     "allow": ["Kiwi"]
   },
   "providers": [

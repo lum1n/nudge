@@ -10,7 +10,13 @@
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
-import { builtinDetectors, DeepScanner, localModelDir, piecesOf, Vault } from "../../dist/index.js";
+import {
+  DeepScanner,
+  localModelDir,
+  piecesOf,
+  quasiIdentifierDetectors,
+  Vault,
+} from "../../dist/index.js";
 import type { DeepDetector } from "../../dist/index.js";
 import { LABEL_KINDS } from "../../dist/privacy/deep/detector.js";
 import { PACK_WORDS, THRESHOLDS } from "../../dist/privacy/deep/local-model.js";
@@ -190,7 +196,7 @@ async function runItems(detector: DeepDetector | undefined): Promise<ItemResult[
         [item.text],
         vault,
       );
-    const redacted = vault.redact(item.text, builtinDetectors);
+    const redacted = vault.redact(item.text, quasiIdentifierDetectors);
     const leaks = item.hide.flatMap(([value, kind, tier]) => {
       const how = leak(redacted, value, kind);
       return how === undefined ? [] : [{ value, kind, tier, how }];
