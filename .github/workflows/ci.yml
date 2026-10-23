@@ -1,0 +1,72 @@
+# The checks every change passes: on pushes to main, on pull requests, and (through
+# workflow_call) before release.yml bundles and signs a tag.
+#   - TypeScript: typecheck, lint and test (`pnpm check`),
+#   - the Rust client: `cargo test`, its server tests against the built packages,
+#   - the Android app: a debug build, without the native libraries (cargo-ndk).
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.5.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+
+  rust:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.5.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      # The client's server tests run the faux server on the built packages; without them they skip.
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: clients/rust
+      - run: cargo test --locked
+        working-directory: clients/rust
+
+  android:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools platforms;android-37.0
+      - uses: gradle/actions/setup-gradle@v6
+      # The bindings come from a host build of nudge-ffi.
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: clients/rust
+      - run: ./gradlew :app:assembleDebug -Pnudge.native=false
+        working-directory: apps/android
