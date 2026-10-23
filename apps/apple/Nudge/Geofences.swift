@@ -26,8 +26,9 @@ final class Geofences {
     @ObservationIgnored private var syncing = false
     @ObservationIgnored private let defaults = UserDefaults.standard
     private static let enabledKey = "location.arrive"
-    /// The monitor's name: the same at every launch, so events that woke the app reach it.
-    private static let monitorName = "nudge.arrival"
+    /// The monitor's name: the same at every launch, so events that woke the app reach it. Letters
+    /// only: Core Location throws "Monitor name is not valid" for one with a dot in it.
+    private static let monitorName = "NudgeArrival"
     private static let refresh = "refresh"
 
     init() {
