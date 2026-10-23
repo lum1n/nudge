@@ -147,6 +147,8 @@ export class NudgeAssistant extends DurableObject<NudgeEnv> {
         version: "0.0.0",
         report,
         publicUrl: this.env.NUDGE_PUBLIC_URL,
+        // Cloudflare sets it at its edge, and the Worker passes the request on as it came.
+        peerAddress: (c) => c.req.header("cf-connecting-ip"),
       }),
     );
     return { nudge, app };

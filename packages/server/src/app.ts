@@ -1,9 +1,10 @@
 import { readFile } from "node:fs/promises";
+import type { IncomingMessage } from "node:http";
 import { join } from "node:path";
 import { upgradeWebSocket as nodeUpgradeWebSocket } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import type { Nudge } from "@nudge/core";
-import { Hono, type MiddlewareHandler } from "hono";
+import { type Context, Hono, type MiddlewareHandler } from "hono";
 import type { UpgradeWebSocket } from "hono/ws";
 import { HttpError } from "./v1/rest.ts";
 import { type V1Options, v1Routes } from "./v1/routes.ts";
@@ -23,6 +24,10 @@ export type AppOptions = {
   readonly publicUrl?: V1Options["publicUrl"];
   /** Whether to believe a proxy's `X-Forwarded-*` about the request's origin, as behind exe.dev's. */
   readonly trustProxy?: V1Options["trustProxy"];
+  /** Requests allowed per address and per token; default generous, and strict for codes. */
+  readonly limits?: V1Options["limits"];
+  /** The address a request came from, for rate limits; default the Node socket's. */
+  readonly peerAddress?: V1Options["peerAddress"];
   /** Setting up extensions from the web UI, such as in the config file; none without. */
   readonly extensionSettings?: V1Options["extensionSettings"];
   /** The server's own API for its owners (ADR 11); none without. */
@@ -53,6 +58,8 @@ export function createApp(options: AppOptions): Hono {
       timing: options.timing,
       publicUrl: options.publicUrl,
       trustProxy: options.trustProxy,
+      limits: options.limits,
+      peerAddress: options.peerAddress ?? nodePeerAddress,
       extensionSettings: options.extensionSettings,
       server: options.server,
       setup: options.setup,
@@ -60,6 +67,12 @@ export function createApp(options: AppOptions): Hono {
   );
   if (options.web !== undefined) serveWeb(app, options.web);
   return app;
+}
+
+/** The socket's remote address under `@hono/node-server`; undefined elsewhere, as in tests. */
+function nodePeerAddress(c: Context): string | undefined {
+  const env = c.env as { incoming?: IncomingMessage } | undefined;
+  return env?.incoming?.socket?.remoteAddress;
 }
 
 /** Files from the build, and `index.html` for every other page so the browser's router takes over. */

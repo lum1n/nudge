@@ -190,7 +190,7 @@ Paths are relative to `relay.json`. The relay makes `relay-handle.key` beside it
 
 Every model request's cost, as the model catalog prices it, is booked per month to the room and to the player whose message was being answered. That includes what tools such as the browser report. Nudges and watches count for the room only. `nudge usage` prints the months, by player and room, and `GET /v1/a/<assistant>/usage` gives the same to admins (others see the total and their own share).
 
-`"budget": { "monthlyUsd": 20, "perPlayerUsd": 5, "warnAt": 0.8 }` on an assistant in `nudge.json` sets limits. At `warnAt` of a limit, the player, or for the assistant's limit the admins, hear about it in their own room, once a month. Past a player's limit their messages are refused. Past the assistant's, nothing more goes to the model, nudges and watches included, until the month ends (in the assistant's time zone). Local models cost nothing.
+`"budget": { "monthlyUsd": 20, "perPlayerUsd": 5, "warnAt": 0.8 }` on an assistant in `nudge.json` sets limits. At `warnAt` of a limit, the player, or for the assistant's limit the admins, hear about it in their own room, once a month. Past a player's limit their messages are refused. Past the assistant's, nothing more goes to the model, nudges and watches included, until the month ends (in the assistant's time zone). Local models cost nothing. An assistant with no `monthlyUsd` refuses nothing, but its admins hear once a month when it has spent $25 (`warnUsd` changes that).
 
 ## Privacy
 

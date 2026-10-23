@@ -161,6 +161,7 @@ export {
 export {
   type Budget,
   BudgetReached,
+  DEFAULT_WARN_USD,
   type MonthSpend,
   SpendDoc,
   Spending,

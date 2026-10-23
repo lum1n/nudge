@@ -1,11 +1,18 @@
 import { randomBytes } from "node:crypto";
 import type { Nudge } from "@nudge/core";
 import { CLOSE } from "@nudge/protocol";
-import { Hono } from "hono";
+import { type Context as HonoContext, Hono } from "hono";
 import type { UpgradeWebSocket } from "hono/ws";
 import { Connection, type ConnectionOptions } from "./connection.ts";
 import { ExtensionSocket } from "./extension-socket.ts";
 import { Hubs } from "./hub.ts";
+import {
+  DEFAULT_RATE_LIMITS,
+  limitBody,
+  MAX_REST_BODY,
+  type RateLimits,
+  rateLimits,
+} from "./limits.ts";
 import { type ExtensionSettings, restRoutes } from "./rest.ts";
 import { type ServerControl, serverRoutes } from "./server.ts";
 import { type SetupControl, setupRoutes } from "./setup.ts";
@@ -24,6 +31,13 @@ export type V1Options = {
   readonly publicUrl?: string | (() => string | undefined);
   /** Whether to believe a proxy's `X-Forwarded-*` about the request's origin. */
   readonly trustProxy?: boolean | (() => boolean);
+  /**
+   * The address a request came from, as the runtime sees it, for rate limits; behind a trusted
+   * proxy, `X-Forwarded-For` is believed instead. Without one, every caller counts as one.
+   */
+  readonly peerAddress?: (c: HonoContext) => string | undefined;
+  /** Requests allowed per address, per token and per address on the routes that take codes. */
+  readonly limits?: Partial<RateLimits>;
   /** Setting up extensions from the web UI; none without. */
   readonly extensionSettings?: ExtensionSettings;
   /** The server's own API for its owners, at `/v1/server` (ADR 11); absent, it answers 404. */
@@ -40,6 +54,27 @@ export type V1Options = {
  */
 export function v1Routes(options: V1Options): Hono {
   const app = new Hono();
+  const { publicUrl: url, trustProxy: trust } = options;
+  const publicUrl = typeof url === "function" ? url : () => url;
+  const trustProxy = typeof trust === "function" ? trust : () => trust === true;
+
+  const limits = rateLimits({
+    limits: { ...DEFAULT_RATE_LIMITS, ...options.limits },
+    peerAddress: options.peerAddress ?? (() => undefined),
+    trustProxy,
+  });
+  app.use(limits.all);
+  // Where a code is guessed: pairing, setup, and starting a sign-in, which holds a place.
+  app.use("/a/:assistant/pair", limits.attempts);
+  app.use("/setup", limits.attempts);
+  app.use("/setup/*", limits.attempts);
+  app.use("/sign-in", limits.attempts);
+  // Extension routes check their own limits, which may be larger.
+  const restBody = limitBody(MAX_REST_BODY);
+  app.use(async (c, next) =>
+    /\/a\/[^/]+\/ext(\/|$)/.test(c.req.path) ? next() : restBody(c, next),
+  );
+
   // A new epoch per app, so clients that reconnect after a restart know to subscribe again.
   const epoch = randomBytes(8).toString("base64url");
   const hubs = new WeakMap<Nudge, Hubs>();
@@ -108,9 +143,6 @@ export function v1Routes(options: V1Options): Hono {
     }),
   );
 
-  const { publicUrl: url, trustProxy: trust } = options;
-  const publicUrl = typeof url === "function" ? url : () => url;
-  const trustProxy = typeof trust === "function" ? trust : () => trust === true;
   if (options.server !== undefined)
     app.route(
       "/server",

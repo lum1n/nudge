@@ -677,7 +677,14 @@ export class Nudge {
         month: "2-digit",
       }).format(this.now());
       const whose = warning.kind === "player" ? "your" : "the assistant's";
-      const message = `Spent ${usd(warning.spent)} of ${whose} ${usd(warning.limit)} budget this month`;
+      const message =
+        warning.unlimited === true
+          ? `Spent ${usd(warning.spent)} on models this month, with no monthly budget set`
+          : `Spent ${usd(warning.spent)} of ${whose} ${usd(warning.limit)} budget this month`;
+      const consequence =
+        warning.unlimited === true
+          ? "Nothing is refused; an admin can set a limit (budget.monthlyUsd in nudge.json)"
+          : `Past the limit, ${warning.kind === "player" ? "their messages are refused" : "nothing more is answered"} until the month ends`;
       for (const playerId of players) {
         if (
           warning.kind === "assistant" &&
@@ -689,9 +696,7 @@ export class Nudge {
         await conversation.submit(
           {
             type: "input",
-            content:
-              `${message}. Past the limit, ${warning.kind === "player" ? "their messages are refused" : "nothing more is answered"} ` +
-              `until the month ends. Tell them briefly, in your own words.`,
+            content: `${message}. ${consequence}. Tell them briefly, in your own words.`,
             whenBusy: "followUp",
             requestId: `budget:${month}:${warning.kind}:${warning.playerId ?? ""}`,
             entry: {

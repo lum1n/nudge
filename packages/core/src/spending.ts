@@ -20,7 +20,15 @@ export type Budget = {
   readonly perPlayerUsd?: number;
   /** Share of a limit at which a warning goes out once a month; default 0.8. */
   readonly warnAt?: number;
+  /**
+   * Without `monthlyUsd`: the spend at which the admins are told, once a month, that there is no
+   * limit. Nothing is refused. Default `DEFAULT_WARN_USD`.
+   */
+  readonly warnUsd?: number;
 };
+
+/** What an assistant with no monthly budget may spend in a month before its admins hear of it. */
+export const DEFAULT_WARN_USD = 25;
 
 // Stored in a document, so plain JSON.
 export type MonthSpend = {
@@ -53,6 +61,8 @@ export type SpendWarning = {
   readonly playerId?: string;
   readonly spent: number;
   readonly limit: number;
+  /** No budget is set, and nothing is refused: `limit` is only where the warning goes out. */
+  readonly unlimited?: true;
 };
 
 export class BudgetReached extends Error {
@@ -240,6 +250,9 @@ export class Spending {
     const { monthlyUsd, perPlayerUsd } = this.budget;
     if (monthlyUsd !== undefined && spend.total >= monthlyUsd * share)
       found.push({ kind: "assistant", spent: spend.total, limit: monthlyUsd });
+    const warnUsd = this.budget.warnUsd ?? DEFAULT_WARN_USD;
+    if (monthlyUsd === undefined && spend.total >= warnUsd)
+      found.push({ kind: "assistant", spent: spend.total, limit: warnUsd, unlimited: true });
     if (perPlayerUsd !== undefined)
       for (const [playerId, spent] of Object.entries(spend.players))
         if (spent >= perPlayerUsd * share)
