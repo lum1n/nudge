@@ -316,7 +316,7 @@ export {
 export { keepsPlaceholders } from "./privacy/tool-values.ts";
 export { canRead, onlyReads, readsOnly } from "./extensions/reads.ts";
 export type { RedactedHistory };
-export { currentTurn, inTurn, type Owner, type Turn } from "./privacy/turn.ts";
+export { currentTurn, inTurn, type Owner, type SetsTurn, type Turn } from "./privacy/turn.ts";
 export {
   type DatabaseEncryption,
   type DatabaseKey,

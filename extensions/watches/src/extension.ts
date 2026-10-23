@@ -320,7 +320,14 @@ function createTimer(host: Pick<ExtensionHost<unknown>, "assistant" | "now">) {
           report =
             watch.script === undefined
               ? await checkWithModel(watch, count, nudge, runtime, context)
-              : await checkWithScript(watch, watch.script, task.state.checkpoint, runtime, context);
+              : await checkWithScript(
+                  watch,
+                  watch.script,
+                  task.state.checkpoint,
+                  nudge,
+                  runtime,
+                  context,
+                );
         } catch (caught) {
           if (runtime.signal.aborted) throw caught;
           error = (caught as Error).message;
@@ -452,21 +459,30 @@ async function checkWithModel(
   if (settled.status !== "done") throw new Error(`the check ended ${settled.status}`);
   const report = parseReport(await lastReply(side, context));
   if (report === undefined) throw new Error("the check's reply had no items");
-  return report;
+  // Only a script's message is posted as it is; the model tells the room itself.
+  return { items: report.items };
 }
 
 /**
  * A check as a run of the watch's saved script, with no model: the run is a task this timer owns,
- * noted in the checkpoint first, so a rerun after a crash waits for the same run.
+ * noted in the checkpoint first, so a rerun after a crash waits for the same run. The script's
+ * tool calls answer the watch: private to its owner if it is private, else public.
  */
 async function checkWithScript(
   watch: Watch,
   script: string,
   checkpoint: TimerCheckpoint,
+  nudge: ReturnType<ExtensionHost<unknown>["assistant"]>,
   runtime: TaskRuntime<TimerInput, TimerCheckpoint, { checks: number }, object>,
   context: Context,
 ): Promise<Report> {
   let run = checkpoint.run as TaskId<ScriptRunResult> | undefined;
+  // A run nothing registers would wait for its definition, and the watch with it: one a restart
+  // left is stopped, and the check fails.
+  if (!nudge.extensions().some((extension) => extension.name === "scripts")) {
+    if (run !== undefined) await runtime.abortOwned(run, context);
+    throw new Error(`script ${script} can't run: the scripts extension is off`);
+  }
   if (run === undefined)
     await runtime.commit(async (tx) => {
       run = await tx.createTask(
@@ -475,6 +491,7 @@ async function checkWithScript(
           roomId: watch.roomId,
           name: script,
           callId: `watch:${watch.id}:${checkpoint.count}`,
+          turn: watch.privateTo === undefined ? {} : { privateTo: watch.privateTo },
         },
         { ownership: { kind: "task", taskId: runtime.taskId } },
       );

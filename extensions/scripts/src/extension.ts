@@ -20,8 +20,10 @@ import {
   defineTool,
   keepsPlaceholders,
   onlyReads,
+  type Owner,
   roomOf,
   section,
+  type SetsTurn,
   Type,
 } from "@nudge/core";
 import { MAX_CODE, NAME, type Script, ScriptsDoc, withArgs } from "./model.ts";
@@ -62,10 +64,12 @@ function privately(): { privateTo?: { playerId: string; displayName: string } } 
 
 /** A private script exists only in its owner's private turns. */
 function visible(script: Script): boolean {
-  return (
-    script.privateTo === undefined ||
-    script.privateTo.playerId === currentTurn().privateTo?.playerId
-  );
+  return visibleTo(script, currentTurn().privateTo);
+}
+
+/** Whether a turn private to `privateTo`, or public, sees the script. */
+function visibleTo(script: Script, privateTo: Owner | undefined): boolean {
+  return script.privateTo === undefined || script.privateTo.playerId === privateTo?.playerId;
 }
 
 const text = (value: string, isError = false) => ({
@@ -123,7 +127,7 @@ function readingOnly(api: ToolExecutionApi): ToolExecutionApi {
   };
 }
 
-export type ScriptRunInput = {
+export type ScriptRunInput = SetsTurn & {
   roomId: string;
   name: string;
   args?: JsonObject;
@@ -134,51 +138,60 @@ export type ScriptRunResult = { ok: boolean; output: string };
 
 /**
  * One run of a saved script, out of any turn: for watches and other timers. Create it owned by
- * the task that waits for it; its result is the script's output. Reruns after a restart reattach
- * to the script's call, which code mode resumes.
+ * the task that waits for it; its result is the script's output. Its `turn` is the one the
+ * script's tool calls answer, such as its watch's: private to the watch's owner, or public, and
+ * never what the room happens to be in. Only a script that turn sees runs. Reruns after a restart
+ * reattach to the script's call, which code mode resumes.
  */
-export const ScriptRun = defineTask<ScriptRunInput, { phase: "run" }, ScriptRunResult>({
-  name: "scripts.run",
-  version: 1,
-  initial: () => ({ phase: "run" }),
-  phases: {
-    run: async (task, runtime, context) => {
-      const { roomId, name, args, callId } = task.input;
-      const script = (await runtime.snapshot(ScriptsDoc, roomId, context))?.items.find(
-        (item) => item.name === name,
-      );
-      const result =
-        script === undefined
-          ? undefined
-          : await callNested(
-              runtime,
-              callId,
-              EXEC_TOOL,
-              { code: withArgs(script.code, args) },
-              context,
-            );
-      const ok = result !== undefined && !result.isError;
-      const output = result === undefined ? `No script ${name} in this room.` : outputOf(result);
-      return runtime.commit(async (tx) => {
-        const item = (await tx.doc(ScriptsDoc, roomId, null)).items.find((i) => i.name === name);
-        if (item !== undefined) counted(item, ok, output, Date.now());
-        return {
-          status: "terminal",
-          outcome: { status: "completed", result: { ok, output } },
-        };
-      }, context);
+function createScriptRun(now: () => number) {
+  return defineTask<ScriptRunInput, { phase: "run" }, ScriptRunResult>({
+    name: "scripts.run",
+    version: 1,
+    initial: () => ({ phase: "run" }),
+    phases: {
+      run: async (task, runtime, context) => {
+        const { roomId, name, args, callId, turn } = task.input;
+        const mine = (item: Script) => item.name === name && visibleTo(item, turn.privateTo);
+        const script = (await runtime.snapshot(ScriptsDoc, roomId, context))?.items.find(mine);
+        const result =
+          script === undefined
+            ? undefined
+            : await callNested(
+                runtime,
+                callId,
+                EXEC_TOOL,
+                { code: withArgs(script.code, args) },
+                context,
+              );
+        const ok = result !== undefined && !result.isError;
+        const output = result === undefined ? `No script ${name} in this room.` : outputOf(result);
+        return runtime.commit(async (tx) => {
+          const item = (await tx.doc(ScriptsDoc, roomId, null)).items.find(mine);
+          if (item !== undefined) counted(item, ok, output, now());
+          return {
+            status: "terminal",
+            outcome: { status: "completed", result: { ok, output } },
+          };
+        }, context);
+      },
     },
-  },
-  abort: async (_task, runtime, context) => {
-    await runtime.commit(
-      () => ({
-        status: "terminal",
-        outcome: { status: "aborted", result: { ok: false, output: "The run was stopped." } },
-      }),
-      context,
-    );
-  },
-});
+    abort: async (_task, runtime, context) => {
+      await runtime.commit(
+        () => ({
+          status: "terminal",
+          outcome: { status: "aborted", result: { ok: false, output: "The run was stopped." } },
+        }),
+        context,
+      );
+    },
+  });
+}
+
+/**
+ * The run task, to start runs with: `createTask` takes its name, version and first checkpoint.
+ * The extension registers its own, which counts runs on the host's clock.
+ */
+export const ScriptRun = createScriptRun(Date.now);
 
 /** Counts a run on its script. */
 function counted(script: Script, ok: boolean, output: string, now: number): void {
@@ -256,7 +269,11 @@ export const scriptsExtension = defineNudgeExtension({
     const scriptsOf = async (api: ToolExecutionApi, context: Context) => {
       const room = await roomOf(api, api.conversationId, context);
       const items = (await api.snapshot(ScriptsDoc, room.id, context))?.items ?? [];
-      return { room, items: items.filter(visible) };
+      return {
+        room,
+        items: items.filter(visible),
+        hidden: items.filter((item) => !visible(item)),
+      };
     };
 
     const save = defineTool({
@@ -283,7 +300,10 @@ export const scriptsExtension = defineNudgeExtension({
         if (!NAME.test(name)) return text("Name it in lower case words joined by dashes.", true);
         if (args.code.length > MAX_CODE)
           return text(`Keep a script under ${MAX_CODE} characters.`, true);
-        const { room, items } = await scriptsOf(api, context);
+        const { room, items, hidden } = await scriptsOf(api, context);
+        // Someone's private script: replacing it would take it from them, and their watches.
+        if (hidden.some((item) => item.name === name))
+          return text(`The name ${name} is taken; choose another.`, true);
         const taken = items.some((item) => item.name === name);
         if (!taken && items.length >= maxPerRoom)
           return text(`This conversation keeps ${maxPerRoom} scripts already.`, true);
@@ -309,7 +329,10 @@ export const scriptsExtension = defineNudgeExtension({
             lastRunAt: now,
             ...privately(),
           };
-          state.items = [...state.items.filter((item) => item.name !== name), script];
+          state.items = [
+            ...state.items.filter((item) => item.name !== name || !visible(item)),
+            script,
+          ];
         }, context);
         return text(`${taken ? "Replaced" : "Saved"} script ${name}. The test run:\n${output}`);
       },
@@ -336,7 +359,7 @@ export const scriptsExtension = defineNudgeExtension({
         const output = outputOf(result);
         await api.commit(async (tx) => {
           const item = (await tx.doc(ScriptsDoc, room.id, null)).items.find(
-            (i) => i.name === script.name,
+            (i) => i.name === script.name && visible(i),
           );
           if (item !== undefined) counted(item, !result.isError, output, host.now());
         }, context);
@@ -390,14 +413,14 @@ export const scriptsExtension = defineNudgeExtension({
           return text(`No script ${args.name} in this conversation.`, true);
         await api.commit(async (tx) => {
           const state = await tx.doc(ScriptsDoc, room.id, null);
-          state.items = state.items.filter((item) => item.name !== args.name);
+          state.items = state.items.filter((item) => item.name !== args.name || !visible(item));
         }, context);
         return text(`Removed script ${args.name}.`);
       },
     });
 
     return {
-      tasks: [ScriptRun],
+      tasks: [createScriptRun(host.now)],
       // Scripts are kept as the model wrote them, with placeholders; the code runs with the values.
       tools: [exec, keepsPlaceholders(save), run, list, show, remove],
       sections: [

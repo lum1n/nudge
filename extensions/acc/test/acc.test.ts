@@ -11,6 +11,7 @@ import {
   fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
 import { createNudge, LOBBY, type Nudge, type RoomEvent, SecretStore } from "@nudge/core";
+import { scriptsExtension } from "@nudge/ext-scripts";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   type AccBackend,
@@ -210,7 +211,7 @@ describe("acc", () => {
 
   async function open(
     acc: FakeAcc,
-    options: { approveStart?: boolean; database?: string; settings?: object } = {},
+    options: { approveStart?: boolean; database?: string; settings?: object; scripts?: true } = {},
   ) {
     const faux = fauxProvider();
     const models = createModels();
@@ -230,6 +231,17 @@ describe("acc", () => {
               harness: "claude",
               cwd: "~/proj",
               prompt: "Make the tests pass",
+            }),
+          ],
+          { stopReason: "toolUse" },
+        );
+      if (text.includes("Save this script: "))
+        return fauxAssistantMessage(
+          [
+            fauxToolCall("save_script", {
+              name: "hosts",
+              description: "The machines",
+              code: text.slice(text.indexOf("Save this script: ") + "Save this script: ".length),
             }),
           ],
           { stopReason: "toolUse" },
@@ -256,6 +268,7 @@ describe("acc", () => {
               approveStart: options.approveStart ?? false,
             },
           },
+          ...(options.scripts === undefined ? [] : [scriptsExtension]),
         ],
       },
       context,
@@ -404,6 +417,20 @@ describe("acc", () => {
     expect(later.pinned("devbox")).toBe("SHA256:two");
     expect(later.publicKey()).toBe("ssh-ed25519 AAAA nudge-test");
     expect(acc.keys).toBe(1);
+  });
+
+  it("lets a script look at the machines, but not ask to trust a host key", async () => {
+    const acc = new FakeAcc();
+    const { nudge, events, say } = await open(acc, { scripts: true });
+    const answers = () => events.flatMap((e) => (e.type === "answer" ? [e.text] : []));
+    await say("Save this script: return await tools.acc_hosts({});");
+    expect(answers().at(-1)).toContain("Saved script hosts");
+    expect(answers().at(-1)).toContain("devbox (u@10.0.0.2): reachable");
+
+    await say("Save this script: return await tools.acc_hosts({ trust_new_key: 'devbox' });");
+    expect(answers().at(-1)).toContain("Not saved");
+    expect(answers().at(-1)).toContain("Scripts only read");
+    expect(await nudge.approvals.list(LOBBY, context)).toEqual([]);
   });
 
   it("reaches this machine's sessions with nothing set up", async () => {

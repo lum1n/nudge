@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { Context as ModelContext } from "@earendil-works/pi-ai";
 import { createModels } from "@earendil-works/pi-ai/models";
@@ -25,6 +28,7 @@ import { parseFound, parseReport, remember, WatchesDoc, watchesExtension } from 
 
 const context = BACKGROUND_CONTEXT;
 const by = { playerId: "owner", displayName: "Vegard" };
+const ann = { playerId: "ann", displayName: "Ann" };
 
 function lastUser(request: ModelContext): string {
   const message = request.messages.findLast((m) => m.role === "user");
@@ -46,11 +50,14 @@ describe("watches", () => {
   /** What a check finds now, as the site would list it. */
   let listings: { key: string; text: string }[];
   let checks: number;
+  /** More the check's reply says beside its items. */
+  let extra: JsonObject;
   let events: RoomEvent[];
 
   beforeEach(async () => {
     listings = [{ key: "https://finn.example/1", text: "GLC 2027, 780 000 kr" }];
     checks = 0;
+    extra = {};
     const faux = fauxProvider();
     const models = createModels();
     models.setProvider(faux.provider);
@@ -65,7 +72,9 @@ describe("watches", () => {
       if (text.includes("scheduled check for a watch")) {
         checks++;
         return fauxAssistantMessage([
-          fauxText(`I looked.\n\`\`\`json\n${JSON.stringify({ items: listings })}\n\`\`\``),
+          fauxText(
+            `I looked.\n\`\`\`json\n${JSON.stringify({ items: listings, ...extra })}\n\`\`\``,
+          ),
         ]);
       }
       if (text.includes("found something new"))
@@ -146,6 +155,19 @@ describe("watches", () => {
     expect(checks).toBe(after);
   });
 
+  it("answers a model check's news itself, also when the reply has a message", async () => {
+    extra = { message: "Posted as it is" };
+    await say("Watch for new GLC 2027 listings under 800 000 kr on finn, often");
+    await until(() => events.some((e) => e.type === "answer" && e.cause === "nudge"));
+    const first = events.find((e) => e.type === "answer" && e.cause === "nudge")!;
+    expect(first).toMatchObject({ text: expect.stringContaining("News!") });
+    const room = await nudge.conversation(LOBBY, context);
+    const entries = (await room.entries({ order: "ascending" }, 500, undefined, context)).items;
+    const fires = entries.filter((e) => e.kind === "nudge.fire");
+    expect(fires).toHaveLength(1);
+    expect(fires[0]!.data).not.toHaveProperty("said");
+  });
+
   it("reads the items out of a reply, and remembers keys once", () => {
     expect(
       parseFound('Found these:\n{"items":[{"key":"a","text":"A"},{"key":"","text":"x"}]}'),
@@ -185,10 +207,7 @@ describe("watches that run a script", () => {
     }),
   });
 
-  beforeEach(async () => {
-    listings = ["GLC 2027, 780 000 kr"];
-    requests = 0;
-    calls = [];
+  const open = async (database: string, scripts: boolean) => {
     const faux = fauxProvider();
     const models = createModels();
     models.setProvider(faux.provider);
@@ -206,12 +225,12 @@ describe("watches that run a script", () => {
     faux.setResponses(Array.from({ length: 200 }, () => answer));
     nudge = await createNudge(
       {
-        database: ":memory:",
+        database,
         models,
         model: { provider: faux.provider.id, modelId: faux.getModel().id },
         extensions: [
           site,
-          scriptsExtension,
+          ...(scripts ? [scriptsExtension] : []),
           { extension: watchesExtension, settings: { minScriptMinutes: 0 } },
         ],
       },
@@ -219,16 +238,24 @@ describe("watches that run a script", () => {
     );
     events = [];
     nudge.events.subscribe((event) => events.push(event));
+  };
+
+  beforeEach(async () => {
+    listings = ["GLC 2027, 780 000 kr"];
+    requests = 0;
+    calls = [];
+    await open(":memory:", true);
   });
 
   afterEach(async () => {
     await nudge.close(context);
   });
 
-  const ask = async (name: string, args: JsonObject) => {
+  const ask = async (name: string, args: JsonObject, as: { private?: true } = {}) => {
     calls.push({ name, args });
+    const author = as.private === undefined ? by : ann;
     const settled = await (
-      await nudge.submit(LOBBY, { text: "go", author: by }, context)
+      await nudge.submit(LOBBY, { text: "go", author, ...as }, context)
     ).wait(context);
     if (settled.status !== "done") throw new Error(`unanswered: ${JSON.stringify(settled)}`);
   };
@@ -291,6 +318,55 @@ describe("watches that run a script", () => {
     await until(async () => ((await watch())?.checks ?? 0) >= 2);
     expect((await watch())?.lastError).toContain("site down");
     expect(news()).toHaveLength(0);
+  });
+
+  it("runs a public watch's script in public, whatever the room said last", async () => {
+    await ask("schedule_nudge", { message: "Walk the dog", in_minutes: 600 });
+    await ask("save_script", {
+      name: "nudges",
+      description: "The room's nudges",
+      code: "const all = await tools.list_nudges({});\nreturn { items: [{ key: all, text: all }] };",
+    });
+    await ask("add_watch", { what: "New nudges", every_minutes: 0.01, script: "nudges" });
+    await until(async () => ((await watch())?.seen ?? []).some((k) => k.includes("Walk the dog")));
+
+    // Ann's private nudge is the newest thing in the room; the watch's checks still don't see it.
+    await ask("schedule_nudge", { message: "Dentist at 9", in_minutes: 600 }, { private: true });
+    const before = (await watch())?.checks ?? 0;
+    await until(async () => ((await watch())?.checks ?? 0) >= before + 3);
+    expect((await watch())?.lastError).toBeUndefined();
+    expect(JSON.stringify((await watch())?.seen)).not.toContain("Dentist");
+    expect(JSON.stringify(news())).not.toContain("Dentist");
+  });
+
+  it("notes a watch whose script is gone", async () => {
+    await watchWith(`${LIST}return { items };`);
+    await until(() => news().length === 1);
+    await ask("remove_script", { name: "glc" });
+    await until(async () => ((await watch())?.lastError ?? "").includes("No script glc"));
+  });
+
+  it("notes a watch whose script can't run with the scripts extension off", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nudge-watches-"));
+    try {
+      await nudge.close(context);
+      await open(join(dir, "nudge.db"), true);
+      await ask("save_script", {
+        name: "glc",
+        description: "GLC listings",
+        code: `${LIST}return { items };`,
+      });
+      await ask("add_watch", { what: "New GLC listings", every_minutes: 0.05, script: "glc" });
+      await until(async () => ((await watch())?.checks ?? 0) >= 1);
+      await nudge.close(context);
+
+      await open(join(dir, "nudge.db"), false);
+      await until(async () =>
+        ((await watch())?.lastError ?? "").includes("scripts extension is off"),
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("won't watch with a script that isn't saved", async () => {

@@ -21,6 +21,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ScriptsDoc, scriptsExtension, withArgs } from "../src/index.ts";
 
 const context = BACKGROUND_CONTEXT;
+const ann = { playerId: "ann", displayName: "Ann" };
 
 /** A site to read and a message to send; only the first reads. */
 let sent: string[] = [];
@@ -95,9 +96,10 @@ describe("scripts", () => {
     await nudge.close(context);
   });
 
-  const ask = async (name: string, args: JsonObject) => {
+  const ask = async (name: string, args: JsonObject, as: { private?: true } = {}) => {
     calls.push({ name, args });
-    const settled = await (await nudge.submit(LOBBY, { text: "go" }, context)).wait(context);
+    const message = as.private === undefined ? { text: "go" } : { text: "go", author: ann, ...as };
+    const settled = await (await nudge.submit(LOBBY, message, context)).wait(context);
     if (settled.status !== "done") throw new Error(`unanswered: ${JSON.stringify(settled)}`);
     return results.at(-1)!;
   };
@@ -149,6 +151,19 @@ describe("scripts", () => {
     expect(
       await ask("save_script", { name: "Bad Name", description: "x", code: "return 1;" }),
     ).toContain("lower case");
+  });
+
+  it("keeps a private script's name to its owner", async () => {
+    const code = "return 'mine';";
+    await ask("save_script", { name: "mine", description: "Ann's", code }, { private: true });
+    expect(
+      await ask("save_script", { name: "mine", description: "x", code: "return 1;" }),
+    ).toContain("is taken");
+    expect(await ask("remove_script", { name: "mine" })).toContain("No script mine");
+    expect(await scripts()).toMatchObject([{ name: "mine", code, privateTo: ann }]);
+
+    expect(await ask("remove_script", { name: "mine" }, { private: true })).toContain("Removed");
+    expect(await scripts()).toEqual([]);
   });
 
   it("puts args after an options line", () => {
