@@ -25,6 +25,7 @@ An extendable, multiplayer personal assistant that keeps personal data away from
 - `@nudge/ext-terminal`: lets the assistant run shell commands in a sandboxed workspace (`extensions/terminal`).
 - `@nudge/ext-mcp`: gives the assistant the tools of MCP servers (`extensions/mcp`).
 - `@nudge/ext-codemode`: lets the model run short scripts that call the room's tools (`extensions/codemode`).
+- `@nudge/ext-scripts`: saved scripts for lookups the assistant repeats, run again without a model (`extensions/scripts`).
 - `@nudge/ext-federation`: lets people from other assistants join, with their home vouching for them (`extensions/federation`).
 - `@nudge/ext-peers`: lets linked assistants on other servers talk to each other (`extensions/peers`).
 - `@nudge/ext-push`: notifications of answers and approvals, through Web Push, APNs and FCM (`extensions/push`).
@@ -471,6 +472,20 @@ To make it always come first ("always use the timetable API first for departures
 - Each check runs in a side conversation of the room, out of the room's sight but with its tools, connectors, logins and memory. The model replies with the items that match, each with a stable key such as its URL.
 - The room hears only about items it hasn't seen before. That arrives like a fired nudge, so push and chat bridges deliver it too.
 - Every check is a model run with tools, so it costs: `minMinutes` (default 30) caps how often, and `maxPerRoom` (default 10) how many.
+- With the scripts extension on, a watch can name a saved script (`add_watch` with `script`). Each check then runs that script instead of the model and costs nothing, so it may run as often as `minScriptMinutes` (default 5). The model is asked to tell the room only when the script finds something new. If the script also returns a `message`, that text is posted as it is, and no model runs at all.
+
+### Scripts
+
+`extensions/scripts` lets the assistant write the steps of a lookup it repeats once, as a short JavaScript program, and run it again by name. Examples: "the Finn search for a 2027 GLC under 800 000 kr", "tomorrow's power prices from the connector". The model saves one with `save_script`, which runs it once as a test and keeps it only if that works. It runs it with `run_script`, and `list_scripts`, `show_script` and `remove_script` manage them per room.
+
+```json
+{ "from": "./extensions/scripts", "settings": { "timeoutSeconds": 30, "maxPerRoom": 20 } }
+```
+
+- Scripts run like code mode's: QuickJS in a worker thread, with no network, files or environment. They call tools as `await tools.<name>(args)` and get `args` from whoever runs them. They stop after `timeoutSeconds` or past `memoryMb`.
+- **Scripts only read.** A script sees, and can call, only the tools marked as reading (`readsOnly` in `@nudge/core`): web search and pages, feeds, reading mail, calendar and contacts, documents and lists, connector `GET` calls, and coding agents' sessions. Anything that changes something or asks for approval is refused, because a script often runs with nobody watching.
+- A script is kept as the model wrote it, with placeholders for personal values, and runs with the values. What it returns goes back to placeholders before the model sees it.
+- For a watch, a script returns `{"items":[{"key":"…","text":"…"}]}`, and optionally `"message"`.
 
 ### Triggers
 

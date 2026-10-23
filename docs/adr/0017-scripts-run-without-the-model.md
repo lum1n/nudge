@@ -1,0 +1,13 @@
+# 17. Saved scripts run without the model, and only read
+
+Watches made every check a model run with tools (ADR 8's side conversations). A check that finds nothing new still pays for a model working out, again, which site to search and how to read it. Most checks are like that. Code mode already lets the model write a program that calls the room's tools, but only as a tool call inside a turn.
+
+**A script is a code mode program the room keeps by name.** `save_script` stores the model's JavaScript per room, after one test run that has to succeed. `run_script` runs it again with `args`. A watch can name a script, and its checks then run the script instead of a model. The room's model is asked to speak only when the script finds keys it hasn't seen. A script that also returns `message` has that text posted to the room as a fired nudge marked `said`. Nothing answers it, and room events treat it as the answer, so push and bridges deliver it like any other.
+
+**It runs through code mode's own tool, not a copy.** Pi Durable exports `createCodemodeTool`, so the scripts extension wraps it as `script_exec`, a tool only other tools may call (`callers: ["tools"]`). In a turn, `run_script` calls it as a nested tool call. Out of one, a `scripts.run` task makes the same nested call itself: a `ToolTask` and its `NestedCallDoc` in one commit, as `executeTool` does. Code mode's replay therefore applies unchanged: after a restart, the run picks up its journal and its tool calls' results. The watch's timer notes the run's task in its checkpoint, so a rerun waits for the same run. Each run is its own task, so its documents retire when it ends instead of piling up under a timer that runs for months.
+
+**Scripts may call only tools marked as reading.** A tool says so with `readsOnly(tool, when?)`. `when` narrows the mark to some calls: `call_api` reads only with `GET` or `HEAD`. The wrapper gives code mode an agent whose callable tools are just the marked ones, and it refuses any other call before it runs. Approvals don't block (ADR 6), so a script that triggered one could neither wait for it nor use its result. And a write repeated on every run of a timer is the wrong default for something nobody watches. Unmarked is the safe side: a new tool stays out of scripts until someone marks it.
+
+**Values stay as they are elsewhere.** The script is stored with placeholders (`keepsPlaceholders`). `script_exec`'s arguments are put back like any tool's, so the program runs with the values. Its tools' results and its output go back to placeholders before anything is stored (ADR 9).
+
+What this doesn't do: triggers can't run a script yet, the apps have no page listing scripts, and a script can't act on what it finds except by telling the room.

@@ -10,6 +10,7 @@ import {
   type FireEntryData,
   inTurn,
   type Owner,
+  readsOnly,
   requestApproval,
   roomOf,
   roomsSetting,
@@ -787,10 +788,10 @@ export function accExtension(options: AccOptions = {}) {
       return {
         problems,
         tools: [
-          hostsTool,
-          sessionsTool,
+          readsOnly(hostsTool),
+          readsOnly(sessionsTool),
           startTool,
-          readTool,
+          readsOnly(readTool),
           sendTool,
           answerTool,
           controlTool,

@@ -31,6 +31,8 @@ export type FireEntryData = {
   source?: "watch";
   /** See `ScheduledNudge.privateTo`; the answer is private too. */
   privateTo?: Owner;
+  /** The message is all there is to say, written without a model: nothing answers it. */
+  said?: true;
 };
 
 /**

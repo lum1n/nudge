@@ -5,6 +5,7 @@ import {
   defineTask,
   type DocumentReader,
   type TaskId,
+  type TaskRuntime,
 } from "@earendil-works/pi-durable";
 import {
   defineNudgeExtension,
@@ -19,7 +20,8 @@ import {
   section,
   Type,
 } from "@nudge/core";
-import { type Found, parseFound, remember, type Watch, WatchesDoc } from "./model.ts";
+import { ScriptRun, type ScriptRunResult, ScriptsDoc } from "@nudge/ext-scripts";
+import { type Found, parseReport, remember, type Report, type Watch, WatchesDoc } from "./model.ts";
 
 const VERSION = "0.1.0";
 
@@ -31,9 +33,11 @@ function privately(): { privateTo?: { playerId: string; displayName: string } } 
 
 /** A private watch exists only in its owner's private turns. */
 function visible(watch: Watch): boolean {
-  return (
-    watch.privateTo === undefined || watch.privateTo.playerId === currentTurn().privateTo?.playerId
-  );
+  return visibleTo(watch.privateTo);
+}
+
+function visibleTo(privateTo: { playerId: string } | undefined): boolean {
+  return privateTo === undefined || privateTo.playerId === currentTurn().privateTo?.playerId;
 }
 const MINUTE = 60_000;
 
@@ -44,6 +48,12 @@ const Settings = Type.Object({
     minimum: 0,
     description: "Fewest minutes between two checks of a watch; each check is a paid model run.",
   }),
+  minScriptMinutes: Type.Number({
+    default: 5,
+    minimum: 0,
+    description:
+      "Fewest minutes between two checks of a watch that runs a saved script; those cost no model run.",
+  }),
   maxPerRoom: Type.Number({
     default: 10,
     minimum: 1,
@@ -52,7 +62,13 @@ const Settings = Type.Object({
 });
 
 type TimerInput = { roomId: string; watchId: string; every: number; firstAt: number };
-type TimerCheckpoint = { phase: "wait" | "check"; at: number; count: number };
+type TimerCheckpoint = {
+  phase: "wait" | "check";
+  at: number;
+  count: number;
+  /** The check's script run, once started. */
+  run?: number;
+};
 
 /** What the model is asked in a check; its reply is read, not shown. */
 export function checkPrompt(watch: Pick<Watch, "what">): string {
@@ -86,7 +102,7 @@ export const watchesExtension = defineNudgeExtension({
     "Watches: the assistant checks something on a schedule and tells the room only when something new turns up.",
   settings: Settings,
   setup: (host) => {
-    const { minMinutes, maxPerRoom } = host.settings;
+    const { minMinutes, minScriptMinutes, maxPerRoom } = host.settings;
     const timer = createTimer(host);
 
     const text = (value: string, isError = false) => ({
@@ -95,6 +111,7 @@ export const watchesExtension = defineNudgeExtension({
     });
     const describe = (watch: Watch) =>
       `${watch.id}: every ${duration(watch.every)} — ${watch.what}` +
+      (watch.script === undefined ? "" : ` (runs script ${watch.script})`) +
       (watch.lastCheckAt === undefined
         ? " (not checked yet)"
         : ` (${watch.checks} checks, ${watch.seen.length} seen` +
@@ -106,23 +123,41 @@ export const watchesExtension = defineNudgeExtension({
       description:
         "Watch something for this conversation: check it on a schedule with your tools and tell " +
         "the room only when something new matches, such as new listings for a search, a price " +
-        "under a limit, or a page that changes. The first check runs at once.",
+        "under a limit, or a page that changes. The first check runs at once. Each check is a " +
+        "model run with your tools, unless `script` names a saved script (save_script) that " +
+        "returns the items: then checks cost nothing and you hear only of news.",
       parameters: Type.Object({
         what: Type.String({
           description:
             "What to check and what counts as a match, with every detail a later check needs " +
             "(site, search, limits).",
         }),
-        every_minutes: Type.Number({ description: `How often to check; at least ${minMinutes}.` }),
+        every_minutes: Type.Number({
+          description: `How often to check; at least ${minMinutes}, or ${minScriptMinutes} with a script.`,
+        }),
+        script: Type.Optional(
+          Type.String({ description: "A saved script each check runs instead of you." }),
+        ),
       }),
       execute: async (args, api, context) => {
         if (await isSide(api, api.conversationId, context))
           return text("Watches can't be added from a watch's own check.", true);
-        if (!(args.every_minutes >= minMinutes) || args.every_minutes <= 0)
-          return text(`Check at most every ${minMinutes} minutes.`, true);
+        const least = args.script === undefined ? minMinutes : minScriptMinutes;
+        if (!(args.every_minutes >= least) || args.every_minutes <= 0)
+          return text(`Check at most every ${least} minutes.`, true);
         const what = args.what.trim();
         if (what === "") return text("Say what to watch.", true);
         const room = await roomOf(api, api.conversationId, context);
+        if (args.script !== undefined) {
+          const script = (await api.snapshot(ScriptsDoc, room.id, context))?.items.find(
+            (item) => item.name === args.script,
+          );
+          if (script === undefined || !visibleTo(script.privateTo))
+            return text(
+              `No saved script ${args.script} here; save it with save_script first.`,
+              true,
+            );
+        }
         const every = Math.round(args.every_minutes * MINUTE);
         const now = host.now();
         const watch = await api.commit(async (tx) => {
@@ -149,6 +184,7 @@ export const watchesExtension = defineNudgeExtension({
             checks: 0,
             createdAt: now,
             ...privately(),
+            ...(args.script === undefined ? {} : { script: args.script }),
           };
           state.next += 1;
           state.items.push(structuredClone(watch));
@@ -243,8 +279,8 @@ async function isSide(
 }
 
 /**
- * One watch's timer: sleeps until the next check, runs it in the watch's side conversation, and
- * tells the room what is new. Owned by the room's conversation and `background`, like a nudge.
+ * One watch's timer: sleeps until the next check, runs it (its script, or a model run in the
+ * watch's side conversation), and tells the room what is new. Owned by the room's conversation and `background`, like a nudge.
  */
 function createTimer(host: Pick<ExtensionHost<unknown>, "assistant" | "now">) {
   return defineTask<TimerInput, TimerCheckpoint, { checks: number }>({
@@ -278,71 +314,71 @@ function createTimer(host: Pick<ExtensionHost<unknown>, "assistant" | "now">) {
             context,
           );
 
-        let sideId = watch.sideId;
-        if (sideId === undefined) {
-          sideId = await nudge.rooms.createSide(roomId, context);
-          const made = sideId;
-          await runtime.commit(async (tx) => {
-            const item = (await tx.doc(WatchesDoc, roomId, null)).items.find(
-              (i) => i.id === watchId,
-            );
-            if (item !== undefined) item.sideId = made;
-            return undefined;
-          }, context);
-        }
-        const side = await nudge.harness.conversation(sideId as ConversationId, context);
-        if (side === undefined) throw new Error(`Watch ${watchId} lost its side conversation`);
-
-        let found: Found[] | undefined;
+        let report: Report | undefined;
         let error: string | undefined;
         try {
-          // Every check starts afresh: earlier checks' pages would only cost.
-          await side.reset(undefined, context);
-          const submission = await side.submit(
-            {
-              type: "input",
-              content: checkPrompt(watch),
-              whenBusy: "followUp",
-              requestId: `watch:${watchId}:${count}`,
-            },
-            context,
-          );
-          const settled = await submission.wait(context);
-          if (settled.status !== "done") throw new Error(`the check ended ${settled.status}`);
-          found = parseFound(await lastReply(side, context));
-          if (found === undefined) throw new Error("the check's reply had no items");
+          report =
+            watch.script === undefined
+              ? await checkWithModel(watch, count, nudge, runtime, context)
+              : await checkWithScript(watch, watch.script, task.state.checkpoint, runtime, context);
         } catch (caught) {
           if (runtime.signal.aborted) throw caught;
           error = (caught as Error).message;
         }
 
-        const fresh = (found ?? []).filter((item) => !watch.seen.includes(item.key));
+        const found = report?.items ?? [];
+        const fresh = found.filter((item) => !watch.seen.includes(item.key));
         if (fresh.length > 0) {
           const room = await nudge.rooms.get(roomId, context);
           const conversation =
             room === undefined
               ? undefined
               : await runtime.conversation(room.conversationId as ConversationId, context);
+          const fire = {
+            nudgeId: `watch-${watchId}`,
+            message: `Watch ${watchId}: ${fresh.length} new — ${watch.what}`,
+            fireAt: host.now(),
+            source: "watch",
+            ...(watch.privateTo === undefined ? {} : { privateTo: watch.privateTo }),
+          } satisfies FireEntryData;
           // The request id makes a rerun after a crash find this submission instead of adding another.
-          await conversation?.submit(
-            {
-              type: "input",
-              content: foundPrompt(watch, fresh),
-              whenBusy: "followUp",
-              requestId: `watch:${watchId}:${count}:found`,
-              entry: {
-                kind: FIRE_ENTRY,
-                data: {
-                  nudgeId: `watch-${watchId}`,
-                  message: `Watch ${watchId}: ${fresh.length} new — ${watch.what}`,
-                  fireAt: host.now(),
-                  source: "watch",
-                  ...(watch.privateTo === undefined ? {} : { privateTo: watch.privateTo }),
-                } satisfies FireEntryData,
+          const requestId = `watch:${watchId}:${count}:found`;
+          if (report?.message !== undefined && room !== undefined) {
+            // The script said it all: posted as it is, and no model answers it. A write goes
+            // through the room's own handle, which queues it behind a run in progress.
+            const own = await nudge.harness.conversation(
+              room.conversationId as ConversationId,
+              context,
+            );
+            await own?.submit(
+              {
+                type: "write",
+                requestId,
+                entry: {
+                  kind: FIRE_ENTRY,
+                  data: { ...fire, message: report.message, said: true },
+                  model: [
+                    {
+                      role: "user",
+                      content: `Your watch ${watchId} ("${watch.what}") posted this to the room:\n${report.message}`,
+                      timestamp: host.now(),
+                    },
+                  ],
+                },
               },
-            },
-            context,
-          );
+              context,
+            );
+          } else
+            await conversation?.submit(
+              {
+                type: "input",
+                content: foundPrompt(watch, fresh),
+                whenBusy: "followUp",
+                requestId,
+                entry: { kind: FIRE_ENTRY, data: fire },
+              },
+              context,
+            );
         }
 
         const next = nextCheck(at, every, host.now());
@@ -358,7 +394,7 @@ function createTimer(host: Pick<ExtensionHost<unknown>, "assistant" | "now">) {
           if (error === undefined) {
             item.seen = remember(
               item.seen,
-              (found ?? []).map((f) => f.key),
+              found.map((f) => f.key),
             );
             item.lastFound = fresh.length;
             delete item.lastError;
@@ -377,6 +413,80 @@ function createTimer(host: Pick<ExtensionHost<unknown>, "assistant" | "now">) {
       );
     },
   });
+}
+
+/** A check as a model run with tools, in the watch's side conversation. */
+async function checkWithModel(
+  watch: Watch,
+  count: number,
+  nudge: ReturnType<ExtensionHost<unknown>["assistant"]>,
+  runtime: TaskRuntime<TimerInput, TimerCheckpoint, { checks: number }, object>,
+  context: Context,
+): Promise<Report> {
+  let sideId = watch.sideId;
+  if (sideId === undefined) {
+    sideId = await nudge.rooms.createSide(watch.roomId, context);
+    const made = sideId;
+    await runtime.commit(async (tx) => {
+      const item = (await tx.doc(WatchesDoc, watch.roomId, null)).items.find(
+        (i) => i.id === watch.id,
+      );
+      if (item !== undefined) item.sideId = made;
+      return undefined;
+    }, context);
+  }
+  const side = await nudge.harness.conversation(sideId as ConversationId, context);
+  if (side === undefined) throw new Error(`Watch ${watch.id} lost its side conversation`);
+  // Every check starts afresh: earlier checks' pages would only cost.
+  await side.reset(undefined, context);
+  const submission = await side.submit(
+    {
+      type: "input",
+      content: checkPrompt(watch),
+      whenBusy: "followUp",
+      requestId: `watch:${watch.id}:${count}`,
+    },
+    context,
+  );
+  const settled = await submission.wait(context);
+  if (settled.status !== "done") throw new Error(`the check ended ${settled.status}`);
+  const report = parseReport(await lastReply(side, context));
+  if (report === undefined) throw new Error("the check's reply had no items");
+  return report;
+}
+
+/**
+ * A check as a run of the watch's saved script, with no model: the run is a task this timer owns,
+ * noted in the checkpoint first, so a rerun after a crash waits for the same run.
+ */
+async function checkWithScript(
+  watch: Watch,
+  script: string,
+  checkpoint: TimerCheckpoint,
+  runtime: TaskRuntime<TimerInput, TimerCheckpoint, { checks: number }, object>,
+  context: Context,
+): Promise<Report> {
+  let run = checkpoint.run as TaskId<ScriptRunResult> | undefined;
+  if (run === undefined)
+    await runtime.commit(async (tx) => {
+      run = await tx.createTask(
+        ScriptRun,
+        {
+          roomId: watch.roomId,
+          name: script,
+          callId: `watch:${watch.id}:${checkpoint.count}`,
+        },
+        { ownership: { kind: "task", taskId: runtime.taskId } },
+      );
+      return { status: "running", checkpoint: { ...checkpoint, run: Number(run) } };
+    }, context);
+  const settled = await runtime.waitForTask(run!, context);
+  const result = settled.state.outcome?.result;
+  if (result === undefined || !result.ok)
+    throw new Error(`script ${script} failed: ${result?.output.slice(0, 300) ?? "no result"}`);
+  const report = parseReport(result.output);
+  if (report === undefined) throw new Error(`script ${script} returned no items`);
+  return report;
 }
 
 /** The text of the side conversation's latest answer. */

@@ -24,6 +24,8 @@ export type Watch = {
   createdAt: number;
   /** Added in answer to something private: only this player hears what it finds. */
   privateTo?: { playerId: string; displayName: string };
+  /** The saved script each check runs instead of a model run, by name. */
+  script?: string;
 };
 
 export type WatchesState = { items: Watch[]; next: number };
@@ -43,13 +45,23 @@ export const MAX_SEEN = 500;
 /** One thing a check found. */
 export type Found = { readonly key: string; readonly text: string };
 
+/** What a check reports: what matches now, and text a script wants posted as it is. */
+export type Report = { readonly items: Found[]; readonly message?: string };
+
 /**
  * The items in a check's reply: the last JSON object in it with an `items` array. Undefined when
  * there is none, so a reply that went wrong isn't taken for "nothing matches".
  */
 export function parseFound(reply: string): Found[] | undefined {
+  return parseReport(reply)?.items;
+}
+
+/** The report in a check's reply or a script's output: the last JSON object with `items`. */
+export function parseReport(reply: string): Report | undefined {
   const text = reply.replace(/```(?:json)?/g, "");
-  const starts = [...text.matchAll(/\{\s*"items"\s*:/g)].map((match) => match.index).reverse();
+  const starts = [...text.matchAll(/\{\s*"(?:items|message)"\s*:/g)]
+    .map((match) => match.index)
+    .reverse();
   for (const start of starts) {
     // The object ends at one of the closing braces after it; try the furthest first.
     for (let end = text.lastIndexOf("}"); end > start; end = text.lastIndexOf("}", end - 1)) {
@@ -59,13 +71,16 @@ export function parseFound(reply: string): Found[] | undefined {
       } catch {
         continue;
       }
-      const items = (value as { items?: unknown }).items;
+      const { items, message } = value as { items?: unknown; message?: unknown };
       if (!Array.isArray(items)) break;
-      return items.flatMap((item) => {
+      const found = items.flatMap((item) => {
         const { key, text } = (item ?? {}) as { key?: unknown; text?: unknown };
         if (typeof key !== "string" || key.trim() === "") return [];
         return [{ key: key.trim(), text: typeof text === "string" ? text.trim() : key.trim() }];
       });
+      return typeof message === "string" && message.trim() !== ""
+        ? { items: found, message: message.trim() }
+        : { items: found };
     }
   }
   return undefined;

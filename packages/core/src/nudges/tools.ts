@@ -3,6 +3,7 @@ import type { Context } from "@earendil-works/chord";
 import { type DocumentReader, defineTool, type ToolRegistration } from "@earendil-works/pi-durable";
 import { roomOf } from "../identity/directory.ts";
 import { profileOf } from "../identity/profiles.ts";
+import { readsOnly } from "../extensions/reads.ts";
 import { keepsPlaceholders } from "../privacy/tool-values.ts";
 import { currentTurn } from "../privacy/turn.ts";
 import type { Nudges } from "./nudges.ts";
@@ -119,7 +120,7 @@ export function createNudgeTools(options: NudgeToolOptions): ToolRegistration[] 
     },
   });
 
-  return [keepsPlaceholders(schedule), list, cancel] as ToolRegistration[];
+  return [keepsPlaceholders(schedule), readsOnly(list), cancel] as ToolRegistration[];
 }
 
 function minutes(ms: number): string {

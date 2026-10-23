@@ -7,9 +7,21 @@ import {
   fauxText,
   fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
-import { createNudge, LOBBY, type Nudge, type RoomEvent, roomOf } from "@nudge/core";
+import type { JsonObject } from "@earendil-works/pi-durable";
+import {
+  createNudge,
+  defineNudgeExtension,
+  defineTool,
+  LOBBY,
+  type Nudge,
+  readsOnly,
+  type RoomEvent,
+  roomOf,
+  Type,
+} from "@nudge/core";
+import { scriptsExtension } from "@nudge/ext-scripts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { parseFound, remember, WatchesDoc, watchesExtension } from "../src/index.ts";
+import { parseFound, parseReport, remember, WatchesDoc, watchesExtension } from "../src/index.ts";
 
 const context = BACKGROUND_CONTEXT;
 const by = { playerId: "owner", displayName: "Vegard" };
@@ -140,6 +152,149 @@ describe("watches", () => {
     ).toEqual([{ key: "a", text: "A" }]);
     expect(parseFound('{"items":[]} trailing')).toEqual([]);
     expect(parseFound("No JSON here {not json}")).toBeUndefined();
+    expect(parseReport('Output:\n{"message":"Two new","items":[{"key":"a"}]}')).toEqual({
+      items: [{ key: "a", text: "a" }],
+      message: "Two new",
+    });
     expect(remember(["a"], ["b", "a", "b"])).toEqual(["a", "b"]);
+  });
+});
+
+describe("watches that run a script", () => {
+  let nudge: Nudge;
+  let listings: string[];
+  /** Model requests, of any kind. */
+  let requests: number;
+  let calls: { name: string; args: JsonObject }[];
+  let events: RoomEvent[];
+
+  const site = defineNudgeExtension({
+    name: "site",
+    version: "0.0.0",
+    setup: () => ({
+      tools: [
+        readsOnly(
+          defineTool({
+            name: "listings",
+            description: "List what is for sale.",
+            parameters: Type.Object({}),
+            execute: async () => ({ output: [{ type: "text", text: listings.join("\n") }] }),
+          }),
+        ),
+      ],
+    }),
+  });
+
+  beforeEach(async () => {
+    listings = ["GLC 2027, 780 000 kr"];
+    requests = 0;
+    calls = [];
+    const faux = fauxProvider();
+    const models = createModels();
+    models.setProvider(faux.provider);
+    const answer = (request: ModelContext) => {
+      requests++;
+      const last = request.messages.findLast((m) => m.role !== "system");
+      if (last?.role === "toolResult") return fauxAssistantMessage([fauxText("Done.")]);
+      const text = lastUser(request);
+      if (text.includes("found something new"))
+        return fauxAssistantMessage([fauxText(`News! ${text.split("\n").slice(1, -1).join(" ")}`)]);
+      const call = calls.shift();
+      if (call === undefined) return fauxAssistantMessage([fauxText("Okay.")]);
+      return fauxAssistantMessage([fauxToolCall(call.name, call.args)], { stopReason: "toolUse" });
+    };
+    faux.setResponses(Array.from({ length: 200 }, () => answer));
+    nudge = await createNudge(
+      {
+        database: ":memory:",
+        models,
+        model: { provider: faux.provider.id, modelId: faux.getModel().id },
+        extensions: [
+          site,
+          scriptsExtension,
+          { extension: watchesExtension, settings: { minScriptMinutes: 0 } },
+        ],
+      },
+      context,
+    );
+    events = [];
+    nudge.events.subscribe((event) => events.push(event));
+  });
+
+  afterEach(async () => {
+    await nudge.close(context);
+  });
+
+  const ask = async (name: string, args: JsonObject) => {
+    calls.push({ name, args });
+    const settled = await (
+      await nudge.submit(LOBBY, { text: "go", author: by }, context)
+    ).wait(context);
+    if (settled.status !== "done") throw new Error(`unanswered: ${JSON.stringify(settled)}`);
+  };
+  const watch = async () => (await nudge.harness.snapshot(WatchesDoc, LOBBY, context))?.items[0];
+  const news = () => events.filter((e) => e.type === "answer" && e.cause === "nudge");
+
+  const watchWith = async (code: string) => {
+    await ask("save_script", { name: "glc", description: "GLC listings", code });
+    await ask("add_watch", { what: "New GLC listings", every_minutes: 0.01, script: "glc" });
+  };
+  const LIST =
+    "const all = (await tools.listings({})).split('\\n');\n" +
+    "const items = all.map((line) => ({ key: line, text: line }));\n";
+
+  it("checks with no model run, and the model speaks only on news", async () => {
+    await watchWith(`${LIST}return { items };`);
+    await until(() => news().length === 1);
+    expect(news()[0]).toMatchObject({ text: expect.stringContaining("GLC 2027, 780 000 kr") });
+
+    // Checks with nothing new cost no model request at all.
+    await until(async () => ((await watch())?.checks ?? 0) >= 2);
+    const quiet = requests;
+    await until(async () => ((await watch())?.checks ?? 0) >= 6);
+    expect(requests).toBe(quiet);
+    expect(news()).toHaveLength(1);
+    expect(await nudge.rooms.sides(LOBBY, context)).toEqual([]);
+
+    listings = [...listings, "GLC 2027, 799 000 kr"];
+    await until(() => news().length === 2);
+    expect(requests).toBe(quiet + 1);
+    expect(news()[1]).toMatchObject({ text: expect.stringContaining("799 000 kr") });
+  });
+
+  it("posts a script's own message with no model at all", async () => {
+    await watchWith(
+      `${LIST}return { items, message: items.length + " GLC listings now: " + all.join("; ") };`,
+    );
+    await until(() => news().length === 1);
+    const after = requests;
+    expect(news()[0]).toMatchObject({ text: "1 GLC listings now: GLC 2027, 780 000 kr" });
+
+    listings = [...listings, "GLC 2027, 799 000 kr"];
+    await until(() => news().length === 2);
+    expect(news()[1]).toMatchObject({ text: expect.stringContaining("2 GLC listings now") });
+    expect(requests).toBe(after);
+
+    const room = await nudge.conversation(LOBBY, context);
+    const entries = (await room.entries({ order: "ascending" }, 500, undefined, context)).items;
+    expect(entries.filter((e) => e.kind === "nudge.fire")).toHaveLength(2);
+  });
+
+  it("notes a script that fails, and keeps checking", async () => {
+    await ask("save_script", {
+      name: "glc",
+      description: "GLC listings",
+      code: `${LIST}if (all.join("") === "") throw new Error("site down");\nreturn { items };`,
+    });
+    listings = [];
+    await ask("add_watch", { what: "New GLC listings", every_minutes: 0.01, script: "glc" });
+    await until(async () => ((await watch())?.checks ?? 0) >= 2);
+    expect((await watch())?.lastError).toContain("site down");
+    expect(news()).toHaveLength(0);
+  });
+
+  it("won't watch with a script that isn't saved", async () => {
+    await ask("add_watch", { what: "x", every_minutes: 1, script: "nope" });
+    expect(await watch()).toBeUndefined();
   });
 });

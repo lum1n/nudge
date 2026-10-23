@@ -6,6 +6,7 @@ import {
   defineTool,
   type ExtensionDocuments,
   keepsPlaceholders,
+  readsOnly,
   roomOf,
   type RoomSocketHandler,
   section,
@@ -276,7 +277,9 @@ export const listsExtension = defineNudgeExtension({
 
     return {
       // Lists keep what they are given; values go back in only where someone sees them.
-      tools: [add, showTool, check, remove, clear].map((tool) => keepsPlaceholders(tool)),
+      tools: [add, readsOnly(showTool), check, remove, clear].map((tool) =>
+        keepsPlaceholders(tool),
+      ),
       roomSocket: panels.roomSocket,
       sections: [
         section("lists", async (input, context) => {
