@@ -3,6 +3,7 @@ import {
   defineNudgeExtension,
   defineTool,
   parseTime,
+  readsOnly,
   requestApproval,
   roomOf,
   roomsSetting,
@@ -301,7 +302,7 @@ export function calendarExtension(options: CalendarOptions = {}) {
       });
 
       return {
-        tools: [list, add, remove],
+        tools: [readsOnly(list), add, remove],
         sections: [
           section("calendar", async (input, context) => {
             const room = await roomOf(input.read, input.conversationId, context).catch(

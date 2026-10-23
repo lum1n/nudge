@@ -10,6 +10,7 @@ import {
   type FireEntryData,
   inTurn,
   type Owner,
+  readsOnly,
   requestApproval,
   roomOf,
   roomsSetting,
@@ -787,10 +788,11 @@ export function accExtension(options: AccOptions = {}) {
       return {
         problems,
         tools: [
-          hostsTool,
-          sessionsTool,
+          // Trusting a new host key asks an admin: never from a script.
+          readsOnly(hostsTool, (args) => args.trust_new_key === undefined),
+          readsOnly(sessionsTool),
           startTool,
-          readTool,
+          readsOnly(readTool),
           sendTool,
           answerTool,
           controlTool,

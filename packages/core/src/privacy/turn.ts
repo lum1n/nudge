@@ -18,6 +18,13 @@ export type Turn = {
   readonly redact?: (text: string) => string;
 };
 
+/**
+ * The input of a task that sets the turn of every tool call under it, such as a watch's script
+ * run: those calls answer the watch, not whatever the room's conversation is in now. Only tasks
+ * the assistant's own code creates can set it; a tool call's own task never does.
+ */
+export type SetsTurn = { readonly turn: { readonly privateTo?: Owner } };
+
 const turns = new AsyncLocalStorage<Turn>();
 
 /** The turn of the tool call running now; empty outside tools. */

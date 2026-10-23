@@ -3,6 +3,7 @@ import {
   defineNudgeExtension,
   defineTool,
   formatTime,
+  readsOnly,
   requestApproval,
   roomOf,
   roomsSetting,
@@ -298,7 +299,7 @@ export function mailExtension(options: MailOptions = {}) {
       });
 
       return {
-        tools: [search, read, send],
+        tools: [readsOnly(search), readsOnly(read), send],
         sections: [
           section("mail", async (input, context) => {
             const room = await roomOf(input.read, input.conversationId, context).catch(

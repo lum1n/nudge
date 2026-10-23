@@ -1,6 +1,14 @@
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { fillVariables } from "@nudge/bridge";
-import { defineNudgeExtension, defineTool, roomOf, roomsSetting, section, Type } from "@nudge/core";
+import {
+  defineNudgeExtension,
+  defineTool,
+  readsOnly,
+  roomOf,
+  roomsSetting,
+  section,
+  Type,
+} from "@nudge/core";
 import { CardDavBackend, type ContactsAccount, type ContactsBackend } from "./backend.ts";
 import { KnownContacts } from "./known.ts";
 import type { Contact } from "./vcard.ts";
@@ -220,7 +228,7 @@ export function contactsExtension(options: ContactsOptions = {}) {
       });
 
       return {
-        tools: [search],
+        tools: [readsOnly(search)],
         detectors: known.detectors,
         sections: [
           section("contacts", async (input, context) => {

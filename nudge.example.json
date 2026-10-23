@@ -42,9 +42,14 @@
           "from": "./extensions/lists"
         },
         {
-          "$comment": "Watches: the assistant checks something on a schedule with its tools and tells the room only what is new. Each check is a model run, so minMinutes caps how often.",
+          "$comment": "Scripts: the assistant saves small programs for lookups it repeats and runs them again by name, or from a watch, without a model run. Scripts can only call tools that read.",
+          "from": "./extensions/scripts",
+          "settings": { "timeoutSeconds": 30, "maxPerRoom": 20 }
+        },
+        {
+          "$comment": "Watches: the assistant checks something on a schedule with its tools and tells the room only what is new. Each check is a model run, so minMinutes caps how often; a watch that runs a saved script costs none, and minScriptMinutes caps that.",
           "from": "./extensions/watches",
-          "settings": { "minMinutes": 30, "maxPerRoom": 10 }
+          "settings": { "minMinutes": 30, "minScriptMinutes": 5, "maxPerRoom": 10 }
         },
         {
           "$comment": "Triggers: a secret web address per room that Home Assistant, Uptime Kuma, GitHub or a phone Shortcut POST to, and the assistant acts on what came. url is the address senders reach this server at. Each call is a paid model run, so maxPerHour caps how often one trigger answers.",
