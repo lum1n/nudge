@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { PiiDetector, Span } from "./detectors.ts";
 
 /** One protected value and the placeholder the model sees instead. */
@@ -10,6 +11,12 @@ export type VaultEntry = {
   readonly owner?: string;
   /** Dropped for good: the placeholder stays, so its number is never given to another value. */
   readonly forgotten?: true;
+  /**
+   * Of a forgotten value: the SHA-256 of its key and how many words it has, so written out again
+   * it is still hidden behind its old placeholder, without the vault keeping it.
+   */
+  readonly hash?: string;
+  readonly words?: number;
   /**
    * Readable again (ADR 15): no longer hidden, but its placeholder, wherever it is still stored,
    * is put back in what the model sees.
@@ -45,6 +52,9 @@ export function vaultKey(value: string): string {
 export class Vault {
   private readonly byKey = new Map<string, VaultEntry>();
   private readonly releasedByKey = new Map<string, VaultEntry>();
+  private readonly forgottenByHash = new Map<string, VaultEntry>();
+  /** How many words the forgotten values have, most first; undefined until needed. */
+  private forgottenWords: number[] | undefined;
   private readonly byPlaceholder = new Map<string, VaultEntry>();
   private readonly counters = new Map<string, number>();
   private unsaved: VaultEntry[] = [];
@@ -89,6 +99,14 @@ export class Vault {
       throw new Error("Refusing to protect a value shorter than two characters");
     if (!/^[A-Z]+$/.test(kind))
       throw new Error(`Placeholder kind must be upper-case letters, got "${kind}"`);
+    // Protected again on purpose, such as a place someone is back at: kept once more, under a
+    // new placeholder, and the forgotten one no longer stands for it.
+    const forgotten = this.forgottenByHash.get(hashOf(trimmed));
+    if (forgotten !== undefined) {
+      const { hash: _, words: __, ...tombstone } = forgotten;
+      this.insert(tombstone);
+      this.unsaved.push(tombstone);
+    }
     const released = this.releasedByKey.get(vaultKey(trimmed));
     if (released !== undefined) {
       // Hidden again, under its old placeholder.
@@ -157,7 +175,8 @@ export class Vault {
 
   /**
    * Drops a value for good: from now on everyone, the model and tools only ever see its
-   * placeholder. False when the vault doesn't hold it.
+   * placeholder. Only a hash of it is kept, so where it is written out again it is still hidden
+   * behind that placeholder, with its owner. False when the vault doesn't hold it.
    */
   forget(placeholder: string): boolean {
     const entry = this.byPlaceholder.get(placeholder);
@@ -168,6 +187,8 @@ export class Vault {
       placeholder,
       ...(entry.owner === undefined ? {} : { owner: entry.owner }),
       forgotten: true,
+      hash: hashOf(entry.value),
+      words: vaultKey(entry.value).split(" ").length,
     };
     this.byKey.delete(vaultKey(entry.value));
     this.insert(tombstone);
@@ -195,6 +216,11 @@ export class Vault {
     return this.byKey.has(vaultKey(value));
   }
 
+  /** Whether `value` was forgotten: it stays hidden behind its old placeholder. */
+  forgot(value: string): boolean {
+    return this.forgottenByHash.has(hashOf(value));
+  }
+
   /** The placeholder `value` is hidden under; undefined when it isn't hidden. */
   placeholderOf(value: string): string | undefined {
     return this.byKey.get(vaultKey(value))?.placeholder;
@@ -212,14 +238,17 @@ export class Vault {
    */
   redact(text: string, detectors: readonly PiiDetector[], owner?: string): string {
     if (text === "") return text;
-    return mapOutsidePlaceholders(this.withReleased(text), (segment) => {
-      for (const span of pickSpans(segment, detectors)) {
-        const value = segment.slice(span.start, span.end);
-        // Only new values: an owner given here must not take a value others already saw.
-        this.protect(value, span.kind, this.byKey.has(vaultKey(value)) ? undefined : owner);
-      }
-      return this.replaceKnown(segment);
-    });
+    return mapOutsidePlaceholders(this.withReleased(text), (outer) =>
+      mapOutsidePlaceholders(this.hideForgotten(outer, detectors), (segment) => {
+        for (const span of pickSpans(segment, detectors)) {
+          const value = segment.slice(span.start, span.end);
+          if (this.forgot(value)) continue;
+          // Only new values: an owner given here must not take a value others already saw.
+          this.protect(value, span.kind, this.byKey.has(vaultKey(value)) ? undefined : owner);
+        }
+        return this.replaceKnown(segment);
+      }),
+    );
   }
 
   /** Puts the values back. Placeholders this vault does not know, or forgot, stay as they are. */
@@ -270,6 +299,65 @@ export class Vault {
     );
   }
 
+  /**
+   * Text with forgotten values written out replaced by their placeholders. The vault has only
+   * their hashes, so it tries what the detectors find and each run of as many words as a
+   * forgotten value has, with the punctuation around it and a possessive `s` taken off.
+   */
+  private hideForgotten(text: string, detectors: readonly PiiDetector[]): string {
+    if (this.forgottenByHash.size === 0 || text === "") return text;
+    const found: { start: number; end: number; placeholder: string }[] = [];
+    for (const span of pickSpans(text, detectors)) {
+      const entry = this.forgottenByHash.get(hashOf(text.slice(span.start, span.end)));
+      if (entry !== undefined) found.push({ ...span, placeholder: entry.placeholder });
+    }
+    this.forgottenWords ??= [
+      ...new Set([...this.forgottenByHash.values()].map((entry) => entry.words ?? 1)),
+    ].sort((a, b) => b - a);
+    const words = [...text.matchAll(/\S+/gu)].map((match) => ({
+      start: match.index,
+      end: match.index + match[0].length,
+    }));
+    for (const count of this.forgottenWords)
+      for (let i = 0; i + count <= words.length; i++) {
+        const match = this.forgottenAt(text, words[i]!.start, words[i + count - 1]!.end);
+        if (match !== undefined) found.push(match);
+      }
+    if (found.length === 0) return text;
+    found.sort((a, b) => a.start - b.start || b.end - a.end);
+    let result = "";
+    let last = 0;
+    for (const match of found) {
+      if (match.start < last) continue;
+      result += text.slice(last, match.start) + match.placeholder;
+      last = match.end;
+    }
+    return result + text.slice(last);
+  }
+
+  /** The forgotten value from `start` to `end`, with the punctuation around it or without. */
+  private forgottenAt(
+    text: string,
+    start: number,
+    end: number,
+  ): { start: number; end: number; placeholder: string } | undefined {
+    const run = text.slice(start, end);
+    const lead = /^[("'«“‘<[{]+/u.exec(run)?.[0].length ?? 0;
+    const trail = /[.,;:!?)"'»”’>\]}]+$/u.exec(run)?.[0].length ?? 0;
+    for (const from of lead === 0 ? [start] : [start, start + lead])
+      for (const to of trail === 0 ? [end] : [end, end - trail]) {
+        if (to - from < 2) continue;
+        const entry = this.forgottenByHash.get(hashOf(text.slice(from, to)));
+        if (entry !== undefined) return { start: from, end: to, placeholder: entry.placeholder };
+        // "Anns bil": names and places may take a possessive `s`.
+        if (text[to - 1] !== "s" || to - 1 - from < 2) continue;
+        const named = this.forgottenByHash.get(hashOf(text.slice(from, to - 1)));
+        if (named !== undefined && POSSESSIVE_KINDS.has(named.kind))
+          return { start: from, end: to - 1, placeholder: named.placeholder };
+      }
+    return undefined;
+  }
+
   /** Text with the placeholders of released values put back. */
   private withReleased(text: string): string {
     if (this.releasedByKey.size === 0 || !text.includes("⟦")) return text;
@@ -312,15 +400,23 @@ export class Vault {
       this.byKey.delete(vaultKey(previous.value));
       this.releasedByKey.delete(vaultKey(previous.value));
     }
+    if (previous?.hash !== undefined) this.forgottenByHash.delete(previous.hash);
     if (entry.released) this.releasedByKey.set(key, entry);
     else if (!entry.forgotten) this.byKey.set(key, entry);
+    else if (entry.hash !== undefined) this.forgottenByHash.set(entry.hash, entry);
     this.byPlaceholder.set(entry.placeholder, entry);
     if (!n.startsWith(":"))
       this.counters.set(kind, Math.max(this.counters.get(kind) ?? 0, Number(n)));
     this.matcher = undefined;
+    this.forgottenWords = undefined;
     this.hiddenFrom.clear();
     this.changes++;
   }
+}
+
+/** What a forgotten value is known by: the SHA-256 of its key. */
+function hashOf(value: string): string {
+  return createHash("sha256").update(vaultKey(value)).digest("hex");
 }
 
 /**

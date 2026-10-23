@@ -72,12 +72,34 @@ export const ibanDetector = regexDetector(
   (match) => ibanValid(match.replace(/ /g, "")),
 );
 
-/** Payment card numbers, checked with Luhn. */
-export const cardDetector = regexDetector(
+/**
+ * Links: after a scheme (`https://`), after `www.`, or a host with a path (`nytimes.com/2026/…`),
+ * up to the next space or quote.
+ */
+const LINK =
+  /(?:(?<![\p{L}\p{N}])[a-z][a-z0-9+.-]*:\/\/|(?<![\p{L}\p{N}_@.-])www\.|(?<![\p{L}\p{N}_@.-])(?:[a-z0-9-]+\.)+[a-z]{2,}(?=[/?#]))[^\s<>"'`]*/giu;
+
+const CARD = regexDetector(
   "CARD",
   /(?<![\p{L}\p{N}])\d(?:[ -]?\d){12,18}(?![\p{L}\p{N}])/u,
   (match) => luhnValid(digits(match)),
 );
+
+/**
+ * Payment card numbers, checked with Luhn. Digits in a link are left alone: one in ten long ids
+ * passes Luhn, and an article's id in its address is not a card.
+ */
+export const cardDetector: PiiDetector = {
+  kind: "CARD",
+  *find(text) {
+    const links = [...text.matchAll(LINK)].map((match) => ({
+      start: match.index,
+      end: match.index + match[0].length,
+    }));
+    for (const span of CARD.find(text))
+      if (!links.some((link) => span.start >= link.start && span.start < link.end)) yield span;
+  },
+};
 
 /** Norwegian national identity numbers (fødselsnummer, D-nummer), checked with both control digits. */
 export const norwegianIdDetector = regexDetector(

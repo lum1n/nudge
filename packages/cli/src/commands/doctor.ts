@@ -119,6 +119,11 @@ export async function doctor(options: DoctorOptions): Promise<boolean> {
         const names = installed.map((e) => `${e.name}${e.version ? ` ${e.version}` : ""}`);
         check(true, `${assistant.name}: extensions ${names.join(", ") || "none enabled"}`);
         for (const extension of installed) {
+          if (extension.error !== undefined)
+            check(
+              false,
+              `${assistant.name}: ${extension.name}: fails to start, so the assistant opens without it: ${extension.error}`,
+            );
           for (const problem of extension.problems)
             check(false, `${assistant.name}: ${extension.name}: ${problem}`);
           for (const used of extension.models) {

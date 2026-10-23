@@ -4,6 +4,7 @@ import { domainDetector, ipDetector, usernameDetector } from "../src/privacy/hos
 import { orgDetector, placeDetector } from "../src/privacy/places.ts";
 import {
   birthDateDetector,
+  cardDetector,
   phoneCueDetector,
   type PiiDetector,
   secretDetector,
@@ -160,6 +161,22 @@ describe("what every assistant hides (ADR 15)", () => {
       "hunter2",
       "abc123def",
     ]);
+  });
+
+  it.each([
+    ["Kortnummer 4111 1111 1111 1111, utløper 12/28", ["4111 1111 1111 1111"]],
+    ["card: 5555-5555-5555-4444", ["5555-5555-5555-4444"]],
+    ["Les https://www.nytimes.com/ og betal med 4012888888881881", ["4012888888881881"]],
+    ["Link: https://shop.no/kvittering, kort 4111111111111111.", ["4111111111111111"]],
+    ["Betal på kjeks.dev med 4111111111111111", ["4111111111111111"]],
+    ["https://www.nytimes.com/live/2026/10/22/world/4111111111111111", []],
+    ["https://example.com/article?id=4111111111111111&ref=home", []],
+    ["se www.vg.no/nyheter/i/4111111111111111 i dag", []],
+    ["nytimes.com/2026/10/22/4012888888881881.html", []],
+    ["<a href='https://x.com/a#5555555555554444'>lenke</a>", []],
+    ["ordre 4111111111111112", []],
+  ])("finds the card numbers in %j", (text, cards) => {
+    expect(found(cardDetector, text)).toEqual(cards);
   });
 
   it("leaves names, places, hosts and API words readable", () => {

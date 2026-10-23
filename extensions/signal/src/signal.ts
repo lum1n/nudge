@@ -15,6 +15,7 @@ export type Envelope = {
 /** Signal's own limit is far higher; long messages read badly on a phone anyway. */
 const MAX_LENGTH = 4000;
 const REQUEST_TIMEOUT_MS = 30_000;
+const MAX_RETRY_MS = 300_000;
 const GROUP = "group.";
 
 /**
@@ -41,18 +42,26 @@ export class SignalCli implements Transport {
     private readonly report: (error: unknown) => void,
   ) {}
 
-  /** Connects, and keeps reconnecting after a drop, waiting `retryMs` between tries. */
+  /**
+   * Connects, and keeps reconnecting after a drop: `retryMs` after it, doubling with each failed
+   * try in a row up to `MAX_RETRY_MS`.
+   */
   start(retryMs = 5_000): void {
+    let failures = 0;
+    const retry = () => {
+      if (this.closed) return;
+      setTimeout(attempt, Math.min(retryMs * 2 ** failures++, MAX_RETRY_MS));
+    };
     const attempt = () => {
       if (this.closed) return;
       this.connect().then(
-        (socket) =>
-          socket.once("close", () => {
-            if (!this.closed) setTimeout(attempt, retryMs);
-          }),
+        (socket) => {
+          failures = 0;
+          socket.once("close", retry);
+        },
         (error: unknown) => {
           this.report(error);
-          setTimeout(attempt, retryMs);
+          retry();
         },
       );
     };
@@ -106,7 +115,14 @@ export class SignalCli implements Transport {
         socket.on("error", (error) => this.report(error));
         this.socket = socket;
         const lines = createInterface({ input: socket });
-        lines.on("line", (line) => this.line(line));
+        lines.on("line", (line) => {
+          // A throw here would be an uncaught exception, taking the whole host down.
+          try {
+            this.line(line);
+          } catch (error) {
+            this.report(error);
+          }
+        });
         socket.once("close", () => {
           for (const { reject } of this.pending.values())
             reject(new Error("signal: connection to signal-cli closed"));

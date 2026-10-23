@@ -28,6 +28,8 @@ import {
 } from "../src/index.ts";
 import { decode, encode, MAX_WIDTH, pack, splitWords, unpack } from "../src/privacy/deep/gliner.ts";
 import { openLocalModel } from "../src/privacy/deep/local-model.ts";
+import { vaultValue } from "../src/privacy/deep/scanner.ts";
+import { withoutPublicEnds } from "../src/privacy/public-names.ts";
 
 const context = BACKGROUND_CONTEXT;
 
@@ -192,6 +194,61 @@ describe("DeepScanner", () => {
     const scanner = new DeepScanner({ detector, mode: "required" });
     await scanner.protectIn(["Rema 1000, Jonas Gahr Støre og IKEA Slependen."], vault);
     expect(vault.entries.map(({ value }) => value)).toEqual(["Slependen"]);
+  });
+
+  it.each([
+    ["Vethjem", "Vethjem"],
+    ["Storgata 12", "Storgata 12"],
+    ["Storgata 12 B", "Storgata 12 B"],
+    ["Bank of Hamar", "Bank of Hamar"],
+    ["The Vethjem", "Vethjem"],
+    ["Vethjem og", "Vethjem"],
+    ["Hans", "Hans"],
+    ["Dr. No", "Dr. No"],
+    ["The", undefined],
+    ["Of The", undefined],
+    ["Og", undefined],
+    ["På", undefined],
+    ["12", undefined],
+    ["2026", undefined],
+    ["+47 1234", undefined],
+    ["12.", undefined],
+    ["borettslaget", undefined],
+    ["Mamma", undefined],
+    ["⟦NAME1⟧ Berg", undefined],
+    ["", undefined],
+    ["X", undefined],
+  ])("keeps %j as %j for the vault", (value, kept) => {
+    expect(vaultValue(value)).toBe(kept);
+  });
+
+  it.each([
+    ["IKEA Slependen", "ORG", "Slependen"],
+    ["Vethjem", "ORG", "Vethjem"],
+    ["The New York", "PLACE", ""],
+    ["IKEA London", "PLACE", ""],
+  ])("keeps %j of a %s without well-known ends as %j", (name, kind, kept) => {
+    expect(withoutPublicEnds(name, kind)).toBe(kept);
+  });
+
+  it("leaves out what is left of a finding once a well-known name or small word goes", async () => {
+    const { detector } = fakeModel({
+      "The New York": "PLACE",
+      "Til Vethjem": "ORG",
+      "2026": "ADDRESS",
+      "Storgata 12": "ADDRESS",
+      "Of The": "ORG",
+    });
+    const vault = new Vault();
+    const scanner = new DeepScanner({ detector, mode: "required" });
+    await scanner.protectIn(
+      ["The New York Times, 2026. Til Vethjem, Storgata 12. Of The Year."],
+      vault,
+    );
+    expect(vault.entries.map(({ kind, value }) => `${kind} ${value}`)).toEqual([
+      "ORG Vethjem",
+      "ADDRESS Storgata 12",
+    ]);
   });
 
   it("reads each piece once, also after a restart, and gives new values to the owner", async () => {

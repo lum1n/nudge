@@ -335,9 +335,11 @@ describe("mcp", () => {
   });
 
   it("refuses bad server settings", async () => {
-    await expect(open({ "Bad Name": { command: "x" } })).rejects.toThrow("is not lower-case");
-    await expect(open({ both: { command: "x", url: "http://x" } })).rejects.toThrow(
-      "needs either command or url",
-    );
+    // The assistant opens without it.
+    await open({ "Bad Name": { command: "x" } });
+    expect(nudge?.brokenExtensions()[0]?.error).toContain("is not lower-case");
+    await nudge?.close(context);
+    await open({ both: { command: "x", url: "http://x" } });
+    expect(nudge?.brokenExtensions()[0]?.error).toContain("needs either command or url");
   });
 });

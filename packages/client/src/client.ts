@@ -1,7 +1,8 @@
 import type { MessageResponse, WhenBusy } from "@nudge/protocol";
-import { Api, type TokenStore } from "./api.ts";
+import { Api, ApiError, type TokenStore } from "./api.ts";
 import { Connection, type ConnectionOptions, connectUrl } from "./connection.ts";
-import { RoomListStore, RoomStore } from "./stores.ts";
+import { type KeyValueStorage, memoryStorage, Outbox, type Outgoing } from "./outbox.ts";
+import { type PendingMessage, RoomListStore, RoomStore } from "./stores.ts";
 
 export type NudgeClientOptions = {
   /** The server's address, such as `https://nudge.example`; `""` for the page's own origin. */
@@ -11,23 +12,36 @@ export type NudgeClientOptions = {
   /** What this client is: sent in the socket's hello. */
   readonly client: ConnectionOptions["client"];
   readonly fetch?: typeof fetch;
+  /**
+   * Where the outbox is kept, such as `localStorage`, so messages that didn't get through survive
+   * a reload; in memory only without one.
+   */
+  readonly storage?: KeyValueStorage;
 } & Pick<ConnectionOptions, "socket" | "backoff" | "heartbeatMs" | "onError">;
 
 /** A store held open: call `release` when done with it. */
 export type Lease<S> = { readonly store: S; release(): void };
 
 /**
- * A client of one assistant: its HTTP commands (`api`), its socket (`connection`), and the stores
- * of the views in use, shared by everyone who holds them. A view is subscribed while at least one
- * lease on it is held, and `send` shows a message in its room's store until the view has it.
+ * A client of one assistant: its HTTP commands (`api`), its socket (`connection`), the stores of
+ * the views in use, shared by everyone who holds them, and an outbox. A view is subscribed while
+ * at least one lease on it is held. `send` puts a message in the outbox and shows it in its room's
+ * store until the view has it; one that doesn't get through (no network, or a 5xx) is sent again
+ * with the same `requestId` whenever the socket opens and on `retryNow`, also after a reload when
+ * the outbox is in a `storage`. The server answers a `requestId` it has seen with the same
+ * submission, so a message sent twice still shows once.
  */
 export class NudgeClient {
   readonly api: Api;
   readonly connection: Connection;
+  readonly outbox: Outbox;
   private readonly held = new Map<
     string,
     { store: RoomStore | RoomListStore; leases: number; unwatch: () => void }
   >();
+  /** Messages on their way to the server, by `requestId`, so none is posted twice at once. */
+  private readonly posting = new Map<string, Promise<MessageResponse>>();
+  private delivering: Promise<void> | undefined;
 
   constructor(options: NudgeClientOptions) {
     const { server, assistant, tokens } = options;
@@ -46,6 +60,13 @@ export class NudgeClient {
       ...(options.heartbeatMs !== undefined && { heartbeatMs: options.heartbeatMs }),
       ...(options.onError && { onError: options.onError }),
     });
+    this.outbox = new Outbox(options.storage ?? memoryStorage(), outboxKey(server, assistant));
+    this.connection.subscribe(() => {
+      const status = this.connection.getStatus();
+      if (status.kind !== "open") return;
+      this.claim(status.welcome.player.id);
+      void this.deliverWaiting();
+    });
   }
 
   /** The player's room list. */
@@ -55,51 +76,93 @@ export class NudgeClient {
 
   /** A room's view, with its earlier items and this client's pending messages. */
   room(id: string): Lease<RoomStore> {
-    return this.hold(
-      `room:${id}`,
-      () => new RoomStore(id, (page) => this.api.timeline(id, page)),
-    ) as Lease<RoomStore>;
+    return this.hold(`room:${id}`, () => {
+      const store = new RoomStore(
+        id,
+        (page) => this.api.timeline(id, page),
+        (requestId) => this.outbox.remove(requestId),
+      );
+      for (const message of this.outbox.list(id)) store.sending(pending(message));
+      return store;
+    }) as Lease<RoomStore>;
   }
 
   /**
    * Posts a message, shown as pending in the room's store (when one is held) until the view has
-   * it. On failure the pending message keeps the error and the promise rejects; `resend` tries
-   * again with the same `requestId`, which the server answers with the same submission.
+   * it. On failure the pending message keeps the error and the promise rejects: one that didn't
+   * get through stays in the outbox and goes again by itself, one the server refused waits for
+   * `resend` (the same `requestId` again, which the server answers with the same submission) or
+   * `dismiss`.
    */
-  async send(
+  send(
     room: string,
     text: string,
     options: { whenBusy?: WhenBusy; requestId?: string; private?: boolean } = {},
   ): Promise<MessageResponse> {
-    const requestId = options.requestId ?? newRequestId();
-    const store = this.storeOf(room);
     const { whenBusy } = options;
-    const secret = options.private === true ? { private: true } : {};
-    store?.sending({ requestId, text, ...(whenBusy && { whenBusy }), ...secret });
-    try {
-      return await this.api.send(room, {
-        text,
-        requestId,
-        ...(whenBusy && { whenBusy }),
-        ...secret,
-      });
-    } catch (error) {
-      store?.failed(requestId, (error as Error).message);
-      throw error;
-    }
+    const message: Outgoing = {
+      requestId: options.requestId ?? newRequestId(),
+      room,
+      text,
+      ...(whenBusy && { whenBusy }),
+      ...(options.private === true && { private: true }),
+      createdAt: Date.now(),
+    };
+    this.outbox.put(message);
+    this.storeOf(room)?.sending(pending(message));
+    return this.post(message);
   }
 
   /** Sends a pending message of `room` again. */
   resend(room: string, requestId: string): Promise<MessageResponse> {
-    const message = this.storeOf(room)
-      ?.getState()
-      .pending.find((p) => p.requestId === requestId);
+    const message =
+      this.outbox.list(room).find((m) => m.requestId === requestId) ??
+      this.storeOf(room)
+        ?.getState()
+        .pending.find((p) => p.requestId === requestId);
     if (message === undefined) throw new Error(`No pending message "${requestId}"`);
     return this.send(room, message.text, {
       requestId,
       ...(message.whenBusy && { whenBusy: message.whenBusy }),
       ...(message.private === true && { private: true }),
     });
+  }
+
+  /** Drops a pending message: it leaves the outbox, and the room's store stops showing it. */
+  dismiss(room: string, requestId: string): void {
+    this.outbox.remove(requestId);
+    this.storeOf(room)?.dismiss(requestId);
+  }
+
+  /**
+   * Tries again now rather than on the next backoff, such as when the network comes back or the
+   * page is shown again: reconnects when waiting to, and sends the outbox when open.
+   */
+  retryNow(): void {
+    if (this.connection.getStatus().kind === "open") void this.deliverWaiting();
+    else this.connection.retryNow();
+  }
+
+  /**
+   * Sends the outbox's messages that didn't get through, oldest first, until one doesn't get
+   * through again. Done whenever the socket opens.
+   */
+  deliverWaiting(): Promise<void> {
+    this.delivering ??= (async () => {
+      try {
+        for (const message of this.outbox.list()) {
+          if (message.error !== undefined) continue;
+          try {
+            await this.post(message);
+          } catch (error) {
+            if (retryable(error)) return;
+          }
+        }
+      } finally {
+        this.delivering = undefined;
+      }
+    })();
+    return this.delivering;
   }
 
   /** Connects the socket; views held now or later are subscribed once it is open. */
@@ -110,6 +173,42 @@ export class NudgeClient {
   /** Closes the socket; leases stay, and are subscribed again by `open()`. */
   close(): void {
     this.connection.close();
+  }
+
+  private post(message: Outgoing): Promise<MessageResponse> {
+    const posting = this.posting.get(message.requestId);
+    if (posting !== undefined) return posting;
+    const { requestId, room, text, whenBusy } = message;
+    const post = this.api
+      .send(room, {
+        text,
+        requestId,
+        ...(whenBusy && { whenBusy }),
+        ...(message.private === true && { private: true }),
+      })
+      .then(
+        (response) => {
+          this.outbox.remove(requestId);
+          return response;
+        },
+        (error: unknown) => {
+          const reason = (error as Error).message;
+          if (!retryable(error)) this.outbox.refused(requestId, reason);
+          this.storeOf(room)?.failed(requestId, reason);
+          throw error;
+        },
+      )
+      .finally(() => this.posting.delete(requestId));
+    this.posting.set(requestId, post);
+    return post;
+  }
+
+  /** Makes the outbox the signed-in player's, and stops showing another player's messages. */
+  private claim(player: string): void {
+    const before = this.outbox.list();
+    this.outbox.claim(player);
+    if (this.outbox.list().length === before.length) return;
+    for (const message of before) this.storeOf(message.room)?.dismiss(message.requestId);
   }
 
   private storeOf(room: string): RoomStore | undefined {
@@ -138,6 +237,28 @@ export class NudgeClient {
       },
     };
   }
+}
+
+/** The key a client of `assistant` on `server` keeps its outbox under in its `storage`. */
+export function outboxKey(server: string, assistant: string): string {
+  const origin = server.replace(/\/+$/, "");
+  return `nudge.outbox:${origin === "" ? "" : `${origin}:`}${assistant}`;
+}
+
+/** Whether sending again may work: the request didn't get through, or the server failed. */
+function retryable(error: unknown): boolean {
+  return !(error instanceof ApiError) || error.status >= 500;
+}
+
+function pending(message: Outgoing): PendingMessage {
+  const { requestId, text, whenBusy, error } = message;
+  return {
+    requestId,
+    text,
+    ...(whenBusy && { whenBusy }),
+    ...(message.private === true && { private: true }),
+    ...(error !== undefined && { error }),
+  };
 }
 
 /** A random id, from `getRandomValues`, which pages served over plain HTTP have too. */

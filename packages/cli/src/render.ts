@@ -31,6 +31,8 @@ export function describeNudge(nudge: RoomNudge): string {
 }
 
 export function describeExtension(extension: RoomExtension): string {
+  if (extension.error !== undefined)
+    return `${extension.name}: broken, failed to start: ${extension.error}`;
   const state = extension.enabled ? "on" : "off";
   const chosen = extension.enabled === extension.byDefault ? "" : " (chosen here)";
   const about = extension.description === undefined ? "" : ` — ${extension.description}`;

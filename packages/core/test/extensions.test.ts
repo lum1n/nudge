@@ -15,9 +15,11 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import hello from "../../../extensions/hello/src/index.ts";
 import {
+  checkExtensions,
   ConfigError,
   createNudge,
   type ExtensionHost,
+  ExtensionBroken,
   ExtensionNotFound,
   defineNudgeExtension,
   defineTool,
@@ -109,18 +111,72 @@ describe("extensions", () => {
     expect(current(requests.at(-1)).prompt).toContain('answer with "Hello" first');
     await nudge.close(context);
 
-    await expect(
-      createNudge(
-        { ...options, extensions: [{ extension: hello, settings: { maxSides: 1 } }] },
-        context,
-      ),
-    ).rejects.toThrow(
-      "Settings for the hello extension need fixing:\n  Max sides: must be at least 2.",
-    );
     const plain = defineNudgeExtension({ name: "plain", version: "1", setup: () => ({}) });
-    await expect(
-      createNudge({ ...options, extensions: [{ extension: plain, settings: { a: 1 } }] }, context),
-    ).rejects.toThrow(ConfigError);
+    const refused = await createNudge(
+      {
+        ...options,
+        extensions: [
+          { extension: hello, settings: { maxSides: 1 } },
+          { extension: plain, settings: { a: 1 } },
+        ],
+      },
+      context,
+    );
+    expect(refused.extensions()).toEqual([]);
+    expect(refused.brokenExtensions()).toEqual([
+      expect.objectContaining({
+        name: "hello",
+        error: "Settings for the hello extension need fixing:\n  Max sides: must be at least 2.",
+      }),
+      expect.objectContaining({ name: "plain", error: 'Extension "plain" takes no settings' }),
+    ]);
+    await refused.close(context);
+  });
+
+  it("opens without an extension whose setup throws, and lists it as broken", async () => {
+    const reports: unknown[] = [];
+    const broken = defineNudgeExtension({
+      name: "broken",
+      version: "1.2.3",
+      description: "Never starts",
+      setup: () => {
+        throw new Error("$TOKEN is not set");
+      },
+    });
+    const { options, requests } = setup({
+      extensions: [broken, hello],
+      onReport: (error) => reports.push(error),
+    });
+    const nudge = await createNudge(options, context);
+    expect(nudge.extensions()).toEqual([{ name: "hello", version: "0.1.0" }]);
+    expect(nudge.brokenExtensions()).toEqual([
+      { name: "broken", version: "1.2.3", description: "Never starts", error: "$TOKEN is not set" },
+    ]);
+    expect(String(reports[0])).toContain('Extension "broken" failed to start');
+    await say(nudge, "Hi");
+    expect(current(requests.at(-1)).tools).toContain("roll_dice");
+
+    expect(await nudge.roomExtensions(LOBBY, context)).toEqual([
+      expect.objectContaining({ name: "hello", enabled: true }),
+      {
+        name: "broken",
+        version: "1.2.3",
+        description: "Never starts",
+        enabled: false,
+        byDefault: false,
+        error: "$TOKEN is not set",
+      },
+    ]);
+    await expect(nudge.setRoomExtension(LOBBY, "broken", true, context)).rejects.toThrow(
+      ExtensionBroken,
+    );
+    expect(await nudge.extensionEnabled(LOBBY, "broken", context)).toBe(false);
+
+    // Once a reload sets every extension up, nothing is broken any more.
+    await nudge.reloadExtensions([hello]);
+    expect(nudge.brokenExtensions()).toEqual([]);
+    expect((await nudge.roomExtensions(LOBBY, context)).map((e) => e.name)).toEqual(["hello"]);
+    await nudge.close(context);
   });
 
   it("keeps the built-in name and unique names", async () => {
@@ -364,10 +420,11 @@ describe("extensions", () => {
         }),
       });
     const { options } = setup();
-    for (const paths of [["no-slash"], ["/a/"], ["/a b"], ["/a/:x", "/a/:y"]])
-      await expect(
-        createNudge({ ...options, extensions: [routed(...paths)] }, context),
-      ).rejects.toThrow(/route/);
+    for (const paths of [["no-slash"], ["/a/"], ["/a b"], ["/a/:x", "/a/:y"]]) {
+      const refused = await createNudge({ ...options, extensions: [routed(...paths)] }, context);
+      expect(refused.brokenExtensions()[0]?.error).toMatch(/route/);
+      await refused.close(context);
+    }
     const nudge = await createNudge(
       { ...options, extensions: [routed("/", "/a/:x", "/a/b")] },
       context,
@@ -531,6 +588,25 @@ describe("loading extensions", () => {
       settings: { greeting: "Hoi" },
     });
     expect(loaded[2]).toMatchObject({ extension: { name: "plain" }, rooms: ["personal"] });
+  });
+
+  it("checks every extension, also after one that fails to start", async () => {
+    await writeFile(join(dir, "plain.mjs"), 'export default { name: "plain" };\n');
+    expect(
+      await checkExtensions([
+        { from: HELLO, settings: { maxSides: 1 } },
+        { from: join(dir, "plain.mjs") },
+      ]),
+    ).toEqual([
+      {
+        name: "hello",
+        version: "0.1.0",
+        models: [],
+        problems: [],
+        error: "Settings for the hello extension need fixing:\n  Max sides: must be at least 2.",
+      },
+      { name: "plain", models: [], problems: [] },
+    ]);
   });
 
   it("refuses missing files, modules without an extension, and settings for plain ones", async () => {
