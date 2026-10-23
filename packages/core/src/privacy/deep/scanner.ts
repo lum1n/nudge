@@ -59,6 +59,18 @@ const LOWER_FIRST_NAMES = new Set(
   FIRST_NAMES.filter((name) => !AMBIGUOUS.has(name)).map((name) => name.toLowerCase()),
 );
 
+/**
+ * Small words written with a capital at the start of a sentence or a title, which are no one's
+ * name: "The" of "The New York" once "New York" goes. Lower case. Not "hans", a given name too.
+ */
+const FUNCTION_WORDS = new Set(
+  (
+    "the an of and or for in on at to by with from as is are was this that these those my your " +
+    "our their its og eller på til med av fra om en et ei denne dette disse min din sin vår som " +
+    "er var har ved"
+  ).split(" "),
+);
+
 /** Titles before a name: "Dr. Hansen", "fru Berg". */
 const TITLES = /^(?:dr|mr|mrs|ms|miss|prof|fru|frk|herr|sr|jr)\.?$/iu;
 
@@ -180,13 +192,8 @@ export class DeepScanner {
     // Sørumsand" hides "Sørumsand". Not of a person: "Aas" in "Gunnhild Aas" may be a company too.
     if (isPublicName(value, kind)) return undefined;
     if (kind === "ORG" || kind === "PLACE") value = withoutPublicEnds(value, kind);
-    if (value.length < 2 || value.includes("⟦") || value.includes("⟧")) return undefined;
-    // Names, places and organisations are written with a capital; "borettslaget" and "stranda"
-    // are words. Addresses have a number.
-    if (!/\p{Lu}|\d/u.test(value)) return undefined;
-    const key = vaultKey(value);
-    if (NOT_PERSONAL.has(key) || this.allow.has(key)) return undefined;
-    return value;
+    const kept = vaultValue(value);
+    return kept === undefined || this.allow.has(vaultKey(kept)) ? undefined : kept;
   }
 
   private keyOf(piece: string): string {
@@ -213,6 +220,24 @@ export class DeepScanner {
       this.options.report?.(error);
     });
   }
+}
+
+/**
+ * What of a value the model found is worth a place in the vault, once its ends are trimmed: none
+ * when only small words such as "The" are left, when it is a bare number, a word in lower case or
+ * a pronoun, or when it holds a placeholder.
+ */
+export function vaultValue(value: string): string | undefined {
+  const words = value.split(/\s+/u).filter((word) => word !== "");
+  const small = (word: string) => FUNCTION_WORDS.has(word.toLowerCase().replace(/\P{L}+/gu, ""));
+  while (words.length > 0 && small(words.at(-1)!)) words.pop();
+  while (words.length > 0 && small(words[0]!)) words.shift();
+  const kept = words.join(" ").replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}.]+$/gu, "");
+  if (kept.length < 2 || kept.includes("⟦") || kept.includes("⟧")) return undefined;
+  // Names, places and organisations are written with a capital; "borettslaget" and "stranda"
+  // are words. Addresses have a number, but a number alone ("12", "2026") is no one's.
+  if (!/\p{Lu}|\d/u.test(kept) || !/\p{L}/u.test(kept)) return undefined;
+  return NOT_PERSONAL.has(vaultKey(kept)) ? undefined : kept;
 }
 
 /** A name typed all in lower case that starts with a known given name: "hanne bø", "emma". */

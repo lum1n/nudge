@@ -17,7 +17,10 @@ export function isPublicName(name: string, kind?: string): boolean {
   return known.has(k) || (kind === "PLACE" && knownPlaces.has(k));
 }
 
-/** A name without well-known names at either end: "IKEA Slependen" → "Slependen". */
+/**
+ * A name without well-known names at either end: "IKEA Slependen" → "Slependen". Nothing when
+ * what is left after the first is well known itself: "The New York" → "", not "New".
+ */
 export function withoutPublicEnds(name: string, kind?: string): string {
   let words = name.split(/\s+/u).filter((word) => word !== "");
   for (let n = words.length - 1; n >= 1; n--)
@@ -25,6 +28,7 @@ export function withoutPublicEnds(name: string, kind?: string): string {
       words = words.slice(n);
       break;
     }
+  if (isPublicName(words.join(" "), kind)) return "";
   for (let n = words.length - 1; n >= 1; n--)
     if (isPublicName(words.slice(-n).join(" "), kind)) {
       words = words.slice(0, -n);
