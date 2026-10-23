@@ -126,6 +126,7 @@ private struct ServerView: View {
                     }
                 }
                 WiredSection(server: server)
+                MapsSection(server: server)
                 Section("Model keys") {
                     ForEach(keys, id: \.provider) { key in
                         Button {

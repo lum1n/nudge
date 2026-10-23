@@ -129,6 +129,38 @@ describe("Vault", () => {
     expect(withoutPartialPlaceholder("Hello ⟦NA")).toBe("Hello ");
     expect(withoutPartialPlaceholder("Hello ⟦NAME1⟧")).toBe("Hello ⟦NAME1⟧");
     expect(withoutPartialPlaceholder("math ⟦ x")).toBe("math ⟦ x");
+    expect(withoutPartialPlaceholder("At ⟦PLACE:ho")).toBe("At ");
+    expect(withoutPartialPlaceholder("At ⟦PLACE:home⟧")).toBe("At ⟦PLACE:home⟧");
+  });
+
+  it("names a placeholder, and tells two of one name apart", () => {
+    const vault = new Vault();
+    vault.protect("Oslo S", "PLACE");
+    const home = vault.protectNamed("Storgata 5, Oslo", "PLACE", "home", "ann");
+    expect(home).toBe("⟦PLACE:home⟧");
+    expect(vault.protectNamed("Bakkeveien 2", "PLACE", "home", "bo")).toBe("⟦PLACE:home-2⟧");
+    expect(vault.protect("Majorstuen", "PLACE")).toBe("⟦PLACE2⟧");
+    expect(vault.redact("Bor i storgata 5,  Oslo.", [])).toBe("Bor i ⟦PLACE:home⟧.");
+    expect(vault.rehydrate("Fra ⟦PLACE:home⟧ til ⟦PLACE1⟧")).toBe(
+      "Fra Storgata 5, Oslo til Oslo S",
+    );
+    expect(vault.showTo("bo", "⟦PLACE:home⟧ Storgata 5, Oslo")).toBe("⟦PLACE:home⟧ ⟦PLACE:home⟧");
+    expect(vault.showTo("ann", "⟦PLACE:home⟧")).toBe("Storgata 5, Oslo");
+    expect(vault.protectNamed("storgata 5, oslo", "PLACE", "work", "ann")).toBe(home);
+    expect(() => vault.protectNamed("Somewhere", "PLACE", "Home!", "ann")).toThrow();
+    const reopened = new Vault(vault.entries);
+    expect(reopened.rehydrate("⟦PLACE:home-2⟧")).toBe("Bakkeveien 2");
+    expect(reopened.protect("Grünerløkka", "PLACE")).toBe("⟦PLACE3⟧");
+  });
+
+  it("gives a forgotten name back to its owner only", () => {
+    const vault = new Vault();
+    vault.protectNamed("Storgata 5", "PLACE", "home", "ann");
+    vault.forget("⟦PLACE:home⟧");
+    expect(vault.protectNamed("Bakkeveien 2", "PLACE", "home", "bo")).toBe("⟦PLACE:home-2⟧");
+    expect(vault.protectNamed("Elvegata 9", "PLACE", "home", "ann")).toBe("⟦PLACE:home⟧");
+    expect(vault.rehydrate("⟦PLACE:home⟧")).toBe("Elvegata 9");
+    expect(vault.redact("Storgata 5", [])).toBe("Storgata 5");
   });
 });
 

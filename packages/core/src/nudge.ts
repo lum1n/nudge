@@ -42,7 +42,7 @@ import { attach, MESSAGE_ENTRY, type MessageDraft, submitMessage } from "./host-
 import { DirectoryDoc, type Room } from "./identity/directory.ts";
 import { Players } from "./identity/players.ts";
 import { Looks } from "./identity/appearance.ts";
-import { Personal } from "./identity/personal.ts";
+import { type LocationUpdate, Personal } from "./identity/personal.ts";
 import { Profiles } from "./identity/profiles.ts";
 import { Rooms } from "./identity/rooms.ts";
 import { Memory } from "./memory/memory.ts";
@@ -274,6 +274,7 @@ export class Nudge {
       },
       now,
       (playerId) => changed({ kind: "location", playerId }),
+      (playerId, location) => this.moved(playerId, location),
     );
     this.appearance = new Looks(harness);
     this.rooms = new Rooms(
@@ -723,6 +724,14 @@ export class Nudge {
     })().catch(this.report);
   }
 
+  /** Hands where a player is to the extensions that listen for it. */
+  private moved(playerId: string, location: LocationUpdate): void {
+    for (const installed of this.installed) {
+      if (installed.onLocation === undefined) continue;
+      void (async () => installed.onLocation!(playerId, { ...location }))().catch(this.report);
+    }
+  }
+
   /** The room socket an installed extension serves, if any. */
   roomSocket(extension: string): RoomSocketHandler | undefined {
     return this.installed.find((installed) => installed.extension.name === extension)?.roomSocket;
@@ -805,6 +814,20 @@ export class Nudge {
     await this.models.flush();
     if (options.owner !== undefined && vault.version !== before)
       this.changes.emit({ kind: "vault" });
+    return placeholder;
+  }
+
+  /**
+   * Keeps a value from the model under a placeholder that names it, such as `⟦PLACE:home⟧`, for
+   * `owner` alone (ADR 18). A name taken by another value gets `-2`, `-3`, … A value hidden
+   * already keeps its placeholder.
+   */
+  async protectNamed(value: string, kind: string, name: string, owner: string): Promise<string> {
+    const vault = this.models.vault;
+    const before = vault.version;
+    const placeholder = vault.protectNamed(value, kind, name, owner);
+    await this.models.flush();
+    if (vault.version !== before) this.changes.emit({ kind: "vault" });
     return placeholder;
   }
 

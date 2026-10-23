@@ -5218,6 +5218,210 @@
         }
       }
     },
+    "ArrivalRegion": {
+      "type": "object",
+      "required": [
+        "id",
+        "latitude",
+        "longitude",
+        "radius"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "latitude": {
+          "type": "number"
+        },
+        "longitude": {
+          "type": "number"
+        },
+        "radius": {
+          "type": "number"
+        }
+      }
+    },
+    "ArrivalRegionsResponse": {
+      "type": "object",
+      "required": [
+        "version",
+        "regions"
+      ],
+      "properties": {
+        "version": {
+          "type": "number"
+        },
+        "regions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "latitude",
+              "longitude",
+              "radius"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "latitude": {
+                "type": "number"
+              },
+              "longitude": {
+                "type": "number"
+              },
+              "radius": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "refresh": {
+          "type": "object",
+          "required": [
+            "latitude",
+            "longitude",
+            "radius"
+          ],
+          "properties": {
+            "latitude": {
+              "type": "number"
+            },
+            "longitude": {
+              "type": "number"
+            },
+            "radius": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    "RegionEventRequest": {
+      "type": "object",
+      "required": [
+        "regionId",
+        "event"
+      ],
+      "properties": {
+        "regionId": {
+          "type": "string"
+        },
+        "event": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "enter"
+            },
+            {
+              "type": "string",
+              "const": "exit"
+            }
+          ]
+        }
+      }
+    },
+    "RegionEventResponse": {
+      "type": "object",
+      "required": [
+        "fired"
+      ],
+      "properties": {
+        "fired": {
+          "type": "number"
+        }
+      }
+    },
+    "PlacesResponse": {
+      "type": "object",
+      "required": [
+        "places",
+        "reminders"
+      ],
+      "properties": {
+        "places": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "placeholder",
+              "address",
+              "radius"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "placeholder": {
+                "type": "string"
+              },
+              "address": {
+                "type": "string"
+              },
+              "radius": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "reminders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "roomId",
+              "on",
+              "repeat",
+              "message"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "roomId": {
+                "type": "string"
+              },
+              "on": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "arrive"
+                  },
+                  {
+                    "type": "string",
+                    "const": "leave"
+                  }
+                ]
+              },
+              "repeat": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "once"
+                  },
+                  {
+                    "type": "string",
+                    "const": "always"
+                  }
+                ]
+              },
+              "place": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
     "PlaceRequest": {
       "type": "object",
       "required": [
@@ -7384,6 +7588,242 @@
       "properties": {
         "automatic": {
           "type": "boolean"
+        }
+      }
+    },
+    "GeoRegionStatus": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "by",
+        "state"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "by": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "owner"
+            },
+            {
+              "type": "string",
+              "const": "follow"
+            }
+          ]
+        },
+        "state": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "waiting"
+            },
+            {
+              "type": "string",
+              "const": "downloading"
+            },
+            {
+              "type": "string",
+              "const": "importing"
+            },
+            {
+              "type": "string",
+              "const": "ready"
+            },
+            {
+              "type": "string",
+              "const": "failed"
+            }
+          ]
+        },
+        "step": {
+          "type": "string"
+        },
+        "progress": {
+          "type": "number"
+        },
+        "bytes": {
+          "type": "number"
+        },
+        "updatedAt": {
+          "type": "number"
+        },
+        "usedAt": {
+          "type": "number"
+        },
+        "error": {
+          "type": "string"
+        }
+      }
+    },
+    "GeoStatus": {
+      "type": "object",
+      "required": [
+        "state",
+        "follow",
+        "limitGb",
+        "usedBytes",
+        "regions"
+      ],
+      "properties": {
+        "state": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "off"
+            },
+            {
+              "type": "string",
+              "const": "working"
+            },
+            {
+              "type": "string",
+              "const": "ready"
+            },
+            {
+              "type": "string",
+              "const": "failed"
+            }
+          ]
+        },
+        "follow": {
+          "type": "boolean"
+        },
+        "limitGb": {
+          "type": "number"
+        },
+        "usedBytes": {
+          "type": "number"
+        },
+        "regions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "by",
+              "state"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "by": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "owner"
+                  },
+                  {
+                    "type": "string",
+                    "const": "follow"
+                  }
+                ]
+              },
+              "state": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "waiting"
+                  },
+                  {
+                    "type": "string",
+                    "const": "downloading"
+                  },
+                  {
+                    "type": "string",
+                    "const": "importing"
+                  },
+                  {
+                    "type": "string",
+                    "const": "ready"
+                  },
+                  {
+                    "type": "string",
+                    "const": "failed"
+                  }
+                ]
+              },
+              "step": {
+                "type": "string"
+              },
+              "progress": {
+                "type": "number"
+              },
+              "bytes": {
+                "type": "number"
+              },
+              "updatedAt": {
+                "type": "number"
+              },
+              "usedAt": {
+                "type": "number"
+              },
+              "error": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "error": {
+          "type": "string"
+        }
+      }
+    },
+    "SetGeoRequest": {
+      "type": "object",
+      "properties": {
+        "regions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "follow": {
+          "type": "boolean"
+        },
+        "limitGb": {
+          "type": "number",
+          "minimum": 1
+        }
+      }
+    },
+    "GeoRegionsResponse": {
+      "type": "object",
+      "required": [
+        "regions"
+      ],
+      "properties": {
+        "regions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "name"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "parent": {
+                "type": "string"
+              }
+            }
+          }
         }
       }
     },

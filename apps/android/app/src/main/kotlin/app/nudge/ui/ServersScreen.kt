@@ -24,6 +24,7 @@ import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material3.AlertDialog
@@ -64,6 +65,7 @@ import app.nudge.explain
 import kotlinx.coroutines.launch
 import nudge.ffi.AssistantFor
 import nudge.ffi.AssistantSettings
+import nudge.ffi.GeoStatus
 import nudge.ffi.KeySource
 import nudge.ffi.MadeAssistant
 import nudge.ffi.ModelChoice
@@ -150,6 +152,8 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
     var settingKey by remember { mutableStateOf<String?>(null) }
     var kit by remember { mutableStateOf(false) }
     var removing by remember { mutableStateOf(false) }
+    var geo by remember { mutableStateOf<GeoStatus?>(null) }
+    var maps by remember { mutableStateOf(false) }
     // Followed, so assistants show as joined once they are.
     val places by model.places.collectAsStateWithLifecycle()
     val home by model.session.collectAsStateWithLifecycle()
@@ -157,6 +161,8 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
     suspend fun reload() {
         info = client.info()
         keys = client.keys(null)
+        // Older servers have no map.
+        geo = runCatching { client.geo() }.getOrNull()
     }
 
     fun act(action: suspend () -> Unit) = scope.launch {
@@ -170,7 +176,11 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
     }
 
     LaunchedEffect(server) { act {} }
-
+    if (maps) {
+        BackHandler { maps = false }
+        MapsScreen(client, close = { maps = false; scope.launch { geo = runCatching { client.geo() }.getOrNull() } })
+        return
+    }
     editing?.let { assistant ->
         BackHandler { editing = null }
         AssistantScreen(
@@ -386,6 +396,16 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
                                 },
                                 trailingContent = { Switch(checked = updates.automatic, onCheckedChange = null) },
                             ) { Text("Update automatically") }
+                        }
+                    }
+                    geo?.let { status ->
+                        add { shapes ->
+                            SegmentedListItem(
+                                onClick = { maps = true },
+                                shapes = shapes,
+                                leadingContent = { Icon(Icons.Outlined.Map, null) },
+                                supportingContent = { Text(mapsSummary(status)) },
+                            ) { Text("Maps") }
                         }
                     }
                     add { shapes ->

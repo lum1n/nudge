@@ -28,6 +28,7 @@ An extendable, multiplayer personal assistant that keeps personal data away from
 - `@nudge/ext-scripts`: saved scripts for lookups the assistant repeats, run again without a model (`extensions/scripts`).
 - `@nudge/ext-federation`: lets people from other assistants join, with their home vouching for them (`extensions/federation`).
 - `@nudge/ext-peers`: lets linked assistants on other servers talk to each other (`extensions/peers`).
+- `@nudge/ext-places`: reminders when you get somewhere, with places the model sees as `⟦PLACE:home⟧` (`extensions/places`).
 - `@nudge/ext-push`: notifications of answers and approvals, through Web Push, APNs and FCM (`extensions/push`).
 - `@nudge/ext-rss`: RSS and Atom feeds the assistant checks first for news (`extensions/rss`).
 - `@nudge/ext-triggers`: secret web addresses that let outside events start a turn in a room (`extensions/triggers`).
@@ -498,6 +499,18 @@ To make it always come first ("always use the timetable API first for departures
 - The model never sees the address. It gets a placeholder, and in the room only the person who asked sees the real address. The database keeps only the secret's hash; the secret sits in the extension's encrypted secret store so the address can be shown again. A wrong secret, a removed trigger and a room that turned the extension off all get the same `404`.
 - What a call brings is untrusted: anyone with the address can send anything. The model gets it between two marked lines, with a random mark it can't fake, and is told to treat it as data, not instructions. The model reads at most `maxChars` (default 8000) of it. It passes redaction like any input. Actions that change things still wait for approval as always. This isn't proof against prompt injection, so give a trigger's room only the tools it needs.
 - Every call is a model run, so it costs. `maxPerHour` (default 12) caps the calls per trigger; past that the sender gets `429` with `Retry-After`. `maxPerRoom` (default 10) caps how many triggers a room can have. A sender's retry with the same `Idempotency-Key` or `X-GitHub-Delivery` doesn't start a second turn.
+
+### Places
+
+`extensions/places` reminds people when they get somewhere, or leave: "when I get home, remind me to water the plants", "at any grocery store, remind me to buy milk", "when I leave work, tell me to call Mum". It also finds addresses and works out how long the way is.
+
+- `save_place` saves a place under a name ("home", "Mum's") from an address or "here". The model only ever sees it as `⟦PLACE:home⟧`: the address is the person's own value in the vault, and its coordinates stay in the extension's own data. `list_places` and `forget_place` show and drop them.
+- `remind_on_arrival` takes a saved place, an address, "here" or a kind of place (grocery store, pharmacy, post office, petrol station, …). It fires once or `"always"` (an hour apart at least). `list_arrival_reminders` and `cancel_arrival_reminder` show and stop them.
+- A reminder arrives like a fired nudge, so push and the chat bridges deliver it. In a shared room it is private to the person, unless they let the assistant know where they are there.
+- `find_place` and `route` use the server's own map, so no outside service learns the addresses or the way. Results come with names, kinds and distances, and an address placeholder each. Routes leave out the streets near the person's own places. Public transport isn't covered.
+- Phones watch the places and say when someone gets there: turn on **Reminders when I arrive** in the profile and allow location all the time. The server also checks every location the apps send while open. The profile lists your places and reminders to forget or cancel.
+- The map is the server's own, and covers wherever people go. When an app says someone is in a region the map doesn't have, anywhere in the world, the server fetches it: Photon and GraphHopper on a JRE, the region's OpenStreetMap roads, and its addresses cut from the dump of its country. Regions are countries, or states and provinces of large ones (California, Bavaria). It holds as many as fit under its disk limit (20 GB by default), and drops those someone was in longest ago to make room. Under **Maps** in the server's settings in the apps (or `PUT /v1/server/geo`), owners add regions to keep, turn following off, and set the limit. Norway takes about 3 GB of disk and ten minutes, and about 3 GB of memory while importing. Nothing is asked of any outside service: outside the map, the assistant says the region is on its way. The services run on 127.0.0.1 when asked and stop after ten idle minutes. Assistants on Cloudflare have no map, so only saved places and arrival reminders work there.
+- Settings: `maxPerHour` (6) caps reminders per person, `maxPlaces` (30) saved places, `regions` (19) places a phone watches at once, and `searchKm` (3) how far to look for a place of a kind ([ADR 18](docs/adr/0018-places-and-arrival.md)).
 
 ### Lists
 

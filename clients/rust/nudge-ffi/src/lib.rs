@@ -635,6 +635,93 @@ impl NudgeClient {
         Ok(Arc::new(Panel { socket }))
     }
 
+    /// The places the phone should watch for the player's arrival reminders, around where it is
+    /// when given. Fails with 404 when the assistant has no places extension.
+    pub async fn arrival_regions(
+        &self,
+        latitude: Option<f64>,
+        longitude: Option<f64>,
+    ) -> Result<ArrivalRegions, NudgeError> {
+        let api = self.client.api().clone();
+        let at = latitude.zip(longitude);
+        let answer = run(async move { api.arrival_regions(at).await }).await?;
+        let region = |r: p::ArrivalRegion| ArrivalRegion {
+            id: r.id,
+            latitude: r.latitude,
+            longitude: r.longitude,
+            radius: r.radius,
+        };
+        Ok(ArrivalRegions {
+            version: answer.version as u64,
+            regions: answer.regions.into_iter().map(region).collect(),
+            refresh: answer.refresh.map(|r| ArrivalRegion {
+                id: "refresh".into(),
+                latitude: r.latitude,
+                longitude: r.longitude,
+                radius: r.radius,
+            }),
+        })
+    }
+
+    /// The phone got to (`entered`) or left a region from `arrival_regions`; answers how many
+    /// reminders that set off.
+    pub async fn report_region_event(
+        &self,
+        region_id: String,
+        entered: bool,
+    ) -> Result<u32, NudgeError> {
+        let api = self.client.api().clone();
+        let event = if entered {
+            p::RegionEvent::Enter
+        } else {
+            p::RegionEvent::Exit
+        };
+        let answer = run(async move { api.report_region_event(&region_id, event).await }).await?;
+        Ok(answer.fired as u32)
+    }
+
+    /// The player's saved places and arrival reminders.
+    pub async fn places(&self) -> Result<Places, NudgeError> {
+        let api = self.client.api().clone();
+        let answer = run(async move { api.places().await }).await?;
+        Ok(Places {
+            places: answer
+                .places
+                .into_iter()
+                .map(|place| SavedPlace {
+                    name: place.name,
+                    placeholder: place.placeholder,
+                    address: place.address,
+                    radius: place.radius,
+                })
+                .collect(),
+            reminders: answer
+                .reminders
+                .into_iter()
+                .map(|r| ArrivalReminder {
+                    id: r.id,
+                    room_id: r.room_id,
+                    arrive: r.on == p::ArrivalOn::Arrive,
+                    always: r.repeat == p::ArrivalRepeat::Always,
+                    place: r.place,
+                    kind: r.kind,
+                    message: r.message,
+                })
+                .collect(),
+        })
+    }
+
+    /// Forgets a saved place, by its name, and the reminders for it.
+    pub async fn forget_place(&self, name: String) -> Result<(), NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.forget_place(&name).await }).await?)
+    }
+
+    pub async fn cancel_arrival_reminder(&self, id: String) -> Result<(), NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.cancel_arrival_reminder(&id).await }).await?)
+    }
+
     /// Which native pushes the server sends; 404 when it sends no pushes at all.
     pub async fn push_platforms(&self) -> Result<PushPlatforms, NudgeError> {
         let api = self.client.api().clone();

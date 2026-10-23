@@ -19,6 +19,7 @@ import {
   open,
   parseAddress,
   peek,
+  PLACEHOLDER,
   PlayerMemoryDoc,
   type Profile,
   ProfileDoc,
@@ -96,7 +97,6 @@ const INVITE_TTL_MS = 7 * 24 * 60 * 60_000;
 const MAX_ROTATIONS = 8;
 /** Sealed bodies carry a profile, with its avatar, or a whole memory. */
 const MAX_SEALED_BYTES = 512 * 1024;
-const PLACEHOLDER = /⟦[A-Z]+\d+⟧/g;
 
 type CarriedFact = Static<typeof FactBody>;
 
@@ -1160,7 +1160,11 @@ class Federation {
     const nudge = this.nudge();
     let text = fact.text;
     for (const { placeholder, value, kind } of fact.values) {
-      if (!/^⟦[A-Z]+\d+⟧$/.test(placeholder) || !/^[A-Z]+$/.test(kind) || value === "")
+      if (
+        !new RegExp(`^${PLACEHOLDER.source}$`).test(placeholder) ||
+        !/^[A-Z]+$/.test(kind) ||
+        value === ""
+      )
         return undefined;
       text = text.split(placeholder).join(await nudge.protect(value, kind));
     }

@@ -229,6 +229,25 @@ impl ServerApi {
             .await
     }
 
+    /// The server's own map (ADR 18); 404 on a server that wasn't given one.
+    pub async fn geo(&self) -> Result<GeoStatus, ApiError> {
+        self.request(Method::GET, &["geo"], &[], NO_BODY).await
+    }
+
+    /// Changes what the map holds: `regions` is the whole list owners want; `follow` and
+    /// `limit_gb` change when given.
+    pub async fn configure_geo(&self, change: &SetGeoRequest) -> Result<GeoStatus, ApiError> {
+        self.request(Method::PUT, &["geo"], &[], Some(change)).await
+    }
+
+    /// Every region the map can hold, anywhere in the world.
+    pub async fn geo_regions(&self) -> Result<Vec<GeoRegion>, ApiError> {
+        let answer: GeoRegionsResponse = self
+            .request(Method::GET, &["geo", "regions"], &[], NO_BODY)
+            .await?;
+        Ok(answer.regions)
+    }
+
     /// The server's Wired; 404 on a server that wasn't given one.
     pub async fn wired(&self) -> Result<WiredState, ApiError> {
         self.request(Method::GET, &["wired"], &[], NO_BODY).await

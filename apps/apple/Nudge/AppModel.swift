@@ -97,6 +97,8 @@ final class AppModel {
     let speech = Speech()
     /// Where the player is, told to home while the app is open, if they turned it on.
     let location = LocationSharing()
+    /// The places the device watches for reminders when the player gets there, if they turned it on.
+    let geofences = Geofences()
 
     var account: Account? { session?.account }
     var client: NudgeClient? { session?.client }
@@ -512,6 +514,7 @@ final class AppModel {
         let places = places
         self.session = nil
         location.client = nil
+        geofences.client = nil
         self.places = []
         memberships = nil
         homeFederation = nil
@@ -535,6 +538,8 @@ final class AppModel {
         }
         if active { Task { await syncPlaces() } }
         location.setActive(active)
+        // On leaving too: a reminder set just now is watched from then on.
+        Task { await geofences.sync() }
     }
 
     /// From the push service: register it with every server once signed in.
@@ -643,6 +648,7 @@ final class AppModel {
         self.session = session
         // Only home learns where the player is, never the assistants they joined.
         location.client = session.client
+        geofences.client = session.client
         // The assistants joined, as this device last knew them, until home says.
         places = savedPlaces().compactMap { place in
             KeychainTokens(account: place.keychainAccount).get() == nil ? nil : open(place)

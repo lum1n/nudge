@@ -240,6 +240,7 @@ function ProfilePage() {
         </div>
       </form>
       <Personal assistant={assistant} />
+      <Places assistant={assistant} />
       <Memberships assistant={assistant} />
     </Page>
   );
@@ -390,6 +391,84 @@ function Personal({ assistant }: { assistant: string }) {
  * Where the player joined from here, through the federation extension: whether their own memory
  * goes along, and leaving. Not shown on an assistant without the extension.
  */
+/**
+ * The places the player saved and their reminders for getting somewhere (ADR 18), to forget or
+ * cancel. The assistant adds them when asked in chat; nothing shows without the places extension.
+ */
+function Places({ assistant }: { assistant: string }) {
+  const queryClient = useQueryClient();
+  const key = [assistant, "places"];
+  const api = clientFor(assistant).api;
+  const places = useQuery({ queryKey: key, queryFn: () => api.places(), retry: false });
+  const [error, setError] = useState<string>();
+  if (places.data === undefined) return null;
+  const { places: saved, reminders } = places.data;
+  const act = async (work: () => Promise<void>) => {
+    setError(undefined);
+    try {
+      await work();
+      await queryClient.invalidateQueries({ queryKey: key });
+    } catch (caught) {
+      setError((caught as Error).message);
+    }
+  };
+  return (
+    <section className="flex flex-col gap-3 rounded border border-stone-200 bg-white p-3">
+      <div>
+        <h3 className="text-sm font-medium">Places</h3>
+        <p className="text-xs text-stone-500">
+          Ask the assistant to save a place or remind you when you get somewhere. The model only
+          sees places as placeholders such as ⟦PLACE:home⟧. The Nudge app on your phone tells home
+          when you get there, with Reminders when I arrive on in your profile.
+        </p>
+      </div>
+      {saved.length === 0 && reminders.length === 0 && (
+        <p className="text-sm text-stone-500">No places or reminders yet.</p>
+      )}
+      {saved.length > 0 && (
+        <ul className="flex flex-col gap-1">
+          {saved.map((place) => (
+            <li key={place.name} className="flex items-center justify-between gap-2 text-sm">
+              <span>
+                <span className="font-medium">{place.name}</span>{" "}
+                <span className="text-stone-500">{place.address}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => void act(() => api.forgetPlace(place.name))}
+                className="text-xs text-red-700 hover:underline"
+              >
+                Forget
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {reminders.length > 0 && (
+        <ul className="flex flex-col gap-1">
+          {reminders.map((reminder) => (
+            <li key={reminder.id} className="flex items-center justify-between gap-2 text-sm">
+              <span>
+                {reminder.on === "arrive" ? "Getting to" : "Leaving"}{" "}
+                {reminder.place ?? `any ${reminder.kind}`}
+                {reminder.repeat === "always" ? ", every time" : ""}: {reminder.message}
+              </span>
+              <button
+                type="button"
+                onClick={() => void act(() => api.cancelArrivalReminder(reminder.id))}
+                className="text-xs text-red-700 hover:underline"
+              >
+                Cancel
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
+    </section>
+  );
+}
+
 function Memberships({ assistant }: { assistant: string }) {
   const queryClient = useQueryClient();
   const key = [assistant, "memberships"];

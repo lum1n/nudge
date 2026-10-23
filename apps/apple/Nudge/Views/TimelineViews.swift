@@ -164,7 +164,7 @@ struct OnlyYou: View {
 func hidingValues(_ text: String) -> AttributedString {
     var shown = AttributedString()
     var rest = Substring(text)
-    while let match = rest.firstMatch(of: /⟦[A-Z]+\d+⟧/) {
+    while let match = rest.firstMatch(of: /⟦[A-Z]+(?:\d+|:[a-z0-9\-]{1,24})⟧/) {
         shown += AttributedString(rest[..<match.range.lowerBound])
         var hidden = AttributedString(" hidden ")
         hidden.font = .callout.italic().monospaced()
@@ -254,7 +254,7 @@ struct AnswerView: View {
     private func markdown(_ text: String) -> AttributedString {
         let options = AttributedString.MarkdownParsingOptions(
             interpretedSyntax: .inlineOnlyPreservingWhitespace, failurePolicy: .returnPartiallyParsedIfPossible)
-        let marked = text.replacing(/⟦[A-Z]+\d+⟧/) { _ in "`hidden`" }
+        let marked = text.replacing(/⟦[A-Z]+(?:\d+|:[a-z0-9\-]{1,24})⟧/) { _ in "`hidden`" }
         return (try? AttributedString(markdown: marked, options: options)) ?? AttributedString(marked)
     }
 }

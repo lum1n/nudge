@@ -1,11 +1,12 @@
 import { constants } from "node:fs";
 import { access, mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { Models } from "@earendil-works/pi-ai";
 import {
   buildModels,
   builtinDetectors,
   checkExtensions,
+  checkGeo,
   checkLocalModel,
   databaseEncryption,
   databaseKey,
@@ -66,6 +67,8 @@ export async function doctor(options: DoctorOptions): Promise<boolean> {
 
   const deep = config.privacy?.deep ?? "off";
   if (deep !== "off") await checkDeep(check, modelsDir(options.config), deep);
+  for (const problem of await checkGeo(join(dirname(resolve(options.config)), "server", "geo")))
+    check(false, problem);
 
   const keys = new ServerKeys(serverKeysDir(options.config));
   const ping = async (models: Models, label: string, provider: string, modelId: string) => {

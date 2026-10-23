@@ -297,7 +297,7 @@ export {
 } from "./privacy/detectors.ts";
 export { addressDetector, nameDetector } from "./privacy/people.ts";
 export { AMBIGUOUS, CUES, FIRST_NAMES, LAST_NAMES } from "./privacy/name-lists.ts";
-export { Vault, type VaultEntry } from "./privacy/vault.ts";
+export { PLACEHOLDER, Vault, type VaultEntry } from "./privacy/vault.ts";
 export {
   type DeepDetector,
   type DeepFinding,
@@ -316,7 +316,47 @@ export {
 export { keepsPlaceholders } from "./privacy/tool-values.ts";
 export { canRead, onlyReads, readsOnly } from "./extensions/reads.ts";
 export type { RedactedHistory };
-export { currentTurn, inTurn, type Owner, type SetsTurn, type Turn } from "./privacy/turn.ts";
+export {
+  currentTurn,
+  inTurn,
+  type Owner,
+  type SetsTurn,
+  type Turn,
+  turnOf,
+} from "./privacy/turn.ts";
+export {
+  distanceMeters,
+  type Geo,
+  type GeoPlace,
+  type GeoPoint,
+  type GeoRoute,
+  type GeoCoverage,
+  type GeoStep,
+  GeoUnavailable,
+  providedGeo,
+  provideGeo,
+  type TravelMode,
+} from "./geo/geo.ts";
+export { type GeoEndpoints, graphhopperRoute, httpGeo, photonPlaces } from "./geo/http.ts";
+export {
+  checkGeo,
+  type GeoRegionStatus,
+  type GeoStatus,
+  graphhopperConfig,
+  reason as processFailure,
+  ServerGeo,
+  type ServerGeoOptions,
+} from "./server/geo.ts";
+export {
+  contains,
+  type GeoRegion,
+  type GeoSource,
+  parseGeofabrik,
+  placeRegions,
+  regionFor,
+  regionsAt,
+  sourcesFor,
+} from "./server/geo-catalog.ts";
 export {
   type DatabaseEncryption,
   type DatabaseKey,

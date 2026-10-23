@@ -6,6 +6,7 @@ import { type Static, type TSchema, Type } from "typebox";
 import { Value } from "typebox/value";
 import { ConfigError } from "../config.ts";
 import type { Player, Room, RoomKind } from "../identity/directory.ts";
+import type { LocationUpdate } from "../identity/personal.ts";
 import { InvalidProfile } from "../identity/profiles.ts";
 import type { PiiDetector } from "../privacy/detectors.ts";
 import type { RoomEvent } from "../room-events.ts";
@@ -167,6 +168,12 @@ export type ExtensionParts = Omit<Extension, "name"> & {
    */
   readonly onRoomEvent?: (event: RoomEvent) => void | Promise<void>;
   /**
+   * Hears where a player's device says they are, as it said it, before the assistant rounds it
+   * for the vault (ADR 14), such as to remind them of something once they get somewhere. Never
+   * hand the coordinates to the model. Must not block; a throw or rejection is reported.
+   */
+  readonly onLocation?: (playerId: string, location: LocationUpdate) => void | Promise<void>;
+  /**
    * Releases what `setup` started, such as processes or connections, once a reload replaced the
    * extension or the assistant closed. Calls that already started may still be finishing.
    */
@@ -269,6 +276,7 @@ export type SetUpExtension = {
   readonly approvals: Readonly<Record<string, ApprovalHandler>>;
   readonly denials?: Readonly<Record<string, ApprovalDenialHandler>>;
   readonly onRoomEvent?: (event: RoomEvent) => void | Promise<void>;
+  readonly onLocation?: (playerId: string, location: LocationUpdate) => void | Promise<void>;
   readonly close?: () => void | Promise<void>;
   readonly retire?: (context: Context) => void | Promise<void>;
 };
@@ -315,6 +323,7 @@ export async function setUpExtension(
     approvals = {},
     denials,
     onRoomEvent,
+    onLocation,
     close,
     retire,
     ...parts
@@ -341,6 +350,7 @@ export async function setUpExtension(
     ...(problems === undefined ? {} : { problems }),
     ...(roomSocket === undefined ? {} : { roomSocket }),
     ...(onRoomEvent === undefined ? {} : { onRoomEvent }),
+    ...(onLocation === undefined ? {} : { onLocation }),
     ...(close === undefined ? {} : { close }),
     ...(retire === undefined ? {} : { retire }),
   };

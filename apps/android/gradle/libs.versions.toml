@@ -8,6 +8,7 @@ activityCompose = "1.13.0"
 lifecycle = "2.11.0"
 coreKtx = "1.19.1"
 firebaseBom = "35.0.1"
+playServicesLocation = "21.4.0"
 googleServices = "4.5.0"
 junit = "4.13.2"
 
@@ -29,6 +30,8 @@ lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-com
 lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", version.ref = "lifecycle" }
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
+play-services-location = { module = "com.google.android.gms:play-services-location", version.ref = "playServicesLocation" }
+coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "coroutines" }
 junit = { module = "junit:junit", version.ref = "junit" }
 
 [plugins]

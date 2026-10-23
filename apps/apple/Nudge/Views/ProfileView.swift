@@ -13,6 +13,8 @@ struct ProfileView: View {
     @State private var draft: Draft?
     @State private var personal: Personal?
     @State private var extensions: [PlayerSettings] = []
+    /// Nil without the places extension.
+    @State private var places: Places?
     @State private var picked: PhotosPickerItem?
     @State private var busy = false
     @State private var saved = false
@@ -107,6 +109,36 @@ struct ProfileView: View {
         if let personal = Binding($personal) {
             personalSection(personal)
         }
+        if let places {
+            Section {
+                ForEach(places.places, id: \.name) { place in
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text(place.name)
+                            Text(place.address).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button("Forget", role: .destructive) {
+                            Task { await changePlaces { try await client.forgetPlace(name: place.name) } }
+                        }
+                    }
+                }
+                ForEach(places.reminders, id: \.id) { reminder in
+                    HStack {
+                        Text((reminder.arrive ? "Getting to " : "Leaving ") + (reminder.place ?? "any \(reminder.kind ?? "place")")
+                            + (reminder.always ? ", every time" : "") + ": \(reminder.message)")
+                        Spacer()
+                        Button("Cancel", role: .destructive) {
+                            Task { await changePlaces { try await client.cancelArrivalReminder(id: reminder.id) } }
+                        }
+                    }
+                }
+            } header: {
+                Text("Places")
+            } footer: {
+                Text("Ask the assistant to save a place or remind you when you get somewhere. The model only sees places as placeholders such as ⟦PLACE:home⟧.")
+            }
+        }
         Section("Notifications") {
             Toggle("Answers and nudges", isOn: draft.notifications.answers)
             Toggle("Actions waiting for approval", isOn: draft.notifications.approvals)
@@ -163,6 +195,22 @@ struct ProfileView: View {
             if let problem = model.location.problem {
                 Text(problem).font(.caption).foregroundStyle(.red)
             }
+            Toggle(isOn: Binding(
+                get: { model.geofences.enabled },
+                set: { on in Task { await model.geofences.setEnabled(on) } }
+            )) {
+                VStack(alignment: .leading) {
+                    Text("Reminders when I arrive")
+                    Text(model.geofences.enabled
+                        ? "Watching \(model.geofences.watching) places for your reminders."
+                        : "For \"remind me when I get home\": the device tells home when you get to a place you have a reminder for.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if model.geofences.enabled, let problem = model.geofences.problem {
+                Text(problem).font(.caption).foregroundStyle(.red)
+            }
         } header: {
             Text("Personal details")
         } footer: {
@@ -176,6 +224,16 @@ struct ProfileView: View {
             personal = (try? await client.personal()).map(Personal.init)
             await model.location.refresh()
             extensions = (try? await client.profileExtensions()) ?? []
+            places = try? await client.places()
+        } catch {
+            problem = explain(error)
+        }
+    }
+
+    private func changePlaces(_ change: () async throws -> Void) async {
+        do {
+            try await change()
+            places = try await client.places()
         } catch {
             problem = explain(error)
         }

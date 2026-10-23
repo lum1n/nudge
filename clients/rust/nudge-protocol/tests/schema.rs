@@ -1031,6 +1031,92 @@ fn server_and_setup_bodies_match_the_schema() {
     check("UpdateState", &updates);
     check("SetUpdatesRequest", &SetUpdatesRequest { automatic: false });
     check(
+        "GeoStatus",
+        &GeoStatus {
+            state: GeoState::Working,
+            follow: true,
+            limit_gb: 20.0,
+            used_bytes: 1.0,
+            regions: vec![GeoRegionStatus {
+                id: "us/california".into(),
+                name: "California".into(),
+                by: GeoRegionBy::Follow,
+                state: GeoRegionState::Downloading,
+                step: Some("roads of California".into()),
+                progress: Some(0.5),
+                bytes: Some(1.0),
+                updated_at: Some(1.0),
+                used_at: Some(1.0),
+                error: Some("x".into()),
+            }],
+            error: Some("x".into()),
+        },
+    );
+    check(
+        "SetGeoRequest",
+        &SetGeoRequest {
+            regions: Some(vec!["norway".into()]),
+            follow: Some(false),
+            limit_gb: Some(10.0),
+        },
+    );
+    check(
+        "GeoRegionsResponse",
+        &GeoRegionsResponse {
+            regions: vec![GeoRegion {
+                id: "us/california".into(),
+                name: "California".into(),
+                parent: Some("north-america".into()),
+            }],
+        },
+    );
+    check(
+        "ArrivalRegionsResponse",
+        &ArrivalRegionsResponse {
+            version: 3.0,
+            regions: vec![ArrivalRegion {
+                id: "p:home".into(),
+                latitude: 59.9,
+                longitude: 10.7,
+                radius: 150.0,
+            }],
+            refresh: Some(RefreshCircle {
+                latitude: 59.9,
+                longitude: 10.7,
+                radius: 2000.0,
+            }),
+        },
+    );
+    check(
+        "RegionEventRequest",
+        &RegionEventRequest {
+            region_id: "k:N1".into(),
+            event: RegionEvent::Exit,
+        },
+    );
+    check("RegionEventResponse", &RegionEventResponse { fired: 1.0 });
+    check(
+        "PlacesResponse",
+        &PlacesResponse {
+            places: vec![SavedPlace {
+                name: "home".into(),
+                placeholder: "⟦PLACE:home⟧".into(),
+                address: "Storgata 5".into(),
+                radius: 150.0,
+            }],
+            reminders: vec![ArrivalReminder {
+                id: "a1".into(),
+                room_id: "trip".into(),
+                on: ArrivalOn::Arrive,
+                repeat: ArrivalRepeat::Once,
+                // One or the other, but every key is checked.
+                place: Some("home".into()),
+                kind: Some("grocery store".into()),
+                message: "Water the plants".into(),
+            }],
+        },
+    );
+    check(
         "WiredState",
         &WiredState {
             state: WiredStatus::Root,

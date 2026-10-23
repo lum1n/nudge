@@ -921,6 +921,98 @@ pub struct DevicesResponse {
     pub relays: Vec<String>,
 }
 
+/// A circle a phone watches for the places extension (ADR 18), entering and leaving.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ArrivalRegion {
+    /// `p:<name>` for a saved place, `k:<id>` for a place of a kind.
+    pub id: String,
+    pub latitude: f64,
+    pub longitude: f64,
+    /// Metres.
+    pub radius: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RefreshCircle {
+    pub latitude: f64,
+    pub longitude: f64,
+    pub radius: f64,
+}
+
+/// What the phone watches. Leaving `refresh` means asking again from where it is then.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ArrivalRegionsResponse {
+    pub version: f64,
+    pub regions: Vec<ArrivalRegion>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refresh: Option<RefreshCircle>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RegionEvent {
+    Enter,
+    Exit,
+}
+
+/// The phone got to or left a region.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegionEventRequest {
+    pub region_id: String,
+    pub event: RegionEvent,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RegionEventResponse {
+    pub fired: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SavedPlace {
+    pub name: String,
+    pub placeholder: String,
+    pub address: String,
+    pub radius: f64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ArrivalOn {
+    Arrive,
+    Leave,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ArrivalRepeat {
+    Once,
+    Always,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArrivalReminder {
+    pub id: String,
+    pub room_id: String,
+    pub on: ArrivalOn,
+    pub repeat: ArrivalRepeat,
+    /// A saved place's name; absent for any place of a kind.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub place: Option<String>,
+    /// Such as "grocery store".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+    pub message: String,
+}
+
+/// The caller's saved places and arrival reminders, values readable.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PlacesResponse {
+    pub places: Vec<SavedPlace>,
+    pub reminders: Vec<ArrivalReminder>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ModelRole {
@@ -1504,6 +1596,99 @@ pub struct UpdateState {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SetUpdatesRequest {
     pub automatic: bool,
+}
+
+/// How far the server's map is (ADR 18).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GeoState {
+    Off,
+    Working,
+    Ready,
+    Failed,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GeoRegionState {
+    Waiting,
+    Downloading,
+    Importing,
+    Ready,
+    Failed,
+}
+
+/// Picked by an owner, or fetched because someone was there.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GeoRegionBy {
+    Owner,
+    Follow,
+}
+
+/// One region of the server's map.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GeoRegionStatus {
+    /// Geofabrik's id, such as `norway` or `us/california`.
+    pub id: String,
+    pub name: String,
+    pub by: GeoRegionBy,
+    pub state: GeoRegionState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub step: Option<String>,
+    /// Of the current download, from 0 to 1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub progress: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bytes: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub used_at: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+/// The server's own map: addresses, places and routes from OpenStreetMap, for regions anywhere in
+/// the world.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GeoStatus {
+    pub state: GeoState,
+    /// Whether it fetches the region someone's phone says they are in.
+    pub follow: bool,
+    pub limit_gb: f64,
+    pub used_bytes: f64,
+    pub regions: Vec<GeoRegionStatus>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+/// What changes: the regions owners want (the whole list), following people, the disk limit.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetGeoRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub regions: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub follow: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit_gb: Option<f64>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct GeoRegion {
+    pub id: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent: Option<String>,
+}
+
+/// Every region the map can hold.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct GeoRegionsResponse {
+    pub regions: Vec<GeoRegion>,
 }
 
 /// How far the server's Wired is.

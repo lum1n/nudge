@@ -664,6 +664,66 @@ export const DevicesResponse = Type.Object({
 });
 export type DevicesResponse = Static<typeof DevicesResponse>;
 
+/** A circle a phone watches for the places extension (ADR 18), entering and leaving. */
+export const ArrivalRegion = Type.Object({
+  /** `p:<name>` for a saved place, `k:<id>` for a place of a kind. */
+  id: Type.String(),
+  latitude: Type.Number(),
+  longitude: Type.Number(),
+  /** Metres. */
+  radius: Type.Number(),
+});
+export type ArrivalRegion = Static<typeof ArrivalRegion>;
+
+/**
+ * `GET /ext/places/regions?lat=&lon=`: what the phone watches. Leaving `refresh` means asking
+ * again from where it is then; `version` goes up when the list changes.
+ */
+export const ArrivalRegionsResponse = Type.Object({
+  version: Type.Number(),
+  regions: Type.Array(ArrivalRegion),
+  refresh: Type.Optional(
+    Type.Object({ latitude: Type.Number(), longitude: Type.Number(), radius: Type.Number() }),
+  ),
+});
+export type ArrivalRegionsResponse = Static<typeof ArrivalRegionsResponse>;
+
+/** `POST /ext/places/events`: the phone got to or left a region. */
+export const RegionEventRequest = Type.Object({
+  regionId: Type.String(),
+  event: Type.Union([Type.Literal("enter"), Type.Literal("exit")]),
+});
+export type RegionEventRequest = Static<typeof RegionEventRequest>;
+
+/** How many reminders the event set off. */
+export const RegionEventResponse = Type.Object({ fired: Type.Number() });
+export type RegionEventResponse = Static<typeof RegionEventResponse>;
+
+/** `GET /ext/places/places`: the caller's saved places and arrival reminders, values readable. */
+export const PlacesResponse = Type.Object({
+  places: Type.Array(
+    Type.Object({
+      name: Type.String(),
+      placeholder: Type.String(),
+      address: Type.String(),
+      radius: Type.Number(),
+    }),
+  ),
+  reminders: Type.Array(
+    Type.Object({
+      id: Type.String(),
+      roomId: Type.String(),
+      on: Type.Union([Type.Literal("arrive"), Type.Literal("leave")]),
+      repeat: Type.Union([Type.Literal("once"), Type.Literal("always")]),
+      /** A saved place's name, or `kind` for any place of a kind, such as "grocery store". */
+      place: Type.Optional(Type.String()),
+      kind: Type.Optional(Type.String()),
+      message: Type.String(),
+    }),
+  ),
+});
+export type PlacesResponse = Static<typeof PlacesResponse>;
+
 /** An assistant by its server and its name there, such as one to join. */
 export const PlaceRequest = Type.Object({ server: Type.String(), assistant: Type.String() });
 export type PlaceRequest = Static<typeof PlaceRequest>;
@@ -1096,6 +1156,69 @@ export type UpdateState = Static<typeof UpdateState>;
 export const SetUpdatesRequest = Type.Object({ automatic: Type.Boolean() });
 export type SetUpdatesRequest = Static<typeof SetUpdatesRequest>;
 
+/** One region of the server's map: picked by an owner, or fetched because someone was there. */
+export const GeoRegionStatus = Type.Object({
+  /** Geofabrik's id, such as `norway`, `us/california` or `bayern`. */
+  id: Type.String(),
+  name: Type.String(),
+  /** Only regions fetched for someone are dropped to make room, the longest unused first. */
+  by: Type.Union([Type.Literal("owner"), Type.Literal("follow")]),
+  state: Type.Union([
+    Type.Literal("waiting"),
+    Type.Literal("downloading"),
+    Type.Literal("importing"),
+    Type.Literal("ready"),
+    Type.Literal("failed"),
+  ]),
+  step: Type.Optional(Type.String()),
+  /** Of the current download, from 0 to 1. */
+  progress: Type.Optional(Type.Number()),
+  bytes: Type.Optional(Type.Number()),
+  /** When its data was fetched; it is fetched again once a month. */
+  updatedAt: Type.Optional(Type.Number()),
+  /** When someone was last there. */
+  usedAt: Type.Optional(Type.Number()),
+  error: Type.Optional(Type.String()),
+});
+export type GeoRegionStatus = Static<typeof GeoRegionStatus>;
+
+/**
+ * The server's own map (ADR 18): addresses, places and routes from OpenStreetMap, for regions
+ * anywhere in the world, served on the server itself so nothing about where people go leaves it.
+ */
+export const GeoStatus = Type.Object({
+  state: Type.Union([
+    Type.Literal("off"),
+    Type.Literal("working"),
+    Type.Literal("ready"),
+    Type.Literal("failed"),
+  ]),
+  /** Whether it fetches the region someone's phone says they are in. */
+  follow: Type.Boolean(),
+  /** Most the regions may take on disk; those fetched for someone make room, oldest use first. */
+  limitGb: Type.Number(),
+  usedBytes: Type.Number(),
+  regions: Type.Array(GeoRegionStatus),
+  error: Type.Optional(Type.String()),
+});
+export type GeoStatus = Static<typeof GeoStatus>;
+
+/** What changes: the regions owners want (the whole list), following people, the disk limit. */
+export const SetGeoRequest = Type.Object({
+  regions: Type.Optional(Type.Array(Type.String())),
+  follow: Type.Optional(Type.Boolean()),
+  limitGb: Type.Optional(Type.Number({ minimum: 1 })),
+});
+export type SetGeoRequest = Static<typeof SetGeoRequest>;
+
+/** Every region the map can hold, for owners to pick from. */
+export const GeoRegionsResponse = Type.Object({
+  regions: Type.Array(
+    Type.Object({ id: Type.String(), name: Type.String(), parent: Type.Optional(Type.String()) }),
+  ),
+});
+export type GeoRegionsResponse = Static<typeof GeoRegionsResponse>;
+
 /**
  * The server's Wired: an encrypted network between Nudge servers that needs no open port at
  * home. Other servers reach this one's API at `http://nudge.<name>.wired`.
@@ -1312,6 +1435,11 @@ export const SCHEMAS = {
   PushRenewRequest,
   DeviceRequest,
   DevicesResponse,
+  ArrivalRegion,
+  ArrivalRegionsResponse,
+  RegionEventRequest,
+  RegionEventResponse,
+  PlacesResponse,
   PlaceRequest,
   Membership,
   MembershipsResponse,
@@ -1376,6 +1504,10 @@ export const SCHEMAS = {
   ServerSessionResponse,
   UpdateState,
   SetUpdatesRequest,
+  GeoRegionStatus,
+  GeoStatus,
+  SetGeoRequest,
+  GeoRegionsResponse,
   WiredState,
   WiredEnableRequest,
   WiredJoinRequest,
