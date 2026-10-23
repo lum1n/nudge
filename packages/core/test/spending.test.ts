@@ -163,4 +163,27 @@ describe("spending", () => {
     await say(nudge, "bo", "hi");
     await nudge.close(context);
   });
+
+  it("tells the admins once when an assistant with no budget spends a lot, and refuses nothing", async () => {
+    const nudge = await createNudge({ ...options, budget: { warnUsd: 0.5 } }, context);
+    await nudge.players.invite("Ann", context); // the first player: an admin
+    await nudge.players.invite("Bo", context);
+    await say(nudge, "bo", "one");
+    await say(nudge, "bo", "two");
+    const fires = async () => {
+      const room = await nudge.conversation("personal-ann", context).catch(() => undefined);
+      if (room === undefined) return [];
+      const { items } = await room.entries({ order: "ascending" }, 100, undefined, context);
+      return items.filter((entry) => entry.kind === FIRE_ENTRY);
+    };
+    await until(async () => (await fires()).length === 1);
+    await nudge.harness.waitForIdle(context);
+    await say(nudge, "bo", "three");
+    await nudge.harness.waitForIdle(context);
+    expect((await fires()).map((entry) => (entry.data as { message: string }).message)).toEqual([
+      "Spent $0.600 on models this month, with no monthly budget set",
+    ]);
+    expect(nudge.spending.refusalFor("bo")).toBeUndefined();
+    await nudge.close(context);
+  });
 });

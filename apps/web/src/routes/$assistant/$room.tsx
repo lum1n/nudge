@@ -30,6 +30,7 @@ import {
   useEffect,
   use,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { clientFor, forgetToken, useConnection, useRoom, useRoomList } from "../../api.ts";
@@ -38,12 +39,14 @@ import { Avatar, Portrait } from "../../avatar/Avatar.tsx";
 import type { Mood } from "../../avatar/pose.ts";
 import { useRoomMood } from "../../avatar/use-room-mood.ts";
 import {
+  announcement,
   appendText,
   buildQueueAdapter,
   dayLabel,
   dayStarts,
   type Lane,
   PLACEHOLDER,
+  type Seen,
   timeLabel,
   toThreadMessageLike,
   transcript,
@@ -67,6 +70,16 @@ function Room() {
   const navigate = useNavigate();
   // Below `md` the sidebar is a drawer over the chat.
   const [drawer, setDrawer] = useState(false);
+  // Focus goes into the drawer when it opens, and back to what opened it when it closes.
+  const opener = useRef<HTMLButtonElement>(null);
+  const closer = useRef<HTMLButtonElement>(null);
+  const closeDrawer = useCallback(() => {
+    setDrawer(false);
+    opener.current?.focus();
+  }, []);
+  useEffect(() => {
+    if (drawer) closer.current?.focus();
+  }, [drawer]);
 
   useEffect(() => {
     if (connection.kind === "closed" && connection.code === UNAUTHORIZED) {
@@ -97,11 +110,18 @@ function Room() {
           <button
             type="button"
             aria-label="Close the room's details"
-            onClick={() => setDrawer(false)}
+            tabIndex={-1}
+            onClick={closeDrawer}
             className="fixed inset-0 z-20 bg-stone-900/30 md:hidden"
           />
         )}
         <aside
+          {...(drawer
+            ? { role: "dialog", "aria-modal": true, "aria-label": "The room's details" }
+            : {})}
+          onKeyDown={(event) => {
+            if (drawer && event.key === "Escape") closeDrawer();
+          }}
           className={`${
             drawer ? "fixed inset-y-0 left-0 z-30 flex w-[min(22rem,88vw)] shadow-xl" : "hidden"
           } flex-col gap-4 overflow-y-auto border-r border-stone-200 bg-stone-50 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] md:static md:flex md:w-80 md:shrink-0 md:pt-4 md:pb-4 md:shadow-none`}
@@ -125,8 +145,9 @@ function Room() {
               </p>
             </div>
             <button
+              ref={closer}
               type="button"
-              onClick={() => setDrawer(false)}
+              onClick={closeDrawer}
               className="shrink-0 rounded px-2 py-1 text-sm text-stone-600 hover:bg-stone-200 md:hidden"
             >
               Close
@@ -212,7 +233,10 @@ function Room() {
               Activity
             </Link>
             <button
+              ref={opener}
               type="button"
+              aria-haspopup="dialog"
+              aria-expanded={drawer}
               onClick={() => setDrawer(true)}
               className="flex shrink-0 items-center gap-1.5 rounded border border-stone-300 bg-white px-3 py-1 text-sm"
             >
@@ -220,6 +244,7 @@ function Room() {
               {waiting > 0 && (
                 <span className="rounded-full bg-amber-600 px-1.5 text-xs text-white">
                   {waiting}
+                  <span className="sr-only"> waiting for approval</span>
                 </span>
               )}
             </button>
@@ -244,6 +269,14 @@ function RoomName({ view }: { view: RoomView }) {
   const [draft, setDraft] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  // Back on Rename once the name is saved or the change cancelled.
+  const rename = useRef<HTMLButtonElement>(null);
+  const editing = draft !== undefined;
+  const wasEditing = useRef(false);
+  useEffect(() => {
+    if (wasEditing.current && !editing) rename.current?.focus();
+    wasEditing.current = editing;
+  }, [editing]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -268,6 +301,7 @@ function RoomName({ view }: { view: RoomView }) {
         <h2 className="text-lg font-medium">{view.room.name}</h2>
         {(view.room.kind !== "lobby" || admin) && (
           <button
+            ref={rename}
             type="button"
             onClick={() => setDraft(view.room.name)}
             className="text-sm text-stone-500 hover:text-stone-800"
@@ -285,6 +319,13 @@ function RoomName({ view }: { view: RoomView }) {
           onChange={(event) => setDraft(event.target.value)}
           aria-label="Room name"
           autoFocus
+          onKeyDown={(event) => {
+            if (event.key !== "Escape") return;
+            // Not the drawer's too: Escape here only cancels the rename.
+            event.stopPropagation();
+            setDraft(undefined);
+            setError(undefined);
+          }}
           className="min-w-0 flex-1 rounded border border-stone-300 px-2 py-1 text-sm"
         />
         <button
@@ -321,6 +362,13 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
   const [secret, setSecret] = useState(false);
   const mood = useRoomMood(view);
   const look = lookOf(useRoomList(assistant)?.view?.appearance);
+  const said = useAnnouncement(room, state.timeline, view.approvals, me, name);
+  // The composer keeps the focus: after a send, and on opening a room (where a keyboard is the
+  // pointer; on a phone that would pop up the keyboard unasked).
+  const input = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (matchMedia("(pointer: fine)").matches) input.current?.focus();
+  }, [room]);
   const dispatch = useCallback(
     (message: AppendMessage, lane: Lane) => {
       const text = appendText(message).trim();
@@ -352,7 +400,10 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
     isRunning: view.live.running,
     hasEarlier: state.canLoadEarlier,
     onLoadEarlier: () => store.loadEarlier(),
-    onNew: async (message) => dispatch(message, message.steer ? "steer" : "queue"),
+    onNew: async (message) => {
+      dispatch(message, message.steer ? "steer" : "queue");
+      input.current?.focus();
+    },
     onCancel: async () => {
       await clientFor(assistant).api.abort(room);
     },
@@ -363,6 +414,10 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
     <AssistantRuntimeProvider runtime={runtime}>
       <LookContext value={look}>
         <div className="flex h-full min-h-0 flex-col gap-3">
+          {/* Read out when an answer is done or an approval is asked for, not as it streams. */}
+          <p role="status" aria-live="polite" aria-atomic className="sr-only">
+            {said}
+          </p>
           <StatusLine status={view.live.status} />
           <ThreadPrimitive.Viewport className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto">
             <ThreadPrimitive.LoadEarlier className="self-center text-sm text-stone-500 underline disabled:text-stone-300 disabled:no-underline">
@@ -413,6 +468,8 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
                 </button>
               )}
               <ComposerPrimitive.Input
+                ref={input}
+                aria-label={secret && shared ? "Private message" : "Message"}
                 placeholder={
                   secret && shared ? "Private message: only you see it and the answer" : "Message"
                 }
@@ -433,6 +490,30 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
       </LookContext>
     </AssistantRuntimeProvider>
   );
+}
+
+/**
+ * The latest line for the chat's live region, from `announcement`. A room starts with nothing to
+ * say, so switching to one doesn't read out its history.
+ */
+function useAnnouncement(
+  room: string,
+  timeline: RoomState["timeline"],
+  approvals: RoomView["approvals"],
+  me: string,
+  name: string,
+): string {
+  const [said, setSaid] = useState("");
+  const seen = useRef<{ room: string; at: Seen }>(undefined);
+  useEffect(() => {
+    const now = { timeline, approvals };
+    const before = seen.current?.room === room ? seen.current.at : undefined;
+    seen.current = { room, at: now };
+    if (before === undefined) setSaid("");
+    const line = announcement(before, now, me, name);
+    if (line !== undefined) setSaid(line);
+  }, [room, timeline, approvals, me, name]);
+  return said;
 }
 
 /** The robot, live, and a word on what it is doing. */

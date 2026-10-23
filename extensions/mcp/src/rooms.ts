@@ -33,15 +33,7 @@ export type RoomServer = {
 export type RoomServersState = {
   servers: RoomServer[];
   next: number;
-  /**
-   * Servers waiting for approval, by approval id. Kept here rather than in the approval's
-   * payload, which is stored redacted: a command or URL must come back exactly as asked.
-   */
-  drafts?: Record<string, ServerDraft>;
 };
-
-/** Most drafts kept; the oldest go first, as their approvals are decided or forgotten. */
-const MAX_DRAFTS = 20;
 
 /** The MCP servers people added to a room, keyed by room id. */
 export const RoomServersDoc = defineDocFamily<RoomServersState, null>({
@@ -84,32 +76,6 @@ export function checkDraft(draft: ServerDraft): void {
       throw new Error(`${key.name} is a header, but a program takes variables`);
     if (!/^[A-Za-z_][A-Za-z0-9_-]*$/.test(key.name)) throw new Error(`Bad key name "${key.name}"`);
   }
-}
-
-export async function keepDraft(
-  tx: Tx,
-  roomId: string,
-  approvalId: string,
-  draft: ServerDraft,
-): Promise<void> {
-  const state = await tx.doc(RoomServersDoc, roomId, null);
-  // Read back after setting: the document tracks its own copy, not the object assigned.
-  state.drafts ??= {};
-  const drafts = state.drafts;
-  drafts[approvalId] = copy(draft);
-  for (const old of Object.keys(drafts).slice(0, -MAX_DRAFTS)) delete drafts[old];
-}
-
-/** The draft kept for an approval, taken out. */
-export async function takeDraft(
-  tx: Tx,
-  roomId: string,
-  approvalId: string,
-): Promise<ServerDraft | undefined> {
-  const state = await tx.doc(RoomServersDoc, roomId, null);
-  const draft = state.drafts?.[approvalId];
-  if (draft !== undefined) delete state.drafts![approvalId];
-  return draft === undefined ? undefined : copy(draft);
 }
 
 export async function addServer(

@@ -10,6 +10,7 @@ import {
   defaultExtensions,
   fetchKeys,
   LastOwner,
+  type ModelErrors,
   type Nudge,
   ownerFromHome,
   parseAddress,
@@ -124,6 +125,8 @@ export type ServerRoutesOptions = {
   readonly version: string;
   readonly publicUrl: () => string | undefined;
   readonly trustProxy: () => boolean;
+  /** The host's last model errors, shown to owners; none without. */
+  readonly modelErrors?: Pick<ModelErrors, "recent">;
 };
 
 type Env = { Variables: { owner: ServerOwner; clientId: string } };
@@ -189,6 +192,17 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
       owner: shownOwner(c.var.owner),
       assistants: await listAssistants(control),
       ...(control.updates === undefined ? {} : { updates: control.updates.state() }),
+      ...(options.modelErrors === undefined
+        ? {}
+        : {
+            errors: options.modelErrors.recent().map((error) => ({
+              at: error.at,
+              ...(error.assistant === undefined ? {} : { assistant: error.assistant }),
+              provider: error.provider,
+              model: error.model,
+              message: error.message,
+            })),
+          }),
     } satisfies ServerInfoResponse),
   );
 

@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { doctor } from "../src/commands/doctor.ts";
 
 const BROWSER = join(import.meta.dirname, "../../../extensions/browser/src/index.ts");
+const MCP = join(import.meta.dirname, "../../../extensions/mcp/src/index.ts");
+const FAKE_MCP = join(import.meta.dirname, "../../../extensions/mcp/test/fake-server.mjs");
 const HELLO = join(import.meta.dirname, "../../../extensions/hello/src/index.ts");
 
 /**
@@ -59,6 +61,33 @@ describe("nudge doctor", () => {
     expect(
       found.some((line) => /^ok {3}robin: browser uses openai\/gpt-5-mini: credentials/.test(line)),
     ).toBe(true);
+  });
+
+  it("warns, without failing, of an MCP server whose images reach the model unredacted", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-test");
+    const server = { command: process.execPath, args: [FAKE_MCP] };
+    const printed = await lines(
+      config([
+        {
+          from: MCP,
+          settings: {
+            servers: {
+              plain: server,
+              shown: { ...server, unredactedImages: true },
+              old: { ...server, images: true },
+            },
+          },
+        },
+      ]),
+    );
+    const warnings = printed.filter((line) => line.startsWith("warn "));
+    expect(warnings).toHaveLength(2);
+    expect(warnings[0]).toMatch(
+      /^warn robin: mcp: server shown passes images to the model unredacted; redaction reads only text/,
+    );
+    expect(warnings[1]).toContain("server old passes images");
+    expect(warnings[1]).toContain("rename it unredactedImages");
+    expect(printed.filter((line) => line.startsWith("FAIL"))).toEqual([]);
   });
 
   it("names an extension that fails to start, and still checks the others", async () => {

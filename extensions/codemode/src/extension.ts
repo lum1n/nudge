@@ -1,6 +1,11 @@
 import { CodemodeSandbox } from "@earendil-works/pi-codemode";
 import type { CodemodeRun, CodemodeRunOptions } from "@earendil-works/pi-codemode";
-import { createCodemodeExtension } from "@earendil-works/pi-durable/codemode";
+import type {
+  NestedToolExecutionResult,
+  ToolExecutionApi,
+  ToolRegistration,
+} from "@earendil-works/pi-durable";
+import { CODEMODE_TOOL_NAME, createCodemodeExtension } from "@earendil-works/pi-durable/codemode";
 import { defineNudgeExtension, type ExtensionParts, Type } from "@nudge/core";
 
 const VERSION = "0.1.0";
@@ -22,6 +27,65 @@ export class CappedSandbox extends CodemodeSandbox {
     const timeoutMs = Math.min(options.timeoutMs ?? Number.POSITIVE_INFINITY, this.maxTimeoutMs);
     return super.start(code, { ...options, timeoutMs });
   }
+}
+
+/** The approval a tool's result waits for: tools that ask for one put its id in `details.approval`. */
+function approvalOf(result: NestedToolExecutionResult): string | undefined {
+  const details = result.details;
+  if (result.isError || typeof details !== "object" || details === null || Array.isArray(details))
+    return undefined;
+  const id = details["approval"];
+  return typeof id === "string" ? id : undefined;
+}
+
+/** What a script gets instead of the result of a call that waits for approval. */
+export function waitingValue(id: string, name: string): string {
+  return (
+    `Waiting for approval ${id}: tools.${name} has not run yet, and its result will not come ` +
+    "back to this script. It arrives later as a new message, once someone decides."
+  );
+}
+
+/** What the model is told after a script whose calls wait for approval. */
+export function waitingNote(waiting: ReadonlyMap<string, string>): string {
+  const list = [...waiting].map(([id, name]) => `${id} (tools.${name})`).join(", ");
+  return (
+    `Waiting for approval: ${list}. Those calls have not run; the script got a placeholder ` +
+    "instead of their results. Each outcome arrives as a new message once someone decides; " +
+    "don't make the calls again."
+  );
+}
+
+/**
+ * The code mode tool, made clear about calls that wait for approval. Such a call returns at once
+ * (ADR 6), so a script would otherwise get "Waiting for approval a1." as if it were the result:
+ * a schema-less tool's value becomes a placeholder that says so, and the model is told which calls
+ * wait. The call still asks for the approval as usual; nothing runs before someone approves it.
+ * Why the script isn't resumed with the outcome, and how it could be: ADR 19.
+ */
+export function waitingAware(tool: ToolRegistration): ToolRegistration {
+  return {
+    ...tool,
+    execute: async (args, api, context) => {
+      const waiting = new Map<string, string>();
+      const executeTool: ToolExecutionApi["executeTool"] = async (name, callArgs, ctx, options) => {
+        const result = await api.executeTool(name, callArgs, ctx, options);
+        const id = approvalOf(result);
+        if (id === undefined) return result;
+        waiting.set(id, name);
+        // A tool with a schema returned a value of its own for the wait; it is kept.
+        return typeof result.structuredOutput === "string"
+          ? { ...result, structuredOutput: waitingValue(id, name) }
+          : result;
+      };
+      const result = await tool.execute(args, { ...api, executeTool }, context);
+      if (waiting.size === 0) return result;
+      return {
+        ...result,
+        output: [...(result.output ?? []), { type: "text", text: `\n\n${waitingNote(waiting)}` }],
+      };
+    },
+  };
 }
 
 /**
@@ -62,7 +126,18 @@ export default defineNudgeExtension({
   }),
   setup: ({ settings }): ExtensionParts => {
     const sandbox = new CappedSandbox(settings.timeoutSeconds * 1000, settings.memoryMb * 2 ** 20);
-    const { name: _, ...parts } = createCodemodeExtension({ sandbox, models: settings.models });
-    return { ...parts, close: () => sandbox.close() };
+    const {
+      name: _,
+      tools = [],
+      ...parts
+    } = createCodemodeExtension({
+      sandbox,
+      models: settings.models,
+    });
+    return {
+      ...parts,
+      tools: tools.map((tool) => (tool.name === CODEMODE_TOOL_NAME ? waitingAware(tool) : tool)),
+      close: () => sandbox.close(),
+    };
   },
 });

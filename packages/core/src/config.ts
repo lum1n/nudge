@@ -64,6 +64,8 @@ const AssistantSchema = Type.Object({
       monthlyUsd: Type.Optional(Type.Number({ exclusiveMinimum: 0 })),
       perPlayerUsd: Type.Optional(Type.Number({ exclusiveMinimum: 0 })),
       warnAt: Type.Optional(Type.Number({ exclusiveMinimum: 0, maximum: 1 })),
+      /** Without `monthlyUsd`, admins hear once a month when spend reaches it; default 25. */
+      warnUsd: Type.Optional(Type.Number({ exclusiveMinimum: 0 })),
     }),
   ),
 });

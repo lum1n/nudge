@@ -124,8 +124,8 @@ export function Robot({
       width={size}
       height={size}
       className={className}
-      role="img"
-      aria-label={title}
+      // Untitled, it sits beside a name, as each answer's portrait does: nothing to read out.
+      {...(title ? { role: "img", "aria-label": title } : { "aria-hidden": true })}
     >
       {title && <title>{title}</title>}
       <defs>

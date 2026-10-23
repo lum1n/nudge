@@ -636,9 +636,10 @@ describe("loading extensions", () => {
         version: "0.1.0",
         models: [],
         problems: [],
+        warnings: [],
         error: "Settings for the hello extension need fixing:\n  Max sides: must be at least 2.",
       },
-      { name: "plain", models: [], problems: [] },
+      { name: "plain", models: [], problems: [], warnings: [] },
     ]);
   });
 

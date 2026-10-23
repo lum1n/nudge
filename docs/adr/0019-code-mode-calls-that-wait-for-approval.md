@@ -1,0 +1,17 @@
+# 19. A script's call that waits for approval gets a placeholder, not a result
+
+Code mode (`extensions/codemode`) lets the model write a script that calls the room's tools. Every call goes through the room's normal tool execution, so a write still asks for approval (ADR 6): the tool files the approval and returns at once with "Waiting for approval a1." Nothing runs until someone approves, and the outcome reaches the model later as new input. A script, though, got that text back as if it were the call's result. It could store it, parse it, or pass it on to the next call, and the model only learned the call waited if the script happened to print it.
+
+**The call's value says it waits, and so does the script's result.** Tools that ask for approval put its id in their result's `details.approval`, as every tool that calls `requestApproval` now does. Code mode wraps its tool's `executeTool`: a nested result with an approval, from a tool without an output schema, reaches the script as `Waiting for approval a1: tools.send_mail has not run yet, and its result will not come back to this script. It arrives later as a new message, once someone decides.` A tool with a schema returned a value of its own for the wait, which is kept. After the script ends, a line is added to its output, `Waiting for approval: a1 (tools.send_mail). Those calls have not run; the script got a placeholder instead of their results. Each outcome arrives as a new message once someone decides; don't make the calls again.` So the model knows now, and the approval's outcome reaches it the usual way. The script goes on: calls that don't depend on the write still run, and a script can check for the placeholder and stop.
+
+**Why not resume the script.** Resuming means the script's `await` waits until the approval is decided, which can take days. The script lives in a QuickJS VM in a worker, held by the code mode tool's call inside a turn, and that turn would stay busy for as long. The deadline (`timeoutSeconds`, at most ten minutes) exists so a script can't hold a worker that long. Code mode's replay journal (Pi Durable) could bring the VM back after a restart, but the tool call would still be open, and the transcript has no way to end a tool call and pick it up again in a later turn.
+
+How a resume could work later, if scripts need it:
+
+- The waiting call rejects with a typed error carrying the approval id, the script ends, and code mode stores its start data and journal under the approval instead of retiring them with the task.
+- When the approval is decided, the approval's outcome goes in as the next journal entry: the call's result becomes the handler's text (or a denial), the VM is replayed from the journal up to the waiting call, and the script continues live in a new tool call that the outcome's input starts, not the old one.
+- That needs Pi Durable to let a code mode run outlive its task and be replayed from somewhere other than its own `execute()`, and a deadline that doesn't count the wait. Until then, the placeholder is the contract.
+
+Scripts kept by the scripts extension (ADR 17) can't make such a call at all: they may only call tools marked as reading.
+
+Known gap: the line added to the script's output is built while the script runs. If the host stops after the script's outcome is stored but before the tool's result is, the rerun returns the stored outcome without that line. The script's own output still carries the placeholder if it printed it, and the approval's outcome still arrives.

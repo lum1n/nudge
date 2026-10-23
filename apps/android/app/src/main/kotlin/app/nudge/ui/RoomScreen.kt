@@ -135,11 +135,14 @@ fun RoomScreen(
         bottomBar = {
             if (state?.status != SyncStatus.GONE) {
                 Column(Modifier.imePadding()) {
-                    // Asked for by a tool and waiting: the activity shows them once decided.
-                    state?.approvals?.filter { it.status == ApprovalStatus.PENDING }?.forEach { approval ->
-                        Box(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
-                            ApprovalCard(approval.summary, approval.status, null) { approve ->
-                                attempt { client.decide(roomId, approval.id, approve) }
+                    // Asked for by a tool and waiting: the activity shows them once decided. TalkBack
+                    // reads out a new one as it comes.
+                    Column(Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
+                        state?.approvals?.filter { it.status == ApprovalStatus.PENDING }?.forEach { approval ->
+                            Box(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
+                                ApprovalCard(approval.summary, approval.status, null) { approve ->
+                                    attempt { client.decide(roomId, approval.id, approve) }
+                                }
                             }
                         }
                     }
@@ -298,7 +301,10 @@ private fun Timeline(
         }
         items(queued, key = { "queued:${it.id}" }) { message ->
             val mine = message.author == null || message.author?.id == me
-            Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start, modifier = Modifier.fillMaxWidth()) {
+            Column(
+                horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
+                modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {},
+            ) {
                 Bubble(message.text, mine, if (mine) null else message.author?.displayName, faded = true)
                 Text(
                     if (message.mode == QueueMode.STEER) "next" else "queued",

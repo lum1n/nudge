@@ -44,9 +44,55 @@ describe("Vault", () => {
     expect(redacted).toBe(
       "Mail ⟦EMAIL1⟧, IBAN ⟦IBAN1⟧, call ⟦PHONE1⟧, card ⟦CARD1⟧, fnr ⟦NATIONALID1⟧.",
     );
-    expect(vault.redact(`again ${EMAIL.toUpperCase()}`, builtinDetectors)).toBe("again ⟦EMAIL1⟧");
+    // Written another way, it gets a placeholder of its own, for good, and comes back as written.
+    const upper = `again ${EMAIL.toUpperCase()}`;
+    expect(vault.redact(upper, builtinDetectors)).toBe("again ⟦EMAIL2⟧");
+    expect(vault.redact(upper, builtinDetectors)).toBe("again ⟦EMAIL2⟧");
+    expect(vault.rehydrate("again ⟦EMAIL2⟧")).toBe(upper);
     expect(vault.redact(redacted, builtinDetectors)).toBe(redacted);
     expect(vault.rehydrate(redacted)).toBe(text);
+  });
+
+  it("gives a value back exactly as it was written", () => {
+    const vault = new Vault();
+    vault.protect("Vegard", "NAME");
+    for (const text of ["/home/vegard/x", "Vegard", "VEGARD", "Hi Vegard, see /home/vegard/x"]) {
+      const redacted = vault.redact(text, builtinDetectors);
+      expect(redacted).not.toMatch(/vegard/i);
+      expect(vault.rehydrate(redacted)).toBe(text);
+      expect(vault.rehydrateFor(undefined, redacted)).toBe(text);
+    }
+    expect(vault.redact("Vegard VEGARD vegard", [])).toBe("⟦NAME1⟧ ⟦NAME3⟧ ⟦NAME2⟧");
+    // Saved and opened again, the spellings keep their placeholders.
+    const reopened = new Vault(vault.entries);
+    expect(reopened.rehydrate("⟦NAME1⟧ ⟦NAME3⟧ ⟦NAME2⟧")).toBe("Vegard VEGARD vegard");
+    expect(reopened.redact("vegard", [])).toBe("⟦NAME2⟧");
+    expect(reopened.protect("Vegard", "NAME")).toBe("⟦NAME1⟧");
+    expect(reopened.protect("vegard", "NAME")).toBe("⟦NAME2⟧");
+  });
+
+  it("gives a spelling its value's owner, and forgets the spellings with it", () => {
+    const vault = new Vault();
+    vault.protect("Vegard", "NAME", "p1");
+    const redacted = vault.redact("cd /home/vegard", []);
+    expect(redacted).toBe("cd /home/⟦NAME2⟧");
+    expect(vault.get("⟦NAME2⟧")).toMatchObject({ value: "vegard", owner: "p1" });
+    expect(vault.rehydrateFor("p1", redacted)).toBe("cd /home/vegard");
+    expect(vault.rehydrateFor("p2", redacted)).toBe(redacted);
+    expect(vault.showTo("p1", redacted)).toBe("cd /home/vegard");
+    expect(vault.showTo("p2", "cd /home/vegard and Vegard")).toBe("cd /home/⟦NAME2⟧ and ⟦NAME1⟧");
+
+    vault.takeUnsaved();
+    expect(vault.forget("⟦NAME2⟧")).toBe(true);
+    expect(vault.get("⟦NAME1⟧")?.forgotten).toBe(true);
+    expect(vault.rehydrate(redacted)).toBe(redacted);
+    const saved = vault.takeUnsaved();
+    expect(saved.map((entry) => [entry.placeholder, entry.value, entry.forgotten])).toEqual([
+      ["⟦NAME1⟧", "", true],
+      ["⟦NAME2⟧", "", true],
+    ]);
+    // A forgotten value is still kept from the model, under its first placeholder.
+    expect(vault.redact("vegard", [])).toBe("⟦NAME1⟧");
   });
 
   it("leaves numbers that fail their checksums alone", () => {
@@ -59,7 +105,7 @@ describe("Vault", () => {
     const vault = new Vault();
     vault.protect("Ann", "NAME");
     expect(vault.redact("Ann and ann went to Annecy for an anniversary.", builtinDetectors)).toBe(
-      "⟦NAME1⟧ and ⟦NAME1⟧ went to Annecy for an anniversary.",
+      "⟦NAME1⟧ and ⟦NAME2⟧ went to Annecy for an anniversary.",
     );
   });
 
@@ -147,8 +193,10 @@ describe("Vault", () => {
     expect(vault.knows("Sørumsand")).toBe(false);
     const saved = new Vault(vault.entries);
     expect(saved.redact("Sørumsand", [])).toBe("Sørumsand");
-    expect(saved.protect("sørumsand", "PLACE")).toBe("⟦PLACE1⟧");
+    // Hidden again under its old placeholder; written another way, it gets a spelling of it.
+    expect(saved.protect("sørumsand", "PLACE")).toBe("⟦PLACE2⟧");
     expect(saved.redact("Sørumsand", [])).toBe("⟦PLACE1⟧");
+    expect(saved.rehydrate("⟦PLACE1⟧ ⟦PLACE2⟧")).toBe("Sørumsand sørumsand");
   });
 
   it("holds back a placeholder cut off at the end of a stream", () => {
@@ -287,6 +335,47 @@ describe("redaction in a running assistant", () => {
     expect(sent[1]).toContain("⟦PHONE1⟧");
     // A player's name isn't critical (ADR 15).
     expect(sent[0]).toContain("Vegard");
+  });
+
+  it("gives a tool a name in its arguments as it was written", async () => {
+    const seenByTool: string[] = [];
+    const list = defineTool({
+      name: "list_files",
+      description: "List a folder",
+      parameters: Type.Object({ path: Type.String() }),
+      execute: async (args) => {
+        seenByTool.push(args.path);
+        return { output: [{ type: "text", text: `${args.path}: notes.txt` }] };
+      },
+    });
+    const { faux, options, sent, record } = setup();
+    faux.setResponses([
+      (request) => {
+        record(request);
+        const path = /\/home\/⟦NAME\d+⟧\/docs/.exec(JSON.stringify(request))?.[0] ?? "";
+        return fauxAssistantMessage([fauxToolCall("list_files", { path })], {
+          stopReason: "toolUse",
+        });
+      },
+      (request) => {
+        record(request);
+        return fauxAssistantMessage("It holds notes.txt.");
+      },
+    ]);
+    const nudge = await createNudge(
+      { ...options, extensions: [defineExtension({ name: "files", tools: [list] })] },
+      context,
+    );
+    await nudge.protect("Kari", "NAME");
+    const author = { playerId: "p1", displayName: "Vegard", clientId: "c1" };
+    const settled = await (
+      await nudge.submit(LOBBY, { text: "What is in /home/kari/docs, Kari?", author }, context)
+    ).wait(context);
+    expect(settled.status).toBe("done");
+    expect(seenByTool).toEqual(["/home/kari/docs"]);
+    for (const request of sent) expect(request).not.toMatch(/kari/i);
+    expect(sent[1]).toContain("/home/⟦NAME2⟧/docs: notes.txt");
+    await nudge.close(context);
   });
 
   it("gives a tool only the private values the turn's sender may see", async () => {
@@ -617,9 +706,11 @@ describe("matching what the vault knows", () => {
     vault.protect("Ann Berg", "NAME");
     vault.protect("Sørumsand", "PLACE");
     vault.protect("kjeks", "PRIVATE");
-    expect(vault.redact("Anns bil, Ann  Berg, Ann\nBerg, Sørumsands skole, kjekss", [])).toBe(
-      "Anns bil, ⟦NAME1⟧, ⟦NAME1⟧, ⟦PLACE1⟧s skole, kjekss",
-    );
+    const text = "Anns bil, Ann Berg, Ann  Berg, Ann\nBerg, Sørumsands skole, kjekss";
+    // Each way of writing it has its own placeholder, so it comes back as written.
+    const redacted = vault.redact(text, []);
+    expect(redacted).toBe("Anns bil, ⟦NAME1⟧, ⟦NAME2⟧, ⟦NAME3⟧, ⟦PLACE1⟧s skole, kjekss");
+    expect(vault.rehydrate(redacted)).toBe(text);
   });
 
   it("leaves players' names readable", async () => {

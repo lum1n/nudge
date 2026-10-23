@@ -113,6 +113,8 @@ const KEEP_DECIDED = 30;
 /**
  * Asks the people in a room to approve an action, inside a commit. A tool calls this and returns
  * at once; the action runs when someone approves, and the room hears the outcome as new input.
+ * The tool's result should carry the id as `details.approval`, so code mode can tell a script the
+ * call waits instead of handing it the text as a result (ADR 19).
  */
 export async function requestApproval(
   tx: Tx,

@@ -3,8 +3,11 @@ import { DurableObject } from "cloudflare:workers";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { openDurableObjectSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/cloudflare";
 import {
+  errorFields,
   findAssistant,
   type Invitation,
+  type LogFields,
+  loggerFromEnv,
   type Nudge,
   type NudgeOptions,
   openAssistant,
@@ -103,9 +106,20 @@ export class NudgeAssistant extends DurableObject<NudgeEnv> {
 
   private async start(name: string): Promise<Opened> {
     const config = readConfig(this.env);
-    const report = (error: unknown) => console.error(error);
+    const log = loggerFromEnv({
+      NUDGE_LOG_LEVEL: this.env.NUDGE_LOG_LEVEL,
+      NUDGE_LOG_FORMAT: "json",
+    }).with({ assistant: name });
+    const report = (error: unknown, fields?: LogFields) =>
+      log.error("Assistant error", { ...fields, ...errorFields(error) });
     const nudge = await openAssistant(config, findAssistant(config, name), context, {
       onReport: report,
+      onModelError: (failure) =>
+        log.warn("Model request failed", {
+          provider: failure.provider,
+          model: failure.model,
+          detail: failure.message,
+        }),
       ...this.options(name),
       storage: await openDurableObjectSqliteStorage(this.ctx.storage),
     });
@@ -147,6 +161,8 @@ export class NudgeAssistant extends DurableObject<NudgeEnv> {
         version: "0.0.0",
         report,
         publicUrl: this.env.NUDGE_PUBLIC_URL,
+        // Cloudflare sets it at its edge, and the Worker passes the request on as it came.
+        peerAddress: (c) => c.req.header("cf-connecting-ip"),
       }),
     );
     return { nudge, app };

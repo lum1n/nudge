@@ -156,6 +156,11 @@ export type ExtensionParts = Omit<Extension, "name"> & {
    */
   readonly problems?: () => readonly string[] | Promise<readonly string[]>;
   /**
+   * What works but someone should know about, such as a setting that lets private data past
+   * redaction, for `nudge doctor` to print as warnings without failing.
+   */
+  readonly warnings?: () => readonly string[] | Promise<readonly string[]>;
+  /**
    * Runs actions people approved, by kind. The extension's tools ask with `requestApproval`
    * under the extension's name.
    */
@@ -273,6 +278,7 @@ export type SetUpExtension = {
   readonly routes: readonly ExtensionRoute[];
   readonly models: readonly { readonly provider: string; readonly modelId: string }[];
   readonly problems?: () => readonly string[] | Promise<readonly string[]>;
+  readonly warnings?: () => readonly string[] | Promise<readonly string[]>;
   readonly approvals: Readonly<Record<string, ApprovalHandler>>;
   readonly denials?: Readonly<Record<string, ApprovalDenialHandler>>;
   readonly onRoomEvent?: (event: RoomEvent) => void | Promise<void>;
@@ -336,6 +342,7 @@ export async function setUpExtension(
     routes = [],
     models = [],
     problems,
+    warnings,
     approvals = {},
     denials,
     onRoomEvent,
@@ -364,6 +371,7 @@ export async function setUpExtension(
     ...(publicTools === undefined ? {} : { publicTools }),
     ...(denials === undefined ? {} : { denials }),
     ...(problems === undefined ? {} : { problems }),
+    ...(warnings === undefined ? {} : { warnings }),
     ...(roomSocket === undefined ? {} : { roomSocket }),
     ...(onRoomEvent === undefined ? {} : { onRoomEvent }),
     ...(onLocation === undefined ? {} : { onLocation }),

@@ -14,6 +14,7 @@ import { defineTool } from "@earendil-works/pi-durable";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   builtinDetectors,
+  quasiIdentifierDetectors,
   createNudge,
   type DeepDetector,
   DeepScanner,
@@ -487,8 +488,10 @@ describe.skipIf(modelDir === undefined)("the local model itself", () => {
       );
       expect(values).not.toContain("Oslo");
       expect(values).not.toContain("Mamma");
-      // The rules know stations, whatever the model makes of them.
-      expect(vault.redact("Mamma går av på Oslo S. Været i Oslo?", builtinDetectors)).toBe(
+      // Stations are no longer hidden by default (ADR 15); the opt-in place rules still know them.
+      const text = "Mamma går av på Oslo S. Været i Oslo?";
+      expect(vault.redact(text, builtinDetectors)).toBe(text);
+      expect(vault.redact(text, quasiIdentifierDetectors)).toBe(
         "Mamma går av på ⟦PLACE2⟧. Været i Oslo?",
       );
     } finally {

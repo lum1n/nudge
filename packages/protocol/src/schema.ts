@@ -1286,6 +1286,21 @@ export type WiredJoinRequest = Static<typeof WiredJoinRequest>;
 export const WiredRelayResponse = Type.Object({ invite: Type.String() });
 export type WiredRelayResponse = Static<typeof WiredRelayResponse>;
 
+/**
+ * A model request that failed, as owners see it: the provider's answer with placeholders where
+ * personal values were, scrubbed of keys and cut short.
+ */
+export const ModelErrorShown = Type.Object({
+  /** When, in ms since the epoch. */
+  at: Type.Number(),
+  /** The assistant's URL name, when the request was one of theirs. */
+  assistant: Type.Optional(Type.String()),
+  provider: Type.String(),
+  model: Type.String(),
+  message: Type.String(),
+});
+export type ModelErrorShown = Static<typeof ModelErrorShown>;
+
 export const ServerInfoResponse = Type.Object({
   version: Type.String(),
   /** The owner whose token asked. */
@@ -1293,8 +1308,23 @@ export const ServerInfoResponse = Type.Object({
   assistants: Type.Array(ServerAssistant),
   /** Absent for a server that can't update itself, such as one run from a checkout. */
   updates: Type.Optional(UpdateState),
+  /** The last model requests that failed, newest first; absent where the server keeps none. */
+  errors: Type.Optional(Type.Array(ModelErrorShown)),
 });
 export type ServerInfoResponse = Static<typeof ServerInfoResponse>;
+
+/**
+ * `GET /v1/health`, without a token: whether the server is up, for a load balancer or a monitor.
+ * It names nothing, so it tells a stranger no more than that a Nudge server is there.
+ */
+export const HealthResponse = Type.Object({
+  ok: Type.Literal(true),
+  /** How many assistants are open. */
+  assistants: Type.Integer({ minimum: 0 }),
+  /** Seconds since a model request last failed; absent when none has since the server started. */
+  lastModelErrorAgeSeconds: Type.Optional(Type.Integer({ minimum: 0 })),
+});
+export type HealthResponse = Static<typeof HealthResponse>;
 
 // Setting a server up, under `/v1/setup` (ADR 11): open only while it has no config.
 
@@ -1517,7 +1547,9 @@ export const SCHEMAS = {
   WiredJoinRequest,
   WiredRelayRequest,
   WiredRelayResponse,
+  ModelErrorShown,
   ServerInfoResponse,
+  HealthResponse,
   SetupProvider,
   SetupLocalServer,
   SetupInfoResponse,

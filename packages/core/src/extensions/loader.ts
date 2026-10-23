@@ -77,6 +77,8 @@ export async function checkExtensions(entries: readonly ExtensionConfig[]): Prom
     models: readonly { provider: string; modelId: string }[];
     /** What keeps it from working on this machine (`problems`). */
     problems: readonly string[];
+    /** What works but someone should know about (`warnings`). */
+    warnings: readonly string[];
     /** Why its setup threw; the assistant opens without it. */
     error?: string;
   }[]
@@ -110,18 +112,21 @@ export async function checkExtensions(entries: readonly ExtensionConfig[]): Prom
         ...(version === undefined ? {} : { version }),
         models: [],
         problems: [],
+        warnings: [],
         error: (error as Error).message,
       });
       continue;
     }
-    const { extension, version, models, problems, close } = setUp;
+    const { extension, version, models, problems, warnings, close } = setUp;
     const found = (await problems?.()) ?? [];
+    const warned = (await warnings?.()) ?? [];
     await close?.();
     checked.push({
       name: extension.name,
       ...(version === undefined ? {} : { version }),
       models,
       problems: found,
+      warnings: warned,
     });
   }
   return checked;

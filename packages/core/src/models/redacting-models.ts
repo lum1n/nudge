@@ -28,11 +28,18 @@ import { DeepUnavailable } from "../privacy/deep/detector.ts";
 import { mapStrings, redactContext, rehydrateMessage } from "../privacy/redact.ts";
 import { withoutPlaceholders } from "../privacy/tool-values.ts";
 import type { Vault, VaultEntry } from "../privacy/vault.ts";
+import type { ModelFailure } from "./model-errors.ts";
 
 export type RedactionOptions = {
   readonly detectors: readonly PiiDetector[];
   /** Sees every request exactly as the provider will, for local debugging. */
   readonly onRequest?: (request: { readonly model: string; readonly context: Context }) => void;
+  /**
+   * Told of every request that failed, with the error as the provider gave it (placeholders and
+   * all, so no personal value is in it), for a host's logs and health. Not told of an abort or of
+   * a request the assistant refused itself, such as one past its budget.
+   */
+  readonly onModelError?: (failure: ModelFailure) => void;
 };
 
 type Bound = {
@@ -218,7 +225,10 @@ export class RedactingModels implements Models {
       ),
     };
     await this.flush();
-    return this.inner.classify(model, redacted, options);
+    return this.inner.classify(model, redacted, options).catch((error: unknown) => {
+      this.failed(model, messageOf(error));
+      throw error;
+    });
   }
 
   async generateImages(
@@ -238,7 +248,12 @@ export class RedactingModels implements Models {
       ),
     };
     await this.flush();
-    const result = await this.inner.generateImages(model, redacted, options);
+    const result = await this.inner
+      .generateImages(model, redacted, options)
+      .catch((error: unknown) => {
+        this.failed(model, messageOf(error));
+        throw error;
+      });
     const values = this.values;
     return {
       ...result,
@@ -319,13 +334,26 @@ export class RedactingModels implements Models {
       try {
         const inner = await start();
         const shown = new Map<number, string>();
-        for await (const event of inner) out.push(this.rehydrateEvent(event, shown));
+        for await (const event of inner) {
+          if (event.type === "error" && event.reason === "error")
+            this.failed(model, event.error.errorMessage ?? "The provider gave no reason");
+          out.push(this.rehydrateEvent(event, shown));
+        }
       } catch (error) {
+        if (!(error instanceof RequestRefused)) this.failed(model, messageOf(error));
         out.push({ type: "error", reason: "error", error: failedMessage(model, error) });
       }
       out.end();
     })();
     return out;
+  }
+
+  private failed(model: { readonly provider: string; readonly id: string }, message: string) {
+    try {
+      this.options.onModelError?.({ provider: model.provider, model: model.id, message });
+    } catch {
+      // A host's logging must not fail the request.
+    }
   }
 
   private rehydrateEvent(
@@ -466,7 +494,11 @@ function failedMessage(model: Model<Api>, error: unknown): AssistantMessage {
     },
     stopReason: "error",
     // The provider's own words, such as a missing key or a 429, so retries and people see them.
-    errorMessage: error instanceof Error ? error.message : String(error),
+    errorMessage: messageOf(error),
     timestamp: Date.now(),
   };
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

@@ -19,12 +19,10 @@ import {
   addServer,
   checkDraft,
   describeServer,
-  keepDraft,
   removeServer,
   type RoomServer,
   RoomServersDoc,
   type ServerDraft,
-  takeDraft,
 } from "./rooms.ts";
 
 const VERSION = "0.1.0";
@@ -80,11 +78,22 @@ const ServerSettings = Type.Object({
         "Which calls wait for someone in the room to approve: writes (all but read-only tools, the default), always or never.",
     }),
   ),
-  /** Pass images in results to the model; default false, since redaction only reads text. */
+  /**
+   * Pass images in the server's results to the model as they are. Off by default: redaction reads
+   * only text, so whatever a picture shows (names, numbers, faces) reaches the model's provider.
+   */
+  unredactedImages: Type.Optional(
+    Type.Boolean({
+      title: "Unredacted images",
+      description:
+        "Pass images in the server's results to the model. Off by default: only text is redacted, " +
+        "so whatever a picture shows reaches the model's provider as it is.",
+    }),
+  ),
+  /** The old name of `unredactedImages`, still read; `unredactedImages` wins when both are set. */
   images: Type.Optional(
     Type.Boolean({
-      description:
-        "Pass images in the server's results to the model; off by default, since only text is redacted.",
+      description: "The old name of unredactedImages, still read; prefer unredactedImages.",
     }),
   ),
   timeoutSeconds: Type.Optional(
@@ -94,6 +103,33 @@ const ServerSettings = Type.Object({
     }),
   ),
 });
+
+type ImageSettings = { readonly unredactedImages?: boolean; readonly images?: boolean };
+
+/** Whether a configured server's images reach the model; only an explicit opt-in turns it on. */
+export function passesImages(server: ImageSettings): boolean {
+  return (server.unredactedImages ?? server.images) === true;
+}
+
+/**
+ * Servers rooms add never pass images: the model proposes them, and a room has no setting that lets
+ * images skip redaction. Their images reach the model as a line of text.
+ */
+export const ROOM_SERVER_IMAGES = false;
+
+/** A warning for each configured server whose images reach the model unredacted, for doctor. */
+export function imageWarnings(servers: Readonly<Record<string, ImageSettings>>): string[] {
+  return Object.entries(servers)
+    .filter(([, server]) => passesImages(server))
+    .map(
+      ([name, server]) =>
+        `server ${name} passes images to the model unredacted; redaction reads only text, so ` +
+        "whatever its pictures show reaches the model's provider" +
+        (server.unredactedImages === undefined
+          ? " (set by the old images key; rename it unredactedImages)"
+          : ""),
+    );
+}
 
 /** Providers allow at most 64 characters of `[A-Za-z0-9_-]` in a tool name. */
 export function toolName(server: string, tool: string): string {
@@ -124,7 +160,8 @@ type Server = {
  * MCP servers' tools for the model. Each tool is `mcp__<server>__<tool>`, deferred, so the model
  * finds the ones it needs with `tool_search` instead of being offered them all. Calls that change
  * things wait for an approval. Results reach the model through the assistant's redaction like any
- * other tool output; images only where a server allows them.
+ * other tool output; images only where a server's settings opt in with `unredactedImages`, since
+ * redaction doesn't read them.
  */
 export default defineNudgeExtension({
   name: "mcp",
@@ -207,7 +244,7 @@ export default defineNudgeExtension({
             name,
             config,
             approval: settingsOf.approval ?? "writes",
-            images: settingsOf.images ?? false,
+            images: passesImages(settingsOf),
             tools: wanted === undefined ? listed : listed.filter((t) => wanted.includes(t.name)),
           });
         } catch (error) {
@@ -217,6 +254,8 @@ export default defineNudgeExtension({
     );
     servers.sort((a, b) => a.name.localeCompare(b.name));
     for (const problem of failed) console.error(`mcp: left out server ${problem}`);
+    const warnings = imageWarnings(settings.servers);
+    for (const warning of warnings) console.error(`mcp: ${warning}`);
 
     const needsApproval = (server: Server, tool: Tool) =>
       server.approval === "always" ||
@@ -286,6 +325,7 @@ export default defineNudgeExtension({
         ...(tools.length === 0 ? [] : [...tools, createToolSearchTool() as ToolRegistration]),
       ],
       roomSocket: panels.roomSocket,
+      warnings: () => warnings,
       routes: [
         {
           method: "GET",
@@ -479,16 +519,22 @@ function roomServerTools({ rooms, panels, now }: RoomParts): ToolRegistration[] 
           "only an admin can approve it."
         : `Add the MCP server "${draft.name}" at ${draft.url}, for: ${draft.useFor}`;
       try {
-        const approval = await api.commit(async (tx) => {
-          const approval = await requestApproval(
-            tx,
-            room.id,
-            { extension: "mcp", kind: "add", summary, payload: {}, adminOnly: program },
-            now(),
-          );
-          await keepDraft(tx, room.id, approval.id, draft);
-          return approval;
-        }, context);
+        const approval = await api.commit(
+          (tx) =>
+            requestApproval(
+              tx,
+              room.id,
+              {
+                extension: "mcp",
+                kind: "add",
+                summary,
+                payload: draft as never,
+                adminOnly: program,
+              },
+              now(),
+            ),
+          context,
+        );
         return {
           ...text(`Waiting for approval ${approval.id}.`),
           details: { approval: approval.id },
@@ -561,7 +607,7 @@ function roomServerTools({ rooms, panels, now }: RoomParts): ToolRegistration[] 
         if (tool === undefined)
           return text(`${server.name} has no tool "${args.tool}"; see mcp_tools.`, true);
         if (!needsApproval(server.approval, tool))
-          return forModel(await rooms.call(room.id, server, tool.name, params), false);
+          return forModel(await rooms.call(room.id, server, tool.name, params), ROOM_SERVER_IMAGES);
         const shown = JSON.stringify(params);
         const approval = await api.commit(
           (tx) =>
@@ -613,13 +659,15 @@ function roomServerTools({ rooms, panels, now }: RoomParts): ToolRegistration[] 
 /** Runs what people approved for the servers rooms add. */
 function roomApprovals({ rooms, panels, now }: RoomParts): ExtensionParts["approvals"] & {} {
   return {
-    add: async (_, run) => {
+    add: async (payload, run) => {
       const addedBy = run.approval.decidedBy?.displayName ?? "someone";
-      const server = await run.commit(async (tx) => {
-        const draft = await takeDraft(tx, run.room.id, run.approval.id);
-        if (draft === undefined) throw new Error("What to add was lost; ask for it again");
-        return addServer(tx, run.room.id, draft, addedBy, now());
-      });
+      const draft = payload as Partial<ServerDraft> | null;
+      // Approvals asked for before the payload held the draft have none.
+      if (typeof draft?.name !== "string")
+        throw new Error("What to add was lost; ask for it again");
+      const server = await run.commit((tx) =>
+        addServer(tx, run.room.id, draft as ServerDraft, addedBy, now()),
+      );
       let outcome: string;
       try {
         const tools = await rooms.tools(run.room.id, server);
@@ -653,7 +701,10 @@ function roomApprovals({ rooms, panels, now }: RoomParts): ExtensionParts["appro
           : (JSON.parse(JSON.stringify(stored)) as RoomServer);
       });
       if (server === undefined) return { text: `The MCP server ${id} was removed`, isError: true };
-      const result = forModel(await rooms.call(run.room.id, server, tool, args), false);
+      const result = forModel(
+        await rooms.call(run.room.id, server, tool, args),
+        ROOM_SERVER_IMAGES,
+      );
       return {
         text: result.output
           .map((part) => (part.type === "text" ? part.text : "[image]"))

@@ -12,7 +12,14 @@ import {
 } from "@earendil-works/pi-ai/providers/faux";
 import { createNudge, LOBBY, type Nudge } from "@nudge/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import mcp, { fillVariables, type PanelInput, type PanelOutput, toolName } from "../src/index.ts";
+import mcp, {
+  fillVariables,
+  imageWarnings,
+  type PanelInput,
+  type PanelOutput,
+  passesImages,
+  toolName,
+} from "../src/index.ts";
 import { fakeOAuthServer } from "./fake-oauth.ts";
 
 const context = BACKGROUND_CONTEXT;
@@ -126,12 +133,14 @@ describe("mcp", () => {
   it("adds a program a room asks for once an admin approves, with keys set on the panel", async () => {
     const { faux, outputs, call, done, say, nudge } = await open({});
     const { admin, ann } = await players(nudge);
+    // A hidden name written in lower case comes back so, as in a path.
+    await nudge.protect("Kari", "NAME");
     faux.setResponses([
       call("add_mcp_server", {
         name: "notes",
         useFor: "Keeping notes",
         command: process.execPath,
-        args: [FAKE],
+        args: [FAKE, "/home/kari/notes"],
         keys: [{ in: "env", name: "TOKEN" }],
       }),
       done,
@@ -140,7 +149,9 @@ describe("mcp", () => {
     expect(outputs.at(-1)).toBe("Waiting for approval a1.");
     const [pending] = await nudge.approvals.list(LOBBY, context);
     expect(pending).toMatchObject({ adminOnly: true });
-    expect(pending?.summary).toMatch(/^Start the program `.+fake-server\.mjs` on the server/);
+    expect(pending?.summary).toMatch(
+      /^Start the program `.+fake-server\.mjs \/home\/⟦NAME\d+⟧\/notes` on the server/,
+    );
     await expect(
       nudge.approvals.decide(LOBBY, "a1", { approve: true, by: ann }, context),
     ).rejects.toThrow("Only an admin");
@@ -150,7 +161,12 @@ describe("mcp", () => {
 
     const { send, servers, close } = await panel(nudge);
     expect(servers()).toMatchObject([
-      { id: "m1", name: "notes", keys: [{ in: "env", name: "TOKEN", set: false }] },
+      {
+        id: "m1",
+        name: "notes",
+        args: [FAKE, "/home/kari/notes"],
+        keys: [{ in: "env", name: "TOKEN", set: false }],
+      },
     ]);
     expect(
       await send({ type: "setKey", server: "m1", key: "TOKEN", value: "s3cret-value" }),
@@ -161,6 +177,8 @@ describe("mcp", () => {
       call("mcp_tools", { server: "notes", search: "word" }),
       done,
       call("mcp_call", { server: "notes", tool: "env" }),
+      done,
+      call("mcp_call", { server: "notes", tool: "picture" }),
       done,
       call("mcp_call", { server: "notes", tool: "save", arguments: { note: "Buy milk" } }),
       done,
@@ -175,6 +193,9 @@ describe("mcp", () => {
     expect(env.TOKEN).not.toBe("s3cret-value");
     expect(outputs.at(-1)).not.toContain("s3cret-value");
     expect(env.NUDGE_MCP_TEST_SECRET).toBeUndefined();
+    // A room's servers never pass images: nothing a room sets says they may skip redaction.
+    await say("Show the picture");
+    expect(outputs.at(-1)).toBe("[an image, not shown]");
     await say("Save a note: buy milk");
     expect(outputs.at(-1)).toBe("Waiting for approval a2.");
     // Anyone in the room decides a call.
@@ -241,6 +262,52 @@ describe("mcp", () => {
     } finally {
       await remote.close();
     }
+  });
+
+  it("passes a server's images to the model only when it opts in, and warns of it", async () => {
+    const { faux, requests, call, done, say } = await open({
+      plain: { command: process.execPath, args: [FAKE] },
+      shown: { command: process.execPath, args: [FAKE], unredactedImages: true },
+      old: { command: process.execPath, args: [FAKE], images: true },
+      overridden: {
+        command: process.execPath,
+        args: [FAKE],
+        images: true,
+        unredactedImages: false,
+      },
+    });
+    const images = (request: ModelContext) =>
+      (request.messages.findLast((m) => m.role === "toolResult")?.content ?? []).filter(
+        (part) => part.type === "image",
+      );
+    faux.setResponses([call("tool_search", { query: "picture", limit: 8 }), done]);
+    await say("Find the pictures");
+    for (const [server, shown] of [
+      ["plain", false],
+      ["shown", true],
+      ["old", true],
+      ["overridden", false],
+    ] as const) {
+      faux.setResponses([call(toolName(server, "picture"), {}), done]);
+      await say(`Show ${server}'s picture`);
+      expect(images(requests.at(-1)!), server).toHaveLength(shown ? 1 : 0);
+      expect(lastToolResult(requests.at(-1)!), server).toBe(shown ? "" : "[an image, not shown]");
+    }
+
+    expect(passesImages({})).toBe(false);
+    expect(passesImages({ images: false })).toBe(false);
+    expect(passesImages({ images: true, unredactedImages: false })).toBe(false);
+    expect(passesImages({ unredactedImages: true })).toBe(true);
+    const warnings = imageWarnings({
+      plain: {},
+      shown: { unredactedImages: true },
+      old: { images: true },
+    });
+    expect(warnings).toHaveLength(2);
+    expect(warnings[0]).toMatch(/^server shown passes images to the model unredacted; /);
+    expect(warnings[0]).not.toContain("old images key");
+    expect(warnings[1]).toContain("server old passes images to the model unredacted");
+    expect(warnings[1]).toContain("rename it unredactedImages");
   });
 
   it("names tools and fills in variables", () => {

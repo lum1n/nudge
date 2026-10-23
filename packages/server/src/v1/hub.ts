@@ -11,6 +11,7 @@ import {
   canUse,
   DirectoryDoc,
   type DirectoryState,
+  type LogFields,
   type RoomFact,
   type Nudge,
   type Room as CoreRoom,
@@ -50,7 +51,8 @@ export class Hubs {
 
   constructor(
     readonly nudge: Nudge,
-    private readonly report: (error: unknown) => void,
+    /** Told of what fails in the background, with the room it was for when there is one. */
+    private readonly report: (error: unknown, fields?: LogFields) => void,
   ) {}
 
   /**
@@ -79,7 +81,9 @@ export class Hubs {
   async room(roomId: string): Promise<Lease<RoomHub> | undefined> {
     if ((await this.nudge.rooms.get(roomId, context)) === undefined) return undefined;
     const directory = await this.openDirectory();
-    return this.rooms.lease(roomId, () => RoomHub.open(this.nudge, roomId, directory, this.report));
+    return this.rooms.lease(roomId, () =>
+      RoomHub.open(this.nudge, roomId, directory, (error) => this.report(error, { room: roomId })),
+    );
   }
 
   /**

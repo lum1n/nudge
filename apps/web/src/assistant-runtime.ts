@@ -315,3 +315,61 @@ export function buildQueueAdapter(
     remove: () => {},
   };
 }
+
+/** What the chat showed at one moment, for `announcement` to compare the next one with. */
+export type Seen = { timeline: readonly TimelineItem[]; approvals: readonly Approval[] };
+
+/**
+ * What a screen reader should hear about how the chat changed from `before` to `after`: someone
+ * else's new message, an answer that just finished (once, not every streamed word) and approvals
+ * newly asked for. Nothing the first time (`before` missing), so opening a room stays quiet, nor
+ * for earlier messages loaded above. `me` is the player's id, `assistant` the assistant's name.
+ */
+export function announcement(
+  before: Seen | undefined,
+  after: Seen,
+  me: string,
+  assistant: string,
+): string | undefined {
+  if (before === undefined) return undefined;
+  const lines: string[] = [];
+  const was = new Map(before.timeline.map((item) => [item.id, item]));
+  // New messages come after what was last there; a timeline without it started over.
+  const last = before.timeline.at(-1);
+  const from = last === undefined ? 0 : after.timeline.findIndex((item) => item.id === last.id) + 1;
+  const fresh = last === undefined || from > 0;
+  after.timeline.forEach((item, index) => {
+    if (item.type === "user") {
+      if (!fresh || index < from || was.has(item.id) || item.text === "") return;
+      if (item.author === undefined || item.author.id === me) return;
+      lines.push(`${item.author.displayName}: ${spoken(item.text)}`);
+      return;
+    }
+    if (item.type !== "answer" || item.status === "running") return;
+    const earlier = was.get(item.id);
+    if (earlier?.type !== "answer" || earlier.status !== "running") return;
+    if (item.status === "stopped") lines.push(`${assistant} stopped.`);
+    else if (item.status === "failed")
+      lines.push(
+        `${assistant} couldn't answer${item.error === undefined ? "." : `: ${item.error}`}`,
+      );
+    else {
+      const text = item.parts.flatMap((part) => (part.type === "text" ? [part.text] : []));
+      if (text.length > 0) lines.push(`${assistant}: ${spoken(text.join("\n"))}`);
+    }
+  });
+  const asked = new Set(before.approvals.filter((a) => a.status === "pending").map((a) => a.id));
+  for (const approval of after.approvals)
+    if (approval.status === "pending" && !asked.has(approval.id))
+      lines.push(`Waiting for approval: ${spoken(approval.summary)}`);
+  return lines.length === 0 ? undefined : lines.join("\n");
+}
+
+/** Text as it is read out: hidden values said as "hidden", without markdown's marks. */
+function spoken(text: string): string {
+  return text
+    .replace(PLACEHOLDER, "hidden")
+    .replace(/^\s*(#+|>|[-*+])\s+/gm, "")
+    .replace(/\*\*|__|`/g, "")
+    .trim();
+}

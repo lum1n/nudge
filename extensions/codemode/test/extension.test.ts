@@ -13,9 +13,12 @@ import {
   defineTool,
   LOBBY,
   type Nudge,
+  requestApproval,
+  roomOf,
   Type,
 } from "@nudge/core";
 import { afterEach, describe, expect, it } from "vitest";
+import { waitingNote, waitingValue } from "../src/extension.ts";
 import codemode from "../src/index.ts";
 
 const context = BACKGROUND_CONTEXT;
@@ -35,6 +38,53 @@ const contacts = defineNudgeExtension({
         }),
       }),
     ],
+  }),
+});
+
+/** Who the mailer's handler sent to: only after someone approved it. */
+const sent: string[] = [];
+
+/** A write tool, as in ADR 6: it asks for approval and returns at once; the handler sends. */
+const mailer = defineNudgeExtension({
+  name: "mailer",
+  version: "0.0.0",
+  setup: ({ now }) => ({
+    tools: [
+      defineTool({
+        name: "send_mail",
+        description: "Send a mail.",
+        parameters: Type.Object({ to: Type.String() }),
+        execute: async ({ to }, api, ctx) => {
+          const room = await roomOf(api, api.conversationId, ctx);
+          const approval = await api.commit(
+            (tx) =>
+              requestApproval(
+                tx,
+                room.id,
+                {
+                  extension: "mailer",
+                  kind: "send",
+                  summary: `Send a mail to ${to}`,
+                  payload: { to },
+                },
+                now(),
+              ),
+            ctx,
+          );
+          return {
+            output: [{ type: "text", text: `Waiting for approval ${approval.id}.` }],
+            details: { approval: approval.id },
+          };
+        },
+      }),
+    ],
+    approvals: {
+      send: async (payload) => {
+        const { to } = payload as { to: string };
+        sent.push(to);
+        return { text: `Sent to ${to}.` };
+      },
+    },
   }),
 });
 
@@ -61,6 +111,7 @@ describe("codemode", () => {
   });
 
   async function run(code: string, settings: Record<string, unknown> = {}) {
+    sent.length = 0;
     const faux = fauxProvider();
     const models = createModels();
     models.setProvider(faux.provider);
@@ -76,13 +127,18 @@ describe("codemode", () => {
         requests.push(r);
         return fauxAssistantMessage([fauxText("Done.")]);
       },
+      // The answer to an approval's outcome.
+      (r: ModelContext) => {
+        requests.push(r);
+        return fauxAssistantMessage([fauxText("Sent.")]);
+      },
     ]);
     nudge = await createNudge(
       {
         database: ":memory:",
         models,
         model: { provider: faux.provider.id, modelId: faux.getModel().id },
-        extensions: [contacts, { extension: codemode, settings }],
+        extensions: [contacts, mailer, { extension: codemode, settings }],
       },
       context,
     );
@@ -101,6 +157,35 @@ describe("codemode", () => {
     // The phone number is hidden; the names stay readable (ADR 15).
     expect(output).toContain("Ann: call ⟦PHONE1⟧\nBo: call ⟦PHONE1⟧");
     expect(JSON.stringify(requests)).not.toContain("987 65 432");
+  });
+
+  it("leaves a write a script makes waiting for approval, and tells the script and model so", async () => {
+    const { requests, output } = await run(
+      'const result = await tools.send_mail({ to: "Bo" }); text(JSON.stringify(result));',
+    );
+    // Nothing was sent: the call asked for approval as usual, and it waits.
+    expect(sent).toEqual([]);
+    const [pending] = await nudge!.approvals.list(LOBBY, context);
+    expect(pending).toMatchObject({
+      id: "a1",
+      extension: "mailer",
+      kind: "send",
+      summary: "Send a mail to Bo",
+      status: "pending",
+    });
+    // The script got a placeholder that says the call waits, not something to use as its result,
+    // and the model is told the outcome comes later.
+    expect(output).toContain(JSON.stringify(waitingValue("a1", "send_mail")));
+    expect(output).toContain(waitingNote(new Map([["a1", "send_mail"]])));
+
+    // Once approved, it runs once and the outcome reaches the model as new input.
+    const by = { playerId: "owner", displayName: "Vegard" };
+    const done = await nudge!.approvals.decide(LOBBY, "a1", { approve: true, by }, context);
+    expect(done).toMatchObject({ status: "done", result: "Sent to Bo." });
+    expect(sent).toEqual(["Bo"]);
+    await nudge!.harness.waitForIdle(context);
+    const input = requests.at(-1)?.messages.findLast((m) => m.role === "user")?.content;
+    expect(JSON.stringify(input)).toContain("Vegard approved a1 (Send a mail to Bo)");
   });
 
   it("stops a script that never ends at the deadline", async () => {
