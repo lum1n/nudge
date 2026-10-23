@@ -1,6 +1,7 @@
 import {
   chmodSync,
   existsSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -12,16 +13,37 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   installed,
+  memoryScope,
   readFromSandbox,
   runSandboxed,
   sandboxProblem,
   type SandboxOptions,
+  tmpfsSize,
+  workspaceBytes,
   writeToSandbox,
 } from "../src/sandbox.ts";
 
 describe("installed", () => {
   it("finds the programs on the sandbox's PATH, and only those", () => {
     expect(installed(["no-such-program-here", "sh"])).toEqual(["sh"]);
+  });
+});
+
+describe("workspaceBytes", () => {
+  it("counts what is on disk under a directory, a hard-linked file once", async () => {
+    const root = mkdtempSync(join(tmpdir(), "nudge-terminal-size-"));
+    try {
+      const empty = await workspaceBytes(root);
+      mkdirSync(join(root, "sub"));
+      writeFileSync(join(root, "sub", "a"), Buffer.alloc(100_000, 1));
+      const one = await workspaceBytes(root);
+      expect(one - empty).toBeGreaterThanOrEqual(100_000);
+      linkSync(join(root, "sub", "a"), join(root, "b"));
+      expect(await workspaceBytes(root)).toBe(one);
+      expect(await workspaceBytes(join(root, "missing"))).toBe(0);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 
@@ -110,6 +132,63 @@ describe.skipIf(sandboxProblem() !== undefined)("runSandboxed", () => {
     await runSandboxed(`ln -s ${homedir()}/.bashrc link`, options({ workspace }));
     await expect(readFromSandbox("link", { workspace }, 1_000_000)).rejects.toThrow(/not a file/);
   });
+
+  it("stops a command that uses more memory than it may", async () => {
+    // Random text, as what compresses well is cheap in zswap: a string of 200 MB in bash, against
+    // 100 MB. The cgroup stops it, or allocating fails.
+    const big = "s=$(head -c 150000000 /dev/urandom | base64 -w0); echo survived ${#s}";
+    const result = await runSandboxed(big, options({ maxMemoryBytes: 100 * 1024 ** 2 }));
+    expect(result.output).not.toMatch(/^survived/m);
+    expect(result.exitCode).not.toBe(0);
+    const small = await runSandboxed(
+      "s=$(head -c 10000000 /dev/zero | tr '\\0' x); echo survived ${#s}",
+      options({ maxMemoryBytes: 100 * 1024 ** 2 }),
+    );
+    expect(small).toMatchObject({ exitCode: 0, output: "survived 10000000\n" });
+  });
+
+  it.skipIf(!memoryScope())("caps the memory of all a command starts together", async () => {
+    // Two programs of 70 MB each fit a cap of 100 MB on their own, not together.
+    const hold = "s=$(head -c 52500000 /dev/urandom | base64 -w0); sleep 2; echo held ${#s}";
+    const result = await runSandboxed(
+      `(${hold}) & (${hold}) & wait`,
+      options({ maxMemoryBytes: 100 * 1024 ** 2 }),
+    );
+    expect(result.output.match(/^held \d+$/gm)?.length ?? 0).toBeLessThan(2);
+  });
+
+  it.skipIf(!tmpfsSize())("keeps /tmp within the memory a command may use", async () => {
+    // /tmp is full at 20 MB, or the cgroup stops what fills it.
+    const result = await runSandboxed(
+      "head -c 50000000 /dev/zero > /tmp/x; echo size $(stat -c %s /tmp/x)",
+      options({ maxMemoryBytes: 20 * 1024 ** 2 }),
+    );
+    expect(result.output).not.toContain("size 50000000");
+  });
+
+  it("stops a command that fills the workspace, but lets a full one be cleared", async () => {
+    const workspace = join(root, "quota");
+    const started = Date.now();
+    const result = await runSandboxed(
+      "head -c 3000000 /dev/zero > big; sleep 8; echo never",
+      options({ workspace, maxWorkspaceBytes: 1024 ** 2 }),
+    );
+    expect(result).toMatchObject({ workspaceFull: true, exitCode: undefined, timedOut: false });
+    expect(result.output).not.toContain("never");
+    expect(Date.now() - started).toBeLessThan(6_000);
+    // Over already: no file comes in, but commands still run to clear it up.
+    await expect(
+      writeToSandbox("in.txt", Buffer.from("x"), { workspace, maxWorkspaceBytes: 1024 ** 2 }),
+    ).rejects.toThrow(/over the 1 MB allowed/);
+    const cleared = await runSandboxed(
+      "rm big && echo cleared",
+      options({ workspace, maxWorkspaceBytes: 1024 ** 2 }),
+    );
+    expect(cleared).toMatchObject({ exitCode: 0, workspaceFull: false, output: "cleared\n" });
+    expect(
+      await writeToSandbox("in.txt", Buffer.from("x"), { workspace, maxWorkspaceBytes: 1024 ** 2 }),
+    ).toBe("/workspace/in.txt");
+  }, 15_000);
 
   it("shares the room's desktop's home when given it", async () => {
     const desktop = join(root, "desktop-home");

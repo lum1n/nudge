@@ -1,8 +1,10 @@
 // A command in a bubblewrap sandbox: the system's programs read-only, the room's workspace at
 // /workspace, an empty /tmp, none of Nudge's files or environment, and the network only when the
-// settings give it. Limits on time, CPU, processes and file size keep one command from the host.
+// settings give it. Limits on time, CPU, memory, processes, file size and the workspace's size keep
+// one command from the host.
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, readlinkSync } from "node:fs";
+import { lstat, readdir } from "node:fs/promises";
 import { posix } from "node:path";
 import type { Readable, Writable } from "node:stream";
 
@@ -57,6 +59,14 @@ export interface SandboxOptions {
   maxOutput: number;
   /** Most bytes of any one file a command writes. */
   maxFileBytes?: number;
+  /**
+   * Most bytes of memory a command uses: all it starts together, in a cgroup of its own when the
+   * server's systemd gives one, or else each of its processes on its own (`ulimit -v`). /tmp, kept
+   * in memory, holds at most as much.
+   */
+  maxMemoryBytes?: number;
+  /** Most bytes the workspace holds; a command that grows it past that is stopped. */
+  maxWorkspaceBytes?: number;
   signal?: AbortSignal;
   /** Hears the start of the output as it comes, the part that is kept. */
   onOutput?: (chunk: string) => void;
@@ -71,7 +81,18 @@ export interface CommandResult {
   cut: number;
   timedOut: boolean;
   aborted: boolean;
+  /** Stopped for growing the workspace past `maxWorkspaceBytes`. */
+  workspaceFull: boolean;
 }
+
+/** Most bytes of memory a command uses when the options don't say. */
+export const MAX_MEMORY = 2 * 1024 ** 3;
+
+/** Most bytes a workspace holds when the options don't say. */
+export const MAX_WORKSPACE = 2 * 1024 ** 3;
+
+/** How often a running command's workspace is measured, in milliseconds. */
+const WORKSPACE_CHECK_MS = 1_000;
 
 let checked: { problem: string | undefined } | undefined;
 
@@ -120,8 +141,105 @@ export function workingDirectory(cwd: string | undefined): string {
   return path;
 }
 
+let checkedScope: { works: boolean } | undefined;
+
+/**
+ * Whether commands get a cgroup with a memory cap of their own, through `systemd-run --user
+ * --scope`: on a systemd host with the memory controller delegated to the user, not in Docker.
+ * Checked once, by reading the cap back from inside such a scope.
+ */
+export function memoryScope(): boolean {
+  checkedScope ??= {
+    works:
+      onPath("systemd-run") &&
+      spawnSync(
+        "systemd-run",
+        [
+          ...scopeArgs(64 * 1024 ** 2),
+          "sh",
+          "-c",
+          'read -r line < /proc/self/cgroup && cat "/sys/fs/cgroup/${line#0::}/memory.max"',
+        ],
+        { encoding: "utf8", timeout: 5_000, env: scopeEnv() },
+      ).stdout?.trim() === String(64 * 1024 ** 2),
+  };
+  return checkedScope.works;
+}
+
+/** systemd-run's arguments for a scope that holds the command it then runs to `bytes` of memory. */
+function scopeArgs(bytes: number): string[] {
+  return [
+    "--user",
+    "--scope",
+    "--quiet",
+    "--collect",
+    // The command's own text, not systemd's to expand; a systemd too old for this isn't used.
+    "--expand-environment=no",
+    "-p",
+    `MemoryMax=${bytes}`,
+    "-p",
+    "MemorySwapMax=0",
+    "--",
+  ];
+}
+
+/** What of Nudge's environment systemd-run needs to reach the user's systemd; bubblewrap clears it. */
+function scopeEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { PATH: process.env.PATH ?? "" };
+  for (const name of ["XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS"])
+    if (process.env[name]) env[name] = process.env[name];
+  return env;
+}
+
+let checkedSize: { works: boolean } | undefined;
+
+/** Whether this bubblewrap sizes a tmpfs (`--size`, 0.10 and later; Debian 12 has 0.8). */
+export function tmpfsSize(): boolean {
+  checkedSize ??= {
+    works: /--size\b/.test(
+      spawnSync("bwrap", ["--help"], { encoding: "utf8", timeout: 5_000 }).stdout ?? "",
+    ),
+  };
+  return checkedSize.works;
+}
+
+/**
+ * The bytes a directory takes on disk, with all under it; links aren't followed, and a file with
+ * several hard links counts once. What vanishes while it is counted counts nothing.
+ */
+export async function workspaceBytes(dir: string): Promise<number> {
+  const seen = new Set<string>();
+  const walk = async (path: string): Promise<number> => {
+    let stat;
+    try {
+      stat = await lstat(path);
+    } catch {
+      return 0;
+    }
+    if (stat.nlink > 1 && !stat.isDirectory()) {
+      const key = `${stat.dev}:${stat.ino}`;
+      if (seen.has(key)) return 0;
+      seen.add(key);
+    }
+    let bytes = stat.blocks * 512;
+    if (stat.isDirectory()) {
+      let names: string[] = [];
+      try {
+        names = await readdir(path);
+      } catch {
+        // Unreadable or gone: what it holds isn't counted.
+      }
+      for (const name of names) bytes += await walk(`${path}/${name}`);
+    }
+    return bytes;
+  };
+  return walk(dir);
+}
+
 /** bubblewrap's arguments: what of the machine a command sees. */
 export function sandboxArgs(options: SandboxOptions): string[] {
+  // /tmp and /run are in memory, so they hold no more than a command may use.
+  const sized = tmpfsSize() ? ["--size", String(options.maxMemoryBytes ?? MAX_MEMORY)] : [];
   const system = ["/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/etc", "/opt"];
   // Fonts' caches, and where /etc/resolv.conf points on systemd hosts.
   const extra = ["/var/cache/fontconfig", "/run/systemd/resolve", ...(options.readable ?? [])];
@@ -158,8 +276,10 @@ export function sandboxArgs(options: SandboxOptions): string[] {
     "/proc",
     "--dev",
     "/dev",
+    ...sized,
     "--tmpfs",
     "/tmp",
+    ...sized,
     "--tmpfs",
     "/run",
     ...extra.flatMap((path) => ["--ro-bind-try", path, path]),
@@ -184,11 +304,19 @@ export async function runSandboxed(
   const cwd = workingDirectory(options.cwd);
   const fileBlocks = Math.ceil((options.maxFileBytes ?? 1024 ** 3) / 1024);
   const cpuSeconds = Math.ceil(options.timeoutMs / 1000) + 1;
+  const memory = options.maxMemoryBytes ?? MAX_MEMORY;
+  const scoped = memoryScope();
+  // Without a cgroup, each process gets the memory on its own: less of a cap, but still one.
+  const perProcess = scoped ? "" : ` -v ${Math.ceil(memory / 1024)}`;
   // Limits first, in the same shell; the command's own text follows as bash reads it.
-  const script = `ulimit -t ${cpuSeconds} -f ${fileBlocks} -u 512 2>/dev/null\n${command}`;
+  const script = `ulimit -t ${cpuSeconds} -f ${fileBlocks} -u 512${perProcess} 2>/dev/null\n${command}`;
+  const maxWorkspace = options.maxWorkspaceBytes ?? MAX_WORKSPACE;
+  // A workspace already over can still be cleared up; it just mustn't grow.
+  const allowed = Math.max(maxWorkspace, await workspaceBytes(options.workspace));
   const child = spawn(
-    "bwrap",
+    scoped ? "systemd-run" : "bwrap",
     [
+      ...(scoped ? [...scopeArgs(memory), "bwrap"] : []),
       ...sandboxArgs({ ...options, cwd }),
       // With the internet: its pid on 3, then it waits on 4 for its network; resolv.conf from 5.
       ...(filtered
@@ -205,7 +333,7 @@ export async function runSandboxed(
     {
       stdio: ["ignore", "pipe", "pipe", ...(filtered ? (["pipe", "pipe", "pipe"] as const) : [])],
       detached: true,
-      env: { PATH: process.env.PATH ?? "" },
+      env: scoped ? scopeEnv() : { PATH: process.env.PATH ?? "" },
     },
   );
   const output = new Output(options.maxOutput, options.onOutput);
@@ -213,6 +341,7 @@ export async function runSandboxed(
   child.stderr!.setEncoding("utf8").on("data", (chunk: string) => output.add(chunk));
   let timedOut = false;
   let aborted = false;
+  let workspaceFull = false;
   const stop = () => {
     // The whole group: bubblewrap, and with it everything in the sandbox.
     try {
@@ -233,6 +362,20 @@ export async function runSandboxed(
     timedOut = true;
     stop();
   }, options.timeoutMs);
+  // No quota without root, so the workspace is measured as the command runs.
+  let measuring = false;
+  let ended = false;
+  const watch = setInterval(() => {
+    if (measuring) return;
+    measuring = true;
+    void workspaceBytes(options.workspace).then((bytes) => {
+      measuring = false;
+      if (bytes > allowed && !workspaceFull && !ended) {
+        workspaceFull = true;
+        stop();
+      }
+    });
+  }, WORKSPACE_CHECK_MS);
   const onAbort = () => {
     aborted = true;
     stop();
@@ -241,7 +384,9 @@ export async function runSandboxed(
   if (options.signal?.aborted) onAbort();
   return new Promise((resolve, reject) => {
     const done = () => {
+      ended = true;
       clearTimeout(timer);
+      clearInterval(watch);
       options.signal?.removeEventListener("abort", onAbort);
       void network?.then((slirp) => slirp?.kill("SIGKILL"));
     };
@@ -253,11 +398,12 @@ export async function runSandboxed(
       done();
       if (failed) return reject(failed);
       resolve({
-        exitCode: timedOut || aborted || code === null ? undefined : code,
+        exitCode: timedOut || aborted || workspaceFull || code === null ? undefined : code,
         output: output.text(),
         cut: output.cut,
         timedOut,
         aborted,
+        workspaceFull,
       });
     });
   });
@@ -378,7 +524,10 @@ function runWith(program: string, args: string[], input: string): Promise<void> 
 }
 
 /** What of the sandbox moving a file in or out of it sees. */
-export type FileOptions = Pick<SandboxOptions, "workspace" | "desktop" | "readable">;
+export type FileOptions = Pick<
+  SandboxOptions,
+  "workspace" | "desktop" | "readable" | "maxWorkspaceBytes"
+>;
 
 /**
  * A file's bytes, read in the sandbox, so a path or link in the workspace never reaches beyond
@@ -405,6 +554,12 @@ export async function writeToSandbox(
   bytes: Uint8Array,
   options: FileOptions,
 ): Promise<string> {
+  const max = options.maxWorkspaceBytes ?? MAX_WORKSPACE;
+  const used = await workspaceBytes(options.workspace);
+  if (used + bytes.length > max)
+    throw new Error(
+      `the workspace would hold ${megabytes(used + bytes.length)} MB, over the ${megabytes(max)} MB allowed; delete files from it first`,
+    );
   const script = `mkdir -p -- "$(dirname -- "$1")" || exit 2
 set -o noclobber
 cat > "$1" || exit 2
@@ -497,6 +652,11 @@ class Output {
     if (!this.cut) return this.head + this.tail;
     return `${this.head}\n… (${this.cut} characters cut) …\n${this.tail}`;
   }
+}
+
+/** Bytes as whole megabytes, rounded up. */
+export function megabytes(bytes: number): number {
+  return Math.ceil(bytes / 1024 ** 2);
 }
 
 function onPath(program: string): boolean {
