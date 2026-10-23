@@ -328,6 +328,16 @@ export {
   provideGeo,
   type TravelMode,
 } from "./geo/geo.ts";
+export { type GeoEndpoints, graphhopperRoute, httpGeo, photonPlaces } from "./geo/http.ts";
+export {
+  checkGeo,
+  GEO_REGIONS,
+  type GeoStatus,
+  graphhopperConfig,
+  reason as processFailure,
+  ServerGeo,
+  type ServerGeoOptions,
+} from "./server/geo.ts";
 export {
   type DatabaseEncryption,
   type DatabaseKey,

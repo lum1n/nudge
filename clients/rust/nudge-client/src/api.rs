@@ -394,6 +394,65 @@ impl Api {
         .await
     }
 
+    /// The places the phone should watch for the caller's arrival reminders (ADR 17), around
+    /// where it is when given; 404 when the assistant has no places extension.
+    pub async fn arrival_regions(
+        &self,
+        at: Option<(f64, f64)>,
+    ) -> Result<ArrivalRegionsResponse, ApiError> {
+        let (lat, lon) = at
+            .map(|(lat, lon)| (lat.to_string(), lon.to_string()))
+            .unwrap_or_default();
+        let query: &[(&str, &str)] = if at.is_some() {
+            &[("lat", lat.as_str()), ("lon", lon.as_str())]
+        } else {
+            &[]
+        };
+        self.request(Method::GET, &["ext", "places", "regions"], query, NO_BODY)
+            .await
+    }
+
+    /// Tells the server the phone got to or left a region from `arrival_regions`.
+    pub async fn report_region_event(
+        &self,
+        region_id: &str,
+        event: RegionEvent,
+    ) -> Result<RegionEventResponse, ApiError> {
+        let body = RegionEventRequest {
+            region_id: region_id.to_owned(),
+            event,
+        };
+        self.request(Method::POST, &["ext", "places", "events"], &[], Some(&body))
+            .await
+    }
+
+    /// The caller's saved places and arrival reminders.
+    pub async fn places(&self) -> Result<PlacesResponse, ApiError> {
+        self.request(Method::GET, &["ext", "places", "places"], &[], NO_BODY)
+            .await
+    }
+
+    /// Forgets a saved place, by its name, and the reminders for it.
+    pub async fn forget_place(&self, name: &str) -> Result<(), ApiError> {
+        self.request_empty(
+            Method::DELETE,
+            &["ext", "places", "places", name],
+            &[],
+            NO_BODY,
+        )
+        .await
+    }
+
+    pub async fn cancel_arrival_reminder(&self, id: &str) -> Result<(), ApiError> {
+        self.request_empty(
+            Method::DELETE,
+            &["ext", "places", "reminders", id],
+            &[],
+            NO_BODY,
+        )
+        .await
+    }
+
     /// The caller's full name, e-mail, phone, address and location; only they see the values.
     pub async fn personal(&self) -> Result<PersonalDetails, ApiError> {
         self.request(Method::GET, &["me", "personal"], &[], NO_BODY)

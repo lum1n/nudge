@@ -135,6 +135,37 @@ pub struct UpdateState {
     pub error: Option<String>,
 }
 
+/// How far the server's map is (ADR 17).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum GeoState {
+    Off,
+    Downloading,
+    Importing,
+    Ready,
+    Failed,
+}
+
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct GeoRegion {
+    pub code: String,
+    pub name: String,
+}
+
+/// The server's own map: addresses, places and routes for the places extension, from
+/// OpenStreetMap data of one region the owner picks.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct GeoStatus {
+    pub region: Option<String>,
+    pub state: GeoState,
+    /// What it is getting ready while downloading or importing.
+    pub step: Option<String>,
+    /// Of the current download, from 0 to 1.
+    pub progress: Option<f64>,
+    pub updated_at: Option<f64>,
+    pub error: Option<String>,
+    pub regions: Vec<GeoRegion>,
+}
+
 /// How far the server's Wired is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
 pub enum WiredStatus {
@@ -339,6 +370,33 @@ impl From<p::UpdateState> for UpdateState {
             available: u.available,
             checked_at: u.checked_at,
             error: u.error,
+        }
+    }
+}
+
+impl From<p::GeoStatus> for GeoStatus {
+    fn from(g: p::GeoStatus) -> Self {
+        GeoStatus {
+            region: g.region,
+            state: match g.state {
+                p::GeoState::Off => GeoState::Off,
+                p::GeoState::Downloading => GeoState::Downloading,
+                p::GeoState::Importing => GeoState::Importing,
+                p::GeoState::Ready => GeoState::Ready,
+                p::GeoState::Failed => GeoState::Failed,
+            },
+            step: g.step,
+            progress: g.progress,
+            updated_at: g.updated_at,
+            error: g.error,
+            regions: g
+                .regions
+                .into_iter()
+                .map(|r| GeoRegion {
+                    code: r.code,
+                    name: r.name,
+                })
+                .collect(),
         }
     }
 }
@@ -610,6 +668,20 @@ impl ServerClient {
             .into())
     }
 
+    /// The server's own map; fails with 404 on a server that wasn't given one.
+    pub async fn geo(&self) -> Result<GeoStatus, NudgeError> {
+        let api = self.api.clone();
+        Ok(run(async move { api.geo().await }).await?.into())
+    }
+
+    /// Gets the map of `region` ready, or removes it and its data with none.
+    pub async fn set_geo(&self, region: Option<String>) -> Result<GeoStatus, NudgeError> {
+        let api = self.api.clone();
+        Ok(run(async move { api.set_geo(region.as_deref()).await })
+            .await?
+            .into())
+    }
+
     /// The server's Wired; fails with 404 on a server that wasn't given one.
     pub async fn wired(&self) -> Result<WiredState, NudgeError> {
         let api = self.api.clone();
@@ -780,11 +852,11 @@ pub async fn set_up(
 ) -> Result<SetupResult, NudgeError> {
     let home = match choices.home_assertion {
         None => None,
-        Some(assertion) => Some(serde_json::from_str::<p::Sealed>(&assertion).map_err(|error| {
-            NudgeError::Decode {
+        Some(assertion) => Some(serde_json::from_str::<p::Sealed>(&assertion).map_err(
+            |error| NudgeError::Decode {
                 detail: format!("Not an assertion: {error}"),
-            }
-        })?),
+            },
+        )?),
     };
     let body = p::SetupRequest {
         code: choices.code,

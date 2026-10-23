@@ -5218,6 +5218,210 @@
         }
       }
     },
+    "ArrivalRegion": {
+      "type": "object",
+      "required": [
+        "id",
+        "latitude",
+        "longitude",
+        "radius"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "latitude": {
+          "type": "number"
+        },
+        "longitude": {
+          "type": "number"
+        },
+        "radius": {
+          "type": "number"
+        }
+      }
+    },
+    "ArrivalRegionsResponse": {
+      "type": "object",
+      "required": [
+        "version",
+        "regions"
+      ],
+      "properties": {
+        "version": {
+          "type": "number"
+        },
+        "regions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "latitude",
+              "longitude",
+              "radius"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "latitude": {
+                "type": "number"
+              },
+              "longitude": {
+                "type": "number"
+              },
+              "radius": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "refresh": {
+          "type": "object",
+          "required": [
+            "latitude",
+            "longitude",
+            "radius"
+          ],
+          "properties": {
+            "latitude": {
+              "type": "number"
+            },
+            "longitude": {
+              "type": "number"
+            },
+            "radius": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    "RegionEventRequest": {
+      "type": "object",
+      "required": [
+        "regionId",
+        "event"
+      ],
+      "properties": {
+        "regionId": {
+          "type": "string"
+        },
+        "event": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "enter"
+            },
+            {
+              "type": "string",
+              "const": "exit"
+            }
+          ]
+        }
+      }
+    },
+    "RegionEventResponse": {
+      "type": "object",
+      "required": [
+        "fired"
+      ],
+      "properties": {
+        "fired": {
+          "type": "number"
+        }
+      }
+    },
+    "PlacesResponse": {
+      "type": "object",
+      "required": [
+        "places",
+        "reminders"
+      ],
+      "properties": {
+        "places": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "placeholder",
+              "address",
+              "radius"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "placeholder": {
+                "type": "string"
+              },
+              "address": {
+                "type": "string"
+              },
+              "radius": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "reminders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "roomId",
+              "on",
+              "repeat",
+              "message"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "roomId": {
+                "type": "string"
+              },
+              "on": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "arrive"
+                  },
+                  {
+                    "type": "string",
+                    "const": "leave"
+                  }
+                ]
+              },
+              "repeat": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "once"
+                  },
+                  {
+                    "type": "string",
+                    "const": "always"
+                  }
+                ]
+              },
+              "place": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
     "PlaceRequest": {
       "type": "object",
       "required": [
@@ -7384,6 +7588,90 @@
       "properties": {
         "automatic": {
           "type": "boolean"
+        }
+      }
+    },
+    "GeoStatus": {
+      "type": "object",
+      "required": [
+        "state",
+        "regions"
+      ],
+      "properties": {
+        "region": {
+          "type": "string"
+        },
+        "state": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "off"
+            },
+            {
+              "type": "string",
+              "const": "downloading"
+            },
+            {
+              "type": "string",
+              "const": "importing"
+            },
+            {
+              "type": "string",
+              "const": "ready"
+            },
+            {
+              "type": "string",
+              "const": "failed"
+            }
+          ]
+        },
+        "step": {
+          "type": "string"
+        },
+        "progress": {
+          "type": "number"
+        },
+        "updatedAt": {
+          "type": "number"
+        },
+        "error": {
+          "type": "string"
+        },
+        "regions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "code",
+              "name"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "SetGeoRequest": {
+      "type": "object",
+      "required": [
+        "region"
+      ],
+      "properties": {
+        "region": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       }
     },

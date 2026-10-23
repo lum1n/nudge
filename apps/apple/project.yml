@@ -60,6 +60,7 @@ targets:
         NSLocalNetworkUsageDescription: Nudge reaches a Nudge server on your network.
         NSMicrophoneUsageDescription: Nudge writes out what you say into a message, on this device.
         NSLocationWhenInUseUsageDescription: While Nudge is open, it tells your home assistant where you are, if you turn that on in your profile. The model only sees a placeholder for it.
+        NSLocationAlwaysAndWhenInUseUsageDescription: For reminders when you get somewhere, Nudge tells your home assistant when you get to a place you have a reminder for, also with the app closed.
         # Plain HTTP only to servers on the local network (private addresses, .local names);
         # everywhere else HTTPS, as App Transport Security wants.
         NSAppTransportSecurity:

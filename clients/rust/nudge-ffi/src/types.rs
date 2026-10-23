@@ -784,6 +784,56 @@ pub struct PushPlatforms {
     pub relays: Vec<String>,
 }
 
+/// A circle the phone watches for arrival reminders (ADR 17), entering and leaving.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct ArrivalRegion {
+    /// Give it back in `report_region_event`.
+    pub id: String,
+    pub latitude: f64,
+    pub longitude: f64,
+    /// Metres.
+    pub radius: f64,
+}
+
+/// What the phone watches: `regions`, and once it leaves `refresh`, asks again from there.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct ArrivalRegions {
+    pub version: u64,
+    pub regions: Vec<ArrivalRegion>,
+    pub refresh: Option<ArrivalRegion>,
+}
+
+/// A place the player saved, such as "home", with its address as only they see it.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct SavedPlace {
+    pub name: String,
+    pub placeholder: String,
+    pub address: String,
+    pub radius: f64,
+}
+
+/// A reminder for getting to a place, or leaving it.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct ArrivalReminder {
+    pub id: String,
+    pub room_id: String,
+    /// False for leaving.
+    pub arrive: bool,
+    /// False for once.
+    pub always: bool,
+    /// A saved place's name; absent for any place of a kind.
+    pub place: Option<String>,
+    /// Such as "grocery store".
+    pub kind: Option<String>,
+    pub message: String,
+}
+
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct Places {
+    pub places: Vec<SavedPlace>,
+    pub reminders: Vec<ArrivalReminder>,
+}
+
 /// The device's X25519 key pair for pushes through a relay, each half 32 bytes in base64url.
 /// Keep the private half in the keychain or the app's private storage.
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]

@@ -31,6 +31,7 @@ import type {
   PlayerSettingsResponse,
   PlayerSettingsSchema,
   PersonalDetails,
+  PlacesResponse,
   Profile,
   ProtectResponse,
   PushKeyResponse,
@@ -243,6 +244,20 @@ export class Api {
    */
   shareLocation(room: string, shared: boolean): Promise<PersonalDetails> {
     return this.request("PUT", `${roomPath(room)}/location`, { shared });
+  }
+
+  /** The caller's saved places and arrival reminders (ADR 17); a 404 without the places extension. */
+  places(): Promise<PlacesResponse> {
+    return this.request("GET", "/ext/places/places");
+  }
+
+  /** Forgets a saved place, by its name, and the reminders for it. */
+  forgetPlace(name: string): Promise<void> {
+    return this.request("DELETE", `/ext/places/places/${encodeURIComponent(name)}`);
+  }
+
+  cancelArrivalReminder(id: string): Promise<void> {
+    return this.request("DELETE", `/ext/places/reminders/${encodeURIComponent(id)}`);
   }
 
   /** The installed extensions that take settings from each player, with their schemas. */

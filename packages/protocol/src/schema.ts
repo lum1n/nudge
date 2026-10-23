@@ -664,6 +664,66 @@ export const DevicesResponse = Type.Object({
 });
 export type DevicesResponse = Static<typeof DevicesResponse>;
 
+/** A circle a phone watches for the places extension (ADR 17), entering and leaving. */
+export const ArrivalRegion = Type.Object({
+  /** `p:<name>` for a saved place, `k:<id>` for a place of a kind. */
+  id: Type.String(),
+  latitude: Type.Number(),
+  longitude: Type.Number(),
+  /** Metres. */
+  radius: Type.Number(),
+});
+export type ArrivalRegion = Static<typeof ArrivalRegion>;
+
+/**
+ * `GET /ext/places/regions?lat=&lon=`: what the phone watches. Leaving `refresh` means asking
+ * again from where it is then; `version` goes up when the list changes.
+ */
+export const ArrivalRegionsResponse = Type.Object({
+  version: Type.Number(),
+  regions: Type.Array(ArrivalRegion),
+  refresh: Type.Optional(
+    Type.Object({ latitude: Type.Number(), longitude: Type.Number(), radius: Type.Number() }),
+  ),
+});
+export type ArrivalRegionsResponse = Static<typeof ArrivalRegionsResponse>;
+
+/** `POST /ext/places/events`: the phone got to or left a region. */
+export const RegionEventRequest = Type.Object({
+  regionId: Type.String(),
+  event: Type.Union([Type.Literal("enter"), Type.Literal("exit")]),
+});
+export type RegionEventRequest = Static<typeof RegionEventRequest>;
+
+/** How many reminders the event set off. */
+export const RegionEventResponse = Type.Object({ fired: Type.Number() });
+export type RegionEventResponse = Static<typeof RegionEventResponse>;
+
+/** `GET /ext/places/places`: the caller's saved places and arrival reminders, values readable. */
+export const PlacesResponse = Type.Object({
+  places: Type.Array(
+    Type.Object({
+      name: Type.String(),
+      placeholder: Type.String(),
+      address: Type.String(),
+      radius: Type.Number(),
+    }),
+  ),
+  reminders: Type.Array(
+    Type.Object({
+      id: Type.String(),
+      roomId: Type.String(),
+      on: Type.Union([Type.Literal("arrive"), Type.Literal("leave")]),
+      repeat: Type.Union([Type.Literal("once"), Type.Literal("always")]),
+      /** A saved place's name, or `kind` for any place of a kind, such as "grocery store". */
+      place: Type.Optional(Type.String()),
+      kind: Type.Optional(Type.String()),
+      message: Type.String(),
+    }),
+  ),
+});
+export type PlacesResponse = Static<typeof PlacesResponse>;
+
 /** An assistant by its server and its name there, such as one to join. */
 export const PlaceRequest = Type.Object({ server: Type.String(), assistant: Type.String() });
 export type PlaceRequest = Static<typeof PlaceRequest>;
@@ -1097,6 +1157,36 @@ export const SetUpdatesRequest = Type.Object({ automatic: Type.Boolean() });
 export type SetUpdatesRequest = Static<typeof SetUpdatesRequest>;
 
 /**
+ * The server's own map (ADR 17): addresses, places and routes from OpenStreetMap data of one
+ * region, served on the server itself so nothing about where people go leaves it.
+ */
+export const GeoStatus = Type.Object({
+  /** The region picked, by code from `regions`. */
+  region: Type.Optional(Type.String()),
+  /** `downloading` and `importing`: getting it ready, as `step` says; `failed`: see `error`. */
+  state: Type.Union([
+    Type.Literal("off"),
+    Type.Literal("downloading"),
+    Type.Literal("importing"),
+    Type.Literal("ready"),
+    Type.Literal("failed"),
+  ]),
+  step: Type.Optional(Type.String()),
+  /** Of the current download, from 0 to 1. */
+  progress: Type.Optional(Type.Number()),
+  /** When the data in use was fetched; it is fetched again once a month. */
+  updatedAt: Type.Optional(Type.Number()),
+  error: Type.Optional(Type.String()),
+  /** The regions an owner can pick. */
+  regions: Type.Array(Type.Object({ code: Type.String(), name: Type.String() })),
+});
+export type GeoStatus = Static<typeof GeoStatus>;
+
+/** A region to get the map of, or `null` to remove it and its data. */
+export const SetGeoRequest = Type.Object({ region: Type.Union([Type.String(), Type.Null()]) });
+export type SetGeoRequest = Static<typeof SetGeoRequest>;
+
+/**
  * The server's Wired: an encrypted network between Nudge servers that needs no open port at
  * home. Other servers reach this one's API at `http://nudge.<name>.wired`.
  */
@@ -1312,6 +1402,11 @@ export const SCHEMAS = {
   PushRenewRequest,
   DeviceRequest,
   DevicesResponse,
+  ArrivalRegion,
+  ArrivalRegionsResponse,
+  RegionEventRequest,
+  RegionEventResponse,
+  PlacesResponse,
   PlaceRequest,
   Membership,
   MembershipsResponse,
@@ -1376,6 +1471,8 @@ export const SCHEMAS = {
   ServerSessionResponse,
   UpdateState,
   SetUpdatesRequest,
+  GeoStatus,
+  SetGeoRequest,
   WiredState,
   WiredEnableRequest,
   WiredJoinRequest,

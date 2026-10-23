@@ -921,6 +921,98 @@ pub struct DevicesResponse {
     pub relays: Vec<String>,
 }
 
+/// A circle a phone watches for the places extension (ADR 17), entering and leaving.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ArrivalRegion {
+    /// `p:<name>` for a saved place, `k:<id>` for a place of a kind.
+    pub id: String,
+    pub latitude: f64,
+    pub longitude: f64,
+    /// Metres.
+    pub radius: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RefreshCircle {
+    pub latitude: f64,
+    pub longitude: f64,
+    pub radius: f64,
+}
+
+/// What the phone watches. Leaving `refresh` means asking again from where it is then.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ArrivalRegionsResponse {
+    pub version: f64,
+    pub regions: Vec<ArrivalRegion>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refresh: Option<RefreshCircle>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RegionEvent {
+    Enter,
+    Exit,
+}
+
+/// The phone got to or left a region.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegionEventRequest {
+    pub region_id: String,
+    pub event: RegionEvent,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RegionEventResponse {
+    pub fired: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SavedPlace {
+    pub name: String,
+    pub placeholder: String,
+    pub address: String,
+    pub radius: f64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ArrivalOn {
+    Arrive,
+    Leave,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ArrivalRepeat {
+    Once,
+    Always,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArrivalReminder {
+    pub id: String,
+    pub room_id: String,
+    pub on: ArrivalOn,
+    pub repeat: ArrivalRepeat,
+    /// A saved place's name; absent for any place of a kind.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub place: Option<String>,
+    /// Such as "grocery store".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+    pub message: String,
+}
+
+/// The caller's saved places and arrival reminders, values readable.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PlacesResponse {
+    pub places: Vec<SavedPlace>,
+    pub reminders: Vec<ArrivalReminder>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ModelRole {
@@ -1504,6 +1596,49 @@ pub struct UpdateState {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SetUpdatesRequest {
     pub automatic: bool,
+}
+
+/// How far the server's map is (ADR 17).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GeoState {
+    Off,
+    Downloading,
+    Importing,
+    Ready,
+    Failed,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct GeoRegion {
+    pub code: String,
+    pub name: String,
+}
+
+/// The server's own map: addresses, places and routes from OpenStreetMap data of one region.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GeoStatus {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub region: Option<String>,
+    pub state: GeoState,
+    /// What it is getting ready while downloading or importing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub step: Option<String>,
+    /// Of the current download, from 0 to 1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub progress: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    pub regions: Vec<GeoRegion>,
+}
+
+/// A region to get the map of, or none to remove it and its data.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SetGeoRequest {
+    pub region: Option<String>,
 }
 
 /// How far the server's Wired is.

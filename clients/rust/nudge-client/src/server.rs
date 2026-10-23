@@ -229,6 +229,20 @@ impl ServerApi {
             .await
     }
 
+    /// The server's own map (ADR 17); 404 on a server that wasn't given one.
+    pub async fn geo(&self) -> Result<GeoStatus, ApiError> {
+        self.request(Method::GET, &["geo"], &[], NO_BODY).await
+    }
+
+    /// Gets the map of `region` (a code from `GeoStatus::regions`) ready, or removes the map and
+    /// its data with none.
+    pub async fn set_geo(&self, region: Option<&str>) -> Result<GeoStatus, ApiError> {
+        let body = SetGeoRequest {
+            region: region.map(str::to_owned),
+        };
+        self.request(Method::PUT, &["geo"], &[], Some(&body)).await
+    }
+
     /// The server's Wired; 404 on a server that wasn't given one.
     pub async fn wired(&self) -> Result<WiredState, ApiError> {
         self.request(Method::GET, &["wired"], &[], NO_BODY).await

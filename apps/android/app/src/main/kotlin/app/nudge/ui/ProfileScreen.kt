@@ -4,6 +4,7 @@
 package app.nudge.ui
 
 import android.Manifest
+import android.os.Build
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -79,6 +80,7 @@ import nudge.client.withoutDefaults
 import nudge.ffi.Notifications
 import nudge.ffi.PersonalDetails
 import nudge.ffi.PersonalUpdate
+import nudge.ffi.Places
 import nudge.ffi.PlayerSettings
 import nudge.ffi.Profile
 import nudge.ffi.ProfileUpdate
@@ -128,7 +130,22 @@ fun ProfileScreen(model: AppModel, session: Session, close: () -> Unit) {
     val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
         if (granted.values.any { it }) scope.launch { model.location.setEnabled(true) }
     }
+    val arriving by model.geofences.enabled.collectAsState()
+    val watching by model.geofences.watching.collectAsState()
+    val arrivingProblem by model.geofences.problem.collectAsState()
+    // Android 11 and later ask for "all the time" on its own, after "while using the app".
+    val askBackground = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) scope.launch { model.geofences.setEnabled(true) }
+    }
+    val askForeground = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
+        if (granted[Manifest.permission.ACCESS_FINE_LOCATION] == true) {
+            if (Build.VERSION.SDK_INT >= 29) askBackground.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+            else scope.launch { model.geofences.setEnabled(true) }
+        }
+    }
     var extensions by remember { mutableStateOf<List<PlayerSettings>>(emptyList()) }
+    // Null without the places extension.
+    var places by remember { mutableStateOf<Places?>(null) }
     var busy by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
     var saved by remember { mutableStateOf(false) }
@@ -140,6 +157,7 @@ fun ProfileScreen(model: AppModel, session: Session, close: () -> Unit) {
             personal = runCatching { personalDraftOf(client.personal()) }.getOrNull()
             model.location.refresh()
             extensions = runCatching { client.profileExtensions() }.getOrDefault(emptyList())
+            places = runCatching { client.places() }.getOrNull()
         } catch (error: Exception) {
             problem = explain(error)
         }
@@ -295,6 +313,22 @@ fun ProfileScreen(model: AppModel, session: Session, close: () -> Unit) {
                                 scope.launch { model.location.setEnabled(false) }
                             }
                         }
+                        SwitchRow("Reminders when I arrive", arriving) { on ->
+                            if (on) {
+                                askForeground.launch(
+                                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
+                                )
+                            } else {
+                                scope.launch { model.geofences.setEnabled(false) }
+                            }
+                        }
+                        Text(
+                            arrivingProblem?.takeIf { arriving }
+                                ?: if (arriving) "Watching $watching places for your reminders. Allow location all the time for it to work with the app closed."
+                                else "For \"remind me when I get home\": the phone tells home when you get to a place you have a reminder for.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                         known?.takeIf { sharing }?.let { location ->
                             val at = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT)
                                 .format(java.util.Date(location.at.toLong()))
@@ -305,6 +339,46 @@ fun ProfileScreen(model: AppModel, session: Session, close: () -> Unit) {
                             )
                         }
                         locationProblem?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+                    }
+                }
+            }
+            places?.let { mine ->
+                item(key = "places") {
+                    fun act(action: suspend () -> Unit) = scope.launch {
+                        try {
+                            action()
+                            places = client.places()
+                        } catch (error: Exception) {
+                            problem = explain(error)
+                        }
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Places", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 4.dp))
+                        Text(
+                            "Ask the assistant to save a place or remind you when you get somewhere. The model only sees places as placeholders such as ⟦PLACE:home⟧.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        mine.places.forEach { place ->
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(place.name)
+                                    Text(place.address, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                TextButton(onClick = { act { client.forgetPlace(place.name) } }) { Text("Forget") }
+                            }
+                        }
+                        mine.reminders.forEach { reminder ->
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    (if (reminder.arrive) "Getting to " else "Leaving ") +
+                                        (reminder.place ?: "any ${reminder.kind}") +
+                                        (if (reminder.always) ", every time" else "") + ": ${reminder.message}",
+                                    Modifier.weight(1f),
+                                )
+                                TextButton(onClick = { act { client.cancelArrivalReminder(reminder.id) } }) { Text("Cancel") }
+                            }
+                        }
                     }
                 }
             }
