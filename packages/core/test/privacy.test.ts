@@ -295,6 +295,58 @@ describe("redaction in a running assistant", () => {
     await nudge.close(context);
   });
 
+  it("checks a tool's arguments with the values put back, so a placeholder can stand in an enum", async () => {
+    const seenByTool: string[] = [];
+    const call = defineTool({
+      name: "call_api",
+      description: "Call an API",
+      parameters: Type.Object({
+        method: Type.Union(["GET", "POST"].map((m) => Type.Literal(m))),
+        port: Type.Optional(Type.Number()),
+      }),
+      execute: async (args) => {
+        seenByTool.push(`${args.method} ${args.port}`);
+        return { output: [{ type: "text", text: "OK." }] };
+      },
+    });
+    const { faux, options, sent, record } = setup();
+    const nudge = await createNudge(
+      { ...options, extensions: [defineExtension({ name: "api", tools: [call] })] },
+      context,
+    );
+    // As if the local model took the method for an organisation's name.
+    expect(await nudge.protect("POST", "ORG")).toBe("⟦ORG1⟧");
+    expect(await nudge.protect("8080", "PORT")).toBe("⟦PORT1⟧");
+    const results: string[] = [];
+    for (const method of ["⟦ORG1⟧", "⟦ORG9⟧"]) {
+      faux.setResponses([
+        (request) => {
+          record(request);
+          return fauxAssistantMessage([fauxToolCall("call_api", { method, port: "⟦PORT1⟧" })], {
+            stopReason: "toolUse",
+          });
+        },
+        (request) => {
+          const last = request.messages.at(-1);
+          if (last?.role === "toolResult")
+            results.push(
+              last.content.map((block) => (block.type === "text" ? block.text : "")).join(""),
+            );
+          return fauxAssistantMessage("Done.");
+        },
+      ]);
+      await (await nudge.submit(LOBBY, { text: "Post it" }, context)).wait(context);
+    }
+    expect(seenByTool).toEqual(["POST 8080"]);
+    expect(results[0]).toBe("OK.");
+    // A placeholder the vault doesn't know fails the tool's own check, and the tool never runs.
+    expect(results[1]).toContain('Validation failed for tool "call_api"');
+    // The model is offered the tool's own schema.
+    expect(sent[0]).toContain('"const":"POST"');
+    expect(sent[0]).not.toContain("x-nudge-placeholder");
+    await nudge.close(context);
+  });
+
   it("retries a request the provider turned away for now, its error passed through", async () => {
     const { faux, options } = setup({ settings: { retry: { baseDelayMs: 1 } } });
     faux.setResponses([

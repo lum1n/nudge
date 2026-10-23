@@ -1,5 +1,6 @@
 import type { Context } from "@earendil-works/chord";
-import type { JsonValue } from "@earendil-works/pi-ai";
+import type { JsonObject, JsonValue, TSchema } from "@earendil-works/pi-ai";
+import { validateToolArguments } from "@earendil-works/pi-ai/utils/validation";
 import {
   type ConversationId,
   type Extension,
@@ -69,15 +70,114 @@ function wrap(tool: ToolRegistration, values: ToolValues): ToolRegistration {
         diagnostic: (diagnostic) =>
           api.diagnostic({ ...diagnostic, message: redact(diagnostic.message) }),
       };
-      const given = placeholders
-        ? args
-        : mapStrings(args as JsonValue, (text) => rehydrate(viewer, text));
+      let given: unknown = args;
+      if (!placeholders) {
+        // Checked against the tool's own schema only now, with the values in: "⟦ORG1⟧" isn't
+        // one of an enum's members, but the value behind it may be.
+        const filled = mapStrings(args as JsonValue, (text) => rehydrate(viewer, text));
+        try {
+          given = validateToolArguments(tool, {
+            type: "toolCall",
+            id: "",
+            name: tool.name,
+            arguments: filled as JsonObject,
+          });
+        } catch (error) {
+          const text = (error as Error).message;
+          return redactResult({ output: [{ type: "text", text }], isError: true }, redact);
+        }
+      }
       const result = await inTurn({ ...turn, redact }, () =>
         tool.execute(given as typeof args, shown, context),
       );
       return redactResult(result, redact);
     },
+    // The Harness checks arguments before they reach `execute`, with their placeholders.
+    ...(placeholders ? {} : { parameters: allowingPlaceholders(tool.parameters) }),
   } as ToolRegistration;
+}
+
+/** Marks where `allowingPlaceholders` let a placeholder in; `withoutPlaceholders` takes it out. */
+const ALLOWS_PLACEHOLDER = "x-nudge-placeholder";
+/** A string holding a placeholder. */
+const HOLDS_PLACEHOLDER = { type: "string", pattern: "⟦[A-Z]+\\d+⟧" };
+/** Keywords a placeholder in place of the value can fail. */
+const CONSTRAINTS = ["enum", "const", "pattern", "format", "minLength", "maxLength"];
+const NOT_STRINGS = new Set(["number", "integer", "boolean"]);
+/** Keywords holding schemas: by name, in a list, or as one. */
+const SCHEMA_MAPS = ["properties", "patternProperties", "$defs", "definitions"];
+const SCHEMA_LISTS = ["anyOf", "oneOf", "allOf", "prefixItems"];
+const SCHEMA_ONES = ["items", "additionalProperties"];
+
+/**
+ * A tool's schema that also takes a placeholder wherever one would fail it, such as an enum's
+ * member, a number or an e-mail format, for the Harness's check before the values are put back.
+ * The same schema when nothing in it would; what the model is offered is the schema without them.
+ */
+export function allowingPlaceholders(schema: TSchema): TSchema {
+  const allowed = allowing(schema);
+  return allowed === schema ? schema : (allowed as TSchema);
+}
+
+function allowing(schema: unknown): unknown {
+  if (typeof schema !== "object" || schema === null || Array.isArray(schema)) return schema;
+  const node = schema as Record<string, unknown>;
+  if (constrained(node)) return { anyOf: [node, HOLDS_PLACEHOLDER], [ALLOWS_PLACEHOLDER]: true };
+  let changed: Record<string, unknown> | undefined;
+  const set = (key: string, value: unknown) => {
+    if (value === node[key]) return;
+    changed ??= { ...node };
+    changed[key] = value;
+  };
+  for (const key of SCHEMA_MAPS) {
+    const map = node[key];
+    if (typeof map !== "object" || map === null) continue;
+    const entries = Object.entries(map).map(([name, sub]) => [name, allowing(sub)] as const);
+    if (entries.some(([name, sub]) => sub !== (map as Record<string, unknown>)[name]))
+      set(key, Object.fromEntries(entries));
+  }
+  for (const key of SCHEMA_LISTS) {
+    const list = node[key];
+    if (!Array.isArray(list)) continue;
+    const mapped = list.map(allowing);
+    if (mapped.some((sub, i) => sub !== list[i])) set(key, mapped);
+  }
+  for (const key of SCHEMA_ONES) set(key, allowing(node[key]));
+  return changed ?? node;
+}
+
+/** A schema a placeholder would fail: constrained, or a union of only such. */
+function constrained(node: Record<string, unknown>): boolean {
+  if (CONSTRAINTS.some((keyword) => keyword in node)) return true;
+  const types = Array.isArray(node.type) ? node.type : [node.type];
+  if (types.some((type) => NOT_STRINGS.has(type as string)) && !types.includes("string"))
+    return true;
+  const members = node.anyOf ?? node.oneOf;
+  return (
+    Array.isArray(members) &&
+    members.length > 0 &&
+    members.every((member) => typeof member === "object" && member !== null && constrained(member))
+  );
+}
+
+/** A schema as the tool declared it: what `allowingPlaceholders` added taken out again. */
+export function withoutPlaceholders<T>(schema: T): T {
+  if (typeof schema !== "object" || schema === null) return schema;
+  if (Array.isArray(schema)) {
+    const mapped = schema.map(withoutPlaceholders);
+    return (mapped.some((sub, i) => sub !== schema[i]) ? mapped : schema) as T;
+  }
+  const node = schema as Record<string, unknown>;
+  if (node[ALLOWS_PLACEHOLDER] === true && Array.isArray(node.anyOf))
+    return withoutPlaceholders(node.anyOf[0]) as T;
+  let changed: Record<string, unknown> | undefined;
+  for (const [key, value] of Object.entries(node)) {
+    const mapped = withoutPlaceholders(value);
+    if (mapped === value) continue;
+    changed ??= { ...node };
+    changed[key] = mapped;
+  }
+  return (changed ?? schema) as T;
 }
 
 /** How far up a tool call looks for a task that sets its turn; a script's tool call is two down. */

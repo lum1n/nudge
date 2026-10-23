@@ -21,10 +21,12 @@ import {
   type ModelsDeferredFetchOptions,
   type ModelsImagesOptions,
   type ModelsSimpleStreamOptions,
+  type Tool,
 } from "@earendil-works/pi-ai";
 import type { PiiDetector } from "../privacy/detectors.ts";
 import { DeepUnavailable } from "../privacy/deep/detector.ts";
 import { mapStrings, redactContext, rehydrateMessage } from "../privacy/redact.ts";
+import { withoutPlaceholders } from "../privacy/tool-values.ts";
 import type { Vault, VaultEntry } from "../privacy/vault.ts";
 
 export type RedactionOptions = {
@@ -295,7 +297,7 @@ export class RedactingModels implements Models {
     let redacted: Context;
     try {
       await this.scanFirst(context);
-      redacted = redactContext(context, this.vault, this.detectors);
+      redacted = redactContext(withDeclaredTools(context), this.vault, this.detectors);
       await this.flush();
     } catch (error) {
       throw error instanceof RequestRefused ? error : new RedactionFailed(error);
@@ -405,6 +407,28 @@ export class RedactingModels implements Models {
 export type Scan = (input: Context | readonly string[]) => Promise<void>;
 
 type Rehydrator = Pick<Vault, "rehydrate">;
+
+/**
+ * The request with its tools as they were declared: the model is offered their own schemas, not
+ * the ones that let placeholders through to `withToolValues`.
+ */
+function withDeclaredTools(context: Context): Context {
+  const declared = (tools: Tool[]) =>
+    tools.map((tool) => {
+      const parameters = withoutPlaceholders(tool.parameters);
+      return parameters === tool.parameters ? tool : { ...tool, parameters };
+    });
+  return {
+    ...context,
+    ...(context.tools === undefined ? {} : { tools: declared(context.tools) }),
+    // Tools come and go in system messages, too.
+    messages: context.messages.map((message) =>
+      message.role === "system" && message.toolsAdded !== undefined
+        ? { ...message, toolsAdded: declared(message.toolsAdded) }
+        : message,
+    ),
+  };
+}
 
 /** Puts nothing back: what `rehydrateEvent` uses when placeholders are to stay. */
 const KEEP_PLACEHOLDERS: Rehydrator = { rehydrate: (text) => text };
