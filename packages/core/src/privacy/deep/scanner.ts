@@ -154,7 +154,8 @@ export class DeepScanner {
         for (const value of this.valuesOf(piece.slice(finding.start, finding.end), finding.kind))
           // A person's given and family names on their own too, as players' are: "Torunn's".
           for (const part of finding.kind === "NAME" ? nameParts(value) : [value])
-            if (!this.allow.has(vaultKey(part)))
+            // A forgotten value stays behind its old placeholder; found again, it isn't kept.
+            if (!this.allow.has(vaultKey(part)) && !vault.forgot(part))
               // Only new values: an owner given here must not take a value others already saw.
               vault.protect(part, finding.kind, vault.knows(part) ? undefined : options.owner);
       }

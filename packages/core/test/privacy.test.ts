@@ -101,10 +101,36 @@ describe("Vault", () => {
       placeholder: "⟦EMAIL1⟧",
       owner: "ann",
       forgotten: true,
+      hash: expect.stringMatching(/^[0-9a-f]{64}$/),
+      words: 1,
     });
+    expect(JSON.stringify(vault.entries)).not.toContain(EMAIL);
     const reopened = new Vault(vault.entries);
     expect(reopened.rehydrate("⟦EMAIL1⟧ ⟦EMAIL2⟧")).toBe("⟦EMAIL1⟧ other@example.no");
-    expect(reopened.redact(EMAIL, builtinDetectors)).toBe("⟦EMAIL3⟧");
+    // Written out again, it still never reaches the model: its old placeholder, still Ann's.
+    expect(reopened.redact(`Mail ${EMAIL.toUpperCase()}.`, builtinDetectors, "bo")).toBe(
+      "Mail ⟦EMAIL1⟧.",
+    );
+    expect(reopened.get("⟦EMAIL1⟧")?.owner).toBe("ann");
+    expect(reopened.takeUnsaved()).toEqual([]);
+  });
+
+  it("hides a forgotten value nothing detects behind its placeholder, until protected again", () => {
+    const vault = new Vault();
+    vault.protect("Storgata 5", "PRIVATE", "ann");
+    vault.protect("Vethjem", "PLACE", "ann");
+    vault.forget("⟦PRIVATE1⟧");
+    vault.forget("⟦PLACE1⟧");
+    expect(vault.forgot("storgata  5")).toBe(true);
+    expect(vault.redact("Meet at (Storgata 5), by Vethjems door", [])).toBe(
+      "Meet at (⟦PRIVATE1⟧), by ⟦PLACE1⟧s door",
+    );
+    expect(vault.redact("Storgata 50 and Vethjemmet", [])).toBe("Storgata 50 and Vethjemmet");
+    // Protected again on purpose, it is kept again, under a new placeholder.
+    expect(vault.protect("Vethjem", "PLACE", "ann")).toBe("⟦PLACE2⟧");
+    expect(vault.forgot("Vethjem")).toBe(false);
+    expect(vault.redact("Vethjem", [])).toBe("⟦PLACE2⟧");
+    expect(new Vault(vault.entries).redact("Vethjem, Storgata 5", [])).toBe("⟦PLACE2⟧, ⟦PRIVATE1⟧");
   });
 
   it("releases a value: no longer hidden, its placeholder put back, hidden again when asked", () => {
