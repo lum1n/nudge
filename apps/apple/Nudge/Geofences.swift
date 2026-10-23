@@ -22,6 +22,9 @@ final class Geofences {
     }
     @ObservationIgnored private let manager = CLLocationManager()
     @ObservationIgnored private var monitor: CLMonitor?
+    /// The monitor being made: start() is called from more than one place at launch, and a second
+    /// CLMonitor with the same name throws "already in use".
+    @ObservationIgnored private var starting: Task<CLMonitor, Never>?
     @ObservationIgnored private var listening: Task<Void, Never>?
     @ObservationIgnored private var syncing = false
     @ObservationIgnored private let defaults = UserDefaults.standard
@@ -50,8 +53,13 @@ final class Geofences {
     }
 
     private func start() async {
-        guard monitor == nil else { return }
-        let monitor = await CLMonitor(Self.monitorName)
+        if let starting {
+            _ = await starting.value
+            return
+        }
+        let starting = Task { await CLMonitor(Self.monitorName) }
+        self.starting = starting
+        let monitor = await starting.value
         self.monitor = monitor
         listening = Task { [weak self] in
             do {
