@@ -283,7 +283,8 @@ export function aboutExtension(input: ExtensionInput): {
   if (!isNudgeExtension(extension)) return { name: extension.name };
   return {
     name: extension.name,
-    version: extension.version,
+    // Empty for a module that failed to load; see `loadExtensions`.
+    ...(extension.version === "" ? {} : { version: extension.version }),
     ...(extension.description === undefined ? {} : { description: extension.description }),
   };
 }

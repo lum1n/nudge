@@ -258,10 +258,14 @@ export class Assistants {
             await this.reopen(config, entry.name);
             this.say(`${entry.name}: reopened with its new settings`);
           } else {
+            // One that fails to start is left out, as at open, so the rest still reload.
             const installed = await nudge.reloadExtensions(
               await loadExtensions(entry.extensions ?? [], { fresh: true }),
+              { leaveOutBroken: true },
             );
             this.say(`${entry.name}: extensions reloaded: ${describe(installed)}`);
+            for (const broken of nudge.brokenExtensions())
+              this.say(`${entry.name}: ${broken.name} failed to start, left out: ${broken.error}`);
           }
         } catch (error) {
           this.say(`${entry.name}: reload failed, left as it was: ${(error as Error).message}`);
@@ -335,7 +339,9 @@ function applyChange(entry: RawAssistant, change: AssistantChange): void {
 /** Whether a reload may keep the assistant open: nothing but its extensions changed. */
 function sameSettings(before: AssistantConfig | undefined, after: AssistantConfig): boolean {
   if (before === undefined) return true;
-  const settings = (config: AssistantConfig) => JSON.stringify({ ...config, extensions: [] });
+  // Left out rather than emptied, so adding the first extension doesn't move the key and differ.
+  const settings = (config: AssistantConfig) =>
+    JSON.stringify({ ...config, extensions: undefined });
   return settings(before) === settings(after);
 }
 
