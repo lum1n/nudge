@@ -27,6 +27,15 @@ describe("judge", () => {
       `python3 -c 'from urllib.parse import quote; print(quote("a b"))'`,
       "node -e 'console.log(`${1 + 1}`)'",
       "perl -pe 's/a/b/' in.txt > out.txt",
+      // Module names and words in data are not connections.
+      `python3 -c 'import json; print(json.load(open("a.json"))["net"])'`,
+      `python3 -c 'print(url.startswith("http"))'`,
+      `node -e 'console.log(JSON.parse(require("fs").readFileSync("a.json")).socket)'`,
+      "perl -lne 'print if /socket/' log.txt",
+      // Options with values of their own aren't code.
+      "perl -MList::Util=sum -le 'print sum(1, 2)'",
+      "ruby -rjson -e 'puts JSON.parse(File.read(\"a.json\"))'",
+      "python3 -m json.tool a.json",
     ])
       expect(kind(command), command).toBe("run");
   });
@@ -68,6 +77,24 @@ describe("judge", () => {
       ["perl -e 'unlink \"a.txt\"'", /perl code deletes files/],
       ["perl -ne 'print `rm x`'", /perl code runs other commands/],
       ["ruby -e 'File.delete(\"a\")'", /ruby code deletes files/],
+      // Combined options, and code in the option's own word.
+      ['node -pe \'require("fs").rmSync("out")\'', /node code deletes files/],
+      ['node -ep \'require("fs").rmSync("out")\'', /node code deletes files/],
+      [`python3 -c"import os; os.remove('a')"`, /python3 code deletes files/],
+      [`perl -e'unlink "a"'`, /perl code deletes files/],
+      [`ruby -e"File.delete('a')"`, /ruby code deletes files/],
+      [`php -r'unlink("a");'`, /php code deletes files/],
+      // Code that can't be read before it runs.
+      ['python3 -c "$code"', /python3 code is built from a variable/],
+      ['node -e "$(cat code.js)"', /node code is built from a variable/],
+      // Modules that connect, by how they are loaded.
+      [`node -e 'require("https").get("https://x")'`, /connects elsewhere/],
+      [`node -e 'import("node:net").then((n) => n.connect(80))'`, /connects elsewhere/],
+      ["python3 -c 'import os, socket; print(socket.gethostname())'", /connects elsewhere/],
+      // Perl's and Ruby's other ways to run the shell.
+      ["perl -e 'system \"rm x\"'", /perl code runs other commands/],
+      ["perl -e 'print qx(rm x)'", /perl code runs other commands/],
+      ["ruby -e 'system \"rm x\"'", /ruby code runs other commands/],
     ];
     for (const [command, reason] of cases) {
       const verdict = judge(command);
