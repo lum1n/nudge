@@ -23,6 +23,8 @@ export type LoadOptions = {
 /**
  * Imports the enabled extensions of a config, in order. A module exports its extension as
  * `default` or as `extension`: one made with `defineNudgeExtension`, or a plain Pi Durable one.
+ * One that fails to load is in the list as a stand-in whose setup throws why, so the assistant
+ * opens without it and lists it as broken, named by `from`.
  */
 export async function loadExtensions(
   entries: readonly ExtensionConfig[],
@@ -32,18 +34,36 @@ export async function loadExtensions(
   const loaded: ExtensionInput[] = [];
   for (const entry of entries) {
     if (entry.enabled === false) continue;
-    const extension = await importExtension(entry.from, fresh);
-    if (isNudgeExtension(extension))
-      loaded.push({
-        extension,
-        settings: entry.settings,
-        ...(entry.rooms === undefined ? {} : { rooms: entry.rooms }),
-      });
-    else if (entry.settings !== undefined)
-      throw new ConfigError(`${entry.from} is a plain Pi Durable extension; it takes no settings`);
-    else loaded.push(entry.rooms === undefined ? extension : { extension, rooms: entry.rooms });
+    try {
+      const extension = await importExtension(entry.from, fresh);
+      if (isNudgeExtension(extension))
+        loaded.push({
+          extension,
+          settings: entry.settings,
+          ...(entry.rooms === undefined ? {} : { rooms: entry.rooms }),
+        });
+      else if (entry.settings !== undefined)
+        throw new ConfigError(
+          `${entry.from} is a plain Pi Durable extension; it takes no settings`,
+        );
+      else loaded.push(entry.rooms === undefined ? extension : { extension, rooms: entry.rooms });
+    } catch (error) {
+      loaded.push(unloadable(entry.from, error));
+    }
   }
   return loaded;
+}
+
+/** Stands in for an extension that failed to load; see `loadExtensions`. */
+function unloadable(from: string, error: unknown): NudgeExtension {
+  return {
+    kind: "nudge.extension",
+    name: from,
+    version: "",
+    setup: () => {
+      throw error;
+    },
+  };
 }
 
 /**

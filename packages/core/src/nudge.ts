@@ -145,11 +145,11 @@ export type RoomExtension = InstalledExtension & {
   readonly enabled: boolean;
   /** Whether it is on in rooms of this kind by default; `enabled` differs when the room chose. */
   readonly byDefault: boolean;
-  /** Why its setup failed when the assistant opened; it is off everywhere until it starts. */
+  /** Why its setup failed at open or a reload; it is off everywhere until it starts. */
   readonly error?: string;
 };
 
-/** An extension whose setup threw when the assistant opened, left out so the rest could start. */
+/** An extension whose setup threw at open or a reload, left out so the rest could start. */
 export type BrokenExtension = InstalledExtension & {
   readonly description?: string;
   readonly error: string;
@@ -225,7 +225,7 @@ export class Nudge {
   /** The assistant's own detectors, without its extensions'. */
   private readonly detectors: readonly PiiDetector[];
   private installed: readonly SetUpExtension[];
-  /** Left out at open because their setup threw; a reload that sets them all up clears it. */
+  /** Left out at open, or at a reload that leaves out broken ones, because their setup threw. */
   private broken: readonly BrokenExtension[];
   private readonly scanner: DeepScanner | undefined;
   private readonly report: (error: unknown) => void;
@@ -395,11 +395,7 @@ export class Nudge {
     try {
       installed = await setUpAll(options.extensions ?? [], host, (extension, error) => {
         broken.push(extension);
-        options.onReport?.(
-          new Error(`Extension "${extension.name}" failed to start, left out: ${extension.error}`, {
-            cause: error,
-          }),
-        );
+        options.onReport?.(leftOut(extension, error));
       });
     } catch (error) {
       await unlock();
@@ -548,7 +544,7 @@ export class Nudge {
     }));
   }
 
-  /** The extensions whose setup threw when the assistant opened, in order. */
+  /** The extensions whose setup threw when the assistant opened or last reloaded, in order. */
   brokenExtensions(): BrokenExtension[] {
     return [...this.broken];
   }
@@ -571,12 +567,26 @@ export class Nudge {
 
   /**
    * Installs `extensions` in place of the current ones: same names are replaced, new ones added,
-   * missing ones removed. Every extension is set up first, so one that fails changes nothing.
-   * Conversations pick the change up at their next turn.
+   * missing ones removed. Every extension is set up first, so one that fails changes nothing;
+   * with `leaveOutBroken`, one whose setup throws is left out and listed as broken instead, as at
+   * open, and the rest are installed. Conversations pick the change up at their next turn.
    */
-  reloadExtensions(extensions: readonly ExtensionInput[]): Promise<InstalledExtension[]> {
+  reloadExtensions(
+    extensions: readonly ExtensionInput[],
+    options: { readonly leaveOutBroken?: boolean } = {},
+  ): Promise<InstalledExtension[]> {
     const reload = this.reloading.then(async () => {
-      const next = await setUpAll(extensions, this.host);
+      const broken: BrokenExtension[] = [];
+      const next = await setUpAll(
+        extensions,
+        this.host,
+        options.leaveOutBroken === true
+          ? (extension, error) => {
+              broken.push(extension);
+              this.report(leftOut(extension, error));
+            }
+          : undefined,
+      );
       const names = new Set(next.map(({ extension }) => extension.name));
       for (const { extension } of this.installed)
         if (!names.has(extension.name)) this.registry.uninstall(extension);
@@ -585,7 +595,7 @@ export class Nudge {
       this.models.detectors = withExtensionDetectors(this.detectors, next);
       const replaced = this.installed;
       this.installed = next;
-      this.broken = [];
+      this.broken = broken;
       await closeAll(replaced, this.report);
       await this.selectExtensions(BACKGROUND_CONTEXT);
       return this.extensions();
@@ -1218,6 +1228,13 @@ async function setUpAll(
     throw error;
   }
   return installed;
+}
+
+/** What is reported when an extension is left out because its setup threw. */
+function leftOut(extension: BrokenExtension, error: unknown): Error {
+  return new Error(`Extension "${extension.name}" failed to start, left out: ${extension.error}`, {
+    cause: error,
+  });
 }
 
 function brokenExtension(input: ExtensionInput, error: unknown): BrokenExtension {

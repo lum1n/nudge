@@ -240,6 +240,39 @@ describe("extensions", () => {
     await nudge.close(context);
   });
 
+  it("reloads the rest when asked to leave out one whose setup throws, and lists it", async () => {
+    const reports: unknown[] = [];
+    const { options, requests } = setup({ onReport: (error) => reports.push(error) });
+    const nudge = await createNudge(options, context);
+    const broken = defineNudgeExtension({
+      name: "broken",
+      version: "1",
+      setup: () => {
+        throw new Error("$TOKEN is not set");
+      },
+    });
+
+    expect(await nudge.reloadExtensions([broken, hello], { leaveOutBroken: true })).toEqual([
+      { name: "hello", version: "0.1.0" },
+    ]);
+    expect(nudge.brokenExtensions()).toEqual([
+      { name: "broken", version: "1", error: "$TOKEN is not set" },
+    ]);
+    expect(String(reports.at(-1))).toContain('Extension "broken" failed to start');
+    expect((await nudge.roomExtensions(LOBBY, context)).at(-1)).toMatchObject({
+      name: "broken",
+      enabled: false,
+      error: "$TOKEN is not set",
+    });
+    await say(nudge, "Hi");
+    expect(current(requests.at(-1)).tools).toContain("roll_dice");
+
+    // A reload where it starts installs it and lists nothing as broken.
+    await nudge.reloadExtensions([hello], { leaveOutBroken: true });
+    expect(nudge.brokenExtensions()).toEqual([]);
+    await nudge.close(context);
+  });
+
   it("tells the model which extensions are on, also those turned on mid-conversation", async () => {
     const { options, requests } = setup();
     const nudge = await createNudge(options, context);
@@ -614,13 +647,56 @@ describe("loading extensions", () => {
       parseConfig({ assistants: [{ name: "a", extensions: [{ from: "./nope.js" }] }] }, dir),
     ).toThrow(ConfigError);
     await writeFile(join(dir, "empty.mjs"), "export const x = 1;\n");
-    await expect(loadExtensions([{ from: join(dir, "empty.mjs") }])).rejects.toThrow(
-      /exports no extension/,
-    );
     await writeFile(join(dir, "plain.mjs"), 'export default { name: "plain" };\n');
-    await expect(
-      loadExtensions([{ from: join(dir, "plain.mjs"), settings: { a: 1 } }]),
-    ).rejects.toThrow(/takes no settings/);
+    expect(
+      await checkExtensions([
+        { from: join(dir, "empty.mjs") },
+        { from: join(dir, "plain.mjs"), settings: { a: 1 } },
+      ]),
+    ).toEqual([
+      expect.objectContaining({
+        name: join(dir, "empty.mjs"),
+        error: expect.stringMatching(/exports no extension/),
+      }),
+      expect.objectContaining({
+        name: join(dir, "plain.mjs"),
+        error: expect.stringMatching(/takes no settings/),
+      }),
+    ]);
+  });
+
+  it("opens with the others when a module fails to import, and lists it as broken", async () => {
+    const bad = join(dir, "bad.mjs");
+    await writeFile(bad, "export default {;\n");
+    const loaded = await loadExtensions([{ from: bad, settings: { a: 1 } }, { from: HELLO }]);
+    expect(loaded).toHaveLength(2);
+    const reports: unknown[] = [];
+    const { options, requests } = setup({
+      extensions: loaded,
+      onReport: (error) => reports.push(error),
+    });
+    const nudge = await createNudge(options, context);
+    expect(nudge.extensions()).toEqual([{ name: "hello", version: "0.1.0" }]);
+    expect(nudge.brokenExtensions()).toEqual([
+      { name: bad, error: expect.stringContaining(`Could not load extension ${bad}`) },
+    ]);
+    expect(String(reports[0])).toContain(`Extension "${bad}" failed to start`);
+    await say(nudge, "Hi");
+    expect(current(requests.at(-1)).tools).toContain("roll_dice");
+
+    // A reload that still has it loads the rest; once it imports, it is installed.
+    const plain = join(dir, "plain.mjs");
+    await writeFile(plain, 'export default { name: "plain" };\n');
+    const reload = async (entries: { from: string }[]) =>
+      nudge.reloadExtensions(await loadExtensions(entries, { fresh: true }), {
+        leaveOutBroken: true,
+      });
+    expect(await reload([{ from: bad }, { from: plain }])).toEqual([{ name: "plain" }]);
+    expect(nudge.brokenExtensions().map((e) => e.name)).toEqual([bad]);
+    await writeFile(bad, 'export default { name: "fixed" };\n');
+    expect(await reload([{ from: bad }])).toEqual([{ name: "fixed" }]);
+    expect(nudge.brokenExtensions()).toEqual([]);
+    await nudge.close(context);
   });
 
   it("imports a changed file again when asked for fresh modules", async () => {

@@ -93,11 +93,15 @@ export function reloadExtensionsOnHangup(
   let running = Promise.resolve();
   const reload = async () => {
     const assistant = findAssistant(await loadConfig(configPath), name);
+    // One that fails to start is left out, as at open, so the rest still reload.
     const installed = await nudge.reloadExtensions(
       await loadExtensions(assistant.extensions ?? [], { fresh: true }),
+      { leaveOutBroken: true },
     );
     const names = installed.map((e) => `${e.name}${e.version ? ` ${e.version}` : ""}`);
     say(`${assistant.name}: extensions reloaded: ${names.join(", ") || "none"}`);
+    for (const broken of nudge.brokenExtensions())
+      say(`${assistant.name}: ${broken.name} failed to start, left out: ${broken.error}`);
   };
   const onHangup = () => {
     running = running
