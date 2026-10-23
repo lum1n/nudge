@@ -295,6 +295,19 @@ describe("redaction in a running assistant", () => {
     await nudge.close(context);
   });
 
+  it("retries a request the provider turned away for now, its error passed through", async () => {
+    const { faux, options } = setup({ settings: { retry: { baseDelayMs: 1 } } });
+    faux.setResponses([
+      fauxAssistantMessage([], { stopReason: "error", errorMessage: "429 Too Many Requests" }),
+      fauxAssistantMessage("Hello."),
+    ]);
+    const nudge = await createNudge(options, context);
+    const settled = await (await nudge.submit(LOBBY, { text: "Hi" }, context)).wait(context);
+    expect(settled.status).toBe("done");
+    expect(faux.state.callCount).toBe(2);
+    await nudge.close(context);
+  });
+
   it("gives a tool's models only the private values the turn's sender may see", async () => {
     const { faux, options } = setup();
     const answered: string[] = [];

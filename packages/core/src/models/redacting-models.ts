@@ -292,14 +292,22 @@ export class RedactingModels implements Models {
 
   private async prepare(model: Model<Api>, context: Context): Promise<Context> {
     this.checkAllowed();
-    await this.scanFirst(context);
-    const redacted = redactContext(context, this.vault, this.detectors);
-    await this.flush();
+    let redacted: Context;
+    try {
+      await this.scanFirst(context);
+      redacted = redactContext(context, this.vault, this.detectors);
+      await this.flush();
+    } catch (error) {
+      throw error instanceof RequestRefused ? error : new RedactionFailed(error);
+    }
     this.options.onRequest?.({ model: `${model.provider}/${model.id}`, context: redacted });
     return redacted;
   }
 
-  /** Runs `start` and relays its stream with values put back; a failure to start becomes an error event. */
+  /**
+   * Runs `start` and relays its stream with values put back; a failure to start becomes an error
+   * event, with the provider's message, or saying redaction failed when that is what stopped it.
+   */
   private relay(
     model: Model<Api>,
     start: () => Promise<AssistantMessageEventStream>,
@@ -406,6 +414,17 @@ export class RequestRefused extends Error {
   override name = "RequestRefused";
 }
 
+/** A request not sent because its personal values could not be replaced or saved first. */
+class RedactionFailed extends Error {
+  override name = "RedactionFailed";
+
+  constructor(cause: unknown) {
+    super(`Redaction failed: ${cause instanceof Error ? cause.message : String(cause)}`, {
+      cause,
+    });
+  }
+}
+
 function failedMessage(model: Model<Api>, error: unknown): AssistantMessage {
   return {
     role: "assistant",
@@ -422,10 +441,8 @@ function failedMessage(model: Model<Api>, error: unknown): AssistantMessage {
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
     stopReason: "error",
-    errorMessage:
-      error instanceof RequestRefused
-        ? error.message
-        : `Redaction failed: ${error instanceof Error ? error.message : String(error)}`,
+    // The provider's own words, such as a missing key or a 429, so retries and people see them.
+    errorMessage: error instanceof Error ? error.message : String(error),
     timestamp: Date.now(),
   };
 }
