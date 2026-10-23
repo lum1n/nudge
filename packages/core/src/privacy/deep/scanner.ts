@@ -5,7 +5,7 @@ import { AMBIGUOUS, FIRST_NAMES } from "../name-lists.ts";
 import { nameParts } from "../people.ts";
 import { READABLE_PLACES, withoutOrgType } from "../places.ts";
 import { isPublicName, withoutPublicEnds } from "../public-names.ts";
-import { type Vault, vaultKey } from "../vault.ts";
+import { PLACEHOLDER, type Vault, vaultKey } from "../vault.ts";
 import { type DeepDetector, DeepUnavailable } from "./detector.ts";
 
 /**
@@ -230,7 +230,7 @@ function lowerCaseName(raw: string): string | undefined {
 
 /** Whether a line can hold what the model looks for: a capital, a digit or a given name. */
 function mayHoldNames(line: string): boolean {
-  const text = line.replace(/⟦[A-Z]+\d+⟧/gu, "");
+  const text = line.replace(PLACEHOLDER, "");
   if (/\p{Lu}|\d/u.test(text)) return true;
   return text.split(/[^\p{L}-]+/u).some((word) => LOWER_FIRST_NAMES.has(word));
 }

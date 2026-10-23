@@ -22,6 +22,7 @@
     "@nudge/ext-mcp": "workspace:*",
     "@nudge/ext-ner": "workspace:*",
     "@nudge/ext-peers": "workspace:*",
+    "@nudge/ext-places": "workspace:*",
     "@nudge/ext-push": "workspace:*",
     "@nudge/ext-rss": "workspace:*",
     "@nudge/ext-search": "workspace:*",

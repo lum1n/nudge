@@ -297,7 +297,7 @@ export {
 } from "./privacy/detectors.ts";
 export { addressDetector, nameDetector } from "./privacy/people.ts";
 export { AMBIGUOUS, CUES, FIRST_NAMES, LAST_NAMES } from "./privacy/name-lists.ts";
-export { Vault, type VaultEntry } from "./privacy/vault.ts";
+export { PLACEHOLDER, Vault, type VaultEntry } from "./privacy/vault.ts";
 export {
   type DeepDetector,
   type DeepFinding,
@@ -315,7 +315,19 @@ export {
 } from "./privacy/deep/local-model.ts";
 export { keepsPlaceholders } from "./privacy/tool-values.ts";
 export type { RedactedHistory };
-export { currentTurn, inTurn, type Owner, type Turn } from "./privacy/turn.ts";
+export { currentTurn, inTurn, type Owner, type Turn, turnOf } from "./privacy/turn.ts";
+export {
+  distanceMeters,
+  type Geo,
+  type GeoPlace,
+  type GeoPoint,
+  type GeoRoute,
+  type GeoStep,
+  GeoUnavailable,
+  providedGeo,
+  provideGeo,
+  type TravelMode,
+} from "./geo/geo.ts";
 export {
   type DatabaseEncryption,
   type DatabaseKey,

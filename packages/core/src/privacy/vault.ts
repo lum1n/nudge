@@ -17,10 +17,16 @@ export type VaultEntry = {
   readonly released?: true;
 };
 
-/** Placeholders look like `⟦EMAIL1⟧`: the brackets never occur in prose, Markdown or JSON. */
-export const PLACEHOLDER = /⟦([A-Z]+)(\d+)⟧/g;
-/** Longest placeholder text a stream may have cut in two: `⟦` + kind + number + `⟧`. */
-export const MAX_PLACEHOLDER_LENGTH = 24;
+/**
+ * Placeholders look like `⟦EMAIL1⟧`, or `⟦PLACE:home⟧` for a value that has a name of its own: the
+ * brackets never occur in prose, Markdown or JSON.
+ */
+export const PLACEHOLDER = /⟦([A-Z]+)(\d+|:[a-z0-9-]{1,24})⟧/g;
+/** Longest placeholder text a stream may have cut in two: `⟦` + kind + number or name + `⟧`. */
+export const MAX_PLACEHOLDER_LENGTH = 40;
+/** What may follow the `:` of a named placeholder, before a `-2` that tells two apart. */
+export const PLACEHOLDER_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const MAX_NAME_LENGTH = 20;
 
 const WORD = /[\p{L}\p{N}_]/u;
 /** Kinds whose values may take a Norwegian possessive `s`, as in "Anns bil". */
@@ -111,6 +117,42 @@ export class Vault {
     this.insert(entry);
     this.unsaved.push(entry);
     return entry.placeholder;
+  }
+
+  /**
+   * Protects a value under a placeholder that says what it is, such as `⟦PLACE:home⟧` for the
+   * address of someone's home, for `owner` alone. A name another value has gets `-2`, `-3`, … A
+   * forgotten placeholder of the same owner is given out again: the name stands for what it names
+   * now, as when someone moves house. A value the vault hides already keeps its placeholder, and
+   * stays with the player who owns it.
+   */
+  protectNamed(value: string, kind: string, name: string, owner?: string): string {
+    const trimmed = value.trim();
+    if (trimmed.length < 2)
+      throw new Error("Refusing to protect a value shorter than two characters");
+    if (!/^[A-Z]+$/.test(kind))
+      throw new Error(`Placeholder kind must be upper-case letters, got "${kind}"`);
+    if (!PLACEHOLDER_NAME.test(name) || name.length > MAX_NAME_LENGTH)
+      throw new Error(
+        `A placeholder's name must be lower-case letters, digits and dashes, got "${name}"`,
+      );
+    const key = vaultKey(trimmed);
+    if (this.byKey.has(key) || this.releasedByKey.has(key))
+      return this.protect(trimmed, kind, owner);
+    for (let n = 1; ; n++) {
+      const placeholder = `⟦${kind}:${n === 1 ? name : `${name}-${n}`}⟧`;
+      const taken = this.byPlaceholder.get(placeholder);
+      if (taken !== undefined && !(taken.forgotten && taken.owner === owner)) continue;
+      const entry: VaultEntry = {
+        value: trimmed,
+        kind,
+        placeholder,
+        ...(owner === undefined ? {} : { owner }),
+      };
+      this.insert(entry);
+      this.unsaved.push(entry);
+      return placeholder;
+    }
   }
 
   /**
@@ -247,9 +289,9 @@ export class Vault {
   }
 
   private insert(entry: VaultEntry): void {
-    const match = /^⟦([A-Z]+)(\d+)⟧$/.exec(entry.placeholder);
+    const match = /^⟦([A-Z]+)(\d+|:[a-z0-9-]{1,24})⟧$/.exec(entry.placeholder);
     if (match === null) throw new Error(`Malformed placeholder ${entry.placeholder}`);
-    const [, kind = "", n = "0"] = match;
+    const [, kind = "", n = ""] = match;
     const key = vaultKey(entry.value);
     // An entry's last state wins: a released value is no longer hidden, and the reverse.
     const previous = this.byPlaceholder.get(entry.placeholder);
@@ -260,7 +302,8 @@ export class Vault {
     if (entry.released) this.releasedByKey.set(key, entry);
     else if (!entry.forgotten) this.byKey.set(key, entry);
     this.byPlaceholder.set(entry.placeholder, entry);
-    this.counters.set(kind, Math.max(this.counters.get(kind) ?? 0, Number(n)));
+    if (!n.startsWith(":"))
+      this.counters.set(kind, Math.max(this.counters.get(kind) ?? 0, Number(n)));
     this.matcher = undefined;
     this.hiddenFrom.clear();
     this.changes++;
@@ -332,5 +375,5 @@ export function withoutPartialPlaceholder(text: string): string {
   const open = text.lastIndexOf("⟦");
   if (open === -1 || text.indexOf("⟧", open) !== -1) return text;
   if (text.length - open > MAX_PLACEHOLDER_LENGTH) return text;
-  return /^⟦[A-Z]*\d*$/.test(text.slice(open)) ? text.slice(0, open) : text;
+  return /^⟦[A-Z]*(?:\d*|:[a-z0-9-]*)$/.test(text.slice(open)) ? text.slice(0, open) : text;
 }
