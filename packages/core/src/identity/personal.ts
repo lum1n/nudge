@@ -95,6 +95,8 @@ export class Personal {
     private readonly now: () => number,
     /** Who the model knows the location of changed in `playerId`'s rooms. */
     private readonly changed: (playerId: string) => void = () => {},
+    /** The player's device said where they are, as it said it. */
+    private readonly moved: (playerId: string, location: LocationUpdate) => void = () => {},
   ) {}
 
   /** Undefined for a player who doesn't exist. */
@@ -226,6 +228,8 @@ export class Personal {
     // Rooms show whose location the model knows: one known or forgotten changes that.
     const known = location === undefined ? before.location !== undefined : location !== null;
     if ((before.location !== undefined) !== known) this.changed(playerId);
+    if (update.location !== undefined && update.location !== null)
+      this.moved(playerId, update.location);
     return (await this.get(playerId, context))!;
   }
 

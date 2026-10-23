@@ -11,9 +11,11 @@ import {
   Api,
   ApiError,
   listAssistants,
+  memoryStorage,
   memoryTokens,
   NudgeClient,
   type NudgeClientOptions,
+  type RoomStore,
   type SocketLike,
 } from "../src/index.ts";
 
@@ -236,5 +238,79 @@ describe("NudgeClient against a server", () => {
     lost.open();
     await eventually(() => lost.connection.getStatus().kind === "closed");
     expect(lost.connection.getStatus()).toMatchObject({ code: 4404 });
+  });
+
+  it("keeps unsent messages through a reload and sends each once when back online", async () => {
+    let online = false;
+    const posts: string[] = [];
+    const offline: typeof fetch = (input, init) => {
+      if (init?.method === "POST") posts.push(String(init.body));
+      return online ? fetch(input, init) : Promise.reject(new TypeError("fetch failed"));
+    };
+    const storage = memoryStorage();
+    const userTexts = (store: RoomStore) =>
+      store
+        .getState()
+        .timeline.filter((item) => item.type === "user")
+        .map((item) => item.text);
+
+    // Offline: the message waits in the outbox, kept in the storage.
+    const { client: before } = clientFor(annToken, { fetch: offline, storage });
+    const first = before.room("trip");
+    await expect(before.send("trip", "Hello")).rejects.toThrow("fetch failed");
+    const [hello] = first.store.getState().pending;
+    expect(hello).toMatchObject({ text: "Hello", error: "fetch failed" });
+    expect(before.outbox.list()).toMatchObject([{ requestId: hello!.requestId, room: "trip" }]);
+    first.release();
+    before.close();
+
+    // A reload: a new client on the same storage shows it as pending, and sends it once open.
+    online = true;
+    const { client } = clientFor(annToken, { fetch: offline, storage });
+    const room = client.room("trip");
+    expect(room.store.getState().pending).toEqual([{ requestId: hello!.requestId, text: "Hello" }]);
+    client.open();
+    await eventually(
+      () => room.store.getState().pending.length === 0 && userTexts(room.store).includes("Hello"),
+    );
+    expect(client.outbox.list()).toEqual([]);
+
+    // Offline again with the socket open: `retryNow`, on `online` or on showing the page, sends it.
+    online = false;
+    await expect(client.send("trip", "Again")).rejects.toThrow("fetch failed");
+    online = true;
+    client.retryNow();
+    await eventually(() => userTexts(room.store).includes("Again"));
+    await eventually(() => client.outbox.list().length === 0);
+
+    // The same request id again, at once or later, is the same submission: shown once.
+    const sent = posts.length;
+    const twice = [
+      client.send("trip", "Hello", { requestId: hello!.requestId }),
+      client.send("trip", "Hello", { requestId: hello!.requestId }),
+    ];
+    expect(twice[0]).toBe(twice[1]);
+    await Promise.all(twice);
+    expect(posts.length - sent).toBe(1);
+    await nudge.harness.waitForIdle(context);
+    await eventually(() => room.store.getState().pending.length === 0);
+    expect(userTexts(room.store)).toEqual(["Hello", "Again"]);
+    room.release();
+  });
+
+  it("keeps a message the server refuses until it is sent again or dismissed", async () => {
+    const storage = memoryStorage();
+    const { client } = clientFor(annToken, { storage });
+    const nowhere = client.room("nowhere");
+    await expect(client.send("nowhere", "Lost")).rejects.toMatchObject({ status: 404 });
+    const [lost] = client.outbox.list();
+    expect(lost).toMatchObject({ text: "Lost", error: 'No room "nowhere"' });
+    // A refused message isn't sent again by itself.
+    await client.deliverWaiting();
+    expect(client.outbox.list()).toEqual([lost]);
+    client.dismiss("nowhere", lost!.requestId);
+    expect(client.outbox.list()).toEqual([]);
+    expect(nowhere.store.getState().pending).toEqual([]);
+    nowhere.release();
   });
 });

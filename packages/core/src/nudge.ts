@@ -29,6 +29,7 @@ import {
 import { type Change, Changes } from "./changes.ts";
 import { createBuiltinExtension } from "./extensions/builtin.ts";
 import {
+  aboutExtension,
   type HostBase,
   type ExtensionInput,
   type RoomSocketHandler,
@@ -42,7 +43,7 @@ import { attach, MESSAGE_ENTRY, type MessageDraft, submitMessage } from "./host-
 import { DirectoryDoc, type Room } from "./identity/directory.ts";
 import { Players } from "./identity/players.ts";
 import { Looks } from "./identity/appearance.ts";
-import { Personal } from "./identity/personal.ts";
+import { type LocationUpdate, Personal } from "./identity/personal.ts";
 import { Profiles } from "./identity/profiles.ts";
 import { Rooms } from "./identity/rooms.ts";
 import { Memory } from "./memory/memory.ts";
@@ -146,12 +147,31 @@ export type RoomExtension = InstalledExtension & {
   readonly enabled: boolean;
   /** Whether it is on in rooms of this kind by default; `enabled` differs when the room chose. */
   readonly byDefault: boolean;
+  /** Why its setup failed at open or a reload; it is off everywhere until it starts. */
+  readonly error?: string;
+};
+
+/** An extension whose setup threw at open or a reload, left out so the rest could start. */
+export type BrokenExtension = InstalledExtension & {
+  readonly description?: string;
+  readonly error: string;
 };
 
 export class ExtensionNotFound extends Error {
   override name = "ExtensionNotFound";
   constructor(readonly extension: string) {
     super(`No extension "${extension}"`);
+  }
+}
+
+/** The extension failed to start, so it can't be turned on anywhere. */
+export class ExtensionBroken extends Error {
+  override name = "ExtensionBroken";
+  constructor(
+    readonly extension: string,
+    readonly reason: string,
+  ) {
+    super(`Extension "${extension}" failed to start: ${reason}`);
   }
 }
 
@@ -166,6 +186,7 @@ type Parts = {
   readonly host: HostBase;
   readonly detectors: readonly PiiDetector[];
   readonly installed: readonly SetUpExtension[];
+  readonly broken: readonly BrokenExtension[];
   readonly scanner: DeepScanner | undefined;
   readonly report: (error: unknown) => void;
   readonly events: RoomEvents;
@@ -206,6 +227,8 @@ export class Nudge {
   /** The assistant's own detectors, without its extensions'. */
   private readonly detectors: readonly PiiDetector[];
   private installed: readonly SetUpExtension[];
+  /** Left out at open, or at a reload that leaves out broken ones, because their setup threw. */
+  private broken: readonly BrokenExtension[];
   private readonly scanner: DeepScanner | undefined;
   private readonly report: (error: unknown) => void;
 
@@ -220,7 +243,7 @@ export class Nudge {
       turn: (id, context) => turnOf(this.harness, id, context),
       redact: (text) => this.redact(text),
       rehydrate: (viewer, text) => this.models.vault.rehydrateFor(viewer, text),
-      models: () => this.models.withValues(),
+      models: (viewer) => this.models.withValues(viewer),
     };
   }
   private reloading: Promise<unknown> = Promise.resolve();
@@ -236,6 +259,7 @@ export class Nudge {
     this.host = parts.host;
     this.detectors = parts.detectors;
     this.installed = parts.installed;
+    this.broken = parts.broken;
     this.scanner = parts.scanner;
     this.report = parts.report;
     const scanner = this.scanner;
@@ -276,6 +300,7 @@ export class Nudge {
       },
       now,
       (playerId) => changed({ kind: "location", playerId }),
+      (playerId, location) => this.moved(playerId, location),
     );
     this.appearance = new Looks(harness);
     this.rooms = new Rooms(
@@ -291,8 +316,8 @@ export class Nudge {
       harness,
       this.rooms,
       now,
-      // Actions act on values, so their models put them back (ADR 9).
-      parts.models.withValues(),
+      // Actions act on values, so their models put back those their decider may see (ADR 9).
+      (viewer) => parts.models.withValues(viewer),
       (extension, kind) =>
         this.installed.find((installed) => installed.extension.name === extension)?.approvals[kind],
       changed,
@@ -328,7 +353,7 @@ export class Nudge {
       turn,
       redact: (text) => whenOpen().redact(text),
       rehydrate: (viewer, text) => whenOpen().models.vault.rehydrateFor(viewer, text),
-      models: () => whenOpen().models.withValues(),
+      models: (viewer) => whenOpen().models.withValues(viewer),
     };
     registry.install(
       withToolValues(
@@ -365,9 +390,15 @@ export class Nudge {
     // Locked first, so an assistant open elsewhere starts none of its extensions here.
     const unlock = file === undefined ? async () => {} : await lockDatabase(file);
     // Extensions are in the registry before the Harness opens, so their tasks resume with it.
+    // One extension that fails to start, such as one missing its token, doesn't keep the
+    // assistant closed: it is left out, and listed with its error.
     let installed: SetUpExtension[];
+    const broken: BrokenExtension[] = [];
     try {
-      installed = await setUpAll(options.extensions ?? [], host);
+      installed = await setUpAll(options.extensions ?? [], host, (extension, error) => {
+        broken.push(extension);
+        options.onReport?.(leftOut(extension, error));
+      });
     } catch (error) {
       await unlock();
       throw error;
@@ -475,6 +506,7 @@ export class Nudge {
         host,
         detectors,
         installed,
+        broken,
         scanner,
         report,
         events,
@@ -515,6 +547,11 @@ export class Nudge {
     }));
   }
 
+  /** The extensions whose setup threw when the assistant opened or last reloaded, in order. */
+  brokenExtensions(): BrokenExtension[] {
+    return [...this.broken];
+  }
+
   /** The installed extensions that take settings from each player, with their schemas. */
   playerSettings(): PlayerSettingsSchema[] {
     return this.installed.flatMap(({ extension, version, description, playerSettings }) =>
@@ -533,12 +570,26 @@ export class Nudge {
 
   /**
    * Installs `extensions` in place of the current ones: same names are replaced, new ones added,
-   * missing ones removed. Every extension is set up first, so one that fails changes nothing.
-   * Conversations pick the change up at their next turn.
+   * missing ones removed. Every extension is set up first, so one that fails changes nothing;
+   * with `leaveOutBroken`, one whose setup throws is left out and listed as broken instead, as at
+   * open, and the rest are installed. Conversations pick the change up at their next turn.
    */
-  reloadExtensions(extensions: readonly ExtensionInput[]): Promise<InstalledExtension[]> {
+  reloadExtensions(
+    extensions: readonly ExtensionInput[],
+    options: { readonly leaveOutBroken?: boolean } = {},
+  ): Promise<InstalledExtension[]> {
     const reload = this.reloading.then(async () => {
-      const next = await setUpAll(extensions, this.host);
+      const broken: BrokenExtension[] = [];
+      const next = await setUpAll(
+        extensions,
+        this.host,
+        options.leaveOutBroken === true
+          ? (extension, error) => {
+              broken.push(extension);
+              this.report(leftOut(extension, error));
+            }
+          : undefined,
+      );
       const names = new Set(next.map(({ extension }) => extension.name));
       for (const { extension } of this.installed)
         if (!names.has(extension.name)) this.registry.uninstall(extension);
@@ -547,6 +598,7 @@ export class Nudge {
       this.models.detectors = withExtensionDetectors(this.detectors, next);
       const replaced = this.installed;
       this.installed = next;
+      this.broken = broken;
       await closeAll(replaced, this.report);
       await this.selectExtensions(BACKGROUND_CONTEXT);
       return this.extensions();
@@ -555,16 +607,22 @@ export class Nudge {
     return reload;
   }
 
-  /** The installed extensions, each on or off in the room, in install order. */
+  /**
+   * The installed extensions, each on or off in the room, in install order, then those that failed
+   * to start, off with their error.
+   */
   async roomExtensions(roomId: string, context: Context): Promise<RoomExtension[]> {
     const room = await this.room(roomId, context);
-    return this.installed.map((installed) => ({
-      name: installed.extension.name,
-      ...(installed.version === undefined ? {} : { version: installed.version }),
-      ...(installed.description === undefined ? {} : { description: installed.description }),
-      enabled: enabledIn(room, installed),
-      byDefault: onByDefault(room, installed),
-    }));
+    return [
+      ...this.installed.map((installed) => ({
+        name: installed.extension.name,
+        ...(installed.version === undefined ? {} : { version: installed.version }),
+        ...(installed.description === undefined ? {} : { description: installed.description }),
+        enabled: enabledIn(room, installed),
+        byDefault: onByDefault(room, installed),
+      })),
+      ...this.broken.map((broken) => ({ ...broken, enabled: false, byDefault: false })),
+    ];
   }
 
   /**
@@ -578,8 +636,12 @@ export class Nudge {
     context: Context,
   ): Promise<RoomExtension> {
     await this.room(roomId, context);
-    if (!this.installed.some(({ extension }) => extension.name === name))
-      throw new ExtensionNotFound(name);
+    if (!this.installed.some(({ extension }) => extension.name === name)) {
+      const broken = this.broken.find((extension) => extension.name === name);
+      throw broken === undefined
+        ? new ExtensionNotFound(name)
+        : new ExtensionBroken(name, broken.error);
+    }
     const room = await this.harness.commit(async (tx) => {
       const room = (await tx.doc(DirectoryDoc)).rooms[roomId];
       if (room === undefined) throw new RoomNotFound(roomId);
@@ -731,6 +793,14 @@ export class Nudge {
     })().catch(this.report);
   }
 
+  /** Hands where a player is to the extensions that listen for it. */
+  private moved(playerId: string, location: LocationUpdate): void {
+    for (const installed of this.installed) {
+      if (installed.onLocation === undefined) continue;
+      void (async () => installed.onLocation!(playerId, { ...location }))().catch(this.report);
+    }
+  }
+
   /** The room socket an installed extension serves, if any. */
   roomSocket(extension: string): RoomSocketHandler | undefined {
     return this.installed.find((installed) => installed.extension.name === extension)?.roomSocket;
@@ -813,6 +883,20 @@ export class Nudge {
     await this.models.flush();
     if (options.owner !== undefined && vault.version !== before)
       this.changes.emit({ kind: "vault" });
+    return placeholder;
+  }
+
+  /**
+   * Keeps a value from the model under a placeholder that names it, such as `⟦PLACE:home⟧`, for
+   * `owner` alone (ADR 18). A name taken by another value gets `-2`, `-3`, … A value hidden
+   * already keeps its placeholder.
+   */
+  async protectNamed(value: string, kind: string, name: string, owner: string): Promise<string> {
+    const vault = this.models.vault;
+    const before = vault.version;
+    const placeholder = vault.protectNamed(value, kind, name, owner);
+    await this.models.flush();
+    if (vault.version !== before) this.changes.emit({ kind: "vault" });
     return placeholder;
   }
 
@@ -1123,15 +1207,26 @@ async function openRoomEvents(
   return new RoomEvents(harness, directory, approvals, report);
 }
 
-/** Sets up every extension, or none: when one fails, those set up before it are closed again. */
+/**
+ * Sets up every extension, or none: when one fails, those set up before it are closed again. With
+ * `onBroken`, one whose setup throws is handed to it and left out instead, and the rest start.
+ */
 async function setUpAll(
   inputs: readonly ExtensionInput[],
   host: Parts["host"],
+  onBroken?: (extension: BrokenExtension, error: unknown) => void,
 ): Promise<SetUpExtension[]> {
   const installed: SetUpExtension[] = [];
   try {
     for (const input of inputs) {
-      const setUp = await setUpExtension(input, host);
+      let setUp: SetUpExtension;
+      try {
+        setUp = await setUpExtension(input, host);
+      } catch (error) {
+        if (onBroken === undefined) throw error;
+        onBroken(brokenExtension(input, error), error);
+        continue;
+      }
       const twice = installed.some(({ extension }) => extension.name === setUp.extension.name);
       installed.push(setUp);
       if (twice) throw new Error(`Extension "${setUp.extension.name}" is installed twice`);
@@ -1141,6 +1236,20 @@ async function setUpAll(
     throw error;
   }
   return installed;
+}
+
+/** What is reported when an extension is left out because its setup threw. */
+function leftOut(extension: BrokenExtension, error: unknown): Error {
+  return new Error(`Extension "${extension.name}" failed to start, left out: ${extension.error}`, {
+    cause: error,
+  });
+}
+
+function brokenExtension(input: ExtensionInput, error: unknown): BrokenExtension {
+  return {
+    ...aboutExtension(input),
+    error: error instanceof Error ? error.message : String(error),
+  };
 }
 
 async function closeAll(

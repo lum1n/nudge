@@ -1,4 +1,4 @@
-# 18. A script's call that waits for approval gets a placeholder, not a result
+# 19. A script's call that waits for approval gets a placeholder, not a result
 
 Code mode (`extensions/codemode`) lets the model write a script that calls the room's tools. Every call goes through the room's normal tool execution, so a write still asks for approval (ADR 6): the tool files the approval and returns at once with "Waiting for approval a1." Nothing runs until someone approves, and the outcome reaches the model later as new input. A script, though, got that text back as if it were the call's result. It could store it, parse it, or pass it on to the next call, and the model only learned the call waited if the script happened to print it.
 

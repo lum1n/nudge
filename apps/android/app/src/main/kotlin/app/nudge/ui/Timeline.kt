@@ -499,7 +499,7 @@ private fun OnlyYou() {
 }
 
 /** `⟦EMAIL1⟧` and the like: a value the server hid from this player. */
-private val PLACEHOLDER = Regex("⟦[A-Z]+\\d+⟧")
+private val PLACEHOLDER = Regex("⟦[A-Z]+(?:\\d+|:[a-z0-9-]{1,24})⟧")
 
 private val HIDDEN = SpanStyle(
     fontFamily = FontFamily.Monospace,

@@ -91,7 +91,8 @@ describe("Vault", () => {
       ["⟦NAME1⟧", "", true],
       ["⟦NAME2⟧", "", true],
     ]);
-    expect(vault.redact("vegard", [])).toBe("vegard");
+    // A forgotten value is still kept from the model, under its first placeholder.
+    expect(vault.redact("vegard", [])).toBe("⟦NAME1⟧");
   });
 
   it("leaves numbers that fail their checksums alone", () => {
@@ -146,10 +147,36 @@ describe("Vault", () => {
       placeholder: "⟦EMAIL1⟧",
       owner: "ann",
       forgotten: true,
+      hash: expect.stringMatching(/^[0-9a-f]{64}$/),
+      words: 1,
     });
+    expect(JSON.stringify(vault.entries)).not.toContain(EMAIL);
     const reopened = new Vault(vault.entries);
     expect(reopened.rehydrate("⟦EMAIL1⟧ ⟦EMAIL2⟧")).toBe("⟦EMAIL1⟧ other@example.no");
-    expect(reopened.redact(EMAIL, builtinDetectors)).toBe("⟦EMAIL3⟧");
+    // Written out again, it still never reaches the model: its old placeholder, still Ann's.
+    expect(reopened.redact(`Mail ${EMAIL.toUpperCase()}.`, builtinDetectors, "bo")).toBe(
+      "Mail ⟦EMAIL1⟧.",
+    );
+    expect(reopened.get("⟦EMAIL1⟧")?.owner).toBe("ann");
+    expect(reopened.takeUnsaved()).toEqual([]);
+  });
+
+  it("hides a forgotten value nothing detects behind its placeholder, until protected again", () => {
+    const vault = new Vault();
+    vault.protect("Storgata 5", "PRIVATE", "ann");
+    vault.protect("Vethjem", "PLACE", "ann");
+    vault.forget("⟦PRIVATE1⟧");
+    vault.forget("⟦PLACE1⟧");
+    expect(vault.forgot("storgata  5")).toBe(true);
+    expect(vault.redact("Meet at (Storgata 5), by Vethjems door", [])).toBe(
+      "Meet at (⟦PRIVATE1⟧), by ⟦PLACE1⟧s door",
+    );
+    expect(vault.redact("Storgata 50 and Vethjemmet", [])).toBe("Storgata 50 and Vethjemmet");
+    // Protected again on purpose, it is kept again, under a new placeholder.
+    expect(vault.protect("Vethjem", "PLACE", "ann")).toBe("⟦PLACE2⟧");
+    expect(vault.forgot("Vethjem")).toBe(false);
+    expect(vault.redact("Vethjem", [])).toBe("⟦PLACE2⟧");
+    expect(new Vault(vault.entries).redact("Vethjem, Storgata 5", [])).toBe("⟦PLACE2⟧, ⟦PRIVATE1⟧");
   });
 
   it("releases a value: no longer hidden, its placeholder put back, hidden again when asked", () => {
@@ -176,6 +203,38 @@ describe("Vault", () => {
     expect(withoutPartialPlaceholder("Hello ⟦NA")).toBe("Hello ");
     expect(withoutPartialPlaceholder("Hello ⟦NAME1⟧")).toBe("Hello ⟦NAME1⟧");
     expect(withoutPartialPlaceholder("math ⟦ x")).toBe("math ⟦ x");
+    expect(withoutPartialPlaceholder("At ⟦PLACE:ho")).toBe("At ");
+    expect(withoutPartialPlaceholder("At ⟦PLACE:home⟧")).toBe("At ⟦PLACE:home⟧");
+  });
+
+  it("names a placeholder, and tells two of one name apart", () => {
+    const vault = new Vault();
+    vault.protect("Oslo S", "PLACE");
+    const home = vault.protectNamed("Storgata 5, Oslo", "PLACE", "home", "ann");
+    expect(home).toBe("⟦PLACE:home⟧");
+    expect(vault.protectNamed("Bakkeveien 2", "PLACE", "home", "bo")).toBe("⟦PLACE:home-2⟧");
+    expect(vault.protect("Majorstuen", "PLACE")).toBe("⟦PLACE2⟧");
+    expect(vault.redact("Bor i storgata 5,  Oslo.", [])).toBe("Bor i ⟦PLACE:home⟧.");
+    expect(vault.rehydrate("Fra ⟦PLACE:home⟧ til ⟦PLACE1⟧")).toBe(
+      "Fra Storgata 5, Oslo til Oslo S",
+    );
+    expect(vault.showTo("bo", "⟦PLACE:home⟧ Storgata 5, Oslo")).toBe("⟦PLACE:home⟧ ⟦PLACE:home⟧");
+    expect(vault.showTo("ann", "⟦PLACE:home⟧")).toBe("Storgata 5, Oslo");
+    expect(vault.protectNamed("storgata 5, oslo", "PLACE", "work", "ann")).toBe(home);
+    expect(() => vault.protectNamed("Somewhere", "PLACE", "Home!", "ann")).toThrow();
+    const reopened = new Vault(vault.entries);
+    expect(reopened.rehydrate("⟦PLACE:home-2⟧")).toBe("Bakkeveien 2");
+    expect(reopened.protect("Grünerløkka", "PLACE")).toBe("⟦PLACE3⟧");
+  });
+
+  it("gives a forgotten name back to its owner only", () => {
+    const vault = new Vault();
+    vault.protectNamed("Storgata 5", "PLACE", "home", "ann");
+    vault.forget("⟦PLACE:home⟧");
+    expect(vault.protectNamed("Bakkeveien 2", "PLACE", "home", "bo")).toBe("⟦PLACE:home-2⟧");
+    expect(vault.protectNamed("Elvegata 9", "PLACE", "home", "ann")).toBe("⟦PLACE:home⟧");
+    expect(vault.rehydrate("⟦PLACE:home⟧")).toBe("Elvegata 9");
+    expect(vault.redact("Storgata 5", [])).toBe("Storgata 5");
   });
 });
 
@@ -354,6 +413,112 @@ describe("redaction in a running assistant", () => {
     }
     // The room is shared, but only Ann's turn acts on her value.
     expect(seenByTool).toEqual([placeholder, "Storgata 1"]);
+    await nudge.close(context);
+  });
+
+  it("checks a tool's arguments with the values put back, so a placeholder can stand in an enum", async () => {
+    const seenByTool: string[] = [];
+    const call = defineTool({
+      name: "call_api",
+      description: "Call an API",
+      parameters: Type.Object({
+        method: Type.Union(["GET", "POST"].map((m) => Type.Literal(m))),
+        port: Type.Optional(Type.Number()),
+      }),
+      execute: async (args) => {
+        seenByTool.push(`${args.method} ${args.port}`);
+        return { output: [{ type: "text", text: "OK." }] };
+      },
+    });
+    const { faux, options, sent, record } = setup();
+    const nudge = await createNudge(
+      { ...options, extensions: [defineExtension({ name: "api", tools: [call] })] },
+      context,
+    );
+    // As if the local model took the method for an organisation's name.
+    expect(await nudge.protect("POST", "ORG")).toBe("⟦ORG1⟧");
+    expect(await nudge.protect("8080", "PORT")).toBe("⟦PORT1⟧");
+    const results: string[] = [];
+    for (const method of ["⟦ORG1⟧", "⟦ORG9⟧"]) {
+      faux.setResponses([
+        (request) => {
+          record(request);
+          return fauxAssistantMessage([fauxToolCall("call_api", { method, port: "⟦PORT1⟧" })], {
+            stopReason: "toolUse",
+          });
+        },
+        (request) => {
+          const last = request.messages.at(-1);
+          if (last?.role === "toolResult")
+            results.push(
+              last.content.map((block) => (block.type === "text" ? block.text : "")).join(""),
+            );
+          return fauxAssistantMessage("Done.");
+        },
+      ]);
+      await (await nudge.submit(LOBBY, { text: "Post it" }, context)).wait(context);
+    }
+    expect(seenByTool).toEqual(["POST 8080"]);
+    expect(results[0]).toBe("OK.");
+    // A placeholder the vault doesn't know fails the tool's own check, and the tool never runs.
+    expect(results[1]).toContain('Validation failed for tool "call_api"');
+    // The model is offered the tool's own schema.
+    expect(sent[0]).toContain('"const":"POST"');
+    expect(sent[0]).not.toContain("x-nudge-placeholder");
+    await nudge.close(context);
+  });
+
+  it("retries a request the provider turned away for now, its error passed through", async () => {
+    const { faux, options } = setup({ settings: { retry: { baseDelayMs: 1 } } });
+    faux.setResponses([
+      fauxAssistantMessage([], { stopReason: "error", errorMessage: "429 Too Many Requests" }),
+      fauxAssistantMessage("Hello."),
+    ]);
+    const nudge = await createNudge(options, context);
+    const settled = await (await nudge.submit(LOBBY, { text: "Hi" }, context)).wait(context);
+    expect(settled.status).toBe("done");
+    expect(faux.state.callCount).toBe(2);
+    await nudge.close(context);
+  });
+
+  it("gives a tool's models only the private values the turn's sender may see", async () => {
+    const { faux, options } = setup();
+    const answered: string[] = [];
+    const draft = defineTool({
+      name: "draft",
+      description: "Draft a note",
+      parameters: Type.Object({}),
+      execute: async (_, api) => {
+        const reply = await api.models.completeSimple(faux.getModel(), {
+          messages: [{ role: "user", content: "Where to?", timestamp: 0 }],
+        });
+        answered.push(
+          reply.content.map((block) => (block.type === "text" ? block.text : "")).join(""),
+        );
+        return { output: [{ type: "text", text: "Drafted." }] };
+      },
+    });
+    const nudge = await createNudge(
+      { ...options, extensions: [defineExtension({ name: "draft", tools: [draft] })] },
+      context,
+    );
+    const placeholder = await nudge.protect("Storgata 1", "PRIVATE", { owner: "ann" });
+    for (const author of [
+      { playerId: "bo", displayName: "Bo" },
+      { playerId: "ann", displayName: "Ann" },
+    ]) {
+      faux.setResponses([
+        fauxAssistantMessage([fauxToolCall("draft", {})], { stopReason: "toolUse" }),
+        fauxAssistantMessage(`Go to ${placeholder}.`),
+        fauxAssistantMessage("Done."),
+      ]);
+      const settled = await (
+        await nudge.submit(LOBBY, { text: "Draft it", author }, context)
+      ).wait(context);
+      expect(settled.status).toBe("done");
+    }
+    // The room is shared, but only Ann's turn gets her value back from the model.
+    expect(answered).toEqual([`Go to ${placeholder}.`, "Go to Storgata 1."]);
     await nudge.close(context);
   });
 

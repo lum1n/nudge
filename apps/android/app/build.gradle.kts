@@ -68,5 +68,8 @@ dependencies {
     implementation(libs.coroutines.android)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
+    // Geofences for reminders when the player gets somewhere.
+    implementation(libs.play.services.location)
+    implementation(libs.coroutines.play.services)
     testImplementation(libs.junit)
 }

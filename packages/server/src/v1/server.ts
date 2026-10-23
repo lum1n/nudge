@@ -21,6 +21,7 @@ import {
   type ServerKeys,
   type ServerOwner,
   type ServerOwners,
+  GeoUnavailable,
   WiredError,
 } from "@nudge/core";
 import {
@@ -43,12 +44,15 @@ import {
   ServerSessionRequest,
   type ServerSessionResponse,
   SetProviderKeyRequest,
+  SetGeoRequest,
   SetUpdatesRequest,
   WiredEnableRequest,
   WiredJoinRequest,
   WiredRelayRequest,
   type WiredRelayResponse,
   type WiredState,
+  type GeoRegionsResponse,
+  type GeoStatus,
   type UpdateState,
   UpdateAssistantRequest,
 } from "@nudge/protocol";
@@ -77,6 +81,8 @@ export type ServerControl = {
   backupKey(): Promise<Buffer>;
   /** Self-update, for a server `nudge-server` runs; absent otherwise. */
   readonly updates?: UpdateControl;
+  /** The server's own map (ADR 18); absent where the server wasn't given one. */
+  readonly geo?: GeoControl;
   /** The server's Wired; absent where the server wasn't given one. */
   readonly wired?: WiredControl;
 };
@@ -97,6 +103,13 @@ export type WiredControl = {
   remove(name: string): Promise<WiredState>;
   /** Leaves the network, or stops holding it, and forgets it. */
   disable(): Promise<WiredState>;
+};
+
+/** What owners see of and do with the server's map. */
+export type GeoControl = {
+  status(): GeoStatus;
+  available(): Promise<GeoRegionsResponse["regions"]>;
+  configure(change: SetGeoRequest): Promise<GeoStatus>;
 };
 
 /** What owners see of and do with updates. */
@@ -207,6 +220,22 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
   app.put("/updates", async (c) => {
     const { automatic } = await readJson(c, SetUpdatesRequest);
     return c.json(await updates().setAutomatic(automatic));
+  });
+
+  const geo = () => {
+    if (control.geo === undefined) throw new HttpError(404, "This server has no map");
+    return control.geo;
+  };
+
+  app.get("/geo", (c) => c.json(geo().status() satisfies GeoStatus));
+
+  app.get("/geo/regions", async (c) =>
+    c.json({ regions: await guard(() => geo().available()) } satisfies GeoRegionsResponse),
+  );
+
+  app.put("/geo", async (c) => {
+    const change = await readJson(c, SetGeoRequest);
+    return c.json((await guard(() => geo().configure(change))) satisfies GeoStatus);
   });
 
   const wired = () => {
@@ -475,6 +504,7 @@ async function guard<T>(work: () => Promise<T>): Promise<T> {
     if (error instanceof AssistantNotFound) throw new HttpError(404, error.message);
     if (error instanceof ConfigError) throw new HttpError(400, error.message);
     if (error instanceof WiredError) throw new HttpError(409, error.message);
+    if (error instanceof GeoUnavailable) throw new HttpError(400, error.message);
     throw error;
   }
 }

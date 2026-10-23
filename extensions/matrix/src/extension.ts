@@ -1,4 +1,4 @@
-import { ChatBridge, fillVariables, sleep, untilOpen } from "@nudge/bridge";
+import { ChatBridge, fillVariables, keepPolling, untilOpen } from "@nudge/bridge";
 import { defineNudgeExtension, type ExtensionHost, Type } from "@nudge/core";
 import { MatrixClient, MatrixError } from "./matrix.ts";
 
@@ -66,8 +66,8 @@ async function sync(
   report: (error: unknown) => void,
 ): Promise<void> {
   await untilOpen(host, signal);
-  while (!signal.aborted) {
-    try {
+  await keepPolling(
+    async () => {
       const since = (await bridge.state()).cursor;
       const response = await client.sync(since, seconds * 1000, signal);
       for (const roomId of Object.keys(response.rooms?.invite ?? {}))
@@ -76,12 +76,13 @@ async function sync(
         for (const inbound of await client.inbound(response))
           await bridge.receive(inbound).catch(report);
       await bridge.setCursor(response.next_batch);
-    } catch (error) {
-      if (signal.aborted) return;
-      report(error);
-      await sleep(error instanceof MatrixError && error.status === 401 ? 60_000 : 5_000, signal);
-    }
-  }
+    },
+    {
+      signal,
+      report,
+      atLeast: (error) => (error instanceof MatrixError && error.status === 401 ? 60_000 : 0),
+    },
+  );
 }
 
 export default matrixExtension();

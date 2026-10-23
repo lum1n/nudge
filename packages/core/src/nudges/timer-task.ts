@@ -27,8 +27,11 @@ export type FireEntryData = {
   nudgeId: string;
   message: string;
   fireAt: number;
-  /** Set when a watch found something new, rather than a scheduled nudge firing. */
-  source?: "watch";
+  /**
+   * Set when a watch found something new, or when someone got to a place they asked to be
+   * reminded at, rather than a scheduled nudge firing. Clients show an arrival as a nudge.
+   */
+  source?: "watch" | "arrival";
   /** See `ScheduledNudge.privateTo`; the answer is private too. */
   privateTo?: Owner;
   /** The message is all there is to say, written without a model: nothing answers it. */

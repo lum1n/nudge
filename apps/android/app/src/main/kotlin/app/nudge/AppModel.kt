@@ -99,7 +99,8 @@ class Session(
 }
 
 class AppModel(private val context: Context) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    /** For work that outlives a screen, such as a geofence crossing with the app closed. */
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val preferences = context.getSharedPreferences("nudge", Context.MODE_PRIVATE)
     private val syncing = Mutex()
 
@@ -140,6 +141,9 @@ class AppModel(private val context: Context) {
 
     /** Where the player is, told to home while the app is on screen, if they turned it on. */
     val location = LocationSharing(context, preferences, scope)
+
+    /** The places the phone watches for reminders when the player gets there, if they turned it on. */
+    val geofences = Geofences(context, preferences, scope)
 
     /** Whether the app is on screen; pushes for the open room aren't shown then. */
     @Volatile var foreground = false
@@ -574,6 +578,7 @@ class AppModel(private val context: Context) {
         // a second time.
         mutableSession.value = null
         location.setClient(null)
+        geofences.setClient(null)
         val places = mutablePlaces.value
         mutablePlaces.value = emptyList()
         mutableMemberships.value = null
@@ -599,6 +604,8 @@ class AppModel(private val context: Context) {
         }
         if (foreground) scope.launch { syncPlaces() }
         location.setForeground(foreground)
+        // On leaving too: a reminder set just now is watched from then on.
+        scope.launch { geofences.sync() }
     }
 
     /** An FCM registration token, new or again: register it with every server once signed in. */
@@ -706,6 +713,7 @@ class AppModel(private val context: Context) {
         mutableSession.value = session
         // Only home learns where the player is, never the assistants they joined.
         location.setClient(session.client)
+        geofences.setClient(session.client)
         // The assistants joined, as this device last knew them, until home says.
         mutablePlaces.value = savedPlaces().mapNotNull { place ->
             if (tokens(place).get() == null) null else open(place)?.also { watch(it) }

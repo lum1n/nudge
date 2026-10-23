@@ -298,6 +298,11 @@ describe("browser extension", () => {
 
   it("checks its settings", async () => {
     const { open } = setup("no-slash");
-    await expect(open()).rejects.toThrow(/Settings for the browser extension need fixing/);
+    // The assistant opens without it.
+    const nudge = await open();
+    expect(nudge.brokenExtensions()[0]?.error).toMatch(
+      /Settings for the browser extension need fixing/,
+    );
+    await nudge.close(context);
   });
 });

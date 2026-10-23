@@ -3,6 +3,7 @@ import { pathToFileURL } from "node:url";
 import type { Extension } from "@earendil-works/pi-durable";
 import { ConfigError, type ExtensionConfig } from "../config.ts";
 import {
+  aboutExtension,
   type ExtensionInput,
   isNudgeExtension,
   type NudgeExtension,
@@ -22,6 +23,8 @@ export type LoadOptions = {
 /**
  * Imports the enabled extensions of a config, in order. A module exports its extension as
  * `default` or as `extension`: one made with `defineNudgeExtension`, or a plain Pi Durable one.
+ * One that fails to load is in the list as a stand-in whose setup throws why, so the assistant
+ * opens without it and lists it as broken, named by `from`.
  */
 export async function loadExtensions(
   entries: readonly ExtensionConfig[],
@@ -31,18 +34,36 @@ export async function loadExtensions(
   const loaded: ExtensionInput[] = [];
   for (const entry of entries) {
     if (entry.enabled === false) continue;
-    const extension = await importExtension(entry.from, fresh);
-    if (isNudgeExtension(extension))
-      loaded.push({
-        extension,
-        settings: entry.settings,
-        ...(entry.rooms === undefined ? {} : { rooms: entry.rooms }),
-      });
-    else if (entry.settings !== undefined)
-      throw new ConfigError(`${entry.from} is a plain Pi Durable extension; it takes no settings`);
-    else loaded.push(entry.rooms === undefined ? extension : { extension, rooms: entry.rooms });
+    try {
+      const extension = await importExtension(entry.from, fresh);
+      if (isNudgeExtension(extension))
+        loaded.push({
+          extension,
+          settings: entry.settings,
+          ...(entry.rooms === undefined ? {} : { rooms: entry.rooms }),
+        });
+      else if (entry.settings !== undefined)
+        throw new ConfigError(
+          `${entry.from} is a plain Pi Durable extension; it takes no settings`,
+        );
+      else loaded.push(entry.rooms === undefined ? extension : { extension, rooms: entry.rooms });
+    } catch (error) {
+      loaded.push(unloadable(entry.from, error));
+    }
   }
   return loaded;
+}
+
+/** Stands in for an extension that failed to load; see `loadExtensions`. */
+function unloadable(from: string, error: unknown): NudgeExtension {
+  return {
+    kind: "nudge.extension",
+    name: from,
+    version: "",
+    setup: () => {
+      throw error;
+    },
+  };
 }
 
 /**
@@ -58,6 +79,8 @@ export async function checkExtensions(entries: readonly ExtensionConfig[]): Prom
     problems: readonly string[];
     /** What works but someone should know about (`warnings`). */
     warnings: readonly string[];
+    /** Why its setup threw; the assistant opens without it. */
+    error?: string;
   }[]
 > {
   const host = {
@@ -78,10 +101,23 @@ export async function checkExtensions(entries: readonly ExtensionConfig[]): Prom
   };
   const checked: Awaited<ReturnType<typeof checkExtensions>> = [];
   for (const input of await loadExtensions(entries)) {
-    const { extension, version, models, problems, warnings, close } = await setUpExtension(
-      input,
-      host,
-    );
+    let setUp;
+    try {
+      setUp = await setUpExtension(input, host);
+    } catch (error) {
+      // The assistant opens without it, so the others are still worth checking.
+      const { name, version } = aboutExtension(input);
+      checked.push({
+        name,
+        ...(version === undefined ? {} : { version }),
+        models: [],
+        problems: [],
+        warnings: [],
+        error: (error as Error).message,
+      });
+      continue;
+    }
+    const { extension, version, models, problems, warnings, close } = setUp;
     const found = (await problems?.()) ?? [];
     const warned = (await warnings?.()) ?? [];
     await close?.();

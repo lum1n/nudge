@@ -57,6 +57,11 @@
           "settings": { "url": "http://192.168.1.10:8080", "maxPerHour": 12 }
         },
         {
+          "$comment": "Places: reminders when you get somewhere, and addresses and routes from the server's own map (an owner picks its region under the server's Maps settings in the apps). The model sees places as ⟦PLACE:home⟧, never addresses or coordinates.",
+          "from": "./extensions/places",
+          "settings": { "maxPerHour": 6, "searchKm": 3 }
+        },
+        {
           "$comment": "Coding agents (Claude Code, Codex, Cursor, Copilot, pi, opencode) through ACC: on this machine with nothing set up, and on other machines over SSH. The assistant logs in with a key of its own; acc_hosts gives the line for ~/.ssh/authorized_keys. Needs ACC's binding (pnpm acc:fetch); off here so the example works without it.",
           "from": "./extensions/acc",
           "settings": { "hosts": [{ "host": "192.168.1.20", "user": "me", "name": "devbox" }] },

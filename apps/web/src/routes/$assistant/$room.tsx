@@ -1309,16 +1309,27 @@ function ExtensionsPanel() {
       <ul className="flex flex-col gap-1">
         {extensions.data.map((extension) => (
           <li key={extension.name} className="flex items-center justify-between gap-2 text-sm">
-            <label className="flex min-w-0 items-center gap-2" title={extension.description}>
+            <label
+              className="flex min-w-0 items-center gap-2"
+              title={
+                extension.error === undefined
+                  ? extension.description
+                  : `Failed to start: ${extension.error}`
+              }
+            >
               <input
                 type="checkbox"
                 className="size-4 shrink-0"
                 checked={extension.enabled}
+                disabled={extension.error !== undefined}
                 onChange={(event) => void set(extension.name, event.target.checked)}
               />
               <span className="truncate">{extension.name}</span>
+              {extension.error !== undefined && (
+                <span className="shrink-0 text-xs text-red-700">failed to start</span>
+              )}
             </label>
-            {extension.enabled !== extension.byDefault && (
+            {extension.error === undefined && extension.enabled !== extension.byDefault && (
               <button
                 type="button"
                 onClick={() => void set(extension.name, null)}

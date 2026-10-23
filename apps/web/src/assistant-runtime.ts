@@ -220,7 +220,7 @@ function privateLine(id: string, text: string): ThreadMessageLike {
 }
 
 /** `⟦EMAIL1⟧` and the like: a value the server hid from this player. */
-export const PLACEHOLDER = /⟦[A-Z]+\d+⟧/g;
+export const PLACEHOLDER = /⟦[A-Z]+(?:\d+|:[a-z0-9-]{1,24})⟧/g;
 
 function toPart(part: Part) {
   switch (part.type) {

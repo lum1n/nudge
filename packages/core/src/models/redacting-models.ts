@@ -21,10 +21,12 @@ import {
   type ModelsDeferredFetchOptions,
   type ModelsImagesOptions,
   type ModelsSimpleStreamOptions,
+  type Tool,
 } from "@earendil-works/pi-ai";
 import type { PiiDetector } from "../privacy/detectors.ts";
 import { DeepUnavailable } from "../privacy/deep/detector.ts";
 import { mapStrings, redactContext, rehydrateMessage } from "../privacy/redact.ts";
+import { withoutPlaceholders } from "../privacy/tool-values.ts";
 import type { Vault, VaultEntry } from "../privacy/vault.ts";
 import type { ModelFailure } from "./model-errors.ts";
 
@@ -59,7 +61,7 @@ export class RedactingModels implements Models {
   private ownDetectors: readonly PiiDetector[];
   private ownRefuse: () => string | undefined = () => undefined;
   private ownScan: Scan = async () => {};
-  private valued: RedactingModels | undefined;
+  private readonly valued = new Map<string | undefined, RedactingModels>();
 
   /**
    * By default what comes back keeps its placeholders, as the transcript stores it (ADR 9);
@@ -70,6 +72,8 @@ export class RedactingModels implements Models {
     private readonly options: RedactionOptions,
     /** Shares the vault, detectors and budget of another, and puts values back in what comes back. */
     private readonly root?: RedactingModels,
+    /** With `root`: whose values are put back, as `Vault.rehydrateFor` decides. */
+    private readonly viewer?: string,
   ) {
     this.ownDetectors = options.detectors;
   }
@@ -106,16 +110,25 @@ export class RedactingModels implements Models {
 
   /**
    * The same models with values put back in what comes back, for code that acts on the answer
-   * itself rather than storing it, such as a browser worker that types into a page.
+   * itself rather than storing it, such as a browser worker that types into a page. Only the
+   * values `viewer` may see come back: the player a tool call or approved action acts for. Without
+   * one, values someone owns stay placeholders.
    */
-  withValues(): RedactingModels {
-    if (this.root !== undefined) return this;
-    this.valued ??= new RedactingModels(this.inner, this.options, this);
-    return this.valued;
+  withValues(viewer?: string): RedactingModels {
+    if (this.root !== undefined) return this.root.withValues(viewer);
+    let valued = this.valued.get(viewer);
+    if (valued === undefined) {
+      valued = new RedactingModels(this.inner, this.options, this, viewer);
+      this.valued.set(viewer, valued);
+    }
+    return valued;
   }
 
-  private get rehydrating(): boolean {
-    return this.root !== undefined;
+  /** What puts values back in what comes back: the viewer's, or none. */
+  private get values(): Rehydrator {
+    if (this.root === undefined) return KEEP_PLACEHOLDERS;
+    const vault = this.vault;
+    return { rehydrate: (text) => vault.rehydrateFor(this.viewer, text) };
   }
 
   /** Connects the vault once its storage is open. Requests before this fail. */
@@ -241,10 +254,11 @@ export class RedactingModels implements Models {
         this.failed(model, messageOf(error));
         throw error;
       });
+    const values = this.values;
     return {
       ...result,
       output: result.output.map((block) =>
-        block.type === "text" ? { ...block, text: this.vault.rehydrate(block.text) } : block,
+        block.type === "text" ? { ...block, text: values.rehydrate(block.text) } : block,
       ),
     };
   }
@@ -261,7 +275,7 @@ export class RedactingModels implements Models {
     options?: ModelsDeferredFetchOptions,
   ) {
     const message = await this.inner.fetchDeferred(model, handle, options);
-    return this.rehydrating ? rehydrateMessage(message, this.vault) : message;
+    return this.root === undefined ? message : rehydrateMessage(message, this.values);
   }
 
   // Everything else passes through. Spelled out: `inner` is a class instance, so spreading it
@@ -295,14 +309,22 @@ export class RedactingModels implements Models {
 
   private async prepare(model: Model<Api>, context: Context): Promise<Context> {
     this.checkAllowed();
-    await this.scanFirst(context);
-    const redacted = redactContext(context, this.vault, this.detectors);
-    await this.flush();
+    let redacted: Context;
+    try {
+      await this.scanFirst(context);
+      redacted = redactContext(withDeclaredTools(context), this.vault, this.detectors);
+      await this.flush();
+    } catch (error) {
+      throw error instanceof RequestRefused ? error : new RedactionFailed(error);
+    }
     this.options.onRequest?.({ model: `${model.provider}/${model.id}`, context: redacted });
     return redacted;
   }
 
-  /** Runs `start` and relays its stream with values put back; a failure to start becomes an error event. */
+  /**
+   * Runs `start` and relays its stream with values put back; a failure to start becomes an error
+   * event, with the provider's message, or saying redaction failed when that is what stopped it.
+   */
   private relay(
     model: Model<Api>,
     start: () => Promise<AssistantMessageEventStream>,
@@ -339,7 +361,7 @@ export class RedactingModels implements Models {
     shown: Map<number, string>,
   ): AssistantMessageEvent {
     // Placeholders stay; only one cut off at the end of the text so far is held back.
-    const vault = this.rehydrating ? this.vault : KEEP_PLACEHOLDERS;
+    const vault = this.values;
     switch (event.type) {
       case "done":
         return { ...event, message: rehydrateMessage(event.message, vault) };
@@ -412,12 +434,47 @@ export class RedactingModels implements Models {
 /** What `RedactingModels.scan` reads: a whole request, or the texts of a classifier or image one. */
 export type Scan = (input: Context | readonly string[]) => Promise<void>;
 
+type Rehydrator = Pick<Vault, "rehydrate">;
+
+/**
+ * The request with its tools as they were declared: the model is offered their own schemas, not
+ * the ones that let placeholders through to `withToolValues`.
+ */
+function withDeclaredTools(context: Context): Context {
+  const declared = (tools: Tool[]) =>
+    tools.map((tool) => {
+      const parameters = withoutPlaceholders(tool.parameters);
+      return parameters === tool.parameters ? tool : { ...tool, parameters };
+    });
+  return {
+    ...context,
+    ...(context.tools === undefined ? {} : { tools: declared(context.tools) }),
+    // Tools come and go in system messages, too.
+    messages: context.messages.map((message) =>
+      message.role === "system" && message.toolsAdded !== undefined
+        ? { ...message, toolsAdded: declared(message.toolsAdded) }
+        : message,
+    ),
+  };
+}
+
 /** Puts nothing back: what `rehydrateEvent` uses when placeholders are to stay. */
-const KEEP_PLACEHOLDERS = { rehydrate: (text: string) => text } as Vault;
+const KEEP_PLACEHOLDERS: Rehydrator = { rehydrate: (text) => text };
 
 /** A request the assistant would not send, such as one past its budget. */
 export class RequestRefused extends Error {
   override name = "RequestRefused";
+}
+
+/** A request not sent because its personal values could not be replaced or saved first. */
+class RedactionFailed extends Error {
+  override name = "RedactionFailed";
+
+  constructor(cause: unknown) {
+    super(`Redaction failed: ${cause instanceof Error ? cause.message : String(cause)}`, {
+      cause,
+    });
+  }
 }
 
 function failedMessage(model: Model<Api>, error: unknown): AssistantMessage {
@@ -436,8 +493,8 @@ function failedMessage(model: Model<Api>, error: unknown): AssistantMessage {
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
     stopReason: "error",
-    errorMessage:
-      error instanceof RequestRefused ? error.message : `Redaction failed: ${messageOf(error)}`,
+    // The provider's own words, such as a missing key or a 429, so retries and people see them.
+    errorMessage: messageOf(error),
     timestamp: Date.now(),
   };
 }

@@ -1,7 +1,7 @@
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { fauxProvider } from "@earendil-works/pi-ai/providers/faux";
-import { createNudge, defineNudgeExtension, type Nudge } from "@nudge/core";
+import { createNudge, DirectoryDoc, defineNudgeExtension, type Nudge } from "@nudge/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type RunningServer, serveNudge } from "../src/index.ts";
 
@@ -95,6 +95,32 @@ describe("extension room sockets", () => {
     const lobby = connect(`${base}/lobby/ext/echo`, tokens.Cy!);
     await eventually(() => lobby.frames.length > 0);
     lobby.close();
+  });
+
+  it("closes with 4401 when the token is revoked", async () => {
+    const client = connect(`${base}/trip/ext/echo`, tokens.Ann!);
+    await eventually(() => client.frames.includes(JSON.stringify({ type: "ready" })));
+    const ann = (await nudge.players.tokens("ann", context))[0]!;
+    await nudge.players.revoke(ann.clientId, context);
+    expect((await client.closed).code).toBe(4401);
+    await eventually(() => closedSessions.includes("trip/ann"));
+  });
+
+  it("closes with 4404 when the player leaves the room", async () => {
+    await nudge.rooms.createShared({ id: "band", name: "Band", members: ["ann", "cy"] }, context);
+    const ann = connect(`${base}/band/ext/echo`, tokens.Ann!);
+    const cy = connect(`${base}/band/ext/echo`, tokens.Cy!);
+    const ready = JSON.stringify({ type: "ready" });
+    await eventually(() => ann.frames.includes(ready) && cy.frames.includes(ready));
+    await nudge.harness.commit(async (tx) => {
+      (await tx.doc(DirectoryDoc)).rooms.band!.members = ["ann"];
+    }, context);
+    expect((await cy.closed).code).toBe(4404);
+    await eventually(() => closedSessions.includes("band/cy"));
+    // Those still in it keep their socket.
+    ann.send("still here");
+    await eventually(() => ann.frames.includes("band/ann: still here"));
+    ann.close();
   });
 
   it("lists a room's extensions and turns them off and on over HTTP", async () => {

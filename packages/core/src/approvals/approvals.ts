@@ -114,7 +114,7 @@ const KEEP_DECIDED = 30;
  * Asks the people in a room to approve an action, inside a commit. A tool calls this and returns
  * at once; the action runs when someone approves, and the room hears the outcome as new input.
  * The tool's result should carry the id as `details.approval`, so code mode can tell a script the
- * call waits instead of handing it the text as a result (ADR 18).
+ * call waits instead of handing it the text as a result (ADR 19).
  */
 export async function requestApproval(
   tx: Tx,
@@ -169,7 +169,8 @@ export class Approvals {
     private readonly harness: Harness,
     private readonly rooms: Rooms,
     private readonly now: () => number,
-    private readonly models: Models,
+    /** Models that put back the values `viewer` may see; the viewer is who decided. */
+    private readonly models: (viewer: string | undefined) => Models,
     /** The handler an installed extension has for `kind`, looked up when an approval runs. */
     private readonly handler: (extension: string, kind: string) => ApprovalHandler | undefined,
     private readonly changed: (change: Change) => void = () => {},
@@ -304,7 +305,7 @@ export class Approvals {
       room,
       approval,
       commit: (apply) => this.harness.commit(apply, context),
-      models: this.models,
+      models: this.models(approval.decidedBy?.playerId),
       context,
     };
   }

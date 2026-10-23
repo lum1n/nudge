@@ -341,6 +341,11 @@ function ExtensionCard({
           Couldn't load it: {setup.error}
         </p>
       )}
+      {setup.failed !== undefined && (
+        <p className="rounded bg-red-50 px-2 py-1 text-sm text-red-800">
+          Failed to start, so the assistant runs without it: {setup.failed}
+        </p>
+      )}
       {setup.missingEnv.length > 0 && (
         <p className="rounded bg-amber-50 px-2 py-1 text-sm text-amber-900">
           Needs {setup.missingEnv.map((name) => `$${name}`).join(", ")} in the server's environment,

@@ -28,6 +28,8 @@ export type ExtensionSetup = {
   readonly missingEnv: string[];
   /** Why the module could not be loaded. */
   readonly error?: string;
+  /** Why its setup threw when the assistant opened; it is left out until it starts. */
+  readonly failed?: string;
 };
 
 /** One extension as the settings page saves it, in the order it is installed. */
@@ -175,6 +177,7 @@ export const BUNDLED_EXTENSIONS: readonly string[] = [
   "@nudge/ext-mcp",
   "@nudge/ext-ner",
   "@nudge/ext-peers",
+  "@nudge/ext-places",
   "@nudge/ext-push",
   "@nudge/ext-rss",
   "@nudge/ext-scripts",

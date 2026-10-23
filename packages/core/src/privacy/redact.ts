@@ -121,7 +121,7 @@ function assistantBlocks(
  */
 export function rehydrateMessage(
   message: AssistantMessage,
-  vault: Vault,
+  vault: Pick<Vault, "rehydrate">,
   partial = false,
 ): AssistantMessage {
   const text: Text = partial

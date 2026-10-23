@@ -61,7 +61,7 @@ export function waitingNote(waiting: ReadonlyMap<string, string>): string {
  * (ADR 6), so a script would otherwise get "Waiting for approval a1." as if it were the result:
  * a schema-less tool's value becomes a placeholder that says so, and the model is told which calls
  * wait. The call still asks for the approval as usual; nothing runs before someone approves it.
- * Why the script isn't resumed with the outcome, and how it could be: ADR 18.
+ * Why the script isn't resumed with the outcome, and how it could be: ADR 19.
  */
 export function waitingAware(tool: ToolRegistration): ToolRegistration {
   return {

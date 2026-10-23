@@ -7,8 +7,12 @@ import { doctor } from "../src/commands/doctor.ts";
 const BROWSER = join(import.meta.dirname, "../../../extensions/browser/src/index.ts");
 const MCP = join(import.meta.dirname, "../../../extensions/mcp/src/index.ts");
 const FAKE_MCP = join(import.meta.dirname, "../../../extensions/mcp/test/fake-server.mjs");
+const HELLO = join(import.meta.dirname, "../../../extensions/hello/src/index.ts");
 
-/** A nudge.json whose browser extension runs on OpenAI while the assistant runs on Anthropic. */
+/**
+ * A nudge.json with `extensions`; by default a browser extension that runs on OpenAI while the
+ * assistant runs on Anthropic.
+ */
 function config(
   extensions: unknown[] = [{ from: BROWSER, settings: { model: "openai/gpt-5-mini" } }],
 ): string {
@@ -84,5 +88,22 @@ describe("nudge doctor", () => {
     expect(warnings[1]).toContain("server old passes images");
     expect(warnings[1]).toContain("rename it unredactedImages");
     expect(printed.filter((line) => line.startsWith("FAIL"))).toEqual([]);
+  });
+
+  it("names an extension that fails to start, and still checks the others", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-test");
+    const printed = await lines(
+      config([{ from: BROWSER, settings: { model: "no-slash" } }, { from: HELLO }]),
+    );
+    expect(
+      printed.some((line) =>
+        line.startsWith(
+          "FAIL robin: browser: fails to start, so the assistant opens without it: Settings for the browser extension need fixing",
+        ),
+      ),
+    ).toBe(true);
+    expect(printed.some((line) => /^ok {3}robin: extensions browser .*, hello/.test(line))).toBe(
+      true,
+    );
   });
 });

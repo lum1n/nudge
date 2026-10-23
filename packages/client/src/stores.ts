@@ -153,18 +153,24 @@ export class RoomStore extends ViewStore<RoomView> {
     all: [],
   };
 
+  /**
+   * `left` hears of every pending message that stops showing, because the view has it or it was
+   * dismissed: the client's outbox drops it then.
+   */
   constructor(
     readonly id: string,
     private readonly pages?: PageLoader,
+    private readonly left?: (requestId: string) => void,
   ) {
     super();
   }
 
   override readonly getState = (): RoomState => this.room;
 
-  /** Shows `message` as pending until the view has it. */
+  /** Shows `message` as pending until the view has it, which it may have already. */
   sending(message: PendingMessage): void {
     this.pending = [...this.pending.filter((p) => p.requestId !== message.requestId), message];
+    this.seen(this.room.view);
     this.publish();
   }
 
@@ -176,6 +182,7 @@ export class RoomStore extends ViewStore<RoomView> {
   /** Stops showing a pending message, such as one that failed and won't be sent again. */
   dismiss(requestId: string): void {
     this.pending = this.pending.filter((p) => p.requestId !== requestId);
+    this.left?.(requestId);
     this.publish();
   }
 
@@ -217,8 +224,17 @@ export class RoomStore extends ViewStore<RoomView> {
       if (earlier === undefined) this.startOver();
       else this.earlier = earlier;
     }
-    if (next.view !== previous.view) this.pending = unseen(this.pending, next.view);
+    if (next.view !== previous.view) this.seen(next.view);
     this.room = this.build(next);
+  }
+
+  /** Stops showing the pending messages that `view` has. */
+  private seen(view: RoomView | undefined): void {
+    const pending = unseen(this.pending, view);
+    if (pending === this.pending) return;
+    const kept = new Set(pending.map((p) => p.requestId));
+    for (const p of this.pending) if (!kept.has(p.requestId)) this.left?.(p.requestId);
+    this.pending = pending;
   }
 
   private startOver(): void {

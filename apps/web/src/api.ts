@@ -3,9 +3,11 @@ import {
   ApiError,
   checkSetupCode,
   checkSetupKey,
+  type KeyValueStorage,
   type RoomListStore,
   listAssistants,
   NudgeClient,
+  outboxKey,
   ServerApi,
   setUp,
   type SetupRequest,
@@ -62,13 +64,14 @@ function saveToken(assistant: string, token: string, remember: boolean): void {
 }
 
 /**
- * Forgets the assistant's token, in the tab and on the device, and closes its client. The client
- * stays, so pages still mounted don't make a new one (which, without a token, would close with
- * 4401 and sign out again).
+ * Forgets the assistant's token, in the tab and on the device, and its unsent messages, and closes
+ * its client. The client stays, so pages still mounted don't make a new one (which, without a
+ * token, would close with 4401 and sign out again).
  */
 export function forgetToken(assistant: string): void {
   writeTo(sessionStorage, assistant, undefined);
   writeTo(localStorage, assistant, undefined);
+  outboxStorage(assistant).removeItem(outboxKey("", assistant));
   clients.get(assistant)?.close();
 }
 
@@ -94,6 +97,22 @@ function tokenStore(assistant: string, remember?: boolean): TokenStore {
   };
 }
 
+/**
+ * Where an assistant's unsent messages are kept, so a reload doesn't lose them: with its token, on
+ * the device when remembered, else in the tab.
+ */
+function outboxStorage(assistant: string): KeyValueStorage {
+  const where = () => (remembered(assistant) ? localStorage : sessionStorage);
+  return {
+    getItem: (key) => where().getItem(key),
+    setItem: (key, value) => where().setItem(key, value),
+    removeItem: (key) => {
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    },
+  };
+}
+
 const CLIENT = { name: "nudge-web", version: "0.0.0", platform: "web" } as const;
 
 const clients = new Map<string, NudgeClient>();
@@ -107,11 +126,24 @@ export function clientFor(assistant: string): NudgeClient {
       assistant,
       tokens: tokenStore(assistant),
       client: CLIENT,
+      storage: outboxStorage(assistant),
     });
     clients.set(assistant, client);
     client.open();
   }
   return client;
+}
+
+// Back online, or back on the page: reconnect now rather than when the backoff runs out, and send
+// what waits in the outboxes, as the Android app does when it comes to the foreground.
+function retryAll(): void {
+  for (const client of clients.values()) client.retryNow();
+}
+if (typeof document !== "undefined") {
+  addEventListener("online", retryAll);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") retryAll();
+  });
 }
 
 /** The connection's status, re-rendering on every change. */

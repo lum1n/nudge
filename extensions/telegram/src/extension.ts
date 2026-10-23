@@ -1,4 +1,4 @@
-import { ChatBridge, fillVariables, sleep, untilOpen } from "@nudge/bridge";
+import { ChatBridge, fillVariables, keepPolling, untilOpen } from "@nudge/bridge";
 import { defineNudgeExtension, type ExtensionHost, Type } from "@nudge/core";
 import { TelegramApi, TelegramError, toInbound } from "./telegram.ts";
 
@@ -79,9 +79,10 @@ async function poll(
   await untilOpen(host, signal);
   if (signal.aborted) return;
   await api.setCommands(COMMANDS).catch(report);
-  let offset = Number((await bridge.state()).cursor ?? 0);
-  while (!signal.aborted) {
-    try {
+  let offset: number | undefined;
+  await keepPolling(
+    async () => {
+      offset ??= Number((await bridge.state()).cursor ?? 0);
       for (const update of await api.getUpdates(offset, seconds, signal)) {
         const inbound = toInbound(update);
         if (inbound !== undefined) await bridge.receive(inbound).catch(report);
@@ -89,13 +90,14 @@ async function poll(
         // Saved after each, so a restart neither drops nor repeats one.
         await bridge.setCursor(String(offset));
       }
-    } catch (error) {
-      if (signal.aborted) return;
-      report(error);
+    },
+    {
+      signal,
+      report,
       // A token Telegram refuses won't get better soon.
-      await sleep(error instanceof TelegramError && error.code === 401 ? 60_000 : 5_000, signal);
-    }
-  }
+      atLeast: (error) => (error instanceof TelegramError && error.code === 401 ? 60_000 : 0),
+    },
+  );
 }
 
 export default telegramExtension();

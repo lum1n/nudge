@@ -167,4 +167,28 @@ describe("Assistants", () => {
     expect(assistants.running.get("pocket")?.displayName).toBe("Pocket 2");
     expect(lines).toContain("robin: no longer in the config; closed");
   });
+
+  it("reloads the other extensions when one in the config is broken", async () => {
+    assistants = await open();
+    const robin = assistants.running.get("robin")!;
+    const bad = join(dir, "bad.mjs");
+    await writeFile(bad, "export default {;\n");
+    await writeFile(join(dir, "plain.mjs"), 'export default { name: "plain" };\n');
+    await writeFile(
+      configPath,
+      JSON.stringify({
+        assistants: [
+          { name: "robin", model, extensions: [{ from: bad }, { from: "./plain.mjs" }] },
+        ],
+      }),
+    );
+    await assistants.reload();
+    expect(assistants.running.get("robin")).toBe(robin);
+    expect(robin.extensions()).toEqual([{ name: "plain" }]);
+    expect(robin.brokenExtensions().map((e) => e.name)).toEqual([bad]);
+    expect(lines).toContain("robin: extensions reloaded: plain");
+    expect(lines.some((line) => line.startsWith(`robin: ${bad} failed to start, left out:`))).toBe(
+      true,
+    );
+  });
 });

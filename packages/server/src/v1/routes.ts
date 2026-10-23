@@ -150,7 +150,7 @@ export function v1Routes(options: V1Options): Hono {
         nudge === undefined
           ? undefined
           : new ExtensionSocket(
-              nudge,
+              hubsOf(nudge),
               c.req.param("room") ?? "",
               c.req.param("extension") ?? "",
               (error) =>

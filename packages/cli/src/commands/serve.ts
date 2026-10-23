@@ -26,7 +26,9 @@ import {
   serverOwnersFile,
   SetupCodes,
   routeOutgoing,
+  ServerGeo,
   ServerWired,
+  provideGeo,
   testProviderKey,
   Updates,
   writeRawConfig,
@@ -204,6 +206,10 @@ export async function serve(options: ServeOptions): Promise<number> {
     say,
   });
   await wired.load();
+  // The map places and routes come from (ADR 18): the regions owners pick and those people are in.
+  const geo = new ServerGeo({ dir: join(dirname(configPath), "server", "geo"), say });
+  await geo.load();
+  provideGeo(geo.geo);
   const relayFront = wired.relayFront();
   routeOutgoing(() => wired.dispatcher());
   // Where the network reaches this server's API; known once it listens.
@@ -232,6 +238,11 @@ export async function serve(options: ServeOptions): Promise<number> {
       testKey,
       backupKey: theBackupKey,
       ...(updates === undefined ? {} : { updates: updates.control }),
+      geo: {
+        status: () => geo.status(),
+        available: () => geo.available(),
+        configure: (change) => geo.configure(change),
+      },
       wired: {
         state: () => wired.state(),
         enable: async (name) => {
@@ -324,6 +335,8 @@ export async function serve(options: ServeOptions): Promise<number> {
     stopUpdates();
     stopBackups();
     await wired.stop();
+    provideGeo(undefined);
+    await geo.close();
     console.log(restarting ? "Restarting into the new release…" : "Stopping…");
     await server.close();
   } finally {

@@ -441,6 +441,43 @@ export async function untilOpen(
   }
 }
 
+export type PollOptions = {
+  readonly signal: AbortSignal;
+  readonly report: (error: unknown) => void;
+  /** Milliseconds to wait after a failure; each further one in a row doubles it. Default 5 s. */
+  readonly retryMs?: number;
+  /** Longest wait between tries. Default 5 min. */
+  readonly maxRetryMs?: number;
+  /** At least this long after `error`, such as a minute after a token the service refuses. */
+  readonly atLeast?: (error: unknown) => number;
+};
+
+/**
+ * Runs `step` again and again until `signal` aborts. A step that throws is reported and waited
+ * out, longer after each failure in a row, so a service that is down is neither hammered nor
+ * able to stop the bridge, and nothing it throws reaches the host as an unhandled rejection.
+ */
+export async function keepPolling(step: () => Promise<void>, options: PollOptions): Promise<void> {
+  const { signal, retryMs = 5_000, maxRetryMs = 300_000 } = options;
+  let failures = 0;
+  while (!signal.aborted) {
+    try {
+      await step();
+      failures = 0;
+    } catch (error) {
+      if (signal.aborted) return;
+      try {
+        options.report(error);
+      } catch {
+        // A report that throws must not end the loop either.
+      }
+      const backoff = Math.min(retryMs * 2 ** failures, maxRetryMs);
+      failures++;
+      await sleep(Math.max(backoff, options.atLeast?.(error) ?? 0), signal);
+    }
+  }
+}
+
 /** Waits `ms`, or less if `signal` aborts first. */
 export function sleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {

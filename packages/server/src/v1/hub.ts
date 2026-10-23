@@ -90,21 +90,22 @@ export class Hubs {
    * Calls `revoked` once the token of `clientId` stops working, as when an admin revokes it.
    * Returns a function that stops watching.
    */
-  async watchToken(clientId: string, revoked: () => void): Promise<() => void> {
-    const directory = await this.openDirectory();
-    const known = () =>
-      Object.values(directory.value.tokens).some((record) => record.clientId === clientId);
-    let stopped = false;
-    const stop = directory.listen(() => {
-      if (stopped || known()) return;
-      stopped = true;
-      stop();
-      revoked();
-    });
-    return () => {
-      stopped = true;
-      stop();
-    };
+  watchToken(clientId: string, revoked: () => void): Promise<() => void> {
+    return this.watchDirectory(
+      (directory) => Object.values(directory.tokens).some((record) => record.clientId === clientId),
+      revoked,
+    );
+  }
+
+  /**
+   * Calls `lost` once `playerId` may no longer use the room, as when they leave it or it goes.
+   * Returns a function that stops watching.
+   */
+  watchRoom(roomId: string, playerId: string, lost: () => void): Promise<() => void> {
+    return this.watchDirectory((directory) => {
+      const room = directory.rooms[roomId];
+      return room !== undefined && canUse(room, playerId);
+    }, lost);
   }
 
   async roomList(playerId: string): Promise<Lease<RoomListHub>> {
@@ -112,6 +113,25 @@ export class Hubs {
     return this.roomLists.lease(playerId, () =>
       Promise.resolve(new RoomListHub(playerId, directory, this, this.report)),
     );
+  }
+
+  /** Calls `ended` once `holds` is false after a change to the directory. */
+  private async watchDirectory(
+    holds: (directory: Readonly<DirectoryState>) => boolean,
+    ended: () => void,
+  ): Promise<() => void> {
+    const directory = await this.openDirectory();
+    let stopped = false;
+    const stop = directory.listen(() => {
+      if (stopped || holds(directory.value)) return;
+      stopped = true;
+      stop();
+      ended();
+    });
+    return () => {
+      stopped = true;
+      stop();
+    };
   }
 
   private openDirectory(): Promise<Directory> {
