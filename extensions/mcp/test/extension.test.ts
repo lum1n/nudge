@@ -133,12 +133,14 @@ describe("mcp", () => {
   it("adds a program a room asks for once an admin approves, with keys set on the panel", async () => {
     const { faux, outputs, call, done, say, nudge } = await open({});
     const { admin, ann } = await players(nudge);
+    // A hidden name written in lower case comes back so, as in a path.
+    await nudge.protect("Kari", "NAME");
     faux.setResponses([
       call("add_mcp_server", {
         name: "notes",
         useFor: "Keeping notes",
         command: process.execPath,
-        args: [FAKE],
+        args: [FAKE, "/home/kari/notes"],
         keys: [{ in: "env", name: "TOKEN" }],
       }),
       done,
@@ -147,7 +149,9 @@ describe("mcp", () => {
     expect(outputs.at(-1)).toBe("Waiting for approval a1.");
     const [pending] = await nudge.approvals.list(LOBBY, context);
     expect(pending).toMatchObject({ adminOnly: true });
-    expect(pending?.summary).toMatch(/^Start the program `.+fake-server\.mjs` on the server/);
+    expect(pending?.summary).toMatch(
+      /^Start the program `.+fake-server\.mjs \/home\/⟦NAME\d+⟧\/notes` on the server/,
+    );
     await expect(
       nudge.approvals.decide(LOBBY, "a1", { approve: true, by: ann }, context),
     ).rejects.toThrow("Only an admin");
@@ -157,7 +161,12 @@ describe("mcp", () => {
 
     const { send, servers, close } = await panel(nudge);
     expect(servers()).toMatchObject([
-      { id: "m1", name: "notes", keys: [{ in: "env", name: "TOKEN", set: false }] },
+      {
+        id: "m1",
+        name: "notes",
+        args: [FAKE, "/home/kari/notes"],
+        keys: [{ in: "env", name: "TOKEN", set: false }],
+      },
     ]);
     expect(
       await send({ type: "setKey", server: "m1", key: "TOKEN", value: "s3cret-value" }),

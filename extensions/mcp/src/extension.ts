@@ -19,12 +19,10 @@ import {
   addServer,
   checkDraft,
   describeServer,
-  keepDraft,
   removeServer,
   type RoomServer,
   RoomServersDoc,
   type ServerDraft,
-  takeDraft,
 } from "./rooms.ts";
 
 const VERSION = "0.1.0";
@@ -521,16 +519,22 @@ function roomServerTools({ rooms, panels, now }: RoomParts): ToolRegistration[] 
           "only an admin can approve it."
         : `Add the MCP server "${draft.name}" at ${draft.url}, for: ${draft.useFor}`;
       try {
-        const approval = await api.commit(async (tx) => {
-          const approval = await requestApproval(
-            tx,
-            room.id,
-            { extension: "mcp", kind: "add", summary, payload: {}, adminOnly: program },
-            now(),
-          );
-          await keepDraft(tx, room.id, approval.id, draft);
-          return approval;
-        }, context);
+        const approval = await api.commit(
+          (tx) =>
+            requestApproval(
+              tx,
+              room.id,
+              {
+                extension: "mcp",
+                kind: "add",
+                summary,
+                payload: draft as never,
+                adminOnly: program,
+              },
+              now(),
+            ),
+          context,
+        );
         return {
           ...text(`Waiting for approval ${approval.id}.`),
           details: { approval: approval.id },
@@ -655,13 +659,15 @@ function roomServerTools({ rooms, panels, now }: RoomParts): ToolRegistration[] 
 /** Runs what people approved for the servers rooms add. */
 function roomApprovals({ rooms, panels, now }: RoomParts): ExtensionParts["approvals"] & {} {
   return {
-    add: async (_, run) => {
+    add: async (payload, run) => {
       const addedBy = run.approval.decidedBy?.displayName ?? "someone";
-      const server = await run.commit(async (tx) => {
-        const draft = await takeDraft(tx, run.room.id, run.approval.id);
-        if (draft === undefined) throw new Error("What to add was lost; ask for it again");
-        return addServer(tx, run.room.id, draft, addedBy, now());
-      });
+      const draft = payload as Partial<ServerDraft> | null;
+      // Approvals asked for before the payload held the draft have none.
+      if (typeof draft?.name !== "string")
+        throw new Error("What to add was lost; ask for it again");
+      const server = await run.commit((tx) =>
+        addServer(tx, run.room.id, draft as ServerDraft, addedBy, now()),
+      );
       let outcome: string;
       try {
         const tools = await rooms.tools(run.room.id, server);

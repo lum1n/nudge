@@ -15,6 +15,12 @@ export type VaultEntry = {
    * is put back in what the model sees.
    */
   readonly released?: true;
+  /**
+   * Another way the value behind this placeholder was written, such as `vegard` for `Vegard`: it
+   * matches as that value and shares its owner and state, but comes back as written, so a round
+   * trip gives the text back exactly.
+   */
+  readonly spellingOf?: string;
 };
 
 /** Placeholders look like `⟦EMAIL1⟧`: the brackets never occur in prose, Markdown or JSON. */
@@ -34,12 +40,16 @@ export function vaultKey(value: string): string {
 /**
  * Stable placeholders for personal values. Append-only: a value keeps its placeholder for the
  * life of the assistant, so the model's view and provider prompt caches stay consistent.
- * Matching is case-insensitive; rehydration returns the value as first seen.
+ * Matching is case-insensitive and treats runs of whitespace alike; each other way a value is
+ * written gets a placeholder of its own (a spelling, see `VaultEntry.spellingOf`), so rehydration
+ * gives back exactly what was replaced.
  */
 export class Vault {
   private readonly byKey = new Map<string, VaultEntry>();
   private readonly releasedByKey = new Map<string, VaultEntry>();
   private readonly byPlaceholder = new Map<string, VaultEntry>();
+  /** Per placeholder of a value: its other spellings, by how they are written. */
+  private readonly spellings = new Map<string, Map<string, VaultEntry>>();
   private readonly counters = new Map<string, number>();
   private unsaved: VaultEntry[] = [];
   private matcher: RegExp | undefined;
@@ -73,9 +83,9 @@ export class Vault {
   }
 
   /**
-   * Protects a value the detectors would not find, such as a person's name. With `owner`, the
-   * value is that player's alone from now on, also where it was shown before; a value someone else
-   * owns stays theirs.
+   * Protects a value the detectors would not find, such as a person's name, and gives its
+   * placeholder as written (see `VaultEntry.spellingOf`). With `owner`, the value is that player's
+   * alone from now on, also where it was shown before; a value someone else owns stays theirs.
    */
   protect(value: string, kind: string, owner?: string): string {
     const trimmed = value.trim();
@@ -90,7 +100,7 @@ export class Vault {
       const entry = owner === undefined ? hidden : { ...hidden, owner };
       this.insert(entry);
       this.unsaved.push(entry);
-      return entry.placeholder;
+      return this.placeholderAsWritten(entry, trimmed, true);
     }
     const existing = this.byKey.get(vaultKey(trimmed));
     if (existing !== undefined) {
@@ -99,13 +109,12 @@ export class Vault {
         this.insert(owned);
         this.unsaved.push(owned);
       }
-      return existing.placeholder;
+      return this.placeholderAsWritten(existing, trimmed, true);
     }
-    const n = (this.counters.get(kind) ?? 0) + 1;
     const entry: VaultEntry = {
       value: trimmed,
       kind,
-      placeholder: `⟦${kind}${n}⟧`,
+      placeholder: this.nextPlaceholder(kind),
       ...(owner === undefined ? {} : { owner }),
     };
     this.insert(entry);
@@ -118,18 +127,30 @@ export class Vault {
    * placeholder. False when the vault doesn't hold it.
    */
   forget(placeholder: string): boolean {
-    const entry = this.byPlaceholder.get(placeholder);
+    const entry = this.valueOf(placeholder);
     if (entry === undefined || entry.forgotten) return false;
     const tombstone: VaultEntry = {
       value: "",
       kind: entry.kind,
-      placeholder,
+      placeholder: entry.placeholder,
       ...(entry.owner === undefined ? {} : { owner: entry.owner }),
       forgotten: true,
     };
     this.byKey.delete(vaultKey(entry.value));
     this.insert(tombstone);
     this.unsaved.push(tombstone);
+    // Its spellings go with it, so none of them stays stored.
+    for (const spelling of this.spellings.get(entry.placeholder)?.values() ?? []) {
+      const gone: VaultEntry = {
+        value: "",
+        kind: spelling.kind,
+        placeholder: spelling.placeholder,
+        spellingOf: entry.placeholder,
+        forgotten: true,
+      };
+      this.insert(gone);
+      this.unsaved.push(gone);
+    }
     return true;
   }
 
@@ -139,7 +160,7 @@ export class Vault {
    * be released. False when there is nothing to release.
    */
   release(placeholder: string): boolean {
-    const entry = this.byPlaceholder.get(placeholder);
+    const entry = this.valueOf(placeholder);
     if (entry === undefined || entry.forgotten || entry.released || entry.owner !== undefined)
       return false;
     const released: VaultEntry = { ...entry, released: true };
@@ -158,9 +179,21 @@ export class Vault {
     return this.byKey.get(vaultKey(value))?.placeholder;
   }
 
-  /** The entry behind a placeholder, forgotten ones included. */
+  /**
+   * The entry behind a placeholder, forgotten ones included. A spelling comes with the owner and
+   * state of the value it spells.
+   */
   get(placeholder: string): VaultEntry | undefined {
-    return this.byPlaceholder.get(placeholder);
+    const entry = this.byPlaceholder.get(placeholder);
+    if (entry?.spellingOf === undefined) return entry;
+    const value = this.valueOf(placeholder);
+    if (value === undefined || value === entry) return entry;
+    return {
+      ...value,
+      value: value.forgotten ? "" : entry.value,
+      placeholder: entry.placeholder,
+      spellingOf: entry.spellingOf,
+    };
   }
 
   /**
@@ -184,7 +217,7 @@ export class Vault {
   rehydrate(text: string): string {
     if (!text.includes("⟦")) return text;
     return text.replace(PLACEHOLDER, (placeholder) => {
-      const entry = this.byPlaceholder.get(placeholder);
+      const entry = this.get(placeholder);
       return entry === undefined || entry.forgotten ? placeholder : entry.value;
     });
   }
@@ -212,7 +245,7 @@ export class Vault {
     const hidden = mapOutsidePlaceholders(text, (segment) => this.hideOwned(segment, viewer));
     if (!hidden.includes("⟦")) return hidden;
     return hidden.replace(PLACEHOLDER, (placeholder) => {
-      const entry = this.byPlaceholder.get(placeholder);
+      const entry = this.get(placeholder);
       if (entry === undefined || entry.forgotten) return placeholder;
       return entry.owner === undefined || entry.owner === viewer ? entry.value : placeholder;
     });
@@ -220,7 +253,7 @@ export class Vault {
 
   /** Whether `viewer` may see what is behind a placeholder. */
   visibleTo(viewer: string | undefined, placeholder: string): boolean {
-    const entry = this.byPlaceholder.get(placeholder);
+    const entry = this.get(placeholder);
     return (
       entry !== undefined &&
       !entry.forgotten &&
@@ -232,7 +265,7 @@ export class Vault {
   private withReleased(text: string): string {
     if (this.releasedByKey.size === 0 || !text.includes("⟦")) return text;
     return text.replace(PLACEHOLDER, (placeholder) => {
-      const entry = this.byPlaceholder.get(placeholder);
+      const entry = this.get(placeholder);
       return entry?.released ? entry.value : placeholder;
     });
   }
@@ -247,22 +280,71 @@ export class Vault {
       this.hiddenFrom.set(viewer, matcher);
     }
     if (matcher === null) return text;
-    return text.replace(matcher, (match) => this.byKey.get(vaultKey(match))?.placeholder ?? match);
+    return text.replace(matcher, (match) => {
+      const entry = this.byKey.get(vaultKey(match));
+      return entry === undefined ? match : this.placeholderAsWritten(entry, match, false);
+    });
   }
 
   private replaceKnown(text: string): string {
     if (this.byKey.size === 0) return text;
     this.matcher ??= matcherOf([...this.byKey.entries()]);
-    return text.replace(
-      this.matcher,
-      (match) => this.byKey.get(vaultKey(match))?.placeholder ?? match,
-    );
+    return text.replace(this.matcher, (match) => {
+      const entry = this.byKey.get(vaultKey(match));
+      return entry === undefined ? match : this.placeholderAsWritten(entry, match, true);
+    });
+  }
+
+  /** The value a placeholder stands for: its own entry, or the one it is a spelling of. */
+  private valueOf(placeholder: string): VaultEntry | undefined {
+    const entry = this.byPlaceholder.get(placeholder);
+    if (entry?.spellingOf === undefined) return entry;
+    return this.byPlaceholder.get(entry.spellingOf) ?? entry;
+  }
+
+  /**
+   * The placeholder of `entry`'s value as `written`: the entry's own when written the same way,
+   * else its spelling's, which `create` adds when there is none yet.
+   */
+  private placeholderAsWritten(entry: VaultEntry, written: string, create: boolean): string {
+    if (written === entry.value) return entry.placeholder;
+    const known = this.spellings.get(entry.placeholder)?.get(written);
+    if (known !== undefined) return known.placeholder;
+    if (!create) return entry.placeholder;
+    const spelling: VaultEntry = {
+      value: written,
+      kind: entry.kind,
+      placeholder: this.nextPlaceholder(entry.kind),
+      spellingOf: entry.placeholder,
+    };
+    this.insert(spelling);
+    this.unsaved.push(spelling);
+    return spelling.placeholder;
+  }
+
+  private nextPlaceholder(kind: string): string {
+    return `⟦${kind}${(this.counters.get(kind) ?? 0) + 1}⟧`;
   }
 
   private insert(entry: VaultEntry): void {
     const match = /^⟦([A-Z]+)(\d+)⟧$/.exec(entry.placeholder);
     if (match === null) throw new Error(`Malformed placeholder ${entry.placeholder}`);
     const [, kind = "", n = "0"] = match;
+    if (entry.spellingOf !== undefined) {
+      // Text matches the value it spells, so the matchers stay as they are.
+      let spellings = this.spellings.get(entry.spellingOf);
+      if (spellings === undefined) {
+        spellings = new Map();
+        this.spellings.set(entry.spellingOf, spellings);
+      }
+      const previous = this.byPlaceholder.get(entry.placeholder);
+      if (previous !== undefined) spellings.delete(previous.value);
+      if (!entry.forgotten) spellings.set(entry.value, entry);
+      this.byPlaceholder.set(entry.placeholder, entry);
+      this.counters.set(kind, Math.max(this.counters.get(kind) ?? 0, Number(n)));
+      this.changes++;
+      return;
+    }
     const key = vaultKey(entry.value);
     // An entry's last state wins: a released value is no longer hidden, and the reverse.
     const previous = this.byPlaceholder.get(entry.placeholder);
