@@ -710,6 +710,9 @@ pub struct RoomExtension {
     pub enabled: bool,
     /// Whether it is on in rooms of this kind by default; `enabled` differs when the room chose.
     pub by_default: bool,
+    /// Why it failed to start; it is off, in every room, until it does.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -753,6 +756,9 @@ pub struct ExtensionSetup {
     /// Why the module could not be loaded.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// Why its setup threw when the assistant opened; it is left out until it starts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failed: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -1766,6 +1772,19 @@ pub struct WiredRelayResponse {
     pub invite: String,
 }
 
+/// A model request that failed, as owners see it at `GET /server`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ModelErrorShown {
+    /// When, in ms since the epoch.
+    pub at: f64,
+    /// The assistant's URL name, when the request was one of theirs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assistant: Option<String>,
+    pub provider: String,
+    pub model: String,
+    pub message: String,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ServerInfoResponse {
     pub version: String,
@@ -1775,6 +1794,9 @@ pub struct ServerInfoResponse {
     /// Absent for a server that can't update itself.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub updates: Option<UpdateState>,
+    /// The last model requests that failed, newest first; absent where the server keeps none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub errors: Option<Vec<ModelErrorShown>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

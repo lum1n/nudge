@@ -463,6 +463,7 @@ fn http_bodies_match_the_schema() {
         description: Some("Browses the web".into()),
         enabled: false,
         by_default: true,
+        error: Some("Settings need fixing".into()),
     };
     check("RoomExtension", &extension);
     check(
@@ -494,6 +495,7 @@ fn http_bodies_match_the_schema() {
         schema: Some(json!({ "type": "object", "properties": {} })),
         missing_env: vec!["MAIL_PASSWORD".into()],
         error: Some("Cannot find module".into()),
+        failed: Some("Settings need fixing".into()),
     };
     check("ExtensionSetup", &setup);
     check(
@@ -1163,6 +1165,13 @@ fn server_and_setup_bodies_match_the_schema() {
             owner: owner.clone(),
             assistants: vec![assistant],
             updates: Some(updates),
+            errors: Some(vec![ModelErrorShown {
+                at: 1.0,
+                assistant: Some("robin".into()),
+                provider: "anthropic".into(),
+                model: "claude-sonnet-5".into(),
+                message: "429 rate limited".into(),
+            }]),
         },
     );
     check(
