@@ -15,6 +15,7 @@ import {
 import {
   type BrowserAgentOptions,
   type BrowserAgentResult,
+  cleanSiteNotes,
   DEFAULT_BROWSER_MODEL,
   runBrowserAgent,
 } from "./agent.ts";
@@ -24,18 +25,26 @@ import { LoginStore } from "./logins.ts";
 import { holdBrowser, withBrowser } from "./pool.ts";
 import { type Viewer, viewersOf } from "./viewers.ts";
 
-type SiteNotesState = { sites: Record<string, { notes: string; at: number }> };
+type SiteNote = { notes: string; at: number };
+type SiteNotesState = { rooms: Record<string, Record<string, SiteNote>> };
 
-/** What the browser agent learned about using each site, by host; shared by every room. */
+/**
+ * What the browser agent learned about using each site, by room and then host. Each room reads only
+ * its own: a page can steer what the agent writes, and that must not reach other rooms' runs.
+ *
+ * Version 1 kept one set of notes shared by every room. Nothing tells which room a shared note came
+ * from, so the move to version 2 drops them; rooms write fresh ones on their next visits.
+ */
 export const SiteNotesDoc = defineDoc<SiteNotesState>({
   kind: "browser.sites",
-  version: 1,
+  version: 2,
   scope: "session",
-  initial: () => ({ sites: {} }),
+  initial: () => ({ rooms: {} }),
+  migrate: () => ({ rooms: {} }),
 });
 
-/** Sites whose notes are kept; the ones used longest ago go first. */
-const MAX_SITES = 300;
+/** Sites whose notes a room keeps; the ones used longest ago go first. */
+const MAX_SITES = 100;
 
 /** What a `confirm` approval holds: the task a run stopped in, and the action to approve. */
 type ConfirmPayload = { task: string; action: string };
@@ -93,7 +102,7 @@ export default defineNudgeExtension({
     siteNotes: Type.Boolean({
       default: true,
       description:
-        "Keep short notes on how to use each site and show them to the browser on its next visit.",
+        "Keep short notes on how to use each site and show them to the browser on its next visit in the same room.",
     }),
   }),
   setup: ({ settings, dataDir, timeZone, now, documents }) => {
@@ -135,17 +144,22 @@ export default defineNudgeExtension({
       const model = run.models.getModel(provider!, id.join("/")) as Model<Api> | undefined;
       if (!model) return undefined;
       const scope = scopeOf(run.conversationId);
-      const known = settings.siteNotes ? ((await run.notes())?.sites ?? {}) : {};
+      const known = settings.siteNotes ? ((await run.notes())?.rooms[scope] ?? {}) : {};
       const siteNotes = settings.siteNotes
         ? {
             read: (host: string) => known[host]?.notes,
             write: (notes: Readonly<Record<string, string>>) =>
               run.commit(async (tx) => {
                 const doc = await tx.doc(SiteNotesDoc);
-                for (const [host, text] of Object.entries(notes))
-                  doc.sites[host] = { notes: text, at: now() };
-                const hosts = Object.entries(doc.sites).sort(([, a], [, b]) => b.at - a.at);
-                for (const [host] of hosts.slice(MAX_SITES)) delete doc.sites[host];
+                doc.rooms[scope] ??= {};
+                // Read back: the document's copy, not the object assigned.
+                const sites = doc.rooms[scope];
+                for (const [host, text] of Object.entries(notes)) {
+                  const clean = cleanSiteNotes(text);
+                  if (clean !== "") sites[host] = { notes: clean, at: now() };
+                }
+                const hosts = Object.entries(sites).sort(([, a], [, b]) => b.at - a.at);
+                for (const [host] of hosts.slice(MAX_SITES)) delete sites[host];
               }),
           }
         : undefined;

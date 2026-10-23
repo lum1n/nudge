@@ -2,6 +2,9 @@ export { default, SiteNotesDoc } from "./extension.ts";
 export {
   DEFAULT_BROWSER_MODEL,
   browserSystemPrompt,
+  cleanSiteNotes,
+  MAX_SITE_NOTE_LINE,
+  MAX_SITE_NOTE_LINES,
   MAX_SITE_NOTES,
   notesRequest,
   observedHost,
