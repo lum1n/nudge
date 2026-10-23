@@ -1,14 +1,17 @@
 import type { Context } from "@earendil-works/chord";
 import type { JsonValue } from "@earendil-works/pi-ai";
-import type {
-  ConversationId,
-  Extension,
-  ToolExecutionApi,
-  ToolExecutionResult,
-  ToolRegistration,
+import {
+  type ConversationId,
+  type Extension,
+  type TaskId,
+  type TaskRecord,
+  type ToolExecutionApi,
+  type ToolExecutionResult,
+  type ToolRegistration,
+  ToolTask,
 } from "@earendil-works/pi-durable";
 import { mapStrings } from "./redact.ts";
-import { inTurn, type Turn } from "./turn.ts";
+import { inTurn, type Owner, type SetsTurn, type Turn } from "./turn.ts";
 
 const PLACEHOLDERS = Symbol("nudge.placeholders");
 
@@ -25,7 +28,8 @@ export type ToolValues = {
   /** The turn of a conversation, see `turnOf`. */
   readonly turn: (conversationId: ConversationId, context: Context) => Promise<Turn>;
   readonly redact: (text: string) => string;
-  readonly rehydrate: (text: string) => string;
+  /** Puts back the values `viewer` may see; see `Vault.rehydrateFor`. */
+  readonly rehydrate: (viewer: string | undefined, text: string) => string;
   /** Models that put values back, for tools that act on what a model answers. */
   readonly models: () => ToolExecutionApi["models"];
 };
@@ -34,7 +38,8 @@ export type ToolValues = {
  * The extension with every tool between the transcript's placeholders and the values: arguments
  * have their values put back (unless the tool `keepsPlaceholders`), and what the tool returns,
  * prints and reports goes back to placeholders before the Harness stores it. Each call runs in
- * its conversation's turn, so `currentTurn()` says whether it answers something private.
+ * its conversation's turn, or the one a task above it sets (`SetsTurn`), so `currentTurn()` says
+ * whether it answers something private.
  */
 export function withToolValues(extension: Extension, values: ToolValues): Extension {
   if (extension.tools === undefined || extension.tools.length === 0) return extension;
@@ -48,7 +53,8 @@ function wrap(tool: ToolRegistration, values: ToolValues): ToolRegistration {
   return {
     ...tool,
     execute: async (args, api, context) => {
-      const turn = await values.turn(api.conversationId, context);
+      const turn =
+        (await setTurnOf(api, context)) ?? (await values.turn(api.conversationId, context));
       const shown: ToolExecutionApi = {
         ...api,
         ...(placeholders ? {} : { models: values.models() }),
@@ -60,13 +66,46 @@ function wrap(tool: ToolRegistration, values: ToolValues): ToolRegistration {
         diagnostic: (diagnostic) =>
           api.diagnostic({ ...diagnostic, message: redact(diagnostic.message) }),
       };
-      const given = placeholders ? args : mapStrings(args as JsonValue, rehydrate);
+      // Only what the player the turn acts for may see: others' private values stay placeholders.
+      const viewer = (turn.by ?? turn.privateTo)?.playerId;
+      const given = placeholders
+        ? args
+        : mapStrings(args as JsonValue, (text) => rehydrate(viewer, text));
       const result = await inTurn({ ...turn, redact }, () =>
         tool.execute(given as typeof args, shown, context),
       );
       return redactResult(result, redact);
     },
   } as ToolRegistration;
+}
+
+/** How far up a tool call looks for a task that sets its turn; a script's tool call is two down. */
+const SETS_TURN_DEPTH = 8;
+
+/**
+ * The turn the nearest task above this tool call sets (see `SetsTurn`): up through the tool tasks
+ * of nested calls, to the first task that isn't one. Undefined when that task sets none, as for a
+ * call the model makes, which answers what its conversation is in.
+ */
+async function setTurnOf(api: ToolExecutionApi, context: Context): Promise<Turn | undefined> {
+  let id: TaskId | undefined = api.taskId;
+  for (let depth = 0; id !== undefined && depth < SETS_TURN_DEPTH; depth++) {
+    const record: TaskRecord<JsonValue, JsonValue, unknown> | undefined = await api.getTask(
+      id,
+      context,
+    );
+    if (record === undefined) return undefined;
+    if (record.kind !== ToolTask.definition.name) {
+      const set = (record.input as Partial<SetsTurn> | null)?.turn;
+      if (typeof set !== "object" || set === null) return undefined;
+      const owner = set.privateTo as Partial<Owner> | undefined;
+      return typeof owner?.playerId === "string" && typeof owner.displayName === "string"
+        ? { privateTo: { playerId: owner.playerId, displayName: owner.displayName } }
+        : {};
+    }
+    id = record.owner;
+  }
+  return undefined;
 }
 
 function redactResult(

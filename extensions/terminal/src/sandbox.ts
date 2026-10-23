@@ -9,6 +9,9 @@ import type { Readable, Writable } from "node:stream";
 /** Where the workspace is inside the sandbox; commands see no other path of the machine. */
 export const WORKSPACE = "/workspace";
 
+/** Where commands in the sandbox find programs. */
+const SANDBOX_PATH = "/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin";
+
 /** Where the room's desktop's home is inside the sandbox, when the settings share it. */
 export const DESKTOP = "/desktop";
 
@@ -89,6 +92,12 @@ export function sandboxProblem(): string | undefined {
   return checked.problem;
 }
 
+/** Which of these programs commands in the sandbox find, in order. */
+export function installed(programs: readonly string[]): string[] {
+  const dirs = SANDBOX_PATH.split(":");
+  return programs.filter((program) => dirs.some((dir) => existsSync(`${dir}/${program}`)));
+}
+
 let checkedNetwork: { problem: string | undefined } | undefined;
 
 /** Why commands can't have the `internet` network here, if they can't; checked once. */
@@ -131,7 +140,7 @@ export function sandboxArgs(options: SandboxOptions): string[] {
     "--clearenv",
     "--setenv",
     "PATH",
-    "/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin",
+    SANDBOX_PATH,
     "--setenv",
     "HOME",
     WORKSPACE,

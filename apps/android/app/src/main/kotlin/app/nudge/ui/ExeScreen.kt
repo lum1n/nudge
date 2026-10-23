@@ -6,6 +6,7 @@ import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -29,10 +31,12 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -72,6 +76,10 @@ fun ExeScreen(model: AppModel, close: () -> Unit, ready: (SetupStart) -> Unit) {
     var signingIn by remember { mutableStateOf(false) }
     var pasting by remember { mutableStateOf(false) }
     val missing = homeProblem(model)
+    // The owned server holding a Wired network, which the new server joins as it starts.
+    var wiredHome by remember { mutableStateOf<String?>(null) }
+    var joinWired by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) { wiredHome = model.servers.wiredRoot() }
 
     fun launch() = scope.launch {
         busy = true
@@ -82,7 +90,13 @@ fun ExeScreen(model: AppModel, close: () -> Unit, ready: (SetupStart) -> Unit) {
             exe.whoami()
             model.servers.exeToken = token.trim()
             progress = "Making the server, then waiting for it to start. This takes a minute or two."
-            val launched = exe.launchServer(slugOf(name).ifEmpty { "nudge" }, 300u)
+            val vmName = slugOf(name).ifEmpty { "nudge" }
+            val home = wiredHome
+            val launched = if (joinWired && home != null) {
+                exe.launchWiredServer(vmName, 300u, model.servers.client(home))
+            } else {
+                exe.launchServer(vmName, 300u)
+            }
             ready(SetupStart(launched.vm.url, launched.code))
         } catch (error: Exception) {
             problem = explain(error)
@@ -165,6 +179,22 @@ fun ExeScreen(model: AppModel, close: () -> Unit, ready: (SetupStart) -> Unit) {
                     shape = MaterialTheme.shapes.large,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                wiredHome?.let { home ->
+                    Row(
+                        Modifier.fillMaxWidth().toggleable(value = joinWired, enabled = !busy, onValueChange = { joinWired = it }),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Join ${java.net.URI(home).host ?: home}'s Wired network")
+                            Text(
+                                "Then it and your home reach each other, with no port open at home.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(checked = joinWired, onCheckedChange = null, enabled = !busy)
+                    }
+                }
                 progress?.let { Text(it) }
                 problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 if (busy) {

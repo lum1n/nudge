@@ -10,6 +10,7 @@ import {
   type ExtensionDocuments,
   type ExtensionHost,
   formatTime,
+  readsOnly,
   roomOf,
   type RoomSocketHandler,
   section,
@@ -448,7 +449,7 @@ export const documentsExtension = defineNudgeExtension({
     });
 
     return {
-      tools: [list, search, read],
+      tools: [readsOnly(list), readsOnly(search), readsOnly(read)],
       roomSocket: library.roomSocket,
       sections: [
         section("documents", async (input, context) => {

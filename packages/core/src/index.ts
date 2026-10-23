@@ -314,8 +314,16 @@ export {
   startLocalModel,
 } from "./privacy/deep/local-model.ts";
 export { keepsPlaceholders } from "./privacy/tool-values.ts";
+export { canRead, onlyReads, readsOnly } from "./extensions/reads.ts";
 export type { RedactedHistory };
-export { currentTurn, inTurn, type Owner, type Turn, turnOf } from "./privacy/turn.ts";
+export {
+  currentTurn,
+  inTurn,
+  type Owner,
+  type SetsTurn,
+  type Turn,
+  turnOf,
+} from "./privacy/turn.ts";
 export {
   distanceMeters,
   type Geo,

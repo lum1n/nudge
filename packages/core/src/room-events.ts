@@ -9,7 +9,7 @@ import type { Approval, ApprovalsState } from "./approvals/approvals.ts";
 import { APPROVAL_ENTRY } from "./approvals/approvals.ts";
 import type { DirectoryState, Room } from "./identity/directory.ts";
 import { MESSAGE_ENTRY } from "./host-api.ts";
-import { FIRE_ENTRY } from "./nudges/timer-task.ts";
+import { FIRE_ENTRY, type FireEntryData } from "./nudges/timer-task.ts";
 import type { Owner } from "./privacy/turn.ts";
 
 /** What prompted an answer: a person's message, a fired nudge or the outcome of an approval. */
@@ -108,6 +108,19 @@ export class RoomEvents {
     const cause = causeOf(entry.kind);
     if (cause !== undefined) {
       const privateTo = privateToOf(entry);
+      const fire =
+        entry.kind === FIRE_ENTRY ? (entry.data as FireEntryData | undefined) : undefined;
+      // Written whole, such as by a watch's script: it is the answer, and nothing else follows.
+      if (fire?.said === true)
+        return {
+          type: "answer",
+          roomId,
+          text: fire.message,
+          cause,
+          entryId: entry.id,
+          status: "done",
+          ...(privateTo === undefined ? {} : { privateTo }),
+        };
       this.answers.set(entry.conversationId, {
         parts: [],
         cause,

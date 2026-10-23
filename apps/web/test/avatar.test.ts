@@ -9,19 +9,24 @@ describe("pose", () => {
   });
 
   it("stays in range in every mood, for a minute of frames", () => {
+    // One expect at the end: tens of thousands of them made this slow enough to time out in CI.
+    const outOfRange: string[] = [];
     for (const mood of MOODS) {
       for (let t = 0; t < 60; t += 1 / 30) {
         const p = pose(mood, t);
-        for (const value of Object.values(p)) expect(Number.isFinite(value)).toBe(true);
-        expect(Math.abs(p.gazeX)).toBeLessThanOrEqual(1);
-        expect(Math.abs(p.gazeY)).toBeLessThanOrEqual(1);
-        expect(p.eyeLeft).toBeGreaterThanOrEqual(0);
-        expect(p.eyeLeft).toBeLessThanOrEqual(1.35);
-        expect(p.sparks).toBeGreaterThanOrEqual(0);
-        expect(p.sparks).toBeLessThanOrEqual(1);
-        expect(p.cheeks).toBeLessThanOrEqual(1);
+        const inRange =
+          Object.values(p).every(Number.isFinite) &&
+          Math.abs(p.gazeX) <= 1 &&
+          Math.abs(p.gazeY) <= 1 &&
+          p.eyeLeft >= 0 &&
+          p.eyeLeft <= 1.35 &&
+          p.sparks >= 0 &&
+          p.sparks <= 1 &&
+          p.cheeks <= 1;
+        if (!inRange) outOfRange.push(`${mood} at ${t.toFixed(2)}s: ${JSON.stringify(p)}`);
       }
     }
+    expect(outOfRange).toEqual([]);
   });
 
   it("blinks every few seconds, quickly", () => {

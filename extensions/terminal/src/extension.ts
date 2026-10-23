@@ -17,6 +17,7 @@ import {
   type CommandResult,
   DESKTOP,
   type FileOptions,
+  installed,
   type Network,
   networkProblem,
   readFromSandbox,
@@ -34,6 +35,20 @@ type Details = Record<string, string | number | boolean | null>;
 
 /** Most characters of a command's output the model gets: its start and its end. */
 const MAX_OUTPUT = 30_000;
+
+/** Bigger tools the model is told about when the server has them; servers differ the most here. */
+const NOTABLE = [
+  "git",
+  "python3",
+  "node",
+  "pandoc",
+  "ffmpeg",
+  "convert",
+  "pdftotext",
+  "sqlite3",
+  "jq",
+  "curl",
+];
 
 /** Types of files the workspace gives the documents, for their downloads; others have none. */
 const MIME_TYPES: Record<string, string> = {
@@ -173,6 +188,8 @@ export default defineNudgeExtension({
         ),
       );
 
+    const tools = installed(NOTABLE);
+
     /** The room's documents, or why the terminal can't reach them. */
     const documentsOf = async (roomId: string, context: Context) => {
       const nudge = assistant();
@@ -191,7 +208,7 @@ export default defineNudgeExtension({
       tools: [
         defineTool({
           name: "run_command",
-          description: `Run a shell command with bash in a terminal of this room's own: a sandboxed Linux workspace at ${WORKSPACE}, where files stay between commands. Each command starts a fresh shell in ${WORKSPACE} (or cwd), so chain steps with && or pass cwd. Common command-line tools are there: files and text, archives, git, Python, Node, pandoc, ffmpeg and others the server has. ${network === "all" ? "It has the network." : network === "internet" ? "It has the internet, but not this machine's services or the local network." : "It has no network: downloads and installs fail."}${settings.desktopFiles ? ` The room's desktop's files (where its apps save) are at ${DESKTOP}.` : ""} document_to_workspace and workspace_to_documents move files between it and the room's documents. Commands that delete files, send data or connect elsewhere, or run programs not on its list, wait for the room's approval; some, like sudo, never run. Output is cut to its start and end past ${MAX_OUTPUT} characters, so filter long output (grep, head, tail).`,
+          description: `Run a shell command with bash in a terminal of this room's own: a sandboxed Linux workspace at ${WORKSPACE}, where files stay between commands. Each command starts a fresh shell in ${WORKSPACE} (or cwd), so chain steps with && or pass cwd. The basic tools for files, text and archives are there${tools.length ? `; of bigger ones, ${tools.join(", ")}` : ", but no bigger ones such as Python, Node or pandoc"}. ${network === "all" ? "It has the network." : network === "internet" ? "It has the internet, but not this machine's services or the local network." : "It has no network: downloads and installs fail."}${settings.desktopFiles ? ` The room's desktop's files (where its apps save) are at ${DESKTOP}.` : ""} document_to_workspace and workspace_to_documents move files between it and the room's documents. Commands that delete files, send data or connect elsewhere, or run programs not on its list, wait for the room's approval; some, like sudo, never run. Output is cut to its start and end past ${MAX_OUTPUT} characters, so filter long output (grep, head, tail).`,
           parameters: Type.Object({
             command: Type.String({ minLength: 1, description: "The bash command to run" }),
             cwd: Type.Optional(

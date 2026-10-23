@@ -1,4 +1,4 @@
-import { defineNudgeExtension, defineTool, section, Type } from "@nudge/core";
+import { defineNudgeExtension, defineTool, readsOnly, section, Type } from "@nudge/core";
 import { assertReachable } from "@nudge/ext-connectors";
 
 const VERSION = "0.1.0";
@@ -268,7 +268,7 @@ export function searchExtension(options: SearchOptions = {}) {
       });
 
       return {
-        tools: [search, read],
+        tools: [readsOnly(search), readsOnly(read)],
         // The public web: shops and places in results stay readable (ADR 14).
         publicTools: [search.name, read.name],
         sections: [

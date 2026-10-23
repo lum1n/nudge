@@ -25,6 +25,7 @@ An extendable, multiplayer personal assistant that keeps personal data away from
 - `@nudge/ext-terminal`: lets the assistant run shell commands in a sandboxed workspace (`extensions/terminal`).
 - `@nudge/ext-mcp`: gives the assistant the tools of MCP servers (`extensions/mcp`).
 - `@nudge/ext-codemode`: lets the model run short scripts that call the room's tools (`extensions/codemode`).
+- `@nudge/ext-scripts`: saved scripts for lookups the assistant repeats, run again without a model (`extensions/scripts`).
 - `@nudge/ext-federation`: lets people from other assistants join, with their home vouching for them (`extensions/federation`).
 - `@nudge/ext-peers`: lets linked assistants on other servers talk to each other (`extensions/peers`).
 - `@nudge/ext-places`: reminders when you get somewhere, with places the model sees as `⟦PLACE:home⟧` (`extensions/places`).
@@ -320,6 +321,7 @@ An entry's `rooms` lists the kinds of room it is on in by default (`"lobby"`, `"
 
 - Every command runs in a bubblewrap sandbox. It sees the system's programs and libraries read-only, the room's workspace at `/workspace` (on the server `<database>.extensions/terminal/workspaces/conversation-<id>`, kept between commands), an empty `/tmp`, and nothing else of the machine: not your home, not Nudge's data or config, and none of Nudge's environment (its keys). It has its own processes, hostname and IPC. A command stops after `timeoutSeconds` (default 60, at most 600), and gets at most 512 processes and 1 GB per file it writes. The model gets the start and end of the output, past 30 000 characters, redacted like any tool's.
 - It has no network unless `"network": true`. Then commands reach the internet through [slirp4netns](https://github.com/rootless-containers/slirp4netns), without this machine's own services (`127.0.0.1`, such as signal-cli's daemon) or the local network: private, link-local and CGNAT (Tailscale) addresses are blocked in the sandbox's network, and it has a DNS server of its own. That needs `slirp4netns`, `nsenter` and `ip` on the server (in the Docker image); commands with that network run as root of their own user namespace, without any capabilities. With `"localNetwork": true` as well, commands reach what the server reaches, the local network and this machine's services too, and slirp4netns isn't needed.
+- Commands have the programs the server has. The model is told which of git, Python, Node, pandoc, ffmpeg, ImageMagick, pdftotext, sqlite3, jq and curl are there. The server image doesn't install them, so in Docker the terminal has little more than the basic tools for files, text and archives.
 - Files move between the workspace and the room's documents (`extensions/documents`, when it is on in the room): `document_to_workspace` copies an uploaded document into `/workspace`, never over a file there, and `workspace_to_documents` adds a file from it to the room's documents, where people download it from the Documents page. Files of kinds the documents don't read, such as `.docx`, are kept without their text. Both go through the sandbox, so a link in the workspace leads nowhere a command couldn't go.
 - With `"desktopFiles": true`, commands read and write the room's desktop's home (`extensions/desktop`, its apps' files) at `/desktop`, such as to convert with `pandoc` what Writer saved there.
 - Each command is read before it runs, through pipes, `&&`, `$(…)`, `sh -c`, `xargs`, `find -exec` and wrappers like `env` or `timeout`:
@@ -327,7 +329,8 @@ An entry's `rooms` lists the kinds of room it is on in by default (`"lobby"`, `"
   - Commands that delete files (`rm`, `find -delete`, `git clean`, `git reset --hard`), send data (`curl -d`, `curl -X POST`, `git push`, `ssh`, `scp`, mail), run a script of the workspace, run a program not on the list, or that it can't read for sure (a program named by a variable, `sh` reading its input) wait for someone in the room to approve that exact command, as an approval like any other. Approving it runs it, and the room hears the output.
   - `sudo`, `su`, `mount`, `docker`, `systemctl` and the like never run.
 - `allow`, `ask` and `deny` add program names to those lists and override them; a program in `allow` runs however it is called.
-- The reading covers shell commands, not the code a program runs: `python3 -c '…'` or a Node script can delete workspace files or, with the network, send them without asking. The sandbox is what keeps commands from the rest of the machine.
+- Code given inline to an interpreter (`python3 -c`, `node -e`, `perl -e`, `ruby -e`, `php -r`) is read too, by the calls it makes: code that deletes files (`os.remove`, `shutil.rmtree`, `fs.rmSync`, `unlink`), connects elsewhere (`urllib.request`, `requests`, `socket`, `fetch`) or runs other commands (`subprocess`, `os.system`, `child_process`) waits for approval; the rest, such as reading a JSON file, runs at once. `"allow": ["python3"]` runs all of it without asking.
+- That reading is best effort, and it doesn't cover scripts or code an interpreter reads from its input: `python3 script.py`, a Node script, `python3 - <<'EOF'` or `echo '…' | node` can delete workspace files or, with the network, send them without asking. Inline code built from a variable (`python3 -c "$code"`) asks, as it can't be read before it runs. The sandbox is what keeps commands from the rest of the machine.
 - `readable` lists more directories commands may read, such as where a tool is installed outside `/usr` and `/opt`.
 - It needs `bwrap`, `bash` and user namespaces, like the desktop's sandbox; in Docker, the `security_opt` lines in [`packages/release/compose.yaml`](packages/release/compose.yaml). Without them it runs nothing, and `nudge doctor` says why.
 
@@ -472,6 +475,20 @@ To make it always come first ("always use the timetable API first for departures
 - Each check runs in a side conversation of the room, out of the room's sight but with its tools, connectors, logins and memory. The model replies with the items that match, each with a stable key such as its URL.
 - The room hears only about items it hasn't seen before. That arrives like a fired nudge, so push and chat bridges deliver it too.
 - Every check is a model run with tools, so it costs: `minMinutes` (default 30) caps how often, and `maxPerRoom` (default 10) how many.
+- With the scripts extension on, a watch can name a saved script (`add_watch` with `script`). Each check then runs that script instead of the model and costs nothing, so it may run as often as `minScriptMinutes` (default 5). The model is asked to tell the room only when the script finds something new. If the script also returns a `message`, that text is posted as it is, and no model runs at all.
+
+### Scripts
+
+`extensions/scripts` lets the assistant write the steps of a lookup it repeats once, as a short JavaScript program, and run it again by name. Examples: "the Finn search for a 2027 GLC under 800 000 kr", "tomorrow's power prices from the connector". The model saves one with `save_script`, which runs it once as a test and keeps it only if that works. It runs it with `run_script`, and `list_scripts`, `show_script` and `remove_script` manage them per room.
+
+```json
+{ "from": "./extensions/scripts", "settings": { "timeoutSeconds": 30, "maxPerRoom": 20 } }
+```
+
+- Scripts run like code mode's: QuickJS in a worker thread, with no network, files or environment. They call tools as `await tools.<name>(args)` and get `args` from whoever runs them. They stop after `timeoutSeconds` or past `memoryMb`.
+- **Scripts only read.** A script sees, and can call, only the tools marked as reading (`readsOnly` in `@nudge/core`): web search and pages, feeds, reading mail, calendar and contacts, documents and lists, connector `GET` calls, and coding agents' sessions. Anything that changes something or asks for approval is refused, because a script often runs with nobody watching.
+- A script is kept as the model wrote it, with placeholders for personal values, and runs with the values. What it returns goes back to placeholders before the model sees it.
+- For a watch, a script returns `{"items":[{"key":"…","text":"…"}]}`, and optionally `"message"`.
 
 ### Triggers
 

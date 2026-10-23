@@ -2,6 +2,7 @@ import {
   defineNudgeExtension,
   defineTool,
   type ExtensionParts,
+  readsOnly,
   requestApproval,
   roomOf,
   scrubSecrets,
@@ -299,7 +300,14 @@ export default defineNudgeExtension({
     });
 
     return {
-      tools: [addTool, updateTool, removeTool, callTool, docsTool],
+      tools: [
+        addTool,
+        updateTool,
+        removeTool,
+        // Scripts may read through a connector, never change something there.
+        readsOnly(callTool, (args) => READ_METHODS.has(String(args.method))),
+        readsOnly(docsTool),
+      ],
       roomSocket: panels.roomSocket,
       sections: [
         section("connectors", async (input, context) => {
