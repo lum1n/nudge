@@ -1,9 +1,11 @@
 import {
+  currentTurn,
   defineNudgeExtension,
   defineTool,
   type ExtensionParts,
   readsOnly,
   requestApproval,
+  returnsUntrusted,
   roomOf,
   scrubSecrets,
   section,
@@ -237,7 +239,10 @@ export default defineNudgeExtension({
         const isRead =
           READ_METHODS.has(args.method) ||
           connector.readPaths.includes(`${args.method} ${args.path}`);
-        if (isRead) return runCall(connector, args, secrets, room.id);
+        // After untrusted data, a read that sends something could carry it out (ADR 20).
+        const { untrusted } = currentTurn();
+        const carries = untrusted !== undefined && sendsSomething(args);
+        if (isRead && !carries) return runCall(connector, args, secrets, room.id);
         try {
           const approval = await api.commit(
             (tx) =>
@@ -247,7 +252,11 @@ export default defineNudgeExtension({
                 {
                   extension: "connectors",
                   kind: "call",
-                  summary: `${args.method} ${connector.name}${args.path}`,
+                  summary: carries
+                    ? `${args.method} ${connector.name}${withQuery(args.path, args.query)}` +
+                      (args.body === undefined ? "" : ` with ${args.body.slice(0, 300)}`) +
+                      ` (after reading ${untrusted.join(", ")}: it could carry what the conversation holds)`
+                    : `${args.method} ${connector.name}${args.path}`,
                   // The handler has no document access of its own, so the connector it needs
                   // (everything but the secret, which stays in its own store) travels with it.
                   payload: { roomId: room.id, connector, args },
@@ -305,8 +314,9 @@ export default defineNudgeExtension({
         updateTool,
         removeTool,
         // Scripts may read through a connector, never change something there.
-        readsOnly(callTool, (args) => READ_METHODS.has(String(args.method))),
-        readsOnly(docsTool),
+        // What an API answers, and its docs, are written elsewhere: data to the model (ADR 20).
+        returnsUntrusted(readsOnly(callTool, (args) => READ_METHODS.has(String(args.method)))),
+        returnsUntrusted(readsOnly(docsTool)),
       ],
       roomSocket: panels.roomSocket,
       sections: [
@@ -379,12 +389,27 @@ export default defineNudgeExtension({
             args: { method: string; path: string; query?: Record<string, string>; body?: string };
           };
           const outcome = await runCall(connector, args, secrets, roomId);
-          return { text: resultText(outcome), isError: outcome.isError };
+          return { text: resultText(outcome), isError: outcome.isError, untrusted: "call_api" };
         },
       },
     };
   },
 });
+
+/** Whether a call sends something besides its path: a query, a body, or a query in the path. */
+function sendsSomething(args: { path: string; query?: Record<string, string>; body?: string }) {
+  return (
+    Object.keys(args.query ?? {}).length > 0 ||
+    (args.body !== undefined && args.body !== "") ||
+    args.path.includes("?")
+  );
+}
+
+/** A path with its query, as the call would send it. */
+function withQuery(path: string, query: Record<string, string> | undefined): string {
+  const params = new URLSearchParams(query ?? {}).toString();
+  return params === "" ? path : `${path}${path.includes("?") ? "&" : "?"}${params}`;
+}
 
 /** What an approval to change which connector comes first, or for what, asks. */
 function ruleSummary(

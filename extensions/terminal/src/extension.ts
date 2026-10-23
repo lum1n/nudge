@@ -5,6 +5,7 @@ import type { Context } from "@earendil-works/chord";
 import type { Tx } from "@earendil-works/pi-durable";
 import {
   type Approval,
+  currentTurn,
   defineNudgeExtension,
   defineTool,
   requestApproval,
@@ -12,7 +13,7 @@ import {
   Type,
 } from "@nudge/core";
 import { roomDocuments } from "@nudge/ext-documents";
-import { judge, type PolicyLists } from "./policy.ts";
+import { judge, type PolicyLists, type Verdict } from "./policy.ts";
 import {
   type CommandResult,
   DESKTOP,
@@ -226,7 +227,7 @@ export default defineNudgeExtension({
             const problem = sandboxProblem();
             if (problem) return { output: [{ type: "text", text: problem }], isError: true };
             const payload: RunPayload = { command, ...(cwd ? { cwd } : {}) };
-            const verdict = judge(command, lists);
+            const verdict = afterUntrusted(judge(command, lists), network);
             if (verdict.kind === "deny")
               return {
                 output: [
@@ -392,4 +393,19 @@ function describe(result: CommandResult, timeoutSeconds: number): string {
       ? "stopped"
       : `exit code ${result.exitCode}`;
   return `${result.output.trimEnd() || "(no output)"}\n\n(${ending})`;
+}
+
+/**
+ * A command that would run freely asks first when the turn read untrusted data and the terminal
+ * has the network: whatever it runs could send that data out (ADR 20).
+ */
+function afterUntrusted(verdict: Verdict, network: Network): Verdict {
+  const { untrusted } = currentTurn();
+  if (verdict.kind !== "run" || network === "off" || untrusted === undefined) return verdict;
+  return {
+    kind: "ask",
+    reasons: [
+      `this turn read untrusted data (${untrusted.join(", ")}) and the terminal has the network`,
+    ],
+  };
 }

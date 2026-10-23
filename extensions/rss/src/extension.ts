@@ -3,6 +3,7 @@ import {
   defineNudgeExtension,
   defineTool,
   readsOnly,
+  returnsUntrusted,
   roomOf,
   roomsSetting,
   section,
@@ -239,7 +240,7 @@ export function rssExtension(options: RssOptions = {}) {
       });
 
       return {
-        tools: [add, readsOnly(list), remove, readsOnly(read)],
+        tools: [add, readsOnly(list), remove, returnsUntrusted(readsOnly(read))],
         // The news: places and names in stories stay readable, as in a web search (ADR 14).
         publicTools: [read.name],
         sections: [

@@ -14,6 +14,7 @@ import type { Nudges } from "../nudges/nudges.ts";
 import { NudgeTimer } from "../nudges/timer-task.ts";
 import { createNudgeTools } from "../nudges/tools.ts";
 import type { Turn } from "../privacy/turn.ts";
+import { UNTRUSTED_RULE } from "../privacy/untrusted.ts";
 import { BUILTIN_NAME } from "./define.ts";
 
 export type BuiltinOptions = {
@@ -34,8 +35,8 @@ export type BuiltinOptions = {
 
 /**
  * The always-on `nudge` extension: who the assistant is, who is in the room, the personal details
- * of whose room or private turn it is, what it remembers there, what time it is, and the nudge
- * timer with its tools.
+ * of whose room or private turn it is, what it remembers there, what time it is, how to treat
+ * untrusted data (ADR 20), and the nudge timer with its tools.
  */
 export function createBuiltinExtension(options: BuiltinOptions): Extension {
   return defineExtension({
@@ -50,6 +51,8 @@ export function createBuiltinExtension(options: BuiltinOptions): Extension {
           `Several people may share a conversation; each message starts with the name of who wrote it and the time they sent it.`,
         { tag: false },
       ),
+      // Static, so it comes before what changes, for prompt caching.
+      section("untrusted", () => UNTRUSTED_RULE),
       section("members", async (input, context) => {
         const directory = await input.read.snapshot(DirectoryDoc, context);
         const profiles: Record<string, ProfileState> = {};

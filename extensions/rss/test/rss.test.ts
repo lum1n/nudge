@@ -7,7 +7,7 @@ import {
   fauxText,
   fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
-import { createNudge, LOBBY, type Nudge } from "@nudge/core";
+import { createNudge, LOBBY, type Nudge, untrustedData } from "@nudge/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { discoverFeed, parseFeed, rssExtension } from "../src/index.ts";
 
@@ -115,27 +115,31 @@ describe("rss", () => {
     expect(asked).toEqual([`${SITE}/`, `${SITE}/atom`]);
     expect(await call("add_feed", { url: `${SITE}/rss` })).toMatch(/has that feed already: s1/);
 
+    // Stories are written elsewhere: the model gets them as untrusted data.
     expect(await call("read_feeds", {})).toBe(
-      [
-        "1. Ny bru åpnet",
-        "   Byavisa, 2026-10-21 07:30",
-        `   ${SITE}/bru`,
-        "   Brua er åpen for trafikk.",
-        "2. Storm på vei",
-        "   Været, 2026-10-21 05:00",
-        `   ${SITE}/storm`,
-        "   Sterk vind i kveld.",
-        "3. Ferja går igjen",
-        "   Byavisa, 2026-10-20 06:00",
-        `   ${SITE}/ferja`,
-        "   Ruta er tilbake & i rute.",
-      ].join("\n"),
+      untrustedData(
+        "read_feeds",
+        [
+          "1. Ny bru åpnet",
+          "   Byavisa, 2026-10-21 07:30",
+          `   ${SITE}/bru`,
+          "   Brua er åpen for trafikk.",
+          "2. Storm på vei",
+          "   Været, 2026-10-21 05:00",
+          `   ${SITE}/storm`,
+          "   Sterk vind i kveld.",
+          "3. Ferja går igjen",
+          "   Byavisa, 2026-10-20 06:00",
+          `   ${SITE}/ferja`,
+          "   Ruta er tilbake & i rute.",
+        ].join("\n"),
+      ),
     );
     expect(await call("read_feeds", { query: "STORM" })).toMatch(
-      /^1\. Storm på vei\n[^\n]*\n[^\n]*\n[^\n]*$/,
+      /^<untrusted-data source="read_feeds">\n1\. Storm på vei\n[^\n]*\n[^\n]*\n[^\n]*\n<\/untrusted-data>$/,
     );
     expect(await call("read_feeds", { feed: "byavisa", max_items: 1 })).toMatch(
-      /^1\. Ny bru åpnet/,
+      /^<untrusted-data source="read_feeds">\n1\. Ny bru åpnet/,
     );
 
     expect(await call("remove_feed", { feed: "s1" })).toMatch(/in the assistant's settings/);

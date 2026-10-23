@@ -9,6 +9,7 @@ import {
   defineNudgeExtension,
   defineTool,
   requestApproval,
+  returnsUntrusted,
   roomOf,
   Type,
 } from "@nudge/core";
@@ -211,6 +212,7 @@ export default defineNudgeExtension({
 
     return {
       models: [{ provider: provider!, modelId: id.join("/") }],
+      // What it found on the web is data, not instructions (ADR 20).
       tools: [
         defineTool({
           name: "browse",
@@ -281,7 +283,7 @@ export default defineNudgeExtension({
             };
           },
         }),
-      ],
+      ].map(returnsUntrusted),
       approvals: {
         // The action a `browse` run stopped at, approved: the same task again, in the room's
         // browser where the run left it, allowed to do exactly that.
@@ -299,12 +301,15 @@ export default defineNudgeExtension({
             { approved: action },
           );
           if (result === undefined) return { text: unavailable, isError: true };
-          if (result.outcome === "answered") return { text: result.answer, usage: result.usage };
+          // The outcome reaches the model as input, so what the web said is marked there too.
+          if (result.outcome === "answered")
+            return { text: result.answer, usage: result.usage, untrusted: "browse" };
           if (result.outcome === "needs-confirmation") {
             const next = await askToConfirm(run.commit, run.room.id, task, result.action ?? "");
             return {
               text: `${result.answer ? `${result.answer}\n` : ""}It stopped again before another step, which waits for approval ${next.id}: ${result.action}`,
               usage: result.usage,
+              untrusted: "browse",
             };
           }
           if (result.outcome === "needs-login")
