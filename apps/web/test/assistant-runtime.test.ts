@@ -2,6 +2,7 @@ import { type AppendMessage, fromThreadMessageLike } from "@assistant-ui/react";
 import { describe, expect, it } from "vitest";
 import {
   activity,
+  announcement,
   appendText,
   buildQueueAdapter,
   dayLabel,
@@ -10,7 +11,7 @@ import {
   toThreadMessageLike,
   transcript,
 } from "../src/assistant-runtime.ts";
-import type { QueuedMessage, TimelineItem } from "@nudge/client";
+import type { Approval, QueuedMessage, TimelineItem } from "@nudge/client";
 
 describe("toThreadMessageLike", () => {
   it("gives a running tool's last line of output as its progress, and drops it once done", () => {
@@ -326,5 +327,60 @@ describe("dayLabel", () => {
     expect(dayLabel(new Date(2026, 9, 19, 23).getTime(), now)).toBe("Yesterday");
     expect(dayLabel(new Date(2026, 9, 14).getTime(), now)).not.toMatch(/2026/);
     expect(dayLabel(new Date(2025, 9, 14).getTime(), now)).toMatch(/2025/);
+  });
+});
+
+describe("announcement", () => {
+  const answer = (status: "running" | "done", text: string): TimelineItem => ({
+    type: "answer",
+    id: "answer:2",
+    status,
+    parts: text === "" ? [] : [{ type: "text", text }],
+  });
+  const asked: TimelineItem = {
+    type: "user",
+    id: "user:1",
+    text: "Weather?",
+    author: { id: "ann", displayName: "Ann" },
+  };
+  const approval = (id: string): Approval => ({
+    id,
+    summary: "Send ⟦EMAIL1⟧ a mail",
+    status: "pending",
+    requestedAt: 1,
+  });
+
+  it("says a finished answer once, not each streamed word", () => {
+    const streaming = { timeline: [asked, answer("running", "It is")], approvals: [] };
+    expect(announcement({ timeline: [asked], approvals: [] }, streaming, "ann", "Nudge")).toBe(
+      undefined,
+    );
+    const more = { timeline: [asked, answer("running", "It is **sunny**")], approvals: [] };
+    expect(announcement(streaming, more, "ann", "Nudge")).toBeUndefined();
+    const done = { timeline: [asked, answer("done", "It is **sunny**")], approvals: [] };
+    expect(announcement(more, done, "ann", "Nudge")).toBe("Nudge: It is sunny");
+    expect(announcement(done, done, "ann", "Nudge")).toBeUndefined();
+  });
+
+  it("stays quiet on opening a room and on loading earlier messages", () => {
+    const now = { timeline: [answer("done", "Hi")], approvals: [approval("a1")] };
+    expect(announcement(undefined, now, "bo", "Nudge")).toBeUndefined();
+    const earlier = { timeline: [asked, answer("done", "Hi")], approvals: [approval("a1")] };
+    expect(announcement(now, earlier, "bo", "Nudge")).toBeUndefined();
+  });
+
+  it("says someone else's new message, but not my own", () => {
+    const before = { timeline: [answer("done", "Hi")], approvals: [] };
+    const after = { timeline: [answer("done", "Hi"), asked], approvals: [] };
+    expect(announcement(before, after, "bo", "Nudge")).toBe("Ann: Weather?");
+    expect(announcement(before, after, "ann", "Nudge")).toBeUndefined();
+  });
+
+  it("says an approval newly asked for, with hidden values as hidden", () => {
+    const before = { timeline: [], approvals: [approval("a1")] };
+    const after = { timeline: [], approvals: [approval("a1"), approval("a2")] };
+    expect(announcement(before, after, "ann", "Nudge")).toBe(
+      "Waiting for approval: Send hidden a mail",
+    );
   });
 });

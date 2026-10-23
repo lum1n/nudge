@@ -292,7 +292,12 @@ private fun RoomRow(
                         RoomKind.SHARED -> Icons.Outlined.Group
                         RoomKind.LOBBY -> Icons.Outlined.MeetingRoom
                     },
-                    null,
+                    // Nothing else in the row says what kind of room it is.
+                    when (room.room.kind) {
+                        RoomKind.PERSONAL -> "Personal room"
+                        RoomKind.SHARED -> "Shared room"
+                        RoomKind.LOBBY -> "Lobby"
+                    },
                 )
             },
             supportingContent = if (others.isEmpty()) null else ({ Text(others, maxLines = 1) }),

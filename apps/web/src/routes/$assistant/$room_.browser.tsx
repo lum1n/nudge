@@ -126,6 +126,8 @@ function Live({ socket }: { socket: LiveSocket }) {
         <button
           type="button"
           onClick={() => drive({ type: "navigate", url: "back" })}
+          aria-label="Back"
+          title="Back"
           className="rounded border border-stone-300 px-2 text-sm"
         >
           ←

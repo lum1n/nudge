@@ -43,6 +43,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -87,7 +90,11 @@ fun TimelineRow(item: TimelineItem, me: String?, assistant: String, openBrowser:
             PrivateLine("${item.privateTo?.displayName} sent a private message")
         } else {
             val mine = item.author == null || item.author?.id == me
-            Column(Modifier.fillMaxWidth(), horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
+            val sender = if (mine) "You" else item.author?.displayName ?: "Someone"
+            Column(
+                Modifier.fillMaxWidth().spokenAs(sender, item.text, item.sentAt, onlyYou = item.privateTo != null),
+                horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
+            ) {
                 if (item.privateTo != null) OnlyYou()
                 Bubble(item.text, mine, if (mine) null else item.author?.displayName, sentAt = item.sentAt)
             }
@@ -118,6 +125,19 @@ fun TimelineRow(item: TimelineItem, me: String?, assistant: String, openBrowser:
 }
 
 /**
+ * A message as TalkBack reads it, in one go: who sent it, that only the reader sees it, what it
+ * says and when.
+ */
+private fun Modifier.spokenAs(sender: String, text: String, sentAt: Double?, onlyYou: Boolean) = clearAndSetSemantics {
+    contentDescription = listOfNotNull(
+        sender,
+        if (onlyYou) "only you" else null,
+        withHidden(text).text.trim(),
+        sentAt?.let(::timeOfDay),
+    ).joinToString(", ")
+}
+
+/**
  * An answer on a surface of its own, under the assistant's name and when it started, so it reads
  * apart from the messages around it and from the answer before. `mine`: it answers the reader's
  * private message.
@@ -140,7 +160,8 @@ private fun AnswerCard(
     Surface(
         color = surface,
         shape = MaterialTheme.shapes.extraLarge,
-        modifier = Modifier.fillMaxWidth(),
+        // Read as one: the assistant's name, when, and what it said; its buttons and tools stay apart.
+        modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {},
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -240,7 +261,8 @@ fun Bubble(text: String, mine: Boolean, author: String?, faded: Boolean = false,
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun PendingRow(message: PendingMessage, retry: () -> Unit, dismiss: () -> Unit) {
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
+    // Read as one with its state; Retry and Dismiss stay buttons of their own.
+    Column(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}, horizontalAlignment = Alignment.End) {
         Bubble(message.text, mine = true, author = null, faded = true)
         val small = MaterialTheme.typography.labelSmall
         when (val state = message.state) {
@@ -266,9 +288,9 @@ fun ActivityRow(item: TimelineItem, openBrowser: () -> Unit) {
         } else Surface(
             color = MaterialTheme.colorScheme.secondaryContainer,
             shape = MaterialTheme.shapes.large,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {},
         ) { Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Icon(Icons.Outlined.NotificationsActive, null)
+            Icon(Icons.Outlined.NotificationsActive, "Nudge")
             Column {
                 Text(withHidden(item.text))
                 Text(
@@ -364,10 +386,11 @@ private fun Tool(tool: ToolPart) {
         Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 when (tool.status) {
-                    ToolStatus.PENDING, ToolStatus.RUNNING -> LoadingIndicator(Modifier.size(20.dp))
+                    ToolStatus.PENDING, ToolStatus.RUNNING ->
+                        LoadingIndicator(Modifier.size(20.dp).semantics { contentDescription = "Running" })
                     ToolStatus.DONE -> Icon(
                         if (tool.isError == true) Icons.Outlined.ErrorOutline else Icons.Outlined.CheckCircle,
-                        null,
+                        if (tool.isError == true) "Failed" else "Done",
                         Modifier.size(16.dp),
                         tint = if (tool.isError == true) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                     )
@@ -414,7 +437,7 @@ fun ApprovalCard(summary: String, status: ApprovalStatus, decidedBy: String?, de
         } else {
             MaterialTheme.colorScheme.surfaceContainer
         },
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {},
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
