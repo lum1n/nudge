@@ -11,12 +11,19 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  installed,
   readFromSandbox,
   runSandboxed,
   sandboxProblem,
   type SandboxOptions,
   writeToSandbox,
 } from "../src/sandbox.ts";
+
+describe("installed", () => {
+  it("finds the programs on the sandbox's PATH, and only those", () => {
+    expect(installed(["no-such-program-here", "sh"])).toEqual(["sh"]);
+  });
+});
 
 // Needs bubblewrap and user namespaces; GitHub's Ubuntu runners, for one, don't allow them.
 describe.skipIf(sandboxProblem() !== undefined)("runSandboxed", () => {
