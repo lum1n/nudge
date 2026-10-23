@@ -125,8 +125,9 @@ describe("view stores", () => {
     expect(slide([user(0)], [], users(5, 6))).toEqual([user(0)]);
   });
 
-  it("show pending messages until the timeline or the queue has them", () => {
-    const store = new RoomStore("trip");
+  it("show pending messages until the timeline or the queue has them, and say when they leave", () => {
+    const left: string[] = [];
+    const store = new RoomStore("trip", undefined, (requestId) => left.push(requestId));
     store.receive(snapshot(roomView([], { hasEarlier: false })));
     store.sending({ requestId: "r1", text: "Hello" });
     store.sending({ requestId: "r2", text: "Again" });
@@ -148,8 +149,10 @@ describe("view stores", () => {
       ],
     });
     expect(store.getState().pending.map((p) => p.requestId)).toEqual(["r2"]);
+    expect(left).toEqual(["r1"]);
     store.dismiss("r2");
     expect(store.getState().pending).toEqual([]);
+    expect(left).toEqual(["r1", "r2"]);
   });
 
   it("load earlier pages back to the start, without repeating slid items", async () => {

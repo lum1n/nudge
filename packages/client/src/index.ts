@@ -16,7 +16,13 @@ export {
   setUp,
   setupInfo,
 } from "./server-api.ts";
-export { type Lease, NudgeClient, type NudgeClientOptions, newRequestId } from "./client.ts";
+export {
+  type Lease,
+  NudgeClient,
+  type NudgeClientOptions,
+  newRequestId,
+  outboxKey,
+} from "./client.ts";
 export {
   Connection,
   type ConnectionOptions,
@@ -26,6 +32,7 @@ export {
   type SocketLike,
   type Welcome,
 } from "./connection.ts";
+export { type KeyValueStorage, memoryStorage, Outbox, type Outgoing } from "./outbox.ts";
 export {
   RoomListStore,
   type PageLoader,
