@@ -9,6 +9,8 @@ import {
   redactWhenOutdated,
 } from "./privacy/redact-history.ts";
 import {
+  type BrokenExtension,
+  ExtensionBroken,
   ExtensionNotFound,
   type InstalledExtension,
   NotAllowed,
@@ -330,6 +332,8 @@ export {
 } from "./encrypted-storage.ts";
 export { DatabaseInUse, lockDatabase } from "./storage-lock.ts";
 export {
+  type BrokenExtension,
+  ExtensionBroken,
   ExtensionNotFound,
   type InstalledExtension,
   NotAllowed,

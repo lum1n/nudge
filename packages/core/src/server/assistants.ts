@@ -195,8 +195,15 @@ export class Assistants {
   }
 
   /** The assistant's extensions as the settings page shows them. */
-  extensionSetups(name: string): Promise<ExtensionSetup[]> {
-    return listExtensionSetups(this.configPath, name);
+  async extensionSetups(name: string): Promise<ExtensionSetup[]> {
+    const setups = await listExtensionSetups(this.configPath, name);
+    const broken = this.running.get(name)?.brokenExtensions() ?? [];
+    return setups.map((setup) => {
+      const failed = setup.enabled
+        ? broken.find((extension) => extension.name === setup.name)
+        : undefined;
+      return failed === undefined ? setup : { ...setup, failed: failed.error };
+    });
   }
 
   /** Sets up the assistant's extensions as `choices` say, and writes them once they started. */

@@ -28,6 +28,8 @@ export type ExtensionSetup = {
   readonly missingEnv: string[];
   /** Why the module could not be loaded. */
   readonly error?: string;
+  /** Why its setup threw when the assistant opened; it is left out until it starts. */
+  readonly failed?: string;
 };
 
 /** One extension as the settings page saves it, in the order it is installed. */

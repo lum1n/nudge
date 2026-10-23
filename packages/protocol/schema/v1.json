@@ -5758,6 +5758,9 @@
         },
         "byDefault": {
           "type": "boolean"
+        },
+        "error": {
+          "type": "string"
         }
       }
     },
@@ -5791,6 +5794,9 @@
               },
               "byDefault": {
                 "type": "boolean"
+              },
+              "error": {
+                "type": "string"
               }
             }
           }
@@ -5878,6 +5884,9 @@
         },
         "error": {
           "type": "string"
+        },
+        "failed": {
+          "type": "string"
         }
       }
     },
@@ -5951,6 +5960,9 @@
                 }
               },
               "error": {
+                "type": "string"
+              },
+              "failed": {
                 "type": "string"
               }
             }

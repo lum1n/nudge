@@ -273,6 +273,21 @@ export type SetUpExtension = {
   readonly retire?: (context: Context) => void | Promise<void>;
 };
 
+/** An extension's name, version and description, without setting it up. */
+export function aboutExtension(input: ExtensionInput): {
+  name: string;
+  version?: string;
+  description?: string;
+} {
+  const extension = isNudgeExtension(input) || !("extension" in input) ? input : input.extension;
+  if (!isNudgeExtension(extension)) return { name: extension.name };
+  return {
+    name: extension.name,
+    version: extension.version,
+    ...(extension.description === undefined ? {} : { description: extension.description }),
+  };
+}
+
 /** Checks the settings and runs `setup`. A plain extension passes through. */
 export async function setUpExtension(
   input: ExtensionInput,

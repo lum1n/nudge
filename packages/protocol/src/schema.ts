@@ -756,6 +756,8 @@ export const RoomExtension = Type.Object({
   enabled: Type.Boolean(),
   /** Whether it is on in rooms of this kind by default; `enabled` differs when the room chose. */
   byDefault: Type.Boolean(),
+  /** Why it failed to start; it is off, in every room, until it does. */
+  error: Type.Optional(Type.String()),
 });
 export type RoomExtension = Static<typeof RoomExtension>;
 
@@ -794,6 +796,8 @@ export const ExtensionSetup = Type.Object({
   missingEnv: Type.Array(Type.String()),
   /** Why the module could not be loaded. */
   error: Type.Optional(Type.String()),
+  /** Why its setup threw when the assistant opened; it is left out until it starts. */
+  failed: Type.Optional(Type.String()),
 });
 export type ExtensionSetup = Static<typeof ExtensionSetup>;
 

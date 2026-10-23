@@ -4,6 +4,7 @@ import { ApiError, listAssistants, memoryTokens, NudgeClient } from "@nudge/clie
 import {
   type Author,
   canUse,
+  ExtensionBroken,
   ExtensionNotFound,
   findAssistant,
   loadConfig,
@@ -235,7 +236,8 @@ class LocalSession implements ChatSession {
     try {
       return await this.nudge.setRoomExtension(this.room.id, name, enabled, context);
     } catch (error) {
-      if (error instanceof ExtensionNotFound) throw new UsageError(error.message);
+      if (error instanceof ExtensionNotFound || error instanceof ExtensionBroken)
+        throw new UsageError(error.message);
       throw error;
     }
   }

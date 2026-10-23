@@ -3,6 +3,7 @@ import { pathToFileURL } from "node:url";
 import type { Extension } from "@earendil-works/pi-durable";
 import { ConfigError, type ExtensionConfig } from "../config.ts";
 import {
+  aboutExtension,
   type ExtensionInput,
   isNudgeExtension,
   type NudgeExtension,
@@ -56,6 +57,8 @@ export async function checkExtensions(entries: readonly ExtensionConfig[]): Prom
     models: readonly { provider: string; modelId: string }[];
     /** What keeps it from working on this machine (`problems`). */
     problems: readonly string[];
+    /** Why its setup threw; the assistant opens without it. */
+    error?: string;
   }[]
 > {
   const host = {
@@ -76,7 +79,22 @@ export async function checkExtensions(entries: readonly ExtensionConfig[]): Prom
   };
   const checked: Awaited<ReturnType<typeof checkExtensions>> = [];
   for (const input of await loadExtensions(entries)) {
-    const { extension, version, models, problems, close } = await setUpExtension(input, host);
+    let setUp;
+    try {
+      setUp = await setUpExtension(input, host);
+    } catch (error) {
+      // The assistant opens without it, so the others are still worth checking.
+      const { name, version } = aboutExtension(input);
+      checked.push({
+        name,
+        ...(version === undefined ? {} : { version }),
+        models: [],
+        problems: [],
+        error: (error as Error).message,
+      });
+      continue;
+    }
+    const { extension, version, models, problems, close } = setUp;
     const found = (await problems?.()) ?? [];
     await close?.();
     checked.push({

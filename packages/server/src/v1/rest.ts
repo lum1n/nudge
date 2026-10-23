@@ -9,6 +9,7 @@ import {
   canUse,
   ConfigError,
   type Credential,
+  ExtensionBroken,
   ExtensionNotFound,
   InvalidAppearance,
   InvalidPersonal,
@@ -599,6 +600,7 @@ export function restRoutes(options: RestOptions): Hono {
       );
     } catch (error) {
       if (error instanceof ExtensionNotFound) throw new HttpError(404, error.message);
+      if (error instanceof ExtensionBroken) throw new HttpError(409, error.message);
       throw error;
     }
   });

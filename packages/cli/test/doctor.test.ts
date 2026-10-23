@@ -5,9 +5,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { doctor } from "../src/commands/doctor.ts";
 
 const BROWSER = join(import.meta.dirname, "../../../extensions/browser/src/index.ts");
+const HELLO = join(import.meta.dirname, "../../../extensions/hello/src/index.ts");
 
-/** A nudge.json whose browser extension runs on OpenAI while the assistant runs on Anthropic. */
-function config(): string {
+/**
+ * A nudge.json with `extensions`; by default a browser extension that runs on OpenAI while the
+ * assistant runs on Anthropic.
+ */
+function config(
+  extensions: unknown[] = [{ from: BROWSER, settings: { model: "openai/gpt-5-mini" } }],
+): string {
   const dir = mkdtempSync(join(tmpdir(), "nudge-doctor-"));
   const path = join(dir, "nudge.json");
   writeFileSync(
@@ -17,7 +23,7 @@ function config(): string {
         {
           name: "robin",
           model: { provider: "anthropic", modelId: "claude-sonnet-5" },
-          extensions: [{ from: BROWSER, settings: { model: "openai/gpt-5-mini" } }],
+          extensions,
         },
       ],
     }),
@@ -25,11 +31,11 @@ function config(): string {
   return path;
 }
 
-async function lines(): Promise<string[]> {
+async function lines(path = config()): Promise<string[]> {
   const printed: string[] = [];
   const log = vi.spyOn(console, "log").mockImplementation((line: string) => printed.push(line));
   try {
-    await doctor({ config: config() });
+    await doctor({ config: path });
   } finally {
     log.mockRestore();
   }
@@ -53,5 +59,22 @@ describe("nudge doctor", () => {
     expect(
       found.some((line) => /^ok {3}robin: browser uses openai\/gpt-5-mini: credentials/.test(line)),
     ).toBe(true);
+  });
+
+  it("names an extension that fails to start, and still checks the others", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-test");
+    const printed = await lines(
+      config([{ from: BROWSER, settings: { model: "no-slash" } }, { from: HELLO }]),
+    );
+    expect(
+      printed.some((line) =>
+        line.startsWith(
+          "FAIL robin: browser: fails to start, so the assistant opens without it: Settings for the browser extension need fixing",
+        ),
+      ),
+    ).toBe(true);
+    expect(printed.some((line) => /^ok {3}robin: extensions browser .*, hello/.test(line))).toBe(
+      true,
+    );
   });
 });
