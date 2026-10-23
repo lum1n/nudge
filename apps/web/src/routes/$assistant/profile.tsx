@@ -392,7 +392,7 @@ function Personal({ assistant }: { assistant: string }) {
  * goes along, and leaving. Not shown on an assistant without the extension.
  */
 /**
- * The places the player saved and their reminders for getting somewhere (ADR 17), to forget or
+ * The places the player saved and their reminders for getting somewhere (ADR 18), to forget or
  * cancel. The assistant adds them when asked in chat; nothing shows without the places extension.
  */
 function Places({ assistant }: { assistant: string }) {

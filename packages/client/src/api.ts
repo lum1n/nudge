@@ -246,7 +246,7 @@ export class Api {
     return this.request("PUT", `${roomPath(room)}/location`, { shared });
   }
 
-  /** The caller's saved places and arrival reminders (ADR 17); a 404 without the places extension. */
+  /** The caller's saved places and arrival reminders (ADR 18); a 404 without the places extension. */
   places(): Promise<PlacesResponse> {
     return this.request("GET", "/ext/places/places");
   }

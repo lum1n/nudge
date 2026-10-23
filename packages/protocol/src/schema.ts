@@ -664,7 +664,7 @@ export const DevicesResponse = Type.Object({
 });
 export type DevicesResponse = Static<typeof DevicesResponse>;
 
-/** A circle a phone watches for the places extension (ADR 17), entering and leaving. */
+/** A circle a phone watches for the places extension (ADR 18), entering and leaving. */
 export const ArrivalRegion = Type.Object({
   /** `p:<name>` for a saved place, `k:<id>` for a place of a kind. */
   id: Type.String(),
@@ -1183,7 +1183,7 @@ export const GeoRegionStatus = Type.Object({
 export type GeoRegionStatus = Static<typeof GeoRegionStatus>;
 
 /**
- * The server's own map (ADR 17): addresses, places and routes from OpenStreetMap, for regions
+ * The server's own map (ADR 18): addresses, places and routes from OpenStreetMap, for regions
  * anywhere in the world, served on the server itself so nothing about where people go leaves it.
  */
 export const GeoStatus = Type.Object({

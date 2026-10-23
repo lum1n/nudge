@@ -394,7 +394,7 @@ impl Api {
         .await
     }
 
-    /// The places the phone should watch for the caller's arrival reminders (ADR 17), around
+    /// The places the phone should watch for the caller's arrival reminders (ADR 18), around
     /// where it is when given; 404 when the assistant has no places extension.
     pub async fn arrival_regions(
         &self,

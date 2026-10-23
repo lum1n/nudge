@@ -34,7 +34,7 @@ import {
 } from "./geo-catalog.ts";
 
 /**
- * The map a server runs for itself (ADR 17): Photon for addresses and places, GraphHopper for
+ * The map a server runs for itself (ADR 18): Photon for addresses and places, GraphHopper for
  * routes, both Java, on a JRE of their own. It holds the regions owners pick, and the regions
  * people's phones say they are in, anywhere in the world, within a disk limit. Nothing about where
  * people are or go leaves the machine; only the regions' data comes in.

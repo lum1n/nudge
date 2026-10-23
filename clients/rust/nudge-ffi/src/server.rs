@@ -135,7 +135,7 @@ pub struct UpdateState {
     pub error: Option<String>,
 }
 
-/// How far the server's map is (ADR 17).
+/// How far the server's map is (ADR 18).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
 pub enum GeoState {
     Off,

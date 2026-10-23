@@ -784,7 +784,7 @@ pub struct PushPlatforms {
     pub relays: Vec<String>,
 }
 
-/// A circle the phone watches for arrival reminders (ADR 17), entering and leaving.
+/// A circle the phone watches for arrival reminders (ADR 18), entering and leaving.
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
 pub struct ArrivalRegion {
     /// Give it back in `report_region_event`.

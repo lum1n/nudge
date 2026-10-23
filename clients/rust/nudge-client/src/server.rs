@@ -229,7 +229,7 @@ impl ServerApi {
             .await
     }
 
-    /// The server's own map (ADR 17); 404 on a server that wasn't given one.
+    /// The server's own map (ADR 18); 404 on a server that wasn't given one.
     pub async fn geo(&self) -> Result<GeoStatus, ApiError> {
         self.request(Method::GET, &["geo"], &[], NO_BODY).await
     }

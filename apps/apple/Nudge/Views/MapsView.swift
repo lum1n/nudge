@@ -1,7 +1,7 @@
 import Nudge
 import SwiftUI
 
-/// The server's own map (ADR 17): the regions it holds, anywhere in the world, the ones it fetches
+/// The server's own map (ADR 18): the regions it holds, anywhere in the world, the ones it fetches
 /// because someone was there, and the disk they may take.
 struct MapsSection: View {
     @Environment(AppModel.self) private var model

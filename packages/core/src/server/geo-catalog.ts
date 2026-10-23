@@ -2,7 +2,7 @@ import type { GeoPoint } from "../geo/geo.ts";
 import { GEO_SOURCES } from "./geo-sources.ts";
 
 /**
- * The world as the server's map can hold it (ADR 17): Geofabrik's regions, from continents down to
+ * The world as the server's map can hold it (ADR 18): Geofabrik's regions, from continents down to
  * countries and the states and provinces of the large ones, each with its outline and its roads
  * as one file. Addresses come from the Photon dump that holds the region's country
  * (`geo-sources.ts`), cut to the region's outline.

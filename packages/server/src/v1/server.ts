@@ -80,7 +80,7 @@ export type ServerControl = {
   backupKey(): Promise<Buffer>;
   /** Self-update, for a server `nudge-server` runs; absent otherwise. */
   readonly updates?: UpdateControl;
-  /** The server's own map (ADR 17); absent where the server wasn't given one. */
+  /** The server's own map (ADR 18); absent where the server wasn't given one. */
   readonly geo?: GeoControl;
   /** The server's Wired; absent where the server wasn't given one. */
   readonly wired?: WiredControl;

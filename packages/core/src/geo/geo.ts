@@ -32,7 +32,7 @@ export type GeoRoute = {
 };
 
 /**
- * Addresses, places and routes from a service on the assistant's own server (ADR 17), so neither
+ * Addresses, places and routes from a service on the assistant's own server (ADR 18), so neither
  * where people are nor where they go reaches anyone else.
  */
 export type Geo = {

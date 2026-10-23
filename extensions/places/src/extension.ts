@@ -138,7 +138,7 @@ export function createPlacesExtension(options: PlacesExtensionOptions = {}) {
 
       /**
        * What to say when the map found nothing near `point`: that it doesn't cover it yet, and is
-       * fetching it, where the map follows people (ADR 17).
+       * fetching it, where the map follows people (ADR 18).
        */
       const coverage = async (point: GeoPoint | undefined): Promise<string> => {
         const service = options.geo ?? providedGeo();

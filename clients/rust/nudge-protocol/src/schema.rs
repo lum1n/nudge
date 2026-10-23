@@ -921,7 +921,7 @@ pub struct DevicesResponse {
     pub relays: Vec<String>,
 }
 
-/// A circle a phone watches for the places extension (ADR 17), entering and leaving.
+/// A circle a phone watches for the places extension (ADR 18), entering and leaving.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ArrivalRegion {
     /// `p:<name>` for a saved place, `k:<id>` for a place of a kind.
@@ -1598,7 +1598,7 @@ pub struct SetUpdatesRequest {
     pub automatic: bool,
 }
 
-/// How far the server's map is (ADR 17).
+/// How far the server's map is (ADR 18).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum GeoState {

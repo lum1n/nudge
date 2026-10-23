@@ -819,7 +819,7 @@ export class Nudge {
 
   /**
    * Keeps a value from the model under a placeholder that names it, such as `⟦PLACE:home⟧`, for
-   * `owner` alone (ADR 17). A name taken by another value gets `-2`, `-3`, … A value hidden
+   * `owner` alone (ADR 18). A name taken by another value gets `-2`, `-3`, … A value hidden
    * already keeps its placeholder.
    */
   async protectNamed(value: string, kind: string, name: string, owner: string): Promise<string> {

@@ -1,4 +1,4 @@
-// The server's own map (ADR 17): the regions it holds, anywhere in the world, the ones it fetches
+// The server's own map (ADR 18): the regions it holds, anywhere in the world, the ones it fetches
 // because someone was there, and the disk they may take. Nothing about where people go leaves the
 // server; only the regions' map data comes in.
 package app.nudge.ui

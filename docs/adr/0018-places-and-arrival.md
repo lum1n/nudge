@@ -1,4 +1,4 @@
-# 17. Places have names in the vault, and reminders fire on arrival
+# 18. Places have names in the vault, and reminders fire on arrival
 
 "When I'm at the store, remind me to buy milk" didn't work. Nudges fire at a time, watches on a schedule and triggers on a web call, and the apps only say where someone is while they are open (ADR 14). The `places` extension saves people's places, reminds them when they get to one or leave it, and finds addresses and routes. Where someone lives and where they go must not reach a model provider.
 

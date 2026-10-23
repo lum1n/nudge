@@ -1,4 +1,4 @@
-// Reminders when the player gets somewhere (ADR 17). Home says which places to watch, and the
+// Reminders when the player gets somewhere (ADR 18). Home says which places to watch, and the
 // phone's own geofences wake the app when the player gets to one or leaves it, also with the app
 // closed; the app then tells home, which says the reminder in its room. Where the places are stays
 // between home and the phone.

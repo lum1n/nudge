@@ -1,6 +1,6 @@
 // Writes src/server/geo-sources.ts: every Photon dump GraphHopper publishes (the addresses of a
 // country or a group of them, for Photon 1.x), with the countries it holds and its size. The server
-// takes a region's addresses from the dump that holds its country (ADR 17).
+// takes a region's addresses from the dump that holds its country (ADR 18).
 //
 //   node packages/core/scripts/geo-sources.mjs
 //

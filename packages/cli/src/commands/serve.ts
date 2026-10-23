@@ -198,7 +198,7 @@ export async function serve(options: ServeOptions): Promise<number> {
     say,
   });
   await wired.load();
-  // The map places and routes come from (ADR 17), off until an owner picks a region.
+  // The map places and routes come from (ADR 18): the regions owners pick and those people are in.
   const geo = new ServerGeo({ dir: join(dirname(configPath), "server", "geo"), say });
   await geo.load();
   provideGeo(geo.geo);
