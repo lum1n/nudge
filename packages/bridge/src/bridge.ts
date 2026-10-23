@@ -1,6 +1,7 @@
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { defineDoc } from "@earendil-works/pi-durable";
 import {
+  AdminOnly,
   AlreadyDecided,
   ApprovalNotFound,
   canUse,
@@ -374,6 +375,7 @@ export class ChatBridge {
     } catch (error) {
       if (error instanceof ApprovalNotFound) return `No approval ${id} here.`;
       if (error instanceof AlreadyDecided) return `${id} is already decided.`;
+      if (error instanceof AdminOnly) return `Only an admin may decide ${id}.`;
       throw error;
     }
   }

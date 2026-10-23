@@ -162,6 +162,8 @@ fn items() -> Vec<TimelineItem> {
                 Part::Reasoning { text: "b".into() },
                 Part::Tool(tool()),
             ],
+            started_at: Some(1.0),
+            prompted_by: Some(PromptedBy::Watch),
             private_to: Some(ann()),
         }),
         TimelineItem::Marker(MarkerItem {
@@ -203,6 +205,7 @@ fn room_view() -> RoomView {
             decided_at: Some(2.0),
             result: Some("paid".into()),
             private_to: Some(ann()),
+            admin_only: Some(true),
         }],
         memory: vec![Fact {
             id: "f1".into(),
@@ -219,6 +222,7 @@ fn room_view() -> RoomView {
             every: Some(60_000.0),
             private_to: Some(ann()),
         }],
+        sharing_location: Some(vec![ann()]),
     }
 }
 
@@ -239,6 +243,17 @@ fn room_list_view() -> RoomListView {
             every: Some(60_000.0),
             private_to: Some(ann()),
         }],
+        appearance: Some(appearance()),
+    }
+}
+
+fn appearance() -> Appearance {
+    Appearance {
+        body: ["#e8361c".into(), "#ffb238".into()],
+        eyes: "#ffd36b".into(),
+        sparks: "#ff7a45".into(),
+        eye_shape: "round".into(),
+        accessory: "crown".into(),
     }
 }
 
@@ -366,6 +381,7 @@ fn http_bodies_match_the_schema() {
             assistants: vec![AssistantInfo {
                 name: "robin".into(),
                 display_name: "Robin".into(),
+                appearance: Some(appearance()),
             }],
         },
     );
@@ -644,6 +660,46 @@ fn http_bodies_match_the_schema() {
         .unwrap(),
         json!({ "avatar": null })
     );
+    check(
+        "PersonalDetails",
+        &PersonalDetails {
+            full_name: Some("Ann Berg".into()),
+            email: Some("ann@example.com".into()),
+            phone: Some("+47 912 34 567".into()),
+            address: Some("Storgata 5B, 0151 Oslo".into()),
+            location: Some(KnownLocation {
+                text: "Oslo S (59.9139, 10.7522)".into(),
+                at: 1_700_000_000_000.0,
+            }),
+            location_rooms: Some(vec!["trip".into()]),
+        },
+    );
+    check(
+        "ShareLocationRequest",
+        &ShareLocationRequest { shared: true },
+    );
+    check(
+        "UpdatePersonalRequest",
+        &UpdatePersonalRequest {
+            full_name: Some(Some("Ann Berg".into())),
+            email: Some(None),
+            phone: Some(Some("+47 912 34 567".into())),
+            address: Some(None),
+            location: Some(Some(LocationRequest {
+                latitude: 59.9139,
+                longitude: 10.7522,
+                place: Some("Oslo S".into()),
+            })),
+        },
+    );
+    assert_eq!(
+        serde_json::to_value(UpdatePersonalRequest {
+            location: Some(None),
+            ..Default::default()
+        })
+        .unwrap(),
+        json!({ "location": null })
+    );
     let settings = PlayerSettingsSchema {
         name: "hello".into(),
         version: Some("1.0.0".into()),
@@ -696,6 +752,21 @@ fn http_bodies_match_the_schema() {
         "AssertResponse",
         &AssertResponse {
             assertion: sealed.clone(),
+        },
+    );
+    check(
+        "OwnedServersResponse",
+        &OwnedServersResponse {
+            servers: vec![OwnedServer {
+                server: "https://robin.exe.xyz".into(),
+                since: 1.0,
+            }],
+        },
+    );
+    check(
+        "ServerRequest",
+        &ServerRequest {
+            server: "https://robin.exe.xyz".into(),
         },
     );
     check("JoinRequest", &JoinRequest { assertion: sealed });
@@ -792,8 +863,9 @@ fn server_and_setup_bodies_match_the_schema() {
     };
     let owner = ServerOwner {
         id: "o1".into(),
-        assistant: "robin".into(),
-        player_id: "ann".into(),
+        assistant: Some("robin".into()),
+        player_id: Some("ann".into()),
+        address: Some("ann@home.example/robin".into()),
         added_at: 1.0,
     };
     check(
@@ -805,6 +877,22 @@ fn server_and_setup_bodies_match_the_schema() {
         },
     );
     check("SetAdminRequest", &SetAdminRequest { admin: true });
+    check(
+        "SetAppearanceRequest",
+        &SetAppearanceRequest {
+            appearance: Some(appearance()),
+        },
+    );
+    check(
+        "SetAppearanceRequest",
+        &SetAppearanceRequest { appearance: None },
+    );
+    check(
+        "AppearanceResponse",
+        &AppearanceResponse {
+            appearance: Some(appearance()),
+        },
+    );
     check("ModelChoice", &model);
     check("AssistantBudget", &budget);
     check("ServerAssistant", &assistant);
@@ -886,9 +974,10 @@ fn server_and_setup_bodies_match_the_schema() {
     check(
         "AddOwnerRequest",
         &AddOwnerRequest {
-            assistant: "robin".into(),
-            player_id: "bo".into(),
+            assistant: Some("robin".into()),
+            player_id: Some("bo".into()),
             admin: Some(true),
+            address: Some("ann@home.example/robin".into()),
         },
     );
     check(
@@ -906,8 +995,22 @@ fn server_and_setup_bodies_match_the_schema() {
     check(
         "ServerSessionRequest",
         &ServerSessionRequest {
-            assistant: "robin".into(),
+            assistant: Some("robin".into()),
             client: client.clone(),
+            assertion: Some(Sealed {
+                v: 1,
+                epk: "e".into(),
+                iv: "i".into(),
+                data: "d".into(),
+                tag: "t".into(),
+            }),
+        },
+    );
+    check(
+        "ServerKeyResponse",
+        &ServerKeyResponse {
+            signing_key: "s".into(),
+            encryption_key: "e".into(),
         },
     );
     check(
@@ -928,22 +1031,6 @@ fn server_and_setup_bodies_match_the_schema() {
     check("UpdateState", &updates);
     check("SetUpdatesRequest", &SetUpdatesRequest { automatic: false });
     check(
-        "TailscaleState",
-        &TailscaleState {
-            state: TailscaleStatus::NeedsLogin,
-            auth_url: Some("https://login.tailscale.com/a/x".into()),
-            name: Some("nudge-robin.tail1.ts.net".into()),
-            addresses: Some(vec!["100.64.0.9".into()]),
-            error: Some("x".into()),
-        },
-    );
-    check(
-        "TailscaleConnectRequest",
-        &TailscaleConnectRequest {
-            auth_key: Some("tskey-auth-x".into()),
-        },
-    );
-    check(
         "WiredState",
         &WiredState {
             state: WiredStatus::Root,
@@ -958,6 +1045,12 @@ fn server_and_setup_bodies_match_the_schema() {
         },
     );
     check(
+        "WiredEnableRequest",
+        &WiredEnableRequest {
+            name: Some("box".into()),
+        },
+    );
+    check(
         "WiredRelayRequest",
         &WiredRelayRequest {
             url: "https://robin.exe.xyz".into(),
@@ -968,6 +1061,7 @@ fn server_and_setup_bodies_match_the_schema() {
         &WiredJoinRequest {
             invite: "wired1abc".into(),
             relay_url: Some("https://robin.exe.xyz".into()),
+            name: Some("robin".into()),
         },
     );
     check(
@@ -1048,6 +1142,14 @@ fn server_and_setup_bodies_match_the_schema() {
             },
             public_url: Some("https://robin.exe.xyz".into()),
             backups: Some(true),
+            federation: Some(true),
+            home: Some(Sealed {
+                v: 1,
+                epk: "e".into(),
+                iv: "i".into(),
+                data: "d".into(),
+                tag: "t".into(),
+            }),
         },
     );
     check(

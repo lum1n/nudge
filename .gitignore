@@ -2,13 +2,18 @@ node_modules/
 dist/
 *.tsbuildinfo
 .env
+.dev.vars
+.wrangler/
 data/
 *.sqlite
 *.sqlite-*
 extensions/browser/.eval/
+extensions/desktop/.eval/
+packages/core/eval/privacy/.eval/
 # Local config: holds passwords and keys. nudge.example.json is the committed example.
 /nudge.json
 *.log
 /.wired-node
+/.acc-node
 # The server data directory when serving from a checkout: keys, owners, Wired state.
 /server/

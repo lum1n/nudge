@@ -6,19 +6,16 @@ import { fileURLToPath } from "node:url";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { fauxProvider } from "@earendil-works/pi-ai/providers/faux";
-import {
-  Assistants,
-  openAssistant,
-  ServerKeys,
-  ServerOwners,
-  type TailscaleState,
-} from "@nudge/core";
+import { Assistants, openAssistant, ServerIdentity, ServerKeys, ServerOwners } from "@nudge/core";
 import type { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp, type ServerControl } from "../src/index.ts";
 
 const context = BACKGROUND_CONTEXT;
 const client = { name: "test", platform: "node" };
+
+/** How the server reaches owners' homes, as each test says. */
+let homes: typeof fetch = async () => new Response(null, { status: 404 });
 
 describe("the server API", () => {
   let dir: string;
@@ -67,6 +64,8 @@ describe("the server API", () => {
       assistants,
       keys: new ServerKeys(undefined, () => []),
       owners: new ServerOwners(undefined),
+      identity: new ServerIdentity(undefined),
+      fetch: (input, init) => homes(input, init),
       backupBeforeDelete: async (config) => {
         backedUp.push(...config.assistants.map((a) => a.name));
         return "nudge-1.nudgebackup";
@@ -229,38 +228,6 @@ describe("the server API", () => {
     expect((await call("GET", "/a/pocket/me", { token: ann })).status).toBe(404);
   });
 
-  it("connects the server's Tailscale for its owners, where it can run", async () => {
-    const token = await signIn();
-    expect((await call("GET", "/server/tailscale", { token })).status).toBe(404);
-    const keys: (string | undefined)[] = [];
-    let state: TailscaleState = { state: "off" };
-    app = createApp({
-      assistants: assistants.running,
-      server: {
-        ...control,
-        tailscale: {
-          state: async () => state,
-          connect: async (authKey) => {
-            keys.push(authKey);
-            return (state = { state: "needs-login", authUrl: "https://login.tailscale.com/a/x" });
-          },
-          disconnect: async () => (state = { state: "off" }),
-        },
-      },
-    });
-    expect((await call("GET", "/server/tailscale")).status).toBe(401);
-    expect((await call("POST", "/server/tailscale", { token: ann, body: {} })).status).toBe(401);
-    expect((await call("GET", "/server/tailscale", { token })).json).toEqual({ state: "off" });
-    const connected = await call("POST", "/server/tailscale", { token, body: {} });
-    expect(connected.json).toEqual({
-      state: "needs-login",
-      authUrl: "https://login.tailscale.com/a/x",
-    });
-    await call("POST", "/server/tailscale", { token, body: { authKey: "tskey-auth-x" } });
-    expect(keys).toEqual([undefined, "tskey-auth-x"]);
-    expect((await call("DELETE", "/server/tailscale", { token })).json).toEqual({ state: "off" });
-  });
-
   it("keeps model keys it tested, and never shows them", async () => {
     const token = await signIn();
     expect((await call("GET", "/server/keys", { token })).json.keys).toEqual([
@@ -309,5 +276,82 @@ describe("the server API", () => {
       body: { assistant: "robin", playerId: "bo", admin: true },
     });
     expect((await call("GET", "/a/robin/admin/players", { token: bo })).status).toBe(200);
+  });
+
+  it("shows its own keys to anyone, and adds owners whose home is elsewhere by address", async () => {
+    const key = await call("GET", "/server/key");
+    expect(key).toMatchObject({
+      status: 200,
+      json: { signingKey: expect.any(String), encryptionKey: expect.any(String) },
+    });
+    const token = await signIn();
+    const add = (body: unknown) => call("POST", "/server/owners", { token, body });
+    expect((await add({})).status).toBe(400);
+    expect((await add({ address: "nobody" })).status).toBe(400);
+    // Their home must answer with its keys, to pin them.
+    homes = async () => new Response(null, { status: 404 });
+    expect((await add({ address: "vegard@home.example/robin" })).status).toBe(502);
+    homes = async (input) => {
+      expect(String(input)).toBe("https://home.example/v1/a/robin/ext/federation/key");
+      return Response.json({
+        server: "https://home.example",
+        assistant: "robin",
+        signingKey: "sign",
+        encryptionKey: "seal",
+      });
+    };
+    const added = await add({ address: "vegard@home.example/robin" });
+    expect(added).toMatchObject({
+      status: 201,
+      json: { address: "vegard@home.example/robin", addedAt: expect.any(Number) },
+    });
+    // Their home's keys stay on the server.
+    const listed = (await call("GET", "/server/owners", { token })).json;
+    expect(JSON.stringify(listed)).not.toContain("seal");
+    expect(
+      control.owners.ownerAt({
+        server: "https://home.example",
+        assistant: "robin",
+        playerId: "vegard",
+      })?.keys,
+    ).toEqual({ signingKey: "sign", encryptionKey: "seal" });
+    // They keep the server when every assistant here goes.
+    expect(control.owners.wouldLeaveNoOwner("robin")).toBe(false);
+  });
+
+  it("turns Wired on, or joins, under the name an owner picked", async () => {
+    const asked: unknown[] = [];
+    const state = { state: "starting" as const };
+    app = createApp({
+      assistants: assistants.running,
+      server: {
+        ...control,
+        wired: {
+          state: () => ({ state: "off", name: "robin" }),
+          enable: async (name) => (asked.push(["enable", name]), state),
+          join: async (invite, options) => (asked.push(["join", invite, options]), state),
+          addRelay: async () => "wired1abc",
+          remove: async () => state,
+          disable: async () => state,
+        },
+      },
+    });
+    const token = await signIn();
+    expect((await call("GET", "/server/wired", { token })).json).toEqual({ state: "off", name: "robin" });
+    // As before: no body, and the server's own name.
+    expect((await call("POST", "/server/wired", { token })).status).toBe(200);
+    expect((await call("POST", "/server/wired", { token, body: { name: "box" } })).status).toBe(200);
+    expect((await call("POST", "/server/wired", { token, body: { name: "Box!" } })).status).toBe(400);
+    expect((await call("POST", "/server/wired", { token, body: { name: "-box" } })).status).toBe(400);
+    const joined = await call("POST", "/server/wired/join", {
+      token,
+      body: { invite: "wired1abc", name: "box" },
+    });
+    expect(joined.status).toBe(200);
+    expect(asked).toEqual([
+      ["enable", undefined],
+      ["enable", "box"],
+      ["join", "wired1abc", { name: "box" }],
+    ]);
   });
 });

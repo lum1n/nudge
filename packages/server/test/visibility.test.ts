@@ -185,6 +185,7 @@ describe("per-person visibility", () => {
       id: answer!.id,
       status: "done",
       parts: [],
+      startedAt: expect.any(Number),
       privateTo: { id: "ann", displayName: "Ann" },
     });
     expect(boView.memory).toEqual([]);
@@ -225,7 +226,7 @@ describe("per-person visibility", () => {
     const modelView = await call("GET", "/rooms/trip/model-view", tokens.Bo!);
     expect(Value.Check(ModelViewResponse, modelView.json)).toBe(true);
     expect(textOf(modelView.json)).not.toContain("keep it to yourself");
-    expect(textOf(modelView.json)).toContain("(Private to ⟦NAME1⟧.)");
+    expect(textOf(modelView.json)).toContain("(Private to Ann.)");
     const annModel = await call("GET", "/rooms/trip/model-view", tokens.Ann!);
     expect(textOf(annModel.json)).toContain("keep it to yourself");
   });

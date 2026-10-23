@@ -5,8 +5,8 @@
 #     node/       Node, the release's own
 #     app/        @nudge/release deployed with its production dependencies
 #     bin/        nudge-server (the launcher) and nudge
-#     tailscale/  Tailscale's static build, for the server's own Tailscale
 #     wired-node/ Wired's Node binding (github.com/lum1n/wired), for the server's own Wired
+#     acc-node/   ACC's Node binding (github.com/lum1n/acc), for the acc extension
 #     chromium.json  where the release's Chromium is, and its sha256, with NUDGE_RELEASE_URL set
 #     VERSION
 #
@@ -21,8 +21,8 @@ version=${1:?usage: bundle.sh <version>}
 node_version=${NODE_VERSION:-24.22.0}
 root=$(cd "$(dirname "$0")/../../.." && pwd)
 case $(uname -m) in
-  x86_64) arch=x64 tailscale_arch=amd64 ;;
-  aarch64 | arm64) arch=arm64 tailscale_arch=arm64 ;;
+  x86_64) arch=x64 ;;
+  aarch64 | arm64) arch=arm64 ;;
   *) echo "Unsupported architecture $(uname -m)" >&2 && exit 1 ;;
 esac
 name=nudge-$version-linux-$arch
@@ -55,24 +55,24 @@ rm -rf "$sqlite/deps" "$sqlite/src" "$sqlite/build/Release/obj.target" "$sqlite/
 find "$work/app/node_modules" -type d \( -name test -o -name tests -o -name __tests__ \) \
   -not -path '*/node_modules/patchright/*' -prune -exec rm -rf {} +
 "$work/node/bin/node" -e 'require(process.argv[1])' "$sqlite"
+# The local name finder's runtime (ADR 14): only this platform's CPU library, no GPU providers.
+ort=$work/app/node_modules/onnxruntime-node
+find "$ort/bin" -mindepth 2 -maxdepth 2 -type d -not -name linux -exec rm -rf {} +
+find "$ort/bin"/*/linux -mindepth 1 -maxdepth 1 -type d -not -name "$arch" -exec rm -rf {} +
+rm -f "$ort"/bin/*/linux/"$arch"/libonnxruntime_providers_*
+"$work/node/bin/node" -e 'require(process.argv[1])' "$ort"
 
 cp "$root/packages/release/bin/nudge-server" "$root/packages/release/bin/nudge" "$work/bin/"
-
-# Tailscale's newest stable build, checked against the hash it publishes: a server downloading it
-# itself can take many minutes, as from exe.dev, where pkgs.tailscale.com sends about 65 KB/s.
-packages=https://pkgs.tailscale.com/stable
-tailscale=$(curl -fsSL "$packages/?mode=json" |
-  "$work/node/bin/node" -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>console.log(JSON.parse(s).Tarballs[process.argv[1]]))' "$tailscale_arch")
-curl -fsSL "$packages/$tailscale" -o "$out/$tailscale"
-echo "$(curl -fsSL "$packages/$tailscale.sha256")  $tailscale" | (cd "$out" && sha256sum -c -)
-mkdir "$work/tailscale"
-tar -xzf "$out/$tailscale" -C "$work/tailscale" --strip-components=1 --wildcards '*/tailscale' '*/tailscaled'
-rm "$out/$tailscale"
 
 # Wired's Node binding, from its release at the version and hashes wired.sh pins.
 "$root/packages/release/scripts/wired.sh" "$work" "linux-$arch"
 "$work/node/bin/node" -e 'if (typeof require(process.argv[1]).Node.anchor !== "function") process.exit(1)' \
   "$work/wired-node/index.js"
+
+# ACC's Node binding, for the acc extension: from its release at the version and hashes acc.sh pins.
+"$root/packages/release/scripts/acc.sh" "$work" "linux-$arch"
+"$work/node/bin/node" -e 'if (typeof require(process.argv[1]).SshHost !== "function") process.exit(1)' \
+  "$work/acc-node/index.js"
 
 # Chromium, from Google's storage, can take hours to download on a server, as on exe.dev, where it
 # comes at about 30 KB/s; from the release on GitHub, seconds.

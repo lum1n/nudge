@@ -1,4 +1,6 @@
 import type {
+  Appearance,
+  AppearanceResponse,
   Approval,
   AssertResponse,
   AssistantsResponse,
@@ -28,6 +30,7 @@ import type {
   PrivateValuesResponse,
   PlayerSettingsResponse,
   PlayerSettingsSchema,
+  PersonalDetails,
   Profile,
   ProtectResponse,
   PushKeyResponse,
@@ -39,11 +42,16 @@ import type {
   RoomsResponse,
   SaveExtensionSetupsRequest,
   Sealed,
+  SignInResponse,
+  SignInStatusResponse,
   TimelineResponse,
   TokenInfo,
   TokensResponse,
+  UpdatePersonalRequest,
   UpdateProfileRequest,
   UsageResponse,
+  OwnedServer,
+  OwnedServersResponse,
 } from "@nudge/protocol";
 
 /**
@@ -92,6 +100,27 @@ export async function listAssistants(
   return read(await fetcher(`${trim(server)}/v1/a`));
 }
 
+/** Starts signing a browser in by QR code: an app signed in to `server` approves `link`. */
+export async function startSignIn(
+  server: string,
+  fetcher: typeof fetch = fetch,
+): Promise<SignInResponse> {
+  return read(await fetcher(`${trim(server)}/v1/sign-in`, { method: "POST" }));
+}
+
+/** Whether an app approved the sign-in yet; a 404 once it expired. */
+export async function signInStatus(
+  server: string,
+  started: Pick<SignInResponse, "id" | "secret">,
+  fetcher: typeof fetch = fetch,
+): Promise<SignInStatusResponse> {
+  return read(
+    await fetcher(`${trim(server)}/v1/sign-in/${encodeURIComponent(started.id)}`, {
+      headers: { authorization: `Bearer ${started.secret}` },
+    }),
+  );
+}
+
 /** Protocol v1's HTTP commands for one assistant, signed in with the token in `tokens`. */
 export class Api {
   readonly base: string;
@@ -113,6 +142,11 @@ export class Api {
 
   me(): Promise<MeResponse> {
     return this.request("GET", "/me");
+  }
+
+  /** Signs in the browser whose QR code holds sign-in `id`, as the caller. */
+  async approveSignIn(id: string): Promise<void> {
+    await this.request("POST", `/sign-in/${encodeURIComponent(id)}`);
   }
 
   /** Revokes this client's own token, and forgets it. */
@@ -193,6 +227,24 @@ export class Api {
     return this.request("PATCH", "/me/profile", update);
   }
 
+  /** The caller's full name, e-mail, phone, address and location; only they see the values. */
+  personal(): Promise<PersonalDetails> {
+    return this.request("GET", "/me/personal");
+  }
+
+  /** Changes the details given; `null` or `""` clears one. */
+  updatePersonal(update: UpdatePersonalRequest): Promise<PersonalDetails> {
+    return this.request("PATCH", "/me/personal", update);
+  }
+
+  /**
+   * Lets the model in a shared room know where the caller is, for anyone there, or stops it. The
+   * room view's `sharingLocation` shows who does.
+   */
+  shareLocation(room: string, shared: boolean): Promise<PersonalDetails> {
+    return this.request("PUT", `${roomPath(room)}/location`, { shared });
+  }
+
   /** The installed extensions that take settings from each player, with their schemas. */
   async playerSettings(): Promise<PlayerSettingsSchema[]> {
     return (await this.request<PlayerSettingsResponse>("GET", "/me/profile/extensions")).extensions;
@@ -257,6 +309,33 @@ export class Api {
     return this.request("DELETE", `/ext/federation/memberships?${query}`);
   }
 
+  // The servers the caller owns, kept at their home so all their devices see them (ADR 11). On
+  // another device, `ownerAssertion` and `ServerApi.signInFromHome` give a server token for one.
+
+  /** The servers the caller owns, as their home keeps them. */
+  async ownedServers(): Promise<OwnedServer[]> {
+    return (await this.request<OwnedServersResponse>("GET", "/ext/federation/servers")).servers;
+  }
+
+  /** Keeps a server the caller owns at home. */
+  async addOwnedServer(server: string): Promise<OwnedServer[]> {
+    return (await this.request<OwnedServersResponse>("PUT", "/ext/federation/servers", { server }))
+      .servers;
+  }
+
+  /** Takes a server off the caller's list at home; nothing on the server changes. */
+  removeOwnedServer(server: string): Promise<void> {
+    const query = new URLSearchParams({ server });
+    return this.request("DELETE", `/ext/federation/servers?${query}`);
+  }
+
+  /** Has the caller's home vouch for them to a server they own, sealed for that server. */
+  async ownerAssertion(server: string): Promise<Sealed> {
+    return (
+      await this.request<AssertResponse>("POST", "/ext/federation/owner-assertion", { server })
+    ).assertion;
+  }
+
   decide(room: string, approval: string, approve: boolean): Promise<Approval> {
     return this.request("POST", `${roomPath(room)}/approvals/${encodeURIComponent(approval)}`, {
       approve,
@@ -310,6 +389,12 @@ export class Api {
   }
 
   // Admin routes, for players with the admin flag.
+
+  /** How the assistant's robot looks; `null` goes back to the app icon's. */
+  async setAppearance(appearance: Appearance | null): Promise<Appearance | undefined> {
+    return (await this.request<AppearanceResponse>("PUT", "/admin/appearance", { appearance }))
+      .appearance;
+  }
 
   async createPlayer(displayName: string): Promise<Player> {
     return (await this.request<PlayerResponse>("POST", "/admin/players", { displayName })).player;

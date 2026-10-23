@@ -19,6 +19,10 @@ struct ServersView: View {
     /// The player's address at home, to join new assistants from there.
     let address: String?
     @State private var newServer: NewServer?
+    /// The joined server being signed in to as an owner.
+    @State private var managing: String?
+    /// Why signing in to a joined server as its owner didn't work, by server.
+    @State private var problems: [String: String] = [:]
 
     var body: some View {
         Form {
@@ -29,6 +33,25 @@ struct ServersView: View {
                             Label(host(server), systemImage: "server.rack")
                         }
                     }
+                }
+            }
+            if !model.joinedServers.isEmpty {
+                Section {
+                    ForEach(model.joinedServers, id: \.self) { server in
+                        Button { Task { await manage(server) } } label: {
+                            VStack(alignment: .leading) {
+                                Label(host(server), systemImage: "server.rack").foregroundStyle(.primary)
+                                Text(managing == server ? "Signing in…" : problems[server] ?? "Manage this server")
+                                    .font(.caption)
+                                    .foregroundStyle(problems[server] == nil ? Color.secondary : .red)
+                            }
+                        }
+                        .disabled(managing != nil)
+                    }
+                } header: {
+                    Text("Joined from home")
+                } footer: {
+                    Text("You have rooms on these. If one is yours, manage it here: your home vouches for you.")
                 }
             }
             Section {
@@ -43,9 +66,20 @@ struct ServersView: View {
         .navigationTitle("Servers")
         .sheet(item: $newServer) { NewServerView(start: $0) }
     }
+
+    private func manage(_ server: String) async {
+        managing = server
+        defer { managing = nil }
+        do {
+            try await model.manageServer(server)
+            problems[server] = nil
+        } catch {
+            problems[server] = explain(error)
+        }
+    }
 }
 
-/// One server: its updates, its assistants, the model keys set on it, its Tailscale and Wired, and its
+/// One server: its updates, its assistants, the model keys set on it, its Wired, and its
 /// recovery kit; removing it, for one made on exe.dev.
 private struct ServerView: View {
     @Environment(AppModel.self) private var model
@@ -91,7 +125,6 @@ private struct ServerView: View {
                         Label("New assistant", systemImage: "plus")
                     }
                 }
-                TailscaleSection(server: server)
                 WiredSection(server: server)
                 Section("Model keys") {
                     ForEach(keys, id: \.provider) { key in
@@ -140,14 +173,18 @@ private struct ServerView: View {
                     }
                 }
                 Section {
-                    Button("Sign out as owner", role: .destructive) {
+                    Button("Remove from my servers", role: .destructive) {
                         Task {
-                            await model.servers.forget(server)
-                            dismiss()
+                            do {
+                                try await model.removeServer(server)
+                                dismiss()
+                            } catch {
+                                problem = explain(error)
+                            }
                         }
                     }
                 } footer: {
-                    Text("This device stops managing it. Nothing on the server changes.")
+                    Text("Your devices stop managing it. You stay its owner, and nothing on the server changes.")
                 }
                 if let vm = exeVmName(server), model.servers.exeToken != nil {
                     Section {
@@ -227,7 +264,7 @@ private struct ServerView: View {
         }
     }
 
-    /// Asks the server for a newer release now, rather than at its daily check: it installs it and
+    /// Asks the server for a newer release now, rather than at its hourly check: it installs it and
     /// restarts into it when it updates automatically.
     private func checkUpdates() async {
         checking = true
@@ -276,7 +313,6 @@ private struct NewAssistantView: View {
     @State private var busy = false
     @State private var problem: String?
     @State private var made: MadeAssistant?
-    @State private var tailscale: TailscaleState?
 
     init(server: String, keys: [ProviderKey], address: String?, changed: @escaping () async throws -> Void) {
         self.server = server
@@ -291,11 +327,8 @@ private struct NewAssistantView: View {
 
     private var ready: [String] { keys.filter { $0.source != .none }.map(\.provider) }
 
-    /// Whether the home can join it now: it has federation, and when it is only in a tailnet,
-    /// this server is in it too.
-    private var homeCanJoin: Bool {
-        model.homeProblem == nil && (model.homeReach != .tailnet || tailscale?.state == .connected)
-    }
+    /// Whether the home can join it now: it has federation, at an address this server reaches.
+    private var homeCanJoin: Bool { model.homeProblem == nil }
 
     var body: some View {
         Form {
@@ -356,14 +389,6 @@ private struct NewAssistantView: View {
                 }
                 if forMe {
                     HomeFederationSection()
-                    if model.homeProblem == nil, model.homeReach == .tailnet {
-                        if tailscale?.state != .connected {
-                            Section {
-                                Text("Your home is only in your tailnet, so this server joins it first.")
-                            }
-                        }
-                        TailscaleSection(server: server) { tailscale = $0 }
-                    }
                 }
                 if let problem {
                     Section { Text(problem).foregroundStyle(.red) }

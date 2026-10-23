@@ -10,6 +10,11 @@ export type VaultEntry = {
   readonly owner?: string;
   /** Dropped for good: the placeholder stays, so its number is never given to another value. */
   readonly forgotten?: true;
+  /**
+   * Readable again (ADR 15): no longer hidden, but its placeholder, wherever it is still stored,
+   * is put back in what the model sees.
+   */
+  readonly released?: true;
 };
 
 /** Placeholders look like `⟦EMAIL1⟧`: the brackets never occur in prose, Markdown or JSON. */
@@ -18,6 +23,13 @@ export const PLACEHOLDER = /⟦([A-Z]+)(\d+)⟧/g;
 export const MAX_PLACEHOLDER_LENGTH = 24;
 
 const WORD = /[\p{L}\p{N}_]/u;
+/** Kinds whose values may take a Norwegian possessive `s`, as in "Anns bil". */
+const POSSESSIVE_KINDS = new Set(["NAME", "PLACE", "ORG", "ADDRESS"]);
+
+/** The lookup key of a value: lower case, runs of whitespace as one space. */
+export function vaultKey(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/gu, " ");
+}
 
 /**
  * Stable placeholders for personal values. Append-only: a value keeps its placeholder for the
@@ -26,6 +38,7 @@ const WORD = /[\p{L}\p{N}_]/u;
  */
 export class Vault {
   private readonly byKey = new Map<string, VaultEntry>();
+  private readonly releasedByKey = new Map<string, VaultEntry>();
   private readonly byPlaceholder = new Map<string, VaultEntry>();
   private readonly counters = new Map<string, number>();
   private unsaved: VaultEntry[] = [];
@@ -70,7 +83,16 @@ export class Vault {
       throw new Error("Refusing to protect a value shorter than two characters");
     if (!/^[A-Z]+$/.test(kind))
       throw new Error(`Placeholder kind must be upper-case letters, got "${kind}"`);
-    const existing = this.byKey.get(trimmed.toLowerCase());
+    const released = this.releasedByKey.get(vaultKey(trimmed));
+    if (released !== undefined) {
+      // Hidden again, under its old placeholder.
+      const { released: _, ...hidden } = released;
+      const entry = owner === undefined ? hidden : { ...hidden, owner };
+      this.insert(entry);
+      this.unsaved.push(entry);
+      return entry.placeholder;
+    }
+    const existing = this.byKey.get(vaultKey(trimmed));
     if (existing !== undefined) {
       if (owner !== undefined && existing.owner === undefined) {
         const owned = { ...existing, owner };
@@ -105,10 +127,35 @@ export class Vault {
       ...(entry.owner === undefined ? {} : { owner: entry.owner }),
       forgotten: true,
     };
-    this.byKey.delete(entry.value.toLowerCase());
+    this.byKey.delete(vaultKey(entry.value));
     this.insert(tombstone);
     this.unsaved.push(tombstone);
     return true;
+  }
+
+  /**
+   * Makes a value readable again: text no longer has it replaced, and its placeholder is put back
+   * wherever it is still stored, the model's requests included. Owned and forgotten values can't
+   * be released. False when there is nothing to release.
+   */
+  release(placeholder: string): boolean {
+    const entry = this.byPlaceholder.get(placeholder);
+    if (entry === undefined || entry.forgotten || entry.released || entry.owner !== undefined)
+      return false;
+    const released: VaultEntry = { ...entry, released: true };
+    this.insert(released);
+    this.unsaved.push(released);
+    return true;
+  }
+
+  /** Whether the vault hides `value` already. */
+  knows(value: string): boolean {
+    return this.byKey.has(vaultKey(value));
+  }
+
+  /** The placeholder `value` is hidden under; undefined when it isn't hidden. */
+  placeholderOf(value: string): string | undefined {
+    return this.byKey.get(vaultKey(value))?.placeholder;
   }
 
   /** The entry behind a placeholder, forgotten ones included. */
@@ -123,15 +170,11 @@ export class Vault {
    */
   redact(text: string, detectors: readonly PiiDetector[], owner?: string): string {
     if (text === "") return text;
-    return mapOutsidePlaceholders(text, (segment) => {
+    return mapOutsidePlaceholders(this.withReleased(text), (segment) => {
       for (const span of pickSpans(segment, detectors)) {
         const value = segment.slice(span.start, span.end);
         // Only new values: an owner given here must not take a value others already saw.
-        this.protect(
-          value,
-          span.kind,
-          this.byKey.has(value.trim().toLowerCase()) ? undefined : owner,
-        );
+        this.protect(value, span.kind, this.byKey.has(vaultKey(value)) ? undefined : owner);
       }
       return this.replaceKnown(segment);
     });
@@ -172,26 +215,34 @@ export class Vault {
     );
   }
 
+  /** Text with the placeholders of released values put back. */
+  private withReleased(text: string): string {
+    if (this.releasedByKey.size === 0 || !text.includes("⟦")) return text;
+    return text.replace(PLACEHOLDER, (placeholder) => {
+      const entry = this.byPlaceholder.get(placeholder);
+      return entry?.released ? entry.value : placeholder;
+    });
+  }
+
   private hideOwned(text: string, viewer: string | undefined): string {
     let matcher = this.hiddenFrom.get(viewer);
     if (matcher === undefined) {
-      const keys = [...this.byKey.entries()].flatMap(([key, entry]) =>
-        entry.owner !== undefined && entry.owner !== viewer ? [key] : [],
+      const entries = [...this.byKey.entries()].filter(
+        ([, entry]) => entry.owner !== undefined && entry.owner !== viewer,
       );
-      matcher = keys.length === 0 ? null : matcherOf(keys);
+      matcher = entries.length === 0 ? null : matcherOf(entries);
       this.hiddenFrom.set(viewer, matcher);
     }
     if (matcher === null) return text;
-    return replaceWords(text, matcher, (match) => this.byKey.get(match.toLowerCase())?.placeholder);
+    return text.replace(matcher, (match) => this.byKey.get(vaultKey(match))?.placeholder ?? match);
   }
 
   private replaceKnown(text: string): string {
     if (this.byKey.size === 0) return text;
-    this.matcher ??= matcherOf([...this.byKey.keys()]);
-    return replaceWords(
-      text,
+    this.matcher ??= matcherOf([...this.byKey.entries()]);
+    return text.replace(
       this.matcher,
-      (match) => this.byKey.get(match.toLowerCase())?.placeholder,
+      (match) => this.byKey.get(vaultKey(match))?.placeholder ?? match,
     );
   }
 
@@ -199,7 +250,15 @@ export class Vault {
     const match = /^⟦([A-Z]+)(\d+)⟧$/.exec(entry.placeholder);
     if (match === null) throw new Error(`Malformed placeholder ${entry.placeholder}`);
     const [, kind = "", n = "0"] = match;
-    if (!entry.forgotten) this.byKey.set(entry.value.toLowerCase(), entry);
+    const key = vaultKey(entry.value);
+    // An entry's last state wins: a released value is no longer hidden, and the reverse.
+    const previous = this.byPlaceholder.get(entry.placeholder);
+    if (previous !== undefined && !previous.forgotten) {
+      this.byKey.delete(vaultKey(previous.value));
+      this.releasedByKey.delete(vaultKey(previous.value));
+    }
+    if (entry.released) this.releasedByKey.set(key, entry);
+    else if (!entry.forgotten) this.byKey.set(key, entry);
     this.byPlaceholder.set(entry.placeholder, entry);
     this.counters.set(kind, Math.max(this.counters.get(kind) ?? 0, Number(n)));
     this.matcher = undefined;
@@ -208,37 +267,31 @@ export class Vault {
   }
 }
 
-/** One alternation of `keys`, longest first, so "Ann Berg" wins over "Ann". */
-function matcherOf(keys: readonly string[]): RegExp {
+/**
+ * One alternation of the keys, longest first, so "Ann Berg" wins over "Ann". Each key carries its
+ * own word boundaries, so where "Ann Berg" fails ("Ann Bergen") the regex falls back to "Ann".
+ * Whitespace in a key matches any run of whitespace; names and places may take a possessive `s`.
+ */
+function matcherOf(entries: readonly (readonly [string, VaultEntry])[]): RegExp {
   return new RegExp(
-    [...keys]
-      .sort((a, b) => b.length - a.length)
-      .map((key) => key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    [...entries]
+      .sort(([a], [b]) => b.length - a.length)
+      .map(([key, entry]) => {
+        const body = key
+          .split(" ")
+          .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+          .join("\\s+");
+        const before = WORD.test(key[0] ?? "") ? "(?<![\\p{L}\\p{N}_])" : "";
+        const after = !WORD.test(key.at(-1) ?? "")
+          ? ""
+          : POSSESSIVE_KINDS.has(entry.kind)
+            ? "(?=s?(?![\\p{L}\\p{N}_]))"
+            : "(?![\\p{L}\\p{N}_])";
+        return before + body + after;
+      })
       .join("|"),
     "giu",
   );
-}
-
-/** Replaces whole-word matches of `matcher` with what `replace` gives, or leaves them. */
-function replaceWords(
-  text: string,
-  matcher: RegExp,
-  replace: (match: string) => string | undefined,
-): string {
-  return text.replace(matcher, (match, offset: number) => {
-    // Whole words only: "Ann" must not eat the start of "Anniversary".
-    const before = text[offset - 1];
-    const after = text[offset + match.length];
-    const startsWord = WORD.test(match[0] ?? "");
-    const endsWord = WORD.test(match.at(-1) ?? "");
-    if (
-      (startsWord && before !== undefined && WORD.test(before)) ||
-      (endsWord && after !== undefined && WORD.test(after))
-    ) {
-      return match;
-    }
-    return replace(match) ?? match;
-  });
 }
 
 /** Applies `change` to the text between placeholders, leaving the placeholders untouched. */

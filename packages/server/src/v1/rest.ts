@@ -2,6 +2,7 @@ import type { Cursor, EntryId } from "@earendil-works/pi-durable";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
   addressOf,
+  AdminOnly,
   AlreadyDecided,
   ApprovalNotFound,
   BudgetReached,
@@ -9,11 +10,14 @@ import {
   ConfigError,
   type Credential,
   ExtensionNotFound,
+  InvalidAppearance,
+  InvalidPersonal,
   InvalidProfile,
   MAX_ROUTE_BODY,
   NotAllowed,
   type Nudge,
   type Player as CorePlayer,
+  type PersonalUpdate,
   type ProfileUpdate,
   type Room as CoreRoom,
   type TokenRecord,
@@ -21,6 +25,7 @@ import {
 import {
   AdminCreateRoomRequest,
   type AdminPlayer,
+  type AppearanceResponse,
   type AssistantsResponse,
   CreatePlayerRequest,
   CreateRoomRequest,
@@ -39,12 +44,14 @@ import {
   type PairingCodeResponse,
   PairRequest,
   type PairResponse,
+  type SignInResponse,
   type PlayerMemoryResponse,
   type PlayerResponse,
   type PlayersResponse,
   ProtectRequest,
   type PrivateValuesResponse,
   type PlayerSettingsResponse,
+  type PersonalDetails,
   type Profile,
   type ProtectResponse,
   RememberRequest,
@@ -54,11 +61,14 @@ import {
   type RoomExtensionsResponse,
   type RoomsResponse,
   SetAdminRequest,
+  SetAppearanceRequest,
+  ShareLocationRequest,
   ShareMemoryRequest,
   SetRoomExtensionRequest,
   type TimelineResponse,
   type TokenInfo,
   type TokensResponse,
+  UpdatePersonalRequest,
   UpdateProfileRequest,
   type UsageResponse,
 } from "@nudge/protocol";
@@ -76,6 +86,7 @@ import { bodyLimit } from "hono/body-limit";
 import type { Static, TSchema } from "typebox";
 import { Value } from "typebox/value";
 import type { Hubs } from "./hub.ts";
+import { SignInRequests, signInLink } from "./sign-in.ts";
 
 const context = BACKGROUND_CONTEXT;
 
@@ -113,7 +124,7 @@ type Env = {
 
 export class HttpError extends Error {
   constructor(
-    readonly status: 400 | 401 | 403 | 404 | 409 | 410 | 413 | 429,
+    readonly status: 400 | 401 | 403 | 404 | 409 | 410 | 413 | 429 | 502,
     message: string,
   ) {
     super(message);
@@ -134,14 +145,42 @@ const PAGE_MAX = 200;
 export function restRoutes(options: RestOptions): Hono {
   const app = new Hono<Env>();
 
-  app.get("/a", (c) =>
+  app.get("/a", async (c) =>
     c.json({
-      assistants: [...options.assistants].map(([name, nudge]) => ({
-        name,
-        displayName: nudge.displayName,
-      })),
+      assistants: await Promise.all(
+        [...options.assistants].map(async ([name, nudge]) => {
+          const appearance = await nudge.appearance.get(context);
+          return {
+            name,
+            displayName: nudge.displayName,
+            ...(appearance === undefined ? {} : { appearance }),
+          };
+        }),
+      ),
     } satisfies AssistantsResponse),
   );
+
+  // The web UI's sign-in by QR code: the browser starts and asks without a token, an app that is
+  // signed in to one of the assistants approves.
+  const signIns = new SignInRequests();
+
+  app.post("/sign-in", (c) => {
+    const started = signIns.start();
+    if (started === undefined)
+      throw new HttpError(429, "Too many sign-ins waiting; try again soon");
+    const server = options.publicUrl() ?? requestOrigin(c.req.raw, options.trustProxy());
+    return c.json(
+      { ...started, link: signInLink(server, started.id) } satisfies SignInResponse,
+      201,
+    );
+  });
+
+  app.get("/sign-in/:id", (c) => {
+    const secret = /^Bearer\s+(\S+)$/i.exec(c.req.header("authorization") ?? "")?.[1];
+    const status = secret === undefined ? undefined : signIns.status(c.req.param("id"), secret);
+    if (status === undefined) throw new HttpError(404, "No such sign-in, or it expired");
+    return c.json(status);
+  });
 
   const findAssistant: MiddlewareHandler<Env> = async (c, next) => {
     const name = c.req.param("assistant") ?? "";
@@ -225,6 +264,17 @@ export function restRoutes(options: RestOptions): Hono {
   api.all("/ext/:extension/*", extensionRoute);
 
   api.use(authenticate);
+
+  // Signs in the browser that shows the QR code as the caller, with a pairing code it trades.
+  api.post("/sign-in/:id", async (c) => {
+    const id = c.req.param("id");
+    if (!signIns.pending(id))
+      throw new HttpError(404, "That QR code expired or was used; show a new one");
+    const { code } = await c.var.nudge.players.pairingCode(c.var.credential.player.id, context);
+    if (!signIns.approve(id, c.var.name, code))
+      throw new HttpError(409, "That QR code was used meanwhile");
+    return c.body(null, 204);
+  });
 
   api.get("/me", async (c) => {
     const { player, clientId } = c.var.credential;
@@ -320,6 +370,31 @@ export function restRoutes(options: RestOptions): Hono {
       return c.json(profile satisfies Profile);
     } catch (error) {
       if (error instanceof InvalidProfile) throw new HttpError(400, error.message);
+      throw error;
+    }
+  });
+
+  api.get("/me/personal", async (c) => {
+    const details = await c.var.nudge.personal.get(c.var.credential.player.id, context);
+    if (details === undefined) throw new HttpError(404, "No such player");
+    return c.json(details satisfies PersonalDetails);
+  });
+
+  api.patch("/me/personal", async (c) => {
+    // Kept where the player lives, and not spread to the assistants they joined.
+    const { home } = c.var.credential.player;
+    if (home !== undefined)
+      throw new HttpError(403, `Your personal details stay at your home, ${addressOf(home)}`);
+    const body = await readJson(c, UpdatePersonalRequest);
+    try {
+      const details = await c.var.nudge.personal.update(
+        c.var.credential.player.id,
+        body as PersonalUpdate,
+        context,
+      );
+      return c.json(details satisfies PersonalDetails);
+    } catch (error) {
+      if (error instanceof InvalidPersonal) throw new HttpError(400, error.message);
       throw error;
     }
   });
@@ -528,6 +603,27 @@ export function restRoutes(options: RestOptions): Hono {
     }
   });
 
+  // Consent: the model there may then know where the caller is, for anyone in the room.
+  api.put("/rooms/:room/location", async (c) => {
+    const room = await usableRoom(c);
+    const { player } = c.var.credential;
+    if (player.home !== undefined)
+      throw new HttpError(403, `Where you are stays at your home, ${addressOf(player.home)}`);
+    const body = await readJson(c, ShareLocationRequest);
+    try {
+      const details = await c.var.nudge.personal.shareLocation(
+        player.id,
+        room.id,
+        body.shared,
+        context,
+      );
+      return c.json(details satisfies PersonalDetails);
+    } catch (error) {
+      if (error instanceof InvalidPersonal) throw new HttpError(400, error.message);
+      throw error;
+    }
+  });
+
   api.post("/rooms/:room/approvals/:approval", async (c) => {
     const room = await usableRoom(c);
     const body = await readJson(c, DecideRequest);
@@ -543,6 +639,7 @@ export function restRoutes(options: RestOptions): Hono {
     } catch (error) {
       if (error instanceof ApprovalNotFound) throw new HttpError(404, error.message);
       if (error instanceof AlreadyDecided) throw new HttpError(409, error.message);
+      if (error instanceof AdminOnly) throw new HttpError(403, error.message);
       throw error;
     }
   });
@@ -621,6 +718,18 @@ export function restRoutes(options: RestOptions): Hono {
       throw new HttpError(404, `No player "${id}"`);
     const player = await c.var.nudge.players.setAdmin(id, body.admin, context);
     return c.json(await adminPlayerOf(c.var.nudge, player));
+  });
+
+  // Room lists show the change as it happens; `null` goes back to the app icon's robot.
+  api.put("/admin/appearance", admin, async (c) => {
+    const body = await readJson(c, SetAppearanceRequest);
+    try {
+      const appearance = await c.var.nudge.appearance.set(body.appearance, context);
+      return c.json((appearance === undefined ? {} : { appearance }) satisfies AppearanceResponse);
+    } catch (error) {
+      if (error instanceof InvalidAppearance) throw new HttpError(400, error.message);
+      throw error;
+    }
   });
 
   api.post("/admin/tokens", admin, async (c) => {

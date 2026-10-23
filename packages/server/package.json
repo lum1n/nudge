@@ -11,6 +11,11 @@
       "@nudge/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./v1": {
+      "@nudge/source": "./src/v1/routes.ts",
+      "types": "./dist/v1/routes.d.ts",
+      "default": "./dist/v1/routes.js"
     }
   },
   "scripts": {
@@ -30,10 +35,12 @@
     "@earendil-works/pi-ai": "1.2.0",
     "@nudge/ext-browser": "workspace:*",
     "@nudge/ext-connectors": "workspace:*",
+    "@nudge/ext-desktop": "workspace:*",
     "@nudge/ext-documents": "workspace:*",
     "@nudge/ext-federation": "workspace:*",
     "@nudge/ext-lists": "workspace:*",
     "@nudge/ext-mail": "workspace:*",
+    "@nudge/ext-mcp": "workspace:*",
     "@types/ws": "8.18.2",
     "undici": "7.30.1"
   }

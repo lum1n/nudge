@@ -80,7 +80,12 @@ const context = BACKGROUND_CONTEXT;
 export async function openLocal(target: LocalTarget): Promise<ChatSession> {
   const config = await loadConfig(target.config);
   const assistant = findAssistant(config, target.assistant);
-  const nudge = await openAssistant(config, assistant, context, hostOptions(assistant));
+  const nudge = await openAssistant(
+    config,
+    assistant,
+    context,
+    hostOptions(assistant, config, target.config),
+  );
   try {
     const playerId = target.player ?? "owner";
     const known = await nudge.players.get(playerId, context);

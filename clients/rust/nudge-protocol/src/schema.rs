@@ -151,6 +151,18 @@ pub enum AnswerStatus {
     Failed,
 }
 
+/// What an answer answers, when it isn't a message.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PromptedBy {
+    /// A scheduled nudge that fired.
+    Nudge,
+    /// Something new a watch found.
+    Watch,
+    #[serde(other)]
+    Unknown,
+}
+
 /// One answer: every model response and tool round between two messages.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AnswerItem {
@@ -159,6 +171,15 @@ pub struct AnswerItem {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     pub parts: Vec<Part>,
+    /// When its first model response started, in ms since the epoch.
+    #[serde(default, rename = "startedAt", skip_serializing_if = "Option::is_none")]
+    pub started_at: Option<f64>,
+    #[serde(
+        default,
+        rename = "promptedBy",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub prompted_by: Option<PromptedBy>,
     /// It answers something private: only this player sees its parts; everyone else gets none.
     #[serde(default, rename = "privateTo", skip_serializing_if = "Option::is_none")]
     pub private_to: Option<Player>,
@@ -268,6 +289,9 @@ pub struct Approval {
     /// Only this player sees it; everyone else gets it emptied, so they know there was one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub private_to: Option<Player>,
+    /// Only an admin may decide it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub admin_only: Option<bool>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -324,6 +348,10 @@ pub struct RoomView {
     pub memory: Vec<Fact>,
     /// Soonest first.
     pub nudges: Vec<RoomNudge>,
+    /// The members whose location the model may know here: a personal room's owner once their
+    /// device shared one, and in a shared room those who chose to share it there.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sharing_location: Option<Vec<Player>>,
 }
 
 // The room list: the player's rooms and nudges.
@@ -358,6 +386,25 @@ pub struct RoomListView {
     pub rooms: Vec<RoomListEntry>,
     /// Soonest first.
     pub nudges: Vec<RoomListNudge>,
+    /// The assistant's robot; the app icon's when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appearance: Option<Appearance>,
+}
+
+/// How the assistant's robot looks in the apps. Colours are `#rrggbb`. `eye_shape` and
+/// `accessory` are strings so that ones a newer server knows still read: apps draw the app icon's
+/// for those they don't.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Appearance {
+    /// The ribbon's two ends.
+    pub body: [String; 2],
+    pub eyes: String,
+    pub sparks: String,
+    /// `pill`, `round`, `square` or `wide`.
+    pub eye_shape: String,
+    /// `none`, `antenna`, `headphones`, `sprout` or `crown`.
+    pub accessory: String,
 }
 
 // Patches.
@@ -538,6 +585,8 @@ pub struct ErrorResponse {
 pub struct AssistantInfo {
     pub name: String,
     pub display_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appearance: Option<Appearance>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -976,6 +1025,65 @@ pub struct UpdateProfileRequest {
     pub extensions: Option<Option<ExtensionSettingsUpdate>>,
 }
 
+/// A player's personal details, as they see them. Each value is theirs alone: the model and
+/// everyone else only ever see its placeholder. Kept by the assistant they were given to.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonalDetails {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub full_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phone: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub address: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub location: Option<KnownLocation>,
+    /// The shared rooms where they let the model know where they are.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub location_rooms: Option<Vec<String>>,
+}
+
+/// Whether the model may know where the caller is in a shared room, for anyone there.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ShareLocationRequest {
+    pub shared: bool,
+}
+
+/// Where a player's device last said they were (`place (lat, lon)`), and when.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct KnownLocation {
+    pub text: String,
+    /// In ms since the epoch.
+    pub at: f64,
+}
+
+/// Where a device is, and the place it named, such as a street address.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct LocationRequest {
+    pub latitude: f64,
+    pub longitude: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub place: Option<String>,
+}
+
+/// The details to change: `None` leaves one as it is, `Some(None)` (or an empty string) clears it.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdatePersonalRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "nullable")]
+    pub full_name: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "nullable")]
+    pub email: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "nullable")]
+    pub phone: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "nullable")]
+    pub address: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "nullable")]
+    pub location: Option<Option<LocationRequest>>,
+}
+
 /// Each extension's new preferences for the player by name; `None` clears an extension's.
 pub type ExtensionSettingsUpdate =
     std::collections::BTreeMap<String, Option<serde_json::Map<String, Value>>>;
@@ -1060,6 +1168,24 @@ pub struct Sealed {
     pub tag: String,
 }
 
+/// A server, by its address: one the caller owns, or one to vouch for them to.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ServerRequest {
+    pub server: String,
+}
+
+/// A server the caller owns, kept at their home so all their devices see it (ADR 11).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct OwnedServer {
+    pub server: String,
+    pub since: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct OwnedServersResponse {
+    pub servers: Vec<OwnedServer>,
+}
+
 /// The caller's home vouching for them, for the assistant they asked about only.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AssertResponse {
@@ -1113,6 +1239,18 @@ pub struct AdminPlayer {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SetAdminRequest {
     pub admin: bool,
+}
+
+/// `None` goes back to the app icon's robot.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SetAppearanceRequest {
+    pub appearance: Option<Appearance>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppearanceResponse {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appearance: Option<Appearance>,
 }
 
 // The server's own API, under `/v1/server` (ADR 11): for its owners, not an assistant's admins.
@@ -1287,9 +1425,14 @@ pub struct SetProviderKeyRequest {
 #[serde(rename_all = "camelCase")]
 pub struct ServerOwner {
     pub id: String,
-    /// The assistant they are a player of, and their id there.
-    pub assistant: String,
-    pub player_id: String,
+    /// For someone who lives on one of the server's assistants: it, and their id there.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assistant: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub player_id: Option<String>,
+    /// For someone whose home is elsewhere, which vouches for them: their address.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub address: Option<String>,
     pub added_at: f64,
 }
 
@@ -1298,21 +1441,38 @@ pub struct ServerOwnersResponse {
     pub owners: Vec<ServerOwner>,
 }
 
+/// A player of one of the server's assistants (`assistant` and `player_id`), or an `address`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AddOwnerRequest {
-    pub assistant: String,
-    pub player_id: String,
-    /// Makes them an admin of `assistant` too.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assistant: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub player_id: Option<String>,
+    /// Makes the player an admin of `assistant` too.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub admin: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub address: Option<String>,
 }
 
-/// Sent with the player's token of `assistant`.
+/// Sent with the player's token of `assistant`, or with `assertion` alone: their home vouching
+/// for them to this server, from the home's `POST /ext/federation/owner-assertion`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ServerSessionRequest {
-    pub assistant: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assistant: Option<String>,
     pub client: ClientInfo,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assertion: Option<Sealed>,
+}
+
+/// The server's own keys, as homes seal owner assertions to it (ADR 11).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerKeyResponse {
+    pub signing_key: String,
+    pub encryption_key: String,
 }
 
 /// `token` is shown only here; keep it like a password.
@@ -1346,44 +1506,6 @@ pub struct SetUpdatesRequest {
     pub automatic: bool,
 }
 
-/// How far the server's own Tailscale is.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum TailscaleStatus {
-    Off,
-    Starting,
-    /// Someone approves it at `auth_url`.
-    NeedsLogin,
-    /// A tailnet admin approves the machine.
-    NeedsApproval,
-    Connected,
-    Error,
-}
-
-/// The server's own Tailscale, so it can reach assistants only in its owner's tailnet.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TailscaleState {
-    pub state: TailscaleStatus,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub auth_url: Option<String>,
-    /// Its MagicDNS name, such as `nudge-robin.tail1234.ts.net`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub addresses: Option<Vec<String>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-}
-
-/// Without `auth_key`, the state answers with a login URL to approve.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TailscaleConnectRequest {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub auth_key: Option<String>,
-}
-
 /// How far the server's Wired is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -1410,6 +1532,8 @@ pub struct WiredMember {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct WiredState {
     pub state: WiredStatus,
+    /// Its name in the network. While off, the name it takes when turned on or joining, unless
+    /// the owner picks another.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1424,13 +1548,21 @@ pub struct WiredState {
     pub error: Option<String>,
 }
 
+/// Makes the server the root of its own network, as `name` (such as `box`) when given; else its
+/// public address's first label, or the host's name.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct WiredEnableRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
 /// A relay a new server will serve, such as `https://robin.exe.xyz`, added before it joins.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct WiredRelayRequest {
     pub url: String,
 }
 
-/// Joins the network `invite` is for. The server serves a relay at its public HTTPS address, or
+/// Joins the network `invite` is for, as `name` when given. The server serves a relay at its public HTTPS address, or
 /// `relay_url`, which the root must have listed first.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -1438,6 +1570,9 @@ pub struct WiredJoinRequest {
     pub invite: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub relay_url: Option<String>,
+    /// Its name in the network, such as `box`; see `WiredEnableRequest`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
 }
 
 /// The invite the new server joins with, in `NUDGE_WIRED_INVITE`. It is a credential.
@@ -1550,6 +1685,15 @@ pub struct SetupRequest {
     /// Nightly backups beside the config; default true.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub backups: Option<bool>,
+    /// Whether its assistant has federation, to be part of a cluster; default true. False sets
+    /// it up standalone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub federation: Option<bool>,
+    /// An owner assertion from the person's home, when they set it up signed in there: the server
+    /// is started from that home, so its first player is them and its owner their address, and it
+    /// can join their cluster later. Without one, the first player lives there, a new home.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub home: Option<Sealed>,
 }
 
 /// The tokens are shown only here: the player's for the assistant, the owner's for the server.

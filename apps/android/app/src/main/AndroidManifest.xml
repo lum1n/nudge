@@ -4,6 +4,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Where the player is, told to their home while the app is open, when they turn it on. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
     <!-- The speech recognizer, for dictating messages (Android 11 and later only see what they ask for). -->
     <queries>
@@ -37,6 +40,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="nudge" android:host="pair" />
                 <data android:scheme="nudge" android:host="join" />
+                <data android:scheme="nudge" android:host="sign-in" />
             </intent-filter>
         </activity>
 

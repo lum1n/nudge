@@ -207,7 +207,7 @@ describe("players and rooms", () => {
     await nudge.close(context);
   });
 
-  it("tells the model who is in the room, by placeholder", async () => {
+  it("tells the model who is in the room, by name", async () => {
     const { faux, options, answer, requests } = setup(":memory:");
     faux.setResponses([answer("Hello both."), answer("Hi Ann.")]);
     const nudge = await createNudge(options, context);
@@ -221,9 +221,10 @@ describe("players and rooms", () => {
     await nudge.close(context);
 
     const [shared, personal] = requests.map((request) => JSON.stringify(request));
-    expect(shared).toContain("People who can read this conversation: ⟦NAME1⟧, ⟦NAME2⟧.");
-    expect(personal).toContain("This is ⟦NAME1⟧'s personal conversation");
-    expect(shared).not.toMatch(/\bAnn\b|\bBo\b/);
+    // Display names are readable to the model (ADR 15).
+    expect(shared).toContain("People who can read this conversation: Ann, Bo.");
+    expect(personal).toContain("This is Ann's personal conversation");
+    expect(shared).not.toContain("⟦NAME");
   });
 
   it("keeps a profile per player, and tells the model their time zones and languages", async () => {
@@ -270,11 +271,10 @@ describe("players and rooms", () => {
     await nudge.close(context);
     const [request] = requests.map((request) => JSON.stringify(request));
     expect(request).toContain(
-      "⟦NAME3⟧: time zone Europe/Oslo, speaks Norwegian Bokmål (Norway).\\n" +
-        "⟦NAME2⟧: time zone America/New_York.\\n" +
+      "Anna: time zone Europe/Oslo, speaks Norwegian Bokmål (Norway).\\n" +
+        "Bo: time zone America/New_York.\\n" +
         "Answer each person in their language.",
     );
-    expect(request).not.toContain("Anna");
   });
 
   it("reads and writes addresses", () => {
@@ -310,6 +310,28 @@ describe("players and rooms", () => {
     expect(again.token).not.toBe(first.token);
     expect((await nudge.players.byHome(home, context))?.id).toBe("vegard-2");
     expect(await nudge.players.byHome({ ...home, playerId: "ann" }, context)).toBeUndefined();
+    await nudge.close(context);
+  });
+
+  it("binds a player who lives here to their home, once, so joining from it lands on them", async () => {
+    const { options } = setup(":memory:");
+    const nudge = await createNudge(options, context);
+    const vegard = await nudge.players.invite("Vegard", context);
+    const ann = (await nudge.players.invite("Ann", context)).player;
+    const home = { server: "https://other.example", assistant: "robin", playerId: "vegard" };
+    const keys = { signingKey: "s", encryptionKey: "e" };
+    const bound = await nudge.players.setHome(vegard.player.id, home, { keys }, context);
+    expect(bound).toMatchObject({ id: "vegard", home, startedFrom: { keys } });
+    await expect(
+      nudge.players.setHome(vegard.player.id, { ...home, playerId: "v" }, { keys }, context),
+    ).rejects.toThrow(/has a home already/);
+    await expect(nudge.players.setHome(ann.id, home, { keys }, context)).rejects.toThrow(
+      /Another player has that home/,
+    );
+    const joined = await nudge.players.addRoaming(home, "Vegard", context);
+    expect(joined.player.id).toBe("vegard");
+    expect(await nudge.players.isAdmin("vegard", context)).toBe(true);
+    expect((await nudge.players.authenticate(vegard.token, context))?.player.id).toBe("vegard");
     await nudge.close(context);
   });
 

@@ -22,6 +22,7 @@ import nudge.client.JoinLink
 import nudge.client.Observed
 import nudge.client.PairingLink
 import nudge.client.PreferencesTokens
+import nudge.client.SignInLink
 import nudge.client.observeConnectionState
 import nudge.client.observeRoomListState
 import nudge.client.saved
@@ -44,7 +45,6 @@ import nudge.ffi.PushPlatforms
 import nudge.ffi.Reach
 import nudge.ffi.RoomListUpdate
 import nudge.ffi.SetupChoices
-import nudge.ffi.TailscaleStatus
 import nudge.ffi.WiredStatus
 import nudge.ffi.listAssistants
 import nudge.ffi.newDeviceKey
@@ -52,7 +52,16 @@ import nudge.ffi.reach
 import nudge.ffi.registerWithRelay
 
 /** An assistant the app is signed in to. */
-data class Account(val server: String, val assistant: String, val assistantName: String) {
+/**
+ * An assistant the app is signed in to. [standalone]: signed in as a person of its own there, not
+ * joined from home: a standalone server, outside the person's cluster, which home never names.
+ */
+data class Account(
+    val server: String,
+    val assistant: String,
+    val assistantName: String,
+    val standalone: Boolean = false,
+) {
     val key get() = "$server|$assistant"
 
     fun isAt(server: String, assistant: String) =
@@ -118,6 +127,8 @@ class AppModel(private val context: Context) {
     val pendingLink = MutableStateFlow<PairingLink?>(null)
     /** A join link: an admin elsewhere invited the player. */
     val pendingJoin = MutableStateFlow<JoinLink?>(null)
+    /** A sign-in link from the QR code of a browser that shows the web UI. */
+    val pendingSignIn = MutableStateFlow<SignInLink?>(null)
     /** Why the app signed out on its own, for the sign-in screen. */
     val signedOutBecause = MutableStateFlow<String?>(null)
 
@@ -126,6 +137,9 @@ class AppModel(private val context: Context) {
 
     /** Speech to text for the composer, and the player's speech languages on this device. */
     val dictation = Dictation(context, preferences)
+
+    /** Where the player is, told to home while the app is on screen, if they turned it on. */
+    val location = LocationSharing(context, preferences, scope)
 
     /** Whether the app is on screen; pushes for the open room aren't shown then. */
     @Volatile var foreground = false
@@ -195,14 +209,34 @@ class AppModel(private val context: Context) {
 
     /**
      * Sets a server up with what the wizard asked (ADR 11), and signs in as its owner. Signed out,
-     * its new assistant becomes the person's home. Signed in at home, it is joined from there
-     * instead, so they keep one home: at once, or once the server is in the home's tailnet when
-     * the home is only there, which the answer says ([SetUpServer.NeedsTailscale]).
+     * its new assistant becomes the person's home. Signed in at home, it is started from there:
+     * home vouches for the person, so its first player is them and its owner their address. With
+     * federation it is joined from home at once, landing on that player; without, it stays
+     * standalone, and can join the cluster later ([joinCluster]).
      */
-    suspend fun setUp(server: String, choices: SetupChoices): SetUpServer {
-        if (mutableSession.value != null) homeProblem()?.let { throw ServerProblem(it) }
+    suspend fun setUp(server: String, wizard: SetupChoices): SetUpServer {
+        if (mutableSession.value != null && wizard.federation) homeProblem()?.let { throw ServerProblem(it) }
+        var choices = wizard
+        val home = mutableSession.value
+        if (home != null && mutableMemberships.value?.address != null) {
+            try {
+                choices = choices.copy(homeAssertion = home.client.ownerAssertion(server.trimEnd('/')))
+            } catch (error: NudgeException) {
+                // A standalone server home can't vouch for becomes a home of its own instead.
+                if (choices.federation) throw error
+            }
+        }
         val done = nudge.ffi.setUp(server, choices, "nudge-android", "android")
         servers.remember(server, done.serverToken)
+        if (mutableSession.value != null && !choices.federation) {
+            val account = Account(server, done.assistant, choices.displayName ?: done.assistant, standalone = true)
+            tokens(account).set(done.token)
+            syncing.withLock {
+                open(account)?.let { mutablePlaces.value += it }
+                savePlaces()
+            }
+            return SetUpServer.Standalone
+        }
         if (mutableSession.value != null) {
             // The owner API invites and joins from here on; the setup player's token isn't needed.
             val setupAccount = Account(server, done.assistant, done.assistant)
@@ -212,7 +246,6 @@ class AppModel(private val context: Context) {
             runCatching { setup.signOut() }
             setupTokens.set(null)
             setup.close()
-            if (homeReach() == Reach.TAILNET) return SetUpServer.NeedsTailscale(done.assistant)
             joinFromHome(server, done.assistant)
             return SetUpServer.Joined
         }
@@ -244,10 +277,7 @@ class AppModel(private val context: Context) {
         return reach(home.account.server)
     }
 
-    /**
-     * Why the home can't join assistants on other servers yet, if it can't. A home only in a
-     * tailnet can, once the other server is in that tailnet too, which is up to each server.
-     */
+    /** Why the home can't join assistants on other servers yet, if it can't. */
     fun homeProblem(): ServerProblem.Kind? {
         if (mutableSession.value == null) return null
         if (homeReach() == Reach.PRIVATE) return ServerProblem.Kind.PRIVATE_HOME
@@ -274,10 +304,20 @@ class AppModel(private val context: Context) {
     /** Sets the address other servers know the home by: federation's `server`, turned on. */
     private suspend fun setHomeAddress(server: String) {
         val home = mutableSession.value ?: return
-        val setups = home.client.extensionSetups()
+        setFederationAddress(home.client, server)
+        mutableMemberships.value = home.client.memberships()
+        mutableHomeFederation.value = true
+    }
+
+    /**
+     * Turns federation on for the assistant [client] is signed in to, at [server], the address
+     * other servers know it by. Needs the player to be an admin there.
+     */
+    private suspend fun setFederationAddress(client: NudgeClient, server: String) {
+        val setups = client.extensionSetups()
         val federation = setups.firstOrNull { it.from.endsWith("federation") }
             ?: throw ServerProblem(ServerProblem.Kind.NO_FEDERATION_EXTENSION)
-        home.client.saveExtensionSetups(
+        client.saveExtensionSetups(
             setups
                 .filter { it.configured || it.from == federation.from }
                 .map { setup ->
@@ -288,8 +328,49 @@ class AppModel(private val context: Context) {
                     }
                 },
         )
-        mutableMemberships.value = home.client.memberships()
-        mutableHomeFederation.value = true
+    }
+
+    /**
+     * Whether a standalone assistant was started from this person's home, so it can join their
+     * cluster: its player there is them, by their address. Independent ones never can.
+     */
+    fun canJoinCluster(place: Session): Boolean {
+        val address = mutableMemberships.value?.address ?: return false
+        return place.account.standalone && place.me.value?.player?.address == address
+    }
+
+    /**
+     * Joins a standalone assistant started from home to the person's cluster (ADR 11): turns its
+     * federation on at the address this device reaches it by, and joins it from home, which lands
+     * on the same player, so its rooms and history stay. From then on it is one of home's
+     * memberships, on all their devices.
+     */
+    suspend fun joinCluster(place: Session) {
+        val home = mutableSession.value ?: return
+        if (!canJoinCluster(place)) return
+        homeProblem()?.let { throw ServerProblem(it) }
+        val server = place.account.server
+        setFederationAddress(place.client, server.trimEnd('/'))
+        ensureReachesHome(server)
+        val old = tokens(place.account).get()
+        syncing.withLock {
+            val joined = joined(home, server, place.account.assistant)
+            mutablePlaces.value =
+                if (mutablePlaces.value.any { it === place }) mutablePlaces.value.map { if (it === place) joined else it }
+                else mutablePlaces.value + joined
+            savePlaces()
+        }
+        place.close()
+        // The standalone token is the same player's; the joined one replaced it.
+        if (old != null) {
+            val oldTokens = PreferencesTokens(preferences, "setup:${place.account.key}")
+            oldTokens.set(old)
+            val client = NudgeClient(config(place.account).copy(cachePath = null), oldTokens)
+            runCatching { client.signOut() }
+            oldTokens.set(null)
+            client.close()
+        }
+        syncPlaces()
     }
 
     /**
@@ -309,16 +390,11 @@ class AppModel(private val context: Context) {
     }
 
     /**
-     * Makes sure [server] reaches the home as other servers do: through its own Tailscale for a
-     * home only in a tailnet, or in the home's Wired network for a home on Wired, which this device
-     * puts it in when it owns the server holding that network.
+     * Makes sure [server] reaches the home as other servers do: in the home's Wired network for a
+     * home on Wired, which this device puts it in when it owns the server holding that network.
      */
     private suspend fun ensureReachesHome(server: String) {
         when (homeReach()) {
-            Reach.TAILNET ->
-                if (runCatching { servers.client(server).tailscale() }.getOrNull()?.state != TailscaleStatus.CONNECTED) {
-                    throw ServerProblem(ServerProblem.Kind.NEEDS_TAILSCALE)
-                }
             Reach.WIRED -> {
                 val name = homeWiredName() ?: return
                 val owner = servers.client(server)
@@ -350,9 +426,9 @@ class AppModel(private val context: Context) {
 
     /**
      * Joins an assistant on a server this device owns from home, as its owner: invites the home's
-     * address, joins, and makes that guest an admin there and an owner of the server. A home only
-     * in a tailnet needs the server's own Tailscale connected first; a home on Wired, the server in
-     * its network, which this does when it can.
+     * address, joins, and makes that guest an admin there; the server makes the person an owner by
+     * their address, so deleting the assistant later leaves them its owner. A home on Wired needs
+     * the server in its network, which this does when it can.
      */
     suspend fun joinFromHome(server: String, assistant: String) {
         if (mutableSession.value == null) return
@@ -369,6 +445,11 @@ class AppModel(private val context: Context) {
         owner.addOwner(assistant, guest, true)
         // An admin now: Settings shows its extensions and invites.
         place.me.value = runCatching { place.client.me() }.getOrNull() ?: place.me.value
+        // On the list at home, for the person's other devices; the next sync puts it there otherwise.
+        mutableSession.value?.let { home ->
+            runCatching { home.client.addOwnedServer(server.trimEnd('/')) }
+                .onSuccess { listed -> servers.setAtHome(listed.map { it.server }.toSet()) }
+        }
     }
 
     /**
@@ -396,7 +477,78 @@ class AppModel(private val context: Context) {
             if (membership.server.trimEnd('/') == server.trimEnd('/')) runCatching { leave(membership) }
         }
         exe.delete(vm)
+        removeServer(server)
+    }
+
+    /**
+     * Takes a server off the person's list at home and signs this device out of it; their other
+     * devices follow when they next look. They stay its owner, and nothing on the server changes.
+     */
+    suspend fun removeServer(server: String) {
+        mutableSession.value?.let { home ->
+            try {
+                home.client.removeOwnedServer(server.trimEnd('/'))
+            } catch (error: NudgeException.Status) {
+                // Not on the list, or no federation at home: there is nothing to take off.
+                if (error.status.toInt() != 404) throw error
+            }
+        }
         servers.forget(server)
+    }
+
+    /**
+     * Matches the servers this device owns to the person's list at home (ADR 11): signs in to the
+     * ones another device put there, with an assertion from home; puts there the ones only this
+     * device knew, when their owner is the person at home; and forgets the ones taken off elsewhere.
+     */
+    private suspend fun syncServers(home: Session) {
+        val address = mutableMemberships.value?.address ?: return
+        val listed = try {
+            home.client.ownedServers()
+        } catch (_: NudgeException) {
+            return
+        }
+        if (mutableSession.value !== home) return
+        val atHome = listed.map { it.server.trimEnd('/') }.toMutableSet()
+        val homeServer = home.account.server.trimEnd('/')
+        for (server in servers.owned.value) {
+            val key = server.trimEnd('/')
+            if (key in atHome || key == homeServer) continue
+            if (servers.wasAtHome(key)) {
+                servers.forget(server)
+                continue
+            }
+            val client = servers.client(server)
+            val owner = runCatching { client.info().owner }.getOrNull() ?: continue
+            // Set up before owners had addresses, this device may be signed in as the setup's
+            // player, beside the owner its home vouches for.
+            if (owner.address != address &&
+                runCatching { client.owners() }.getOrNull()?.none { it.address == address } != false
+            ) continue
+            runCatching { home.client.addOwnedServer(key) }.onSuccess { atHome += key }
+        }
+        for (owned in listed) {
+            val local = servers.owned.value.firstOrNull { it.trimEnd('/') == owned.server }
+            if (local != null) {
+                // Still signed in, unless its token was revoked, as with the player it was through.
+                try {
+                    servers.client(local).info()
+                    continue
+                } catch (error: NudgeException) {
+                    if (error !is NudgeException.Status || error.status.toInt() != 401) continue
+                }
+            }
+            val server = local ?: owned.server
+            try {
+                val assertion = home.client.ownerAssertion(owned.server)
+                servers.client(server).signInFromHome(assertion)
+                // The client kept the token; remember the server.
+                servers.remember(server, serverToken(server) ?: continue)
+            } catch (_: NudgeException) {
+                // Unreachable for now, or no longer theirs: tried again next time.
+            }
+        }
+        servers.setAtHome(atHome)
     }
 
     /** Signs in to the home's server as its owner, when the player is one; quietly not otherwise. */
@@ -421,6 +573,7 @@ class AppModel(private val context: Context) {
         // Cleared first: revoking the token closes the socket with 4401, which mustn't sign out
         // a second time.
         mutableSession.value = null
+        location.setClient(null)
         val places = mutablePlaces.value
         mutablePlaces.value = emptyList()
         mutableMemberships.value = null
@@ -445,6 +598,7 @@ class AppModel(private val context: Context) {
             }
         }
         if (foreground) scope.launch { syncPlaces() }
+        location.setForeground(foreground)
     }
 
     /** An FCM registration token, new or again: register it with every server once signed in. */
@@ -495,6 +649,29 @@ class AppModel(private val context: Context) {
         mutableMemberships.value = runCatching { home.client.memberships() }.getOrNull()
     }
 
+    /**
+     * Signs in the browser that shows `link`'s QR code as the player, at an assistant on the server
+     * the link names, home first; returns that assistant's name. A browser may reach the server by
+     * another address than this device, so the other assistants are asked too: only the server that
+     * made the QR code knows its request, and the others answer 404 or 401.
+     */
+    suspend fun approveSignIn(link: SignInLink): String {
+        val sessions = listOfNotNull(mutableSession.value) + mutablePlaces.value
+        val named = sessions.filter { it.account.server.trimEnd('/') == link.server.trimEnd('/') }
+        for (session in named + (sessions - named.toSet())) {
+            try {
+                session.client.approveSignIn(link.request)
+                return session.account.assistantName
+            } catch (error: NudgeException.Status) {
+                if (error.status.toInt() != 401 && error.status.toInt() != 404) throw error
+            }
+        }
+        throw IllegalStateException(
+            "That code has expired or was used, or none of your assistants is on ${hostOf(link.server)}. " +
+                "Reload the sign-in page for a new one.",
+        )
+    }
+
     /** Starts or stops carrying the player's own memory to an assistant they joined. */
     suspend fun carryMemory(membership: Membership, carry: Boolean) {
         val home = mutableSession.value ?: return
@@ -503,6 +680,15 @@ class AppModel(private val context: Context) {
     }
 
     /** Stops the home sending the player's profile and memory there, and signs this device out of it. */
+    /** Signs this device out of a standalone assistant; nothing at home changes. */
+    suspend fun signOutOf(place: Session) {
+        syncing.withLock {
+            mutablePlaces.value = mutablePlaces.value.filter { it !== place }
+            savePlaces()
+        }
+        forget(place)
+    }
+
     suspend fun leave(membership: Membership) {
         val home = mutableSession.value ?: return
         home.client.leave(membership.server, membership.assistant)
@@ -518,6 +704,8 @@ class AppModel(private val context: Context) {
     private fun start(account: Account, made: NudgeClient? = null) {
         val session = open(account, made) ?: return
         mutableSession.value = session
+        // Only home learns where the player is, never the assistants they joined.
+        location.setClient(session.client)
         // The assistants joined, as this device last knew them, until home says.
         mutablePlaces.value = savedPlaces().mapNotNull { place ->
             if (tokens(place).get() == null) null else open(place)?.also { watch(it) }
@@ -568,7 +756,7 @@ class AppModel(private val context: Context) {
         syncing.withLock {
             if (mutableSession.value !== home) return
             val (gone, kept) = mutablePlaces.value.partition { place ->
-                before.any { it === place } &&
+                !place.account.standalone && before.any { it === place } &&
                     memberships.memberships.none { place.account.isAt(it.server, it.assistant) }
             }
             val added = memberships.memberships
@@ -579,6 +767,7 @@ class AppModel(private val context: Context) {
             gone.forEach { forget(it) }
         }
         rejoinSignedOut()
+        syncServers(home)
     }
 
     /**
@@ -589,7 +778,7 @@ class AppModel(private val context: Context) {
     suspend fun rejoinSignedOut() {
         val home = mutableSession.value ?: return
         syncing.withLock {
-            for (place in mutablePlaces.value.filter { it.signedOut }) {
+            for (place in mutablePlaces.value.filter { it.signedOut && !it.account.standalone }) {
                 val fresh = runCatching { joined(home, place.account.server, place.account.assistant) }.getOrNull() ?: continue
                 if (mutableSession.value !== home || mutablePlaces.value.none { it === place }) {
                     fresh.close()
@@ -662,11 +851,18 @@ class AppModel(private val context: Context) {
 
     private fun savedPlaces(): List<Account> = preferences.getStringSet(PLACES, emptySet()).orEmpty().mapNotNull { saved ->
         val parts = saved.split('\u0001')
-        if (parts.size == 3) Account(parts[0], parts[1], parts[2]) else null
+        when (parts.size) {
+            3 -> Account(parts[0], parts[1], parts[2])
+            4 -> Account(parts[0], parts[1], parts[2], standalone = parts[3] == STANDALONE)
+            else -> null
+        }
     }
 
     private fun savePlaces() {
-        val saved = mutablePlaces.value.map { "${it.account.server}\u0001${it.account.assistant}\u0001${it.account.assistantName}" }
+        val saved = mutablePlaces.value.map {
+            val kind = if (it.account.standalone) "\u0001$STANDALONE" else ""
+            "${it.account.server}\u0001${it.account.assistant}\u0001${it.account.assistantName}$kind"
+        }
         preferences.edit().putStringSet(PLACES, saved.toSet()).apply()
     }
 
@@ -688,6 +884,7 @@ class AppModel(private val context: Context) {
 
     private companion object {
         const val PLACES = "places"
+        const val STANDALONE = "standalone"
     }
 }
 
@@ -697,8 +894,8 @@ sealed interface SetUpServer {
     data object Home : SetUpServer
     /** Joined from home. */
     data object Joined : SetUpServer
-    /** The home is only in a tailnet: the server joins it before the home can join the assistant. */
-    data class NeedsTailscale(val assistant: String) : SetUpServer
+    /** Outside the person's cluster: signed in to as a person of its own. */
+    data object Standalone : SetUpServer
 }
 
 /** Why the home can't join an assistant on a server this device owns, or more on servers. */
@@ -708,9 +905,9 @@ class ServerProblem(val kind: Kind) : Exception(kind.text) {
         NO_FEDERATION_EXTENSION("Your home's server has no federation extension to turn on. Update it first."),
         PRIVATE_HOME(
             "This device reaches your home at a local address, which other servers can't reach. " +
-                "Sign in to your home at its Tailscale or public address.",
+                "Sign in to your home at its public address, or hold a Wired network at home and use its address: " +
+                "under Settings → Servers, open your home's server.",
         ),
-        NEEDS_TAILSCALE("Your home is only in your tailnet, so this server has to join it first: under Settings → Servers, open the server and connect it under Tailscale."),
         NEEDS_WIRED(
             "Your home is on Wired, but none of your servers here holds its network. " +
                 "Open your home under Settings → Servers and hold a network there, then try again.",
@@ -733,6 +930,9 @@ fun exeVmName(server: String): String? {
 }
 
 /** What to tell the user. */
+/** The host of a server's address, for people to read. */
+fun hostOf(server: String): String = runCatching { java.net.URI(server).host }.getOrNull() ?: server
+
 fun explain(error: Throwable): String = when (error) {
     is NudgeException.Status ->
         if (error.status.toInt() == 401) {

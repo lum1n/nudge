@@ -1,0 +1,364 @@
+[
+  {
+    "id": "spike-001",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Kan du minne meg på å hente Emma i Skogkanten Barnehage klokka fire? Hun er på avdeling Blåveisen.",
+    "hide": [
+      ["Emma", "NAME", 2],
+      ["Skogkanten", "ORG", 2],
+      ["Blåveisen", "ORG", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "spike-002",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Vi har time hos Vethjem for katten på torsdag.",
+    "hide": [["Vethjem", "ORG", 2]],
+    "keep": []
+  },
+  {
+    "id": "spike-003",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Mamma kommer med toget fra Sørumsand og går av på Oslo S rundt halv tre.",
+    "hide": [
+      ["Sørumsand", "PLACE", 2],
+      ["Oslo S", "PLACE", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "spike-004",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Ring Kari Nordmann om dugnaden i borettslaget på lørdag.",
+    "hide": [["Kari Nordmann", "NAME", 1]],
+    "keep": []
+  },
+  {
+    "id": "spike-005",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Pakken skal sendes til Storgata 14B, 2000 Lillestrøm.",
+    "hide": [
+      ["Storgata 14B", "ADDRESS", 1],
+      ["Lillestrøm", "PLACE", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "spike-006",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Jeg jobber hos Bekk Consulting nå, kontoret ligger i Skur 39 på Vippetangen.",
+    "hide": [
+      ["Bekk Consulting", "ORG", 2],
+      ["Skur 39", "ADDRESS", 1],
+      ["Vippetangen", "PLACE", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "spike-007",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Ola spiller fotball for Fet IL og har trening på Riddersand kunstgress.",
+    "hide": [
+      ["Ola", "NAME", 2],
+      ["Fet IL", "ORG", 2],
+      ["Riddersand", "PLACE", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "spike-008",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Hilsen fra hytta på Hovden! Ingrid og Per kommer opp i morgen.",
+    "hide": [
+      ["Hovden", "PLACE", 2],
+      ["Ingrid", "NAME", 2],
+      ["Per", "NAME", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "spike-009",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Tannlegen min, Dr. Hansen på Lillestrøm Tannklinikk, flyttet timen til fredag.",
+    "hide": [
+      ["Hansen", "NAME", 2],
+      ["Lillestrøm Tannklinikk", "ORG", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "spike-010",
+    "source": "chat",
+    "lang": "en",
+    "text": "Remember that Sarah's school, Westbrook Elementary, closes early on Friday.",
+    "hide": [
+      ["Sarah", "NAME", 2],
+      ["Westbrook Elementary", "ORG", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "spike-011",
+    "source": "chat",
+    "lang": "en",
+    "text": "My brother Tom lives at 42 Maple Avenue in Ashford now.",
+    "hide": [
+      ["Tom", "NAME", 2],
+      ["42 Maple Avenue", "ADDRESS", 1],
+      ["Ashford", "PLACE", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "spike-012",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Book a table at Restaurant Fyr in Bjørvika for me and Anders at seven.",
+    "hide": [
+      ["Restaurant Fyr", "ORG", 2],
+      ["Bjørvika", "PLACE", 2],
+      ["Anders", "NAME", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "spike-013",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Henter du Nora på SFO på Blaker skole i dag?",
+    "hide": [
+      ["Nora", "NAME", 2],
+      ["Blaker skole", "ORG", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "spike-014",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Bestemor bor på Frogner sykehjem, besøkstid er mellom 12 og 18.",
+    "hide": [["Frogner sykehjem", "ORG", 2]],
+    "keep": []
+  },
+  {
+    "id": "spike-015",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Jeg har levert bilen på verksted hos Møller Bil Romerike i Lørenskog.",
+    "hide": [
+      ["Møller Bil Romerike", "ORG", 2],
+      ["Lørenskog", "PLACE", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "spike-016",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Svar til Lars Eriksen at styremøtet i Sameiet Solbakken flyttes til mandag.",
+    "hide": [
+      ["Lars Eriksen", "NAME", 1],
+      ["Sameiet Solbakken", "ORG", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "spike-017",
+    "source": "chat",
+    "lang": "en",
+    "text": "Vi flytter fra Kjeller til Nittedal i august.",
+    "hide": [
+      ["Kjeller", "PLACE", 2],
+      ["Nittedal", "PLACE", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "spike-018",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Legekontoret på Sørumsand Legesenter ringte, fastlegen heter Siri Bakke.",
+    "hide": [
+      ["Sørumsand Legesenter", "ORG", 2],
+      ["Siri Bakke", "NAME", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "spike-019",
+    "source": "chat",
+    "lang": "en",
+    "text": "Can you check the opening hours of Paws & Claws Vet Clinic on Elm Street?",
+    "hide": [
+      ["Paws & Claws Vet Clinic", "ORG", 2],
+      ["Elm Street", "ADDRESS", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "spike-020",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Jonas har bursdag på lørdag, feiringen er hjemme hos Marte i Bjerkeveien 7.",
+    "hide": [
+      ["Jonas", "NAME", 2],
+      ["Marte", "NAME", 2],
+      ["Bjerkeveien 7", "ADDRESS", 1]
+    ],
+    "keep": []
+  },
+  {
+    "id": "spike-021",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Hva er værmeldingen for Oslo i morgen?",
+    "hide": [],
+    "keep": []
+  },
+  {
+    "id": "spike-022",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Lag en handleliste: melk, brød, egg og kaffe.",
+    "hide": [],
+    "keep": []
+  },
+  {
+    "id": "spike-023",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Hvordan konverterer jeg en markdown-fil til PDF med pandoc?",
+    "hide": [],
+    "keep": []
+  },
+  {
+    "id": "spike-024",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Tesla Model Y er til salgs, hva tror du den er verdt?",
+    "hide": [],
+    "keep": []
+  },
+  {
+    "id": "spike-025",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Minn meg på å betale strømregningen fra Fjordkraft før den 20.",
+    "hide": [["Fjordkraft", "ORG", 2]],
+    "keep": []
+  },
+  {
+    "id": "spike-026",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Skogstjerna har foreldremøte onsdag, si fra til Vegard.",
+    "hide": [
+      ["Skogstjerna", "ORG", 2],
+      ["Vegard", "NAME", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "spike-027",
+    "source": "chat",
+    "lang": "en",
+    "text": "We met Priya and Daniel at the Hillcrest Community Centre last week.",
+    "hide": [
+      ["Priya", "NAME", 2],
+      ["Daniel", "NAME", 2],
+      ["Hillcrest Community Centre", "ORG", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "spike-028",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Barnas turn trener i Sørumhallen hver tirsdag.",
+    "hide": [["Sørumhallen", "PLACE", 2]],
+    "keep": []
+  },
+  {
+    "id": "spike-029",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Klokka er mye, jeg sover nå. God natt!",
+    "hide": [],
+    "keep": []
+  },
+  {
+    "id": "spike-030",
+    "source": "chat",
+    "lang": "en",
+    "text": "The meeting with Acme Logistics about the Q3 contract is moved to 10am.",
+    "hide": [["Acme Logistics", "ORG", 2]],
+    "keep": []
+  },
+  {
+    "id": "spike-031",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Kan du sjekke om det er ledige plasser på Bøler barnehage for Eline?",
+    "hide": [
+      ["Bøler barnehage", "ORG", 2],
+      ["Eline", "NAME", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "spike-032",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Vi parkerer ved Kiwi på Frogner og går ned til stranda.",
+    "hide": [["Frogner", "PLACE", 2]],
+    "keep": []
+  },
+  {
+    "id": "spike-033",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Martin fra jobben spør om vi kan låne tilhengeren til helgen.",
+    "hide": [["Martin", "NAME", 2]],
+    "keep": []
+  },
+  {
+    "id": "spike-034",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Huseier Gunnar Lie sier husleia øker fra januar.",
+    "hide": [["Gunnar Lie", "NAME", 1]],
+    "keep": []
+  },
+  {
+    "id": "spike-035",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Søster Helene jobber som sykepleier på Ahus.",
+    "hide": [
+      ["Helene", "NAME", 2],
+      ["Ahus", "ORG", 2]
+    ],
+    "keep": []
+  },
+  {
+    "id": "spike-036",
+    "source": "chat",
+    "lang": "nb",
+    "text": "Hvilken buss går fra Lillestrøm stasjon til Strømmen storsenter?",
+    "hide": [
+      ["Lillestrøm stasjon", "PLACE", 2],
+      ["Strømmen storsenter", "PLACE", 2]
+    ],
+    "keep": []
+  }
+]

@@ -1,5 +1,5 @@
 // The servers this device owns (ADR 11), with a server token each, and the exe.dev token servers
-// are made with. The addresses are in the user defaults, the tokens in the keychain like the
+// are made with. The list is kept at home too, so every device of the person's sees it. The addresses are in the user defaults, the tokens in the keychain like the
 // player tokens; none is sent to a server but the one it belongs to.
 import Foundation
 import Nudge
@@ -12,6 +12,7 @@ final class Servers {
 
     @ObservationIgnored private let defaults = UserDefaults.standard
     private static let ownedKey = "servers"
+    private static let atHomeKey = "servers.atHome"
 
     init() {
         owned = (defaults.stringArray(forKey: Self.ownedKey) ?? []).sorted()
@@ -37,6 +38,17 @@ final class Servers {
         tokens(server).set(token: nil)
         owned.removeAll { $0 == server }
         save()
+    }
+
+    /// Whether the server was on the list at home when this device last looked, so one gone from
+    /// there was taken off on another device, rather than not put there yet.
+    func wasAtHome(_ server: String) -> Bool {
+        (defaults.stringArray(forKey: Self.atHomeKey) ?? []).contains(server.trimmingCharacters(in: ["/"]))
+    }
+
+    /// The servers on the list at home, as it just said.
+    func setAtHome(_ servers: Set<String>) {
+        defaults.set(servers.map { $0.trimmingCharacters(in: ["/"]) }.sorted(), forKey: Self.atHomeKey)
     }
 
     /// The owned server that holds a Wired network (other than `except`), if any: the home that

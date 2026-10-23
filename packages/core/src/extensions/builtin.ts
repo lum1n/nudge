@@ -7,6 +7,7 @@ import {
   section,
 } from "@earendil-works/pi-durable";
 import { DirectoryDoc, type DirectoryState } from "../identity/directory.ts";
+import { personalSection } from "../identity/personal.ts";
 import { ProfileDoc, type ProfileState } from "../identity/profiles.ts";
 import { createMemoryTools, memorySection } from "../memory/memory.ts";
 import type { Nudges } from "../nudges/nudges.ts";
@@ -25,11 +26,16 @@ export type BuiltinOptions = {
   readonly changed?: (change: Change) => void;
   /** The turn a conversation is in, for what shows only in private turns. */
   readonly turn: (conversationId: ConversationId, context: Context) => Promise<Turn>;
+  /** An installed extension's description, looked up at render time, so it follows a reload. */
+  readonly describe?: (extension: string) => string | undefined;
+  /** Whether the vault can still put a placeholder's value back, looked up at render time. */
+  readonly known: (placeholder: string) => boolean;
 };
 
 /**
- * The always-on `nudge` extension: who the assistant is, who is in the room, what it remembers there,
- * what time it is, and the nudge timer with its tools.
+ * The always-on `nudge` extension: who the assistant is, who is in the room, the personal details
+ * of whose room or private turn it is, what it remembers there, what time it is, and the nudge
+ * timer with its tools.
  */
 export function createBuiltinExtension(options: BuiltinOptions): Extension {
   return defineExtension({
@@ -41,7 +47,7 @@ export function createBuiltinExtension(options: BuiltinOptions): Extension {
         "identity",
         () =>
           `You are ${options.displayName}, a personal assistant. Be brief and concrete. ` +
-          `Several people may share a conversation; each message starts with the name of who wrote it.`,
+          `Several people may share a conversation; each message starts with the name of who wrote it and the time they sent it.`,
         { tag: false },
       ),
       section("members", async (input, context) => {
@@ -53,26 +59,55 @@ export function createBuiltinExtension(options: BuiltinOptions): Extension {
         }
         return describeRoom(directory, input.conversationId, profiles);
       }),
+      personalSection(options.turn, options.known, options.timeZone),
       memorySection(options.turn),
-      // Rendered to the hour: a section that changes on every request defeats prompt caching.
-      section("time", () => formatHour(options.now(), options.timeZone)),
+      section("extensions", (input) =>
+        describeExtensions(
+          input.agent.extensions.map(({ name }) => name).filter((name) => name !== BUILTIN_NAME),
+          options.describe,
+        ),
+      ),
+      // The date only: a section that changes on every request defeats prompt caching. Messages
+      // carry the minute they were sent.
+      section("time", () => formatToday(options.now(), options.timeZone)),
     ],
   });
 }
 
-export function formatHour(now: number, timeZone: string): string {
-  const hour = new Date(Math.floor(now / 3_600_000) * 3_600_000);
-  const text = new Intl.DateTimeFormat("en-GB", {
+/**
+ * The extensions on in a conversation, said outright. Providers without mid-conversation system
+ * messages fold tool changes into one prompt, so the model can't tell that tools came after its
+ * earlier replies, and repeats what those said it couldn't do.
+ */
+export function describeExtensions(
+  names: readonly string[],
+  describe: (extension: string) => string | undefined = () => undefined,
+): string | undefined {
+  if (names.length === 0) return undefined;
+  const lines = names.map((name) => {
+    const description = describe(name);
+    return description === undefined ? `- ${name}` : `- ${name}: ${description}`;
+  });
+  return [
+    "Extensions on in this conversation now:",
+    ...lines,
+    "They can be turned on during a conversation: go by this list and the tools you have now, " +
+      "not by what earlier replies said you could do.",
+  ].join("\n");
+}
+
+export function formatToday(now: number, timeZone: string): string {
+  const today = new Intl.DateTimeFormat("en-GB", {
     timeZone,
     weekday: "long",
     year: "numeric",
     month: "long",
     day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(hour);
-  return `It is ${text} (${timeZone}), give or take an hour.`;
+  }).format(now);
+  return (
+    `Today is ${today}, in the time zone ${timeZone}. Each message says the time it was sent; ` +
+    `the latest one is the time now.`
+  );
 }
 
 /**

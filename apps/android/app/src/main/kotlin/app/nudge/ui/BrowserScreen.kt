@@ -44,6 +44,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -135,7 +136,8 @@ private fun Live(state: BrowserState, browser: ObservedBrowser) {
     val inControl = state.control?.you ?: false
     var address by remember { mutableStateOf("") }
     var keepLogins by remember { mutableStateOf(true) }
-    var typed by remember { mutableStateOf("") }
+    // Read as it is now in each change: several can come before the next recomposition.
+    val typed = remember { mutableStateOf("") }
     val frame = state.frame
     LaunchedEffect(frame?.url) { frame?.url?.let { address = it } }
 
@@ -175,8 +177,8 @@ private fun Live(state: BrowserState, browser: ObservedBrowser) {
             )
         }
         // A tap may focus another field, where typing starts over.
-        Page(frame, inControl, browser, tapped = { typed = "" })
-        Typing(typed, { typed = it }, inControl, browser)
+        Page(frame, inControl, browser, tapped = { typed.value = "" })
+        Typing(typed, inControl, browser)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 "Remember logins I type here, so the assistant can log in by itself next time",
@@ -275,14 +277,15 @@ private fun Page(frame: BrowserFrame?, inControl: Boolean, browser: ObservedBrow
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun Typing(typed: String, onTyped: (String) -> Unit, inControl: Boolean, browser: ObservedBrowser) {
+private fun Typing(typed: MutableState<String>, inControl: Boolean, browser: ObservedBrowser) {
     OutlinedTextField(
-        value = typed,
+        value = typed.value,
         onValueChange = { next ->
-            val common = typed.commonPrefixWith(next).length
-            repeat(typed.length - common) { browser.press("Backspace") }
+            val before = typed.value
+            val common = before.commonPrefixWith(next).length
+            repeat(before.length - common) { browser.press("Backspace") }
             if (next.length > common) browser.type(next.substring(common))
-            onTyped(next)
+            typed.value = next
         },
         enabled = inControl,
         label = { Text("Type into the page") },
@@ -291,14 +294,14 @@ private fun Typing(typed: String, onTyped: (String) -> Unit, inControl: Boolean,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false, imeAction = ImeAction.Send),
         keyboardActions = KeyboardActions(onSend = {
             browser.press("Enter")
-            onTyped("")
+            typed.value = ""
         }),
         shape = MaterialTheme.shapes.large,
         modifier = Modifier.fillMaxWidth(),
     )
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        AssistChip(onClick = { browser.press("Tab"); onTyped("") }, enabled = inControl, label = { Text("Tab") })
-        AssistChip(onClick = { browser.press("Enter"); onTyped("") }, enabled = inControl, label = { Text("Enter") })
+        AssistChip(onClick = { browser.press("Tab"); typed.value = "" }, enabled = inControl, label = { Text("Tab") })
+        AssistChip(onClick = { browser.press("Enter"); typed.value = "" }, enabled = inControl, label = { Text("Enter") })
         AssistChip(onClick = { browser.press("Backspace") }, enabled = inControl, label = { Text("Backspace") })
         AssistChip(onClick = { browser.press("Escape") }, enabled = inControl, label = { Text("Esc") })
     }

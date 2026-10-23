@@ -115,6 +115,10 @@ export const TimelineItem = Type.Union([
     ]),
     error: Type.Optional(Type.String()),
     parts: Type.Array(Part),
+    /** When its first model response started, in ms since the epoch. */
+    startedAt: Type.Optional(Type.Number()),
+    /** It answers a fired nudge, or what a watch found, rather than a message. */
+    promptedBy: Type.Optional(Type.Union([Type.Literal("nudge"), Type.Literal("watch")])),
     /** It answers something private: only this player sees its parts; everyone else gets none. */
     privateTo: Type.Optional(Player),
   }),
@@ -169,6 +173,8 @@ export const Approval = Type.Object({
   result: Type.Optional(Type.String()),
   /** Asked for in answer to something private: only this player sees and decides it. */
   privateTo: Type.Optional(Player),
+  /** Only an admin may decide it. */
+  adminOnly: Type.Optional(Type.Boolean()),
 });
 export type Approval = Static<typeof Approval>;
 
@@ -210,6 +216,11 @@ export const RoomView = Type.Object({
   memory: Type.Array(Fact),
   /** Soonest first. */
   nudges: Type.Array(RoomNudge),
+  /**
+   * The members whose location the model may know here: a personal room's owner once their device
+   * shared one, and in a shared room those who chose to share it there (`PUT /rooms/<id>/location`).
+   */
+  sharingLocation: Type.Optional(Type.Array(Player)),
 });
 export type RoomView = Static<typeof RoomView>;
 
@@ -233,11 +244,40 @@ export const RoomListNudge = Type.Object({
 });
 export type RoomListNudge = Static<typeof RoomListNudge>;
 
+const Colour = Type.String({ pattern: "^#[0-9a-fA-F]{6}$" });
+
+/**
+ * How the assistant's robot looks in the apps. Clients draw the robot of the app icon for an
+ * eye shape or accessory they don't know, as for none at all.
+ */
+export const Appearance = Type.Object({
+  /** The ribbon's two ends. (Not a `Type.Tuple`, which the JSON schema would write in draft-07.) */
+  body: Type.Unsafe<[string, string]>(Type.Array(Colour, { minItems: 2, maxItems: 2 })),
+  eyes: Colour,
+  sparks: Colour,
+  eyeShape: Type.Union([
+    Type.Literal("pill"),
+    Type.Literal("round"),
+    Type.Literal("square"),
+    Type.Literal("wide"),
+  ]),
+  accessory: Type.Union([
+    Type.Literal("none"),
+    Type.Literal("antenna"),
+    Type.Literal("headphones"),
+    Type.Literal("sprout"),
+    Type.Literal("crown"),
+  ]),
+});
+export type Appearance = Static<typeof Appearance>;
+
 export const RoomListView = Type.Object({
   player: Player,
   rooms: Type.Array(RoomListEntry),
   /** Soonest first. */
   nudges: Type.Array(RoomListNudge),
+  /** The assistant's robot; the app icon's when absent. */
+  appearance: Type.Optional(Appearance),
 });
 export type RoomListView = Static<typeof RoomListView>;
 
@@ -327,7 +367,13 @@ export const ErrorResponse = Type.Object({ error: Type.String() });
 export type ErrorResponse = Static<typeof ErrorResponse>;
 
 export const AssistantsResponse = Type.Object({
-  assistants: Type.Array(Type.Object({ name: Type.String(), displayName: Type.String() })),
+  assistants: Type.Array(
+    Type.Object({
+      name: Type.String(),
+      displayName: Type.String(),
+      appearance: Type.Optional(Appearance),
+    }),
+  ),
 });
 export type AssistantsResponse = Static<typeof AssistantsResponse>;
 
@@ -344,6 +390,25 @@ export const PairResponse = Type.Object({
   player: Player,
 });
 export type PairResponse = Static<typeof PairResponse>;
+
+/** A browser asking at `POST /v1/sign-in` to be signed in by an app that already is. */
+export const SignInResponse = Type.Object({
+  /** What the app approves; in `link`, for anyone who sees the QR code. */
+  id: Type.String(),
+  /** Only for the browser, which shows it to the server to learn the answer; keep it secret. */
+  secret: Type.String(),
+  /** `nudge://sign-in?server=…&request=<id>`, for a QR code. */
+  link: Type.String(),
+  expiresAt: Type.Number(),
+});
+export type SignInResponse = Static<typeof SignInResponse>;
+
+/** Until an app approves, `waiting`; then the assistant and a pairing code to `POST /pair` with. */
+export const SignInStatusResponse = Type.Union([
+  Type.Object({ status: Type.Literal("waiting") }),
+  Type.Object({ status: Type.Literal("approved"), assistant: Type.String(), code: Type.String() }),
+]);
+export type SignInStatusResponse = Static<typeof SignInStatusResponse>;
 
 export const MeResponse = Type.Object({
   player: Player,
@@ -447,6 +512,45 @@ export const UpdateProfileRequest = Type.Object({
   ),
 });
 export type UpdateProfileRequest = Static<typeof UpdateProfileRequest>;
+
+/**
+ * A player's personal details, as they see them. Each value is theirs alone: the model and
+ * everyone else only ever see its placeholder. Kept by the assistant they were given to; a home
+ * doesn't send them on.
+ */
+export const PersonalDetails = Type.Object({
+  fullName: Type.Optional(Type.String()),
+  email: Type.Optional(Type.String()),
+  phone: Type.Optional(Type.String()),
+  address: Type.Optional(Type.String()),
+  /** Where their device last said they were (`place (lat, lon)`), and when, in ms. */
+  location: Type.Optional(Type.Object({ text: Type.String(), at: Type.Number() })),
+  /** The shared rooms where they let the model know where they are. */
+  locationRooms: Type.Optional(Type.Array(Type.String())),
+});
+export type PersonalDetails = Static<typeof PersonalDetails>;
+
+/** Whether the model may know where the caller is in a shared room, for anyone there. */
+export const ShareLocationRequest = Type.Object({ shared: Type.Boolean() });
+export type ShareLocationRequest = Static<typeof ShareLocationRequest>;
+
+/** Where a device is, and the place it named, such as a street address. */
+export const LocationRequest = Type.Object({
+  latitude: Type.Number({ minimum: -90, maximum: 90 }),
+  longitude: Type.Number({ minimum: -180, maximum: 180 }),
+  place: Type.Optional(Type.String({ maxLength: 200 })),
+});
+export type LocationRequest = Static<typeof LocationRequest>;
+
+/** The details to change; absent ones stay, `null` or `""` clears one. */
+export const UpdatePersonalRequest = Type.Object({
+  fullName: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  email: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  phone: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  address: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  location: Type.Optional(Type.Union([LocationRequest, Type.Null()])),
+});
+export type UpdatePersonalRequest = Static<typeof UpdatePersonalRequest>;
 
 /** An installed extension that takes settings from each player, for a profile's settings form. */
 export const PlayerSettingsSchema = Type.Object({
@@ -605,6 +709,20 @@ export type AssertResponse = Static<typeof AssertResponse>;
 export const JoinRequest = Type.Object({ assertion: Sealed });
 export type JoinRequest = Static<typeof JoinRequest>;
 
+/** A server, by its address: one the caller owns, or one to vouch for them to. */
+export const ServerRequest = Type.Object({ server: Type.String() });
+export type ServerRequest = Static<typeof ServerRequest>;
+
+/** A server the caller owns, kept at their home so all their devices see it (ADR 11). */
+export const OwnedServer = Type.Object({
+  server: Type.String(),
+  since: Type.Number(),
+});
+export type OwnedServer = Static<typeof OwnedServer>;
+
+export const OwnedServersResponse = Type.Object({ servers: Type.Array(OwnedServer) });
+export type OwnedServersResponse = Static<typeof OwnedServersResponse>;
+
 export const InviteRequest = Type.Object({ address: Type.String() });
 export type InviteRequest = Static<typeof InviteRequest>;
 
@@ -757,6 +875,15 @@ export const AdminPlayer = Type.Object({
 export type AdminPlayer = Static<typeof AdminPlayer>;
 
 export const PlayersResponse = Type.Object({ players: Type.Array(AdminPlayer) });
+
+/** `null` goes back to the app icon's robot. */
+export const SetAppearanceRequest = Type.Object({
+  appearance: Type.Union([Appearance, Type.Null()]),
+});
+export type SetAppearanceRequest = Static<typeof SetAppearanceRequest>;
+
+export const AppearanceResponse = Type.Object({ appearance: Type.Optional(Appearance) });
+export type AppearanceResponse = Static<typeof AppearanceResponse>;
 export type PlayersResponse = Static<typeof PlayersResponse>;
 
 export const SetAdminRequest = Type.Object({ admin: Type.Boolean() });
@@ -900,11 +1027,15 @@ export const SetProviderKeyRequest = Type.Object({
 });
 export type SetProviderKeyRequest = Static<typeof SetProviderKeyRequest>;
 
+/**
+ * Someone who runs the server: a person who lives on one of its assistants (`assistant` and
+ * `playerId`), or a person whose home is elsewhere (`address`), who signs in vouched for by it.
+ */
 export const ServerOwner = Type.Object({
   id: Type.String(),
-  /** The assistant they are a player of, and their id there. */
-  assistant: Type.String(),
-  playerId: Type.String(),
+  assistant: Type.Optional(Type.String()),
+  playerId: Type.Optional(Type.String()),
+  address: Type.Optional(Type.String()),
   addedAt: Type.Number(),
 });
 export type ServerOwner = Static<typeof ServerOwner>;
@@ -912,17 +1043,34 @@ export type ServerOwner = Static<typeof ServerOwner>;
 export const ServerOwnersResponse = Type.Object({ owners: Type.Array(ServerOwner) });
 export type ServerOwnersResponse = Static<typeof ServerOwnersResponse>;
 
+/** A player of one of the server's assistants (`assistant` and `playerId`), or an `address`. */
 export const AddOwnerRequest = Type.Object({
-  assistant: Type.String(),
-  playerId: Type.String(),
-  /** Makes them an admin of `assistant` too. */
+  assistant: Type.Optional(Type.String()),
+  playerId: Type.Optional(Type.String()),
+  /** Makes the player an admin of `assistant` too. */
   admin: Type.Optional(Type.Boolean()),
+  address: Type.Optional(Type.String()),
 });
 export type AddOwnerRequest = Static<typeof AddOwnerRequest>;
 
-/** Sent with the player's token of `assistant`: an owner's server token for this client. */
-export const ServerSessionRequest = Type.Object({ assistant: Type.String(), client: ClientInfo });
+/**
+ * An owner's server token for this client. Sent with the token of the owner's player of
+ * `assistant`, or with `assertion` alone: their home vouching for them to this server, from the
+ * home's `POST /ext/federation/owner-assertion`.
+ */
+export const ServerSessionRequest = Type.Object({
+  assistant: Type.Optional(Type.String()),
+  client: ClientInfo,
+  assertion: Type.Optional(Sealed),
+});
 export type ServerSessionRequest = Static<typeof ServerSessionRequest>;
+
+/** The server's own keys, as homes seal owner assertions to it (ADR 11). */
+export const ServerKeyResponse = Type.Object({
+  signingKey: Type.String(),
+  encryptionKey: Type.String(),
+});
+export type ServerKeyResponse = Static<typeof ServerKeyResponse>;
 
 /** `token` is shown only here; keep it like a password. */
 export const ServerSessionResponse = Type.Object({
@@ -948,32 +1096,6 @@ export type UpdateState = Static<typeof UpdateState>;
 export const SetUpdatesRequest = Type.Object({ automatic: Type.Boolean() });
 export type SetUpdatesRequest = Static<typeof SetUpdatesRequest>;
 
-/** The server's own Tailscale, so it can reach assistants only in its owner's tailnet. */
-export const TailscaleState = Type.Object({
-  /**
-   * `needs-login`: someone approves it at `authUrl`; `needs-approval`: a tailnet admin approves
-   * the machine; `connected`: in the tailnet as `name`.
-   */
-  state: Type.Union([
-    Type.Literal("off"),
-    Type.Literal("starting"),
-    Type.Literal("needs-login"),
-    Type.Literal("needs-approval"),
-    Type.Literal("connected"),
-    Type.Literal("error"),
-  ]),
-  authUrl: Type.Optional(Type.String()),
-  /** Its MagicDNS name, such as `nudge-robin.tail1234.ts.net`. */
-  name: Type.Optional(Type.String()),
-  addresses: Type.Optional(Type.Array(Type.String())),
-  error: Type.Optional(Type.String()),
-});
-export type TailscaleState = Static<typeof TailscaleState>;
-
-/** Without `authKey`, the state answers with a login URL to approve. */
-export const TailscaleConnectRequest = Type.Object({ authKey: Type.Optional(Type.String()) });
-export type TailscaleConnectRequest = Static<typeof TailscaleConnectRequest>;
-
 /**
  * The server's Wired: an encrypted network between Nudge servers that needs no open port at
  * home. Other servers reach this one's API at `http://nudge.<name>.wired`.
@@ -991,6 +1113,10 @@ export const WiredState = Type.Object({
     Type.Literal("member"),
     Type.Literal("error"),
   ]),
+  /**
+   * Its name in the network: others reach it at `http://nudge.<name>.wired`. While off, the name
+   * it takes when turned on or joining, unless the owner picks another.
+   */
   name: Type.Optional(Type.String()),
   members: Type.Optional(Type.Array(Type.Object({ name: Type.String(), anchor: Type.Boolean() }))),
   /** The network's relays: public addresses of servers every server reaches the others through. */
@@ -1001,17 +1127,31 @@ export const WiredState = Type.Object({
 });
 export type WiredState = Static<typeof WiredState>;
 
+/**
+ * A server's name in a Wired network, such as `box`: 1–63 lowercase letters, digits and dashes,
+ * starting and ending with a letter or digit. Absent, it is the public address's first label, or
+ * the host's name.
+ */
+export const WiredName = Type.String({ pattern: "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$" });
+
+/** Makes the server the root of its own network, as `name` when given. The body may be empty. */
+export const WiredEnableRequest = Type.Object({ name: Type.Optional(WiredName) });
+export type WiredEnableRequest = Static<typeof WiredEnableRequest>;
+
 /** A relay a new server will serve, such as `https://robin.exe.xyz`, added before it joins. */
 export const WiredRelayRequest = Type.Object({ url: Type.String({ pattern: "^https://" }) });
 export type WiredRelayRequest = Static<typeof WiredRelayRequest>;
 
 /**
- * Joins the network `invite` is for. The server serves a relay at its public HTTPS address, or
- * `relayUrl`, which the root must have listed first (`POST /server/wired/relays` there).
+ * Joins the network `invite` is for, as `name` when given. The server serves a relay at its
+ * public HTTPS address, or `relayUrl`, which the root must have listed first
+ * (`POST /server/wired/relays` there).
  */
 export const WiredJoinRequest = Type.Object({
   invite: Type.String({ pattern: "^wired1[a-z0-9]+$" }),
   relayUrl: Type.Optional(Type.String({ pattern: "^https://" })),
+  /** Its name in the network; see `WiredName`. */
+  name: Type.Optional(WiredName),
 });
 export type WiredJoinRequest = Static<typeof WiredJoinRequest>;
 
@@ -1084,6 +1224,18 @@ export const SetupRequest = Type.Object({
   publicUrl: Type.Optional(Type.String({ pattern: "^https?://" })),
   /** Nightly backups beside the config; default true. */
   backups: Type.Optional(Type.Boolean()),
+  /**
+   * Whether its assistant has federation, so people can join it from their homes and it can be
+   * part of a cluster; default true, when it has a public address. False sets it up standalone.
+   */
+  federation: Type.Optional(Type.Boolean()),
+  /**
+   * An owner assertion from the person's home (its `POST /ext/federation/owner-assertion`), when
+   * they set it up signed in there: the server is started from that home, so its first player is
+   * them and its owner their address, and it can join their cluster later. Without one, the first
+   * player lives here, a new home.
+   */
+  home: Type.Optional(Sealed),
 });
 export type SetupRequest = Static<typeof SetupRequest>;
 
@@ -1122,6 +1274,7 @@ export const SCHEMAS = {
   RoomView,
   RoomListEntry,
   RoomListNudge,
+  Appearance,
   RoomListView,
   Path,
   Op,
@@ -1133,6 +1286,8 @@ export const SCHEMAS = {
   ClientInfo,
   PairRequest,
   PairResponse,
+  SignInResponse,
+  SignInStatusResponse,
   MeResponse,
   CreateRoomRequest,
   RenameRoomRequest,
@@ -1146,6 +1301,10 @@ export const SCHEMAS = {
   NotificationPrefs,
   Profile,
   UpdateProfileRequest,
+  PersonalDetails,
+  LocationRequest,
+  UpdatePersonalRequest,
+  ShareLocationRequest,
   PlayerSettingsSchema,
   PlayerSettingsResponse,
   PushKeyResponse,
@@ -1160,6 +1319,9 @@ export const SCHEMAS = {
   Sealed,
   AssertResponse,
   JoinRequest,
+  ServerRequest,
+  OwnedServer,
+  OwnedServersResponse,
   InviteRequest,
   Invite,
   InviteResponse,
@@ -1186,6 +1348,8 @@ export const SCHEMAS = {
   TokensResponse,
   AdminPlayer,
   PlayersResponse,
+  SetAppearanceRequest,
+  AppearanceResponse,
   SetAdminRequest,
   IssueTokenRequest,
   RoomsResponse,
@@ -1208,12 +1372,12 @@ export const SCHEMAS = {
   ServerOwnersResponse,
   AddOwnerRequest,
   ServerSessionRequest,
+  ServerKeyResponse,
   ServerSessionResponse,
   UpdateState,
   SetUpdatesRequest,
-  TailscaleState,
-  TailscaleConnectRequest,
   WiredState,
+  WiredEnableRequest,
   WiredJoinRequest,
   WiredRelayRequest,
   WiredRelayResponse,

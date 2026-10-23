@@ -193,6 +193,8 @@ async fn makes_a_server_on_exe_dev_and_sets_it_up_from_the_app() {
             },
             public_url: Some(server.clone()),
             backups: Some(false),
+            federation: None,
+            home: None,
         },
     )
     .await
@@ -205,7 +207,10 @@ async fn makes_a_server_on_exe_dev_and_sets_it_up_from_the_app() {
         Arc::new(MemoryTokens::new(Some(done.server_token))),
     )
     .unwrap();
-    assert_eq!(owner.info().await.unwrap().owner.player_id, done.player.id);
+    assert_eq!(
+        owner.info().await.unwrap().owner.player_id,
+        Some(done.player.id)
+    );
     let made = owner
         .create_assistant(&CreateAssistantRequest {
             name: "kari".into(),

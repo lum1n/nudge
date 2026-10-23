@@ -61,6 +61,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.nudge.avatar.look
+import app.nudge.avatar.Portrait
 import app.nudge.AppModel
 import app.nudge.BuildConfig
 import app.nudge.Dictation
@@ -86,6 +88,8 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
     val platforms by session.pushPlatforms.collectAsStateWithLifecycle()
     val memberships by model.memberships.collectAsStateWithLifecycle()
     var leaving by remember { mutableStateOf<Membership?>(null) }
+    var signingOutOf by remember { mutableStateOf<Session?>(null) }
+    var joiningCluster by remember { mutableStateOf<Session?>(null) }
     var profile by rememberSaveable { mutableStateOf(false) }
     var speech by rememberSaveable { mutableStateOf(false) }
     val speechLanguages by model.dictation.languages.collectAsStateWithLifecycle()
@@ -104,6 +108,7 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
     // The assistant whose extensions or invites are open: home, or one joined from there.
     var extensionsOf by remember { mutableStateOf<Session?>(null) }
     var invitesOf by remember { mutableStateOf<Session?>(null) }
+    var robotOf by remember { mutableStateOf<Session?>(null) }
     val places by model.places.collectAsStateWithLifecycle()
     val administered = places.filter { place ->
         key(place.account.key) { place.me.collectAsStateWithLifecycle().value?.admin == true }
@@ -135,6 +140,11 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
         ExtensionsScreen(at.client, close = { extensionsOf = null })
         return
     }
+    robotOf?.let { at ->
+        BackHandler { robotOf = null }
+        RobotScreen(at, close = { robotOf = null })
+        return
+    }
     invitesOf?.let { at ->
         BackHandler { invitesOf = null }
         InvitesScreen(at.client, at.account.assistantName, close = { invitesOf = null })
@@ -164,7 +174,7 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
     }
     if (profile) {
         BackHandler { profile = false }
-        ProfileScreen(session, close = { profile = false })
+        ProfileScreen(model, session, close = { profile = false })
         return
     }
 
@@ -276,6 +286,34 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                 )
             }
 
+            val standalone = places.filter { it.account.standalone }
+            if (standalone.isNotEmpty()) {
+                group(
+                    "On their own",
+                    standalone.map<Session, GroupRow> { place ->
+                        { shapes ->
+                            // Read so the row changes once the server says who the player is.
+                            val placeMe by place.me.collectAsStateWithLifecycle()
+                            val canJoin = placeMe != null && memberships != null && model.canJoinCluster(place)
+                            SegmentedListItem(
+                                onClick = { if (canJoin) joiningCluster = place },
+                                onLongClick = { signingOutOf = place },
+                                onLongClickLabel = "Sign out",
+                                shapes = shapes,
+                                leadingContent = { Icon(Icons.Outlined.SmartToy, null) },
+                                overlineContent = { Text(java.net.URI(place.account.server).host ?: place.account.server) },
+                                supportingContent = {
+                                    Text(
+                                        if (canJoin) "Started from your home, without federation. Tap to join your cluster, keeping its rooms. Long press to sign out."
+                                        else "Outside your cluster, without federation: you are a person of its own. Long press to sign out.",
+                                    )
+                                },
+                            ) { Text(place.account.assistantName) }
+                        }
+                    },
+                )
+            }
+
             // Home first, then the assistants joined from it where the player is an admin too.
             val admin = listOfNotNull(session.takeIf { me?.admin == true }) + administered
             admin.forEach { at ->
@@ -283,6 +321,15 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                     // Titles key the list, and assistants on different servers may share a name.
                     if (at === session) "Assistant" else "${at.account.assistantName} on ${java.net.URI(at.account.server).host ?: at.account.server}",
                     buildList<GroupRow> {
+                        add { shapes ->
+                            SegmentedListItem(
+                                onClick = { robotOf = at },
+                                shapes = shapes,
+                                leadingContent = { Portrait(appearance = at.look(), size = 24.dp) },
+                                supportingContent = { Text("How it looks to everyone, in every app") },
+                                trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) },
+                            ) { Text("Robot") }
+                        }
                         add { shapes ->
                             SegmentedListItem(
                                 onClick = { extensionsOf = at },
@@ -293,7 +340,7 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                             ) { Text("Extensions") }
                         }
                         // Without federation at home there are no memberships; joined ones have it.
-                        if (at !== session || memberships != null) {
+                        if (if (at === session) memberships != null else !at.account.standalone) {
                             add { shapes ->
                                 SegmentedListItem(
                                     onClick = { invitesOf = at },
@@ -508,6 +555,45 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                 }) { Text("Leave") }
             },
             dismissButton = { TextButton(onClick = { leaving = null }) { Text("Cancel") } },
+        )
+    }
+
+    joiningCluster?.let { place ->
+        AlertDialog(
+            onDismissRequest = { joiningCluster = null },
+            title = { Text("Join ${place.account.assistantName} to your cluster?") },
+            text = {
+                Text("It gets federation, and you join it from home as the person you are there now: its rooms and history stay, and your other devices list it.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    joiningCluster = null
+                    scope.launch {
+                        try {
+                            model.joinCluster(place)
+                            problem = null
+                        } catch (error: Exception) {
+                            problem = explain(error)
+                        }
+                    }
+                }) { Text("Join my cluster") }
+            },
+            dismissButton = { TextButton(onClick = { joiningCluster = null }) { Text("Cancel") } },
+        )
+    }
+
+    signingOutOf?.let { place ->
+        AlertDialog(
+            onDismissRequest = { signingOutOf = null },
+            title = { Text("Sign out of ${place.account.assistantName}?") },
+            text = { Text("You'll need a new pairing code from it to sign in again.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    signingOutOf = null
+                    scope.launch { model.signOutOf(place) }
+                }) { Text("Sign out") }
+            },
+            dismissButton = { TextButton(onClick = { signingOutOf = null }) { Text("Cancel") } },
         )
     }
 

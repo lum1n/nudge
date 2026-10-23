@@ -1,5 +1,8 @@
 package app.nudge.ui
 
+import androidx.compose.runtime.CompositionLocalProvider
+import app.nudge.avatar.LocalRobotLook
+import app.nudge.avatar.look
 import androidx.activity.compose.BackHandler
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
@@ -23,6 +26,7 @@ import app.nudge.AppModel
 import app.nudge.RoomRef
 import app.nudge.Session
 import app.nudge.explain
+import app.nudge.hostOf
 import kotlinx.coroutines.launch
 import nudge.ffi.ConnectionStatus
 
@@ -60,7 +64,8 @@ fun NudgeApp(model: AppModel, askForNotifications: () -> Unit) {
 
 /**
  * What the detail and extra panes show: a room of one of the signed-in assistants, and in the
- * extra pane its lists, its details, its documents, its connectors or its browser.
+ * extra pane its lists, its details, its documents, its connectors, its MCP servers, its browser or
+ * its desktop.
  */
 private data class Destination(val account: String, val room: String, val extra: Extra? = null) {
     val ref get() = RoomRef(account, room)
@@ -79,7 +84,7 @@ private data class Destination(val account: String, val room: String, val extra:
     }
 }
 
-private enum class Extra { LISTS, INFO, DOCUMENTS, CONNECTORS, BROWSER }
+private enum class Extra { LISTS, INFO, DOCUMENTS, CONNECTORS, MCP, BROWSER, DESKTOP }
 
 /**
  * The rooms beside the open room, the Android way: one pane on a phone, list and detail side by
@@ -94,6 +99,7 @@ private fun SignedIn(model: AppModel, session: Session) {
     val requested by model.requestedRoom.collectAsStateWithLifecycle()
     val link by model.pendingLink.collectAsStateWithLifecycle()
     val join by model.pendingJoin.collectAsStateWithLifecycle()
+    val signIn by model.pendingSignIn.collectAsStateWithLifecycle()
     val places by model.places.collectAsStateWithLifecycle()
     var settings by rememberSaveable { mutableStateOf(false) }
     val navigator = rememberListDetailPaneScaffoldNavigator<String>()
@@ -131,6 +137,7 @@ private fun SignedIn(model: AppModel, session: Session) {
     }
 
     join?.let { invite -> JoinDialog(model, session, invite) }
+    signIn?.let { browser -> SignInDialog(model, browser) }
 
     if (settings) {
         BackHandler { settings = false }
@@ -162,19 +169,22 @@ private fun SignedIn(model: AppModel, session: Session) {
                 if (room == null || at == null) {
                     EmptyRoom()
                 } else {
-                    RoomScreen(
-                        at, room.room, model.dictation,
-                        back = if (listVisible) null else ({ scope.launch { navigator.navigateBack() } }),
-                        lists = { open(Destination.of(room, Extra.LISTS)) },
-                        info = { open(Destination.of(room, Extra.INFO)) },
-                        browser = { open(Destination.of(room, Extra.BROWSER)) },
-                    )
+                    CompositionLocalProvider(LocalRobotLook provides at.look()) {
+                        RoomScreen(
+                            at, room.room, model.dictation,
+                            back = if (listVisible) null else ({ scope.launch { navigator.navigateBack() } }),
+                            lists = { open(Destination.of(room, Extra.LISTS)) },
+                            info = { open(Destination.of(room, Extra.INFO)) },
+                            browser = { open(Destination.of(room, Extra.BROWSER)) },
+                        )
+                    }
                 }
             }
         },
         // Only while something is open there: on a wide screen an empty third pane still takes room.
         extraPane = shown?.extra?.let { extra ->
-            val client = model.sessionFor(shown.account)?.client ?: return@let null
+            val at = model.sessionFor(shown.account) ?: return@let null
+            val client = at.client
             {
                 AnimatedPane {
                     val close = { scope.launch { navigator.navigateBack() }; Unit }
@@ -185,11 +195,15 @@ private fun SignedIn(model: AppModel, session: Session) {
                             client, room.room, close,
                             documents = { open(Destination.of(room, Extra.DOCUMENTS)) },
                             connectors = { open(Destination.of(room, Extra.CONNECTORS)) },
+                            mcp = { open(Destination.of(room, Extra.MCP)) },
                             browser = { open(Destination.of(room, Extra.BROWSER)) },
+                            desktop = { open(Destination.of(room, Extra.DESKTOP)) },
                         )
                         Extra.DOCUMENTS -> DocumentsScreen(client, room.room, close)
                         Extra.CONNECTORS -> ConnectorsScreen(client, room.room, close)
+                        Extra.MCP -> McpServersScreen(client, room.room, at.account.server, close)
                         Extra.BROWSER -> BrowserScreen(client, room.room, close)
+                        Extra.DESKTOP -> DesktopScreen(client, room.room, close)
                     }
                 }
             }
@@ -235,5 +249,53 @@ private fun JoinDialog(model: AppModel, session: Session, invite: nudge.client.J
             ) { Text(if (problem == null) "Join" else "Try again") }
         },
         dismissButton = { TextButton(enabled = !busy, onClick = close) { Text("Cancel") } },
+    )
+}
+
+/** The web UI's sign-in page showed a QR code: sign that browser in as the player. */
+@Composable
+private fun SignInDialog(model: AppModel, browser: nudge.client.SignInLink) {
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    var problem by remember { mutableStateOf<String?>(null) }
+    var signedIn by remember { mutableStateOf<String?>(null) }
+    val close = { model.pendingSignIn.value = null }
+    AlertDialog(
+        onDismissRequest = { if (!busy) close() },
+        title = { Text(if (signedIn == null) "Sign in on the web?" else "Signed in") },
+        text = {
+            Text(
+                signedIn?.let { "The browser is signed in to $it as you." }
+                    ?: problem
+                    ?: (
+                        "The browser that shows this code on ${hostOf(browser.server)} gets signed in as you. " +
+                            "Only go on if you opened that page yourself."
+                        ),
+            )
+        },
+        confirmButton = {
+            if (signedIn != null) {
+                TextButton(onClick = close) { Text("Done") }
+            } else {
+                TextButton(
+                    enabled = !busy,
+                    onClick = {
+                        busy = true
+                        scope.launch {
+                            try {
+                                signedIn = model.approveSignIn(browser)
+                            } catch (error: Exception) {
+                                problem = explain(error)
+                            } finally {
+                                busy = false
+                            }
+                        }
+                    },
+                ) { Text(if (problem == null) "Sign in" else "Try again") }
+            }
+        },
+        dismissButton = {
+            if (signedIn == null) TextButton(enabled = !busy, onClick = close) { Text("Cancel") }
+        },
     )
 }

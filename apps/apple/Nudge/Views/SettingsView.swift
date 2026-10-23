@@ -17,6 +17,8 @@ struct SettingsView: View {
     @State private var notifications: UNAuthorizationStatus?
     @State private var problem: String?
     @State private var confirmSignOut = false
+    @State private var signingOutOf: Session?
+    @State private var joiningCluster: Session?
     @State private var leaving: Membership?
 
     var body: some View {
@@ -72,8 +74,41 @@ struct SettingsView: View {
                         Text("An admin of another assistant invites you by your address; the invite opens here. What only you see stays home.")
                     }
                 }
+                let standalone = model.places.filter(\.account.isStandalone)
+                if !standalone.isEmpty {
+                    Section {
+                        ForEach(standalone, id: \.account.keychainAccount) { place in
+                            LabeledContent(place.account.assistantName, value: place.account.server)
+                                .contextMenu {
+                                    if model.canJoinCluster(place) {
+                                        Button("Join my cluster", systemImage: "point.3.connected.trianglepath.dotted") {
+                                            joiningCluster = place
+                                        }
+                                    }
+                                    Button("Sign out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
+                                        signingOutOf = place
+                                    }
+                                }
+                                .swipeActions {
+                                    Button("Sign out", role: .destructive) { signingOutOf = place }
+                                    if model.canJoinCluster(place) {
+                                        Button("Join my cluster") { joiningCluster = place }
+                                    }
+                                }
+                        }
+                    } header: {
+                        Text("On their own")
+                    } footer: {
+                        Text("Servers outside your cluster, without federation. One set up from your home can join your cluster later, keeping its rooms and history.")
+                    }
+                }
                 if model.me?.admin == true {
                     Section {
+                        if let session = model.session {
+                            NavigationLink { RobotView(session: session) } label: {
+                                Label("Robot", systemImage: "face.smiling")
+                            }
+                        }
                         NavigationLink { ExtensionsView(client: client) } label: {
                             Label("Extensions", systemImage: "puzzlepiece.extension")
                         }
@@ -86,17 +121,23 @@ struct SettingsView: View {
                     } header: {
                         Text("Assistant")
                     } footer: {
-                        Text("Turn extensions on or off and change their settings, for every room. Invite someone from another assistant by their address.")
+                        Text("How the assistant's robot looks to everyone. Turn extensions on or off and change their settings, for every room. Invite someone from another assistant by their address.")
                     }
                 }
                 // The assistants joined from home where the player is an admin too.
                 ForEach(model.places.filter { $0.me?.admin == true }, id: \.account.keychainAccount) { place in
                     Section {
+                        NavigationLink { RobotView(session: place) } label: {
+                            Label("Robot", systemImage: "face.smiling")
+                        }
                         NavigationLink { ExtensionsView(client: place.client) } label: {
                             Label("Extensions", systemImage: "puzzlepiece.extension")
                         }
-                        NavigationLink { InvitesView(client: place.client, assistantName: place.account.assistantName) } label: {
-                            Label("Invites", systemImage: "person.badge.plus")
+                        // Invites go through federation, which a standalone assistant hasn't.
+                        if !place.account.isStandalone {
+                            NavigationLink { InvitesView(client: place.client, assistantName: place.account.assistantName) } label: {
+                                Label("Invites", systemImage: "person.badge.plus")
+                            }
                         }
                     } header: {
                         Text("\(place.account.assistantName) on \(URL(string: place.account.server)?.host() ?? place.account.server)")
@@ -207,6 +248,30 @@ struct SettingsView: View {
                 }
             } message: {
                 Text("Your home stops sending it your profile and memory, and this device signs out of it. You stay a member there.")
+            }
+            .confirmationDialog(
+                "Sign out of \(signingOutOf?.account.assistantName ?? "")?",
+                isPresented: Binding(get: { signingOutOf != nil }, set: { if !$0 { signingOutOf = nil } })
+            ) {
+                Button("Sign out", role: .destructive) {
+                    if let place = signingOutOf {
+                        Task { await model.signOut(of: place) }
+                    }
+                }
+            } message: {
+                Text("You'll need a new pairing code from it to sign in again.")
+            }
+            .confirmationDialog(
+                "Join \(joiningCluster?.account.assistantName ?? "") to your cluster?",
+                isPresented: Binding(get: { joiningCluster != nil }, set: { if !$0 { joiningCluster = nil } })
+            ) {
+                Button("Join my cluster") {
+                    if let place = joiningCluster {
+                        Task { await change { try await model.joinCluster(place) } }
+                    }
+                }
+            } message: {
+                Text("It gets federation, and you join it from home as the person you are there now: its rooms and history stay, and your other devices list it.")
             }
             .task { await load() }
         }

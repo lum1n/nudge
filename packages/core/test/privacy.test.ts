@@ -8,14 +8,23 @@ import {
   fauxAssistantMessage,
   fauxProvider,
   fauxText,
+  fauxThinking,
   fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
 import { AssistantEntry, defineExtension, defineTool } from "@earendil-works/pi-durable";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { builtinDetectors, createNudge, LOBBY, type NudgeOptions, Vault } from "../src/index.ts";
+import {
+  builtinDetectors,
+  createNudge,
+  LOBBY,
+  type NudgeOptions,
+  quasiIdentifierDetectors,
+  Vault,
+} from "../src/index.ts";
 import { openRawDatabase } from "../src/encrypted-storage.ts";
 import { MemoryDoc } from "../src/memory/memory.ts";
-import { redactHistory } from "../src/privacy/redact-history.ts";
+import { VaultDoc } from "../src/privacy/vault-doc.ts";
+import { redactHistory, redactWhenOutdated } from "../src/privacy/redact-history.ts";
 import { withoutPartialPlaceholder } from "../src/privacy/vault.ts";
 
 const context = BACKGROUND_CONTEXT;
@@ -98,6 +107,24 @@ describe("Vault", () => {
     expect(reopened.redact(EMAIL, builtinDetectors)).toBe("⟦EMAIL3⟧");
   });
 
+  it("releases a value: no longer hidden, its placeholder put back, hidden again when asked", () => {
+    const vault = new Vault();
+    vault.protect("Sørumsand", "PLACE");
+    const owned = vault.protect("Kari", "NAME", "p1");
+    expect(vault.redact("Sørumsand", [])).toBe("⟦PLACE1⟧");
+    expect(vault.release("⟦PLACE1⟧")).toBe(true);
+    expect(vault.release(owned)).toBe(false);
+    expect(vault.redact("Bor på Sørumsand, stored as ⟦PLACE1⟧.", [])).toBe(
+      "Bor på Sørumsand, stored as Sørumsand.",
+    );
+    expect(vault.rehydrate("⟦PLACE1⟧")).toBe("Sørumsand");
+    expect(vault.knows("Sørumsand")).toBe(false);
+    const saved = new Vault(vault.entries);
+    expect(saved.redact("Sørumsand", [])).toBe("Sørumsand");
+    expect(saved.protect("sørumsand", "PLACE")).toBe("⟦PLACE1⟧");
+    expect(saved.redact("Sørumsand", [])).toBe("⟦PLACE1⟧");
+  });
+
   it("holds back a placeholder cut off at the end of a stream", () => {
     expect(withoutPartialPlaceholder("Hello ⟦NA")).toBe("Hello ");
     expect(withoutPartialPlaceholder("Hello ⟦NAME1⟧")).toBe("Hello ⟦NAME1⟧");
@@ -154,11 +181,11 @@ describe("redaction in a running assistant", () => {
       },
       (request) => {
         record(request);
-        return fauxAssistantMessage("⟦NAME2⟧, I found ⟦NAME1⟧ at ⟦PHONE1⟧. Your IBAN is ⟦IBAN1⟧.");
+        return fauxAssistantMessage("Vegard, I found ⟦NAME1⟧ at ⟦PHONE1⟧. Your IBAN is ⟦IBAN1⟧.");
       },
       (request) => {
         record(request);
-        return fauxAssistantMessage("Summary: ⟦NAME1⟧ asked about ⟦NAME2⟧ (⟦EMAIL1⟧).");
+        return fauxAssistantMessage("Summary: Vegard asked about ⟦NAME1⟧ (⟦EMAIL1⟧).");
       },
     ]);
     const withTool = await createNudge(
@@ -180,9 +207,9 @@ describe("redaction in a running assistant", () => {
     const answer = await lobby.commit((tx) => tx.entry(AssistantEntry, settled.answer), context);
     const answerText = JSON.stringify(answer?.model);
     // Stored as the model wrote it; people get the values back where they see it.
-    expect(answerText).toContain("⟦NAME2⟧, I found ⟦NAME1⟧ at ⟦PHONE1⟧. Your IBAN is ⟦IBAN1⟧.");
+    expect(answerText).toContain("Vegard, I found ⟦NAME1⟧ at ⟦PHONE1⟧. Your IBAN is ⟦IBAN1⟧.");
     expect(
-      withTool.showTo("p1", "⟦NAME2⟧, I found ⟦NAME1⟧ at ⟦PHONE1⟧. Your IBAN is ⟦IBAN1⟧."),
+      withTool.showTo("p1", "Vegard, I found ⟦NAME1⟧ at ⟦PHONE1⟧. Your IBAN is ⟦IBAN1⟧."),
     ).toBe(`Vegard, I found Kari at ${PHONE}. Your IBAN is ${IBAN}.`);
     // The tool acted on the value, and what it returned was stored without it.
     expect(seenByTool).toEqual([EMAIL]);
@@ -197,9 +224,11 @@ describe("redaction in a running assistant", () => {
 
     expect(sent).toHaveLength(3);
     for (const request of sent) {
-      for (const secret of [...SECRETS, "Vegard"]) expect(request).not.toContain(secret);
+      for (const secret of SECRETS) expect(request).not.toContain(secret);
     }
     expect(sent[1]).toContain("⟦PHONE1⟧");
+    // A player's name isn't critical (ADR 15).
+    expect(sent[0]).toContain("Vegard");
   });
 
   it("rewrites history from before placeholders were stored, and vacuums it out of the file", async () => {
@@ -236,8 +265,8 @@ describe("redaction in a running assistant", () => {
     expect(rows).not.toContain(EMAIL);
     expect(rows).toContain("⟦EMAIL1⟧");
     const reopened = await createNudge(options, context);
-    expect((await reopened.memory.list(LOBBY, context))[0]!.text).toBe("⟦NAME1⟧ is at ⟦PHONE1⟧");
-    expect(reopened.showTo("p1", "⟦NAME1⟧ is at ⟦PHONE1⟧")).toBe(`Vegard is at ${PHONE}`);
+    expect((await reopened.memory.list(LOBBY, context))[0]!.text).toBe("Vegard is at ⟦PHONE1⟧");
+    expect(reopened.showTo("p1", "Vegard is at ⟦PHONE1⟧")).toBe(`Vegard is at ${PHONE}`);
     // Forgetting a value now takes it out of every copy.
     await reopened.forgetValue("⟦EMAIL1⟧");
     await reopened.close(context);
@@ -247,6 +276,71 @@ describe("redaction in a running assistant", () => {
       () => "",
     );
     expect(after + wal).not.toContain(EMAIL);
+  });
+
+  it("rewrites history stored under older detectors once, thinking included", async () => {
+    const { faux, options } = setup();
+    faux.setResponses([
+      fauxAssistantMessage([
+        { ...fauxThinking("They can be reached at ⟦PHONE1⟧."), thinkingSignature: "sig" },
+        fauxText("Noted."),
+      ]),
+    ]);
+    const first = await createNudge(options, context);
+    const text = `Ring meg på ${PHONE}, fnr ${FNR}.`;
+    await (await first.submit(LOBBY, { text }, context)).wait(context);
+    await first.close(context);
+    // As a Nudge with fewer detectors stored it.
+    const raw = await openRawDatabase(options.database);
+    for (const row of raw.all("SELECT id, record FROM entries") as { id: number; record: string }[])
+      raw.run(
+        "UPDATE entries SET record = ? WHERE id = ?",
+        row.record.replaceAll("⟦PHONE1⟧", PHONE).replaceAll("⟦NATIONALID1⟧", FNR),
+        row.id,
+      );
+    raw.close();
+
+    expect(await redactWhenOutdated(options, createNudge, context)).toMatchObject({
+      entries: expect.any(Number),
+    });
+    expect(await redactWhenOutdated(options, createNudge, context)).toBeUndefined();
+    const check = await openRawDatabase(options.database);
+    const rows = JSON.stringify(check.all("SELECT record FROM entries"));
+    check.close();
+    for (const value of [PHONE, FNR]) expect(rows).not.toContain(value);
+    expect(rows).toContain("They can be reached at ⟦PHONE1⟧.");
+    // Changed thinking can't be replayed as signed.
+    expect(rows).not.toContain('"thinkingSignature":"sig"');
+  });
+
+  it("makes names, places and hosts readable once, in requests from stored history too", async () => {
+    const { faux, options, sent, record } = setup();
+    faux.setResponses([
+      fauxAssistantMessage("Noted."),
+      (request) => {
+        record(request);
+        return fauxAssistantMessage("ok");
+      },
+    ]);
+    const first = await createNudge(options, context);
+    await first.protect("Sørumsand", "PLACE");
+    await first.protect("Hemmelig", "PRIVATE");
+    await first.protect(EMAIL, "EMAIL");
+    await (
+      await first.submit(LOBBY, { text: `Bor på Sørumsand, Hemmelig, ${EMAIL}` }, context)
+    ).wait(context);
+    // As a vault from before ADR 15 was stored.
+    await first.harness.commit(async (tx) => {
+      delete (await tx.doc(VaultDoc)).readable;
+    }, context);
+    await first.close(context);
+
+    const second = await createNudge(options, context);
+    expect(second.redact("Sørumsand Hemmelig")).toBe("Sørumsand ⟦PRIVATE1⟧");
+    await (await second.submit(LOBBY, { text: "hvor bor jeg?" }, context)).wait(context);
+    await second.close(context);
+    expect(sent[0]).toContain("Bor på Sørumsand, ⟦PRIVATE1⟧, ⟦EMAIL1⟧");
+    expect(sent[0]).not.toContain("⟦PLACE1⟧");
   });
 
   it("keeps placeholders across a restart", async () => {
@@ -265,7 +359,7 @@ describe("redaction in a running assistant", () => {
 
   it("streams placeholders whole, even when a chunk splits one", async () => {
     const { faux, options } = setup();
-    faux.setResponses([fauxAssistantMessage("Dear ⟦NAME1⟧, your mail ⟦EMAIL1⟧ is set.")]);
+    faux.setResponses([fauxAssistantMessage("Dear Vegard, your mail ⟦EMAIL1⟧ is set.")]);
     const nudge = await createNudge(
       { ...options, settings: { progress: { partialIntervalMs: 1 } } },
       context,
@@ -299,9 +393,112 @@ describe("redaction in a running assistant", () => {
     }
     // A fast answer may come whole, without deltas, and the last words only with the finished
     // message; what streamed is a start of it either way.
-    const answer = "Dear ⟦NAME1⟧, your mail ⟦EMAIL1⟧ is set.";
+    const answer = "Dear Vegard, your mail ⟦EMAIL1⟧ is set.";
     expect(answer.startsWith(shown)).toBe(true);
     expect(nudge.showTo("p1", answer)).toBe(`Dear Vegard, your mail ${EMAIL} is set.`);
     await nudge.close(context);
+  });
+});
+
+describe("matching what the vault knows", () => {
+  it("falls back to a shorter value where a longer one doesn't fit", () => {
+    const vault = new Vault();
+    vault.protect("Ann", "NAME");
+    vault.protect("Ann Berg", "NAME");
+    expect(vault.redact("Ann Berg and Ann Bergen came.", [])).toBe(
+      "⟦NAME2⟧ and ⟦NAME1⟧ Bergen came.",
+    );
+  });
+
+  it("takes possessives and other whitespace", () => {
+    const vault = new Vault();
+    vault.protect("Ann Berg", "NAME");
+    vault.protect("Sørumsand", "PLACE");
+    vault.protect("kjeks", "PRIVATE");
+    expect(vault.redact("Anns bil, Ann  Berg, Ann\nBerg, Sørumsands skole, kjekss", [])).toBe(
+      "Anns bil, ⟦NAME1⟧, ⟦NAME1⟧, ⟦PLACE1⟧s skole, kjekss",
+    );
+  });
+
+  it("leaves players' names readable", async () => {
+    const nudge = await createNudge(
+      {
+        database: ":memory:",
+        models: createModels(),
+        model: { provider: "faux", modelId: "faux-1" },
+      },
+      context,
+    );
+    await nudge.players.invite("Vegard Svendsen", context);
+    expect(nudge.redact("Vegard sa at Svendsens bil står i /home/vegard.")).toBe(
+      "Vegard sa at Svendsens bil står i /home/vegard.",
+    );
+    await nudge.close(context);
+  });
+});
+
+describe("thinking", () => {
+  const assistant = (thinking: string, signature?: string) => ({
+    role: "assistant" as const,
+    content: [
+      {
+        type: "thinking" as const,
+        thinking,
+        ...(signature === undefined ? {} : { thinkingSignature: signature }),
+      },
+      { type: "text" as const, text: "Ok." },
+    ],
+    api: "faux",
+    provider: "faux",
+    model: "faux-1",
+    usage: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+    stopReason: "stop" as const,
+    timestamp: 0,
+  });
+  const user = (text: string) => ({ role: "user" as const, content: text, timestamp: 0 });
+
+  it("hides a value found late in a request where it was written out earlier", async () => {
+    const { redactContext } = await import("../src/privacy/redact.ts");
+    const vault = new Vault();
+    const redacted = redactContext(
+      { messages: [user("Har Vethjem ledig tid?"), user("Vethjem dyreklinikk: åpent 8–16.")] },
+      vault,
+      quasiIdentifierDetectors,
+    );
+    expect(JSON.stringify(redacted)).not.toContain("Vethjem");
+  });
+
+  it("drops thinking from earlier turns, unsigned thinking, and thinking with values", async () => {
+    const { redactContext } = await import("../src/privacy/redact.ts");
+    const vault = new Vault();
+    vault.protect("Sørumsand", "PLACE");
+    const redacted = redactContext(
+      {
+        messages: [
+          user("Hvor bor jeg?"),
+          assistant("He lives near Sørumsand.", "sig1"),
+          user("Og nå?"),
+          assistant("Plain thinking without a value.", "sig2"),
+          assistant("Unsigned thinking."),
+          assistant("Still near Sørumsand.", "sig3"),
+        ],
+      },
+      vault,
+      builtinDetectors,
+    );
+    const thinking = redacted.messages.map((message) =>
+      message.role === "assistant"
+        ? message.content.flatMap((block) => (block.type === "thinking" ? [block.thinking] : []))
+        : null,
+    );
+    expect(thinking).toEqual([null, [], null, ["Plain thinking without a value."], [], []]);
+    expect(JSON.stringify(redacted)).not.toContain("Sørumsand");
   });
 });

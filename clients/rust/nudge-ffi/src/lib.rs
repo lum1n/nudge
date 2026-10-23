@@ -206,6 +206,8 @@ pub struct RoomUpdate {
     pub approvals: Vec<Approval>,
     pub memory: Vec<Fact>,
     pub nudges: Vec<RoomNudge>,
+    /// The members whose location the model may know in the room.
+    pub sharing_location: Vec<Player>,
     /// Changes to the timeline: earlier items, then the view's, oldest first.
     pub timeline: Vec<TimelineChange>,
     pub can_load_earlier: bool,
@@ -400,6 +402,7 @@ pub async fn list_assistants(server: String) -> Result<Vec<Assistant>, NudgeErro
         .map(|a| Assistant {
             name: a.name,
             display_name: a.display_name,
+            appearance: a.appearance.map(Into::into),
         })
         .collect())
 }
@@ -529,6 +532,14 @@ impl NudgeClient {
             client_id: paired.client_id,
             player: paired.player.into(),
         })
+    }
+
+    /// Signs in the browser whose QR code (a `nudge://sign-in` link) holds sign-in `request`, as
+    /// this player. A 404 when it expired or was used, a 401 when this assistant doesn't know the
+    /// token, as when the QR code is another server's.
+    pub async fn approve_sign_in(&self, request: String) -> Result<(), NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.approve_sign_in(&request).await }).await?)
     }
 
     pub async fn me(&self) -> Result<MeInfo, NudgeError> {
@@ -815,6 +826,79 @@ impl NudgeClient {
         Ok(run(async move { api.forget_value(&placeholder).await }).await?)
     }
 
+    /// The player's full name, e-mail, phone, address and location.
+    pub async fn personal(&self) -> Result<PersonalDetails, NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.personal().await }).await?.into())
+    }
+
+    /// Changes the details `update` sets; 400 for one that isn't one, such as an e-mail address.
+    /// 403 for a player whose home is another assistant: their details stay there.
+    pub async fn update_personal(
+        &self,
+        update: PersonalUpdate,
+    ) -> Result<PersonalDetails, NudgeError> {
+        let update = p::UpdatePersonalRequest {
+            full_name: update.full_name.map(Some),
+            email: update.email.map(Some),
+            phone: update.phone.map(Some),
+            address: update.address.map(Some),
+            location: None,
+        };
+        let api = self.client.api().clone();
+        Ok(run(async move { api.update_personal(&update).await })
+            .await?
+            .into())
+    }
+
+    /// Tells the assistant where the player is: coordinates, and the place the device named,
+    /// such as a street address. A spot within 100 m of the last keeps its placeholder.
+    pub async fn share_location(
+        &self,
+        latitude: f64,
+        longitude: f64,
+        place: Option<String>,
+    ) -> Result<PersonalDetails, NudgeError> {
+        let update = p::UpdatePersonalRequest {
+            location: Some(Some(p::LocationRequest {
+                latitude,
+                longitude,
+                place: place.filter(|place| !place.trim().is_empty()),
+            })),
+            ..Default::default()
+        };
+        let api = self.client.api().clone();
+        Ok(run(async move { api.update_personal(&update).await })
+            .await?
+            .into())
+    }
+
+    /// Forgets where the player was; the assistant no longer knows their location.
+    pub async fn forget_location(&self) -> Result<PersonalDetails, NudgeError> {
+        let update = p::UpdatePersonalRequest {
+            location: Some(None),
+            ..Default::default()
+        };
+        let api = self.client.api().clone();
+        Ok(run(async move { api.update_personal(&update).await })
+            .await?
+            .into())
+    }
+
+    /// Lets the model in a shared room know where the player is, for anyone there, or stops it.
+    pub async fn share_location_in(
+        &self,
+        room: String,
+        shared: bool,
+    ) -> Result<PersonalDetails, NudgeError> {
+        let api = self.client.api().clone();
+        Ok(
+            run(async move { api.share_location_in(&room, shared).await })
+                .await?
+                .into(),
+        )
+    }
+
     /// The player's profile: name, avatar, time zone, language and preferences.
     pub async fn profile(&self) -> Result<Profile, NudgeError> {
         let api = self.client.api().clone();
@@ -902,7 +986,52 @@ impl NudgeClient {
         Ok(run(async move { api.leave(&place).await }).await?)
     }
 
+    // The servers the player owns, kept at their home so all their devices see them (ADR 11). On
+    // another device, `owner_assertion` and `ServerClient::sign_in_from_home` give a server token.
+
+    /// The servers the player owns, as their home keeps them.
+    pub async fn owned_servers(&self) -> Result<Vec<OwnedServer>, NudgeError> {
+        let api = self.client.api().clone();
+        let servers = run(async move { api.owned_servers().await }).await?;
+        Ok(servers.into_iter().map(Into::into).collect())
+    }
+
+    /// Keeps a server the player owns at home.
+    pub async fn add_owned_server(&self, server: String) -> Result<Vec<OwnedServer>, NudgeError> {
+        let api = self.client.api().clone();
+        let servers = run(async move { api.add_owned_server(&server).await }).await?;
+        Ok(servers.into_iter().map(Into::into).collect())
+    }
+
+    /// Takes a server off the player's list at home; nothing on the server changes.
+    pub async fn remove_owned_server(&self, server: String) -> Result<(), NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.remove_owned_server(&server).await }).await?)
+    }
+
+    /// Has the player's home vouch for them to a server they own, sealed for that server: an
+    /// assertion for `ServerClient::sign_in_from_home`, good for five minutes.
+    pub async fn owner_assertion(&self, server: String) -> Result<String, NudgeError> {
+        let api = self.client.api().clone();
+        let sealed = run(async move { api.owner_assertion(&server).await }).await?;
+        Ok(serde_json::to_string(&sealed).expect("JSON values serialize"))
+    }
+
     // Admin commands, for players with the admin flag.
+
+    /// How the assistant's robot looks, for everyone; `None` goes back to the app icon's. The
+    /// room list shows the change. A 400 for a colour, eye shape or accessory that isn't one.
+    pub async fn set_appearance(
+        &self,
+        appearance: Option<Appearance>,
+    ) -> Result<Option<Appearance>, NudgeError> {
+        let api = self.client.api().clone();
+        Ok(
+            run(async move { api.set_appearance(appearance.map(Into::into)).await })
+                .await?
+                .map(Into::into),
+        )
+    }
 
     /// Gives a player the admin flag, or with `false` takes it; returns whether they have it now.
     pub async fn set_admin(&self, player_id: String, admin: bool) -> Result<bool, NudgeError> {
@@ -1127,6 +1256,11 @@ fn room_update(
         nudges: view.map_or_else(Vec::new, |view| {
             view.nudges.iter().cloned().map(Into::into).collect()
         }),
+        sharing_location: view
+            .and_then(|view| view.sharing_location.clone())
+            .map_or_else(Vec::new, |players| {
+                players.into_iter().map(Into::into).collect()
+            }),
         timeline: changes
             .into_iter()
             .map(|change| match change {

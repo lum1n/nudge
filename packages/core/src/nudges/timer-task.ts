@@ -27,6 +27,8 @@ export type FireEntryData = {
   nudgeId: string;
   message: string;
   fireAt: number;
+  /** Set when a watch found something new, rather than a scheduled nudge firing. */
+  source?: "watch";
   /** See `ScheduledNudge.privateTo`; the answer is private too. */
   privateTo?: Owner;
 };

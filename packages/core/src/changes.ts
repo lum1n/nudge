@@ -1,12 +1,12 @@
 /**
  * What changed: the room list, one room's memory, nudges or approvals, who may see which values (a
- * value made private or forgotten), which changes what every view shows, a player's profile, or
- * a player's own memory.
+ * value made private or forgotten), which changes what every view shows, a player's profile, a
+ * player's own memory, or in which of their rooms the model may know where they are.
  */
 export type Change =
   | { readonly kind: "rooms" | "vault" }
   | { readonly kind: "memory" | "nudges" | "approvals"; readonly roomId: string }
-  | { readonly kind: "profile" | "player-memory"; readonly playerId: string };
+  | { readonly kind: "profile" | "player-memory" | "location"; readonly playerId: string };
 
 export type ChangeListener = (change: Change) => void;
 

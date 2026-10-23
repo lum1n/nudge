@@ -66,6 +66,13 @@ pub enum Part {
     Tool { tool: ToolPart },
 }
 
+/// What an answer answers, when it isn't a message.
+#[derive(Clone, Copy, Debug, PartialEq, uniffi::Enum)]
+pub enum PromptedBy {
+    Nudge,
+    Watch,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, uniffi::Enum)]
 pub enum AnswerStatus {
     Running,
@@ -113,6 +120,10 @@ pub enum TimelineItem {
         status: AnswerStatus,
         error: Option<String>,
         parts: Vec<Part>,
+        /// When its first model response started, in ms since the epoch.
+        started_at: Option<f64>,
+        /// It answers a fired nudge or a watch, rather than a message.
+        prompted_by: Option<PromptedBy>,
         /// Only this player sees it; everyone else gets it emptied.
         private_to: Option<Player>,
     },
@@ -280,6 +291,44 @@ pub struct RoomListView {
     pub player: Player,
     pub rooms: Vec<RoomListEntry>,
     pub nudges: Vec<RoomListNudge>,
+    /// The assistant's robot; the app icon's when absent.
+    pub appearance: Option<Appearance>,
+}
+
+/// How the assistant's robot looks: colours as `#rrggbb`, `body` the ribbon's two ends. Apps draw
+/// the app icon's eyes or nothing worn for an `eye_shape` or `accessory` they don't know.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct Appearance {
+    pub body: Vec<String>,
+    pub eyes: String,
+    pub sparks: String,
+    pub eye_shape: String,
+    pub accessory: String,
+}
+
+impl From<p::Appearance> for Appearance {
+    fn from(look: p::Appearance) -> Self {
+        Appearance {
+            body: look.body.to_vec(),
+            eyes: look.eyes,
+            sparks: look.sparks,
+            eye_shape: look.eye_shape,
+            accessory: look.accessory,
+        }
+    }
+}
+
+impl From<Appearance> for p::Appearance {
+    fn from(look: Appearance) -> Self {
+        let end = |i: usize| look.body.get(i).cloned().unwrap_or_default();
+        p::Appearance {
+            body: [end(0), end(1)],
+            eyes: look.eyes,
+            sparks: look.sparks,
+            eye_shape: look.eye_shape,
+            accessory: look.accessory,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, uniffi::Enum)]
@@ -362,6 +411,7 @@ pub struct PairingCode {
 pub struct Assistant {
     pub name: String,
     pub display_name: String,
+    pub appearance: Option<Appearance>,
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Enum)]
@@ -507,6 +557,12 @@ pub fn timeline_item(item: &p::TimelineItem) -> Option<TimelineItem> {
             },
             error: answer.error.clone(),
             parts: answer.parts.iter().filter_map(part).collect(),
+            started_at: answer.started_at,
+            prompted_by: match answer.prompted_by {
+                Some(p::PromptedBy::Nudge) => Some(PromptedBy::Nudge),
+                Some(p::PromptedBy::Watch) => Some(PromptedBy::Watch),
+                Some(p::PromptedBy::Unknown) | None => None,
+            },
             private_to: answer.private_to.clone().map(Into::into),
         },
         p::TimelineItem::Marker(marker) => TimelineItem::Marker {
@@ -643,6 +699,7 @@ impl From<p::RoomListView> for RoomListView {
                     private_to: nudge.private_to.map(Into::into),
                 })
                 .collect(),
+            appearance: list.appearance.map(Into::into),
         }
     }
 }
@@ -907,6 +964,56 @@ pub struct ProfileUpdate {
     pub extensions_json: Option<String>,
 }
 
+/// The player's full name, e-mail, phone, address and location. Only they see the values: the
+/// model gets placeholders, in their own room and private messages.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct PersonalDetails {
+    pub full_name: Option<String>,
+    pub email: Option<String>,
+    pub phone: Option<String>,
+    pub address: Option<String>,
+    pub location: Option<KnownLocation>,
+    /// The shared rooms where they let the model know where they are.
+    pub location_rooms: Vec<String>,
+}
+
+/// Where the player's device last said they were (`place (lat, lon)`), and when.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct KnownLocation {
+    pub text: String,
+    /// In ms since the epoch.
+    pub at: f64,
+}
+
+impl From<p::PersonalDetails> for PersonalDetails {
+    fn from(details: p::PersonalDetails) -> Self {
+        PersonalDetails {
+            full_name: details.full_name,
+            email: details.email,
+            phone: details.phone,
+            address: details.address,
+            location: details.location.map(|location| KnownLocation {
+                text: location.text,
+                at: location.at,
+            }),
+            location_rooms: details.location_rooms.unwrap_or_default(),
+        }
+    }
+}
+
+/// The personal details to change; absent ones stay, and an empty string clears one.
+#[derive(Clone, Debug, Default, PartialEq, uniffi::Record)]
+pub struct PersonalUpdate {
+    #[uniffi(default = None)]
+    pub full_name: Option<String>,
+    #[uniffi(default = None)]
+    pub email: Option<String>,
+    #[uniffi(default = None)]
+    pub phone: Option<String>,
+    #[uniffi(default = None)]
+    pub address: Option<String>,
+}
+
 /// An installed extension that takes settings from each player; `schema_json` is JSON Schema.
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
 pub struct PlayerSettings {
@@ -943,6 +1050,22 @@ impl From<p::Membership> for Membership {
             assistant: membership.assistant,
             since: membership.since,
             carry_memory: membership.carry_memory,
+        }
+    }
+}
+
+/// A server the player owns, as their home keeps it (ADR 11).
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct OwnedServer {
+    pub server: String,
+    pub since: f64,
+}
+
+impl From<p::OwnedServer> for OwnedServer {
+    fn from(owned: p::OwnedServer) -> Self {
+        OwnedServer {
+            server: owned.server,
+            since: owned.since,
         }
     }
 }

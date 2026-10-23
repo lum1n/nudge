@@ -40,13 +40,38 @@ impl ServerApi {
         client: ClientInfo,
     ) -> Result<ServerSessionResponse, ApiError> {
         let body = ServerSessionRequest {
-            assistant: assistant.to_owned(),
+            assistant: Some(assistant.to_owned()),
             client,
+            assertion: None,
         };
         let session: ServerSessionResponse = read(
             self.http
                 .post(endpoint(&self.base, &["session"]))
                 .bearer_auth(player_token)
+                .json(&body)
+                .send()
+                .await,
+        )
+        .await?;
+        self.tokens.set(Some(session.token.clone()));
+        Ok(session)
+    }
+
+    /// Trades an assertion from the owner's home, from `Api::owner_assertion`, for a server token,
+    /// and stores it: for an owner whose home is elsewhere.
+    pub async fn sign_in_from_home(
+        &self,
+        assertion: Sealed,
+        client: ClientInfo,
+    ) -> Result<ServerSessionResponse, ApiError> {
+        let body = ServerSessionRequest {
+            assistant: None,
+            client,
+            assertion: Some(assertion),
+        };
+        let session: ServerSessionResponse = read(
+            self.http
+                .post(endpoint(&self.base, &["session"]))
                 .json(&body)
                 .send()
                 .await,
@@ -165,9 +190,22 @@ impl ServerApi {
         admin: bool,
     ) -> Result<ServerOwner, ApiError> {
         let body = AddOwnerRequest {
-            assistant: assistant.to_owned(),
-            player_id: player_id.to_owned(),
+            assistant: Some(assistant.to_owned()),
+            player_id: Some(player_id.to_owned()),
             admin: admin.then_some(true),
+            address: None,
+        };
+        self.request(Method::POST, &["owners"], &[], Some(&body))
+            .await
+    }
+
+    /// Makes the person at `address` an owner too, vouched for by their home when they sign in.
+    pub async fn add_owner_at(&self, address: &str) -> Result<ServerOwner, ApiError> {
+        let body = AddOwnerRequest {
+            assistant: None,
+            player_id: None,
+            admin: None,
+            address: Some(address.to_owned()),
         };
         self.request(Method::POST, &["owners"], &[], Some(&body))
             .await
@@ -191,30 +229,6 @@ impl ServerApi {
             .await
     }
 
-    /// The server's own Tailscale; 404 on a server that can't run it.
-    pub async fn tailscale(&self) -> Result<TailscaleState, ApiError> {
-        self.request(Method::GET, &["tailscale"], &[], NO_BODY)
-            .await
-    }
-
-    /// Joins the server to a tailnet: at once with `auth_key`, else the state has a login URL
-    /// for someone to approve.
-    pub async fn connect_tailscale(
-        &self,
-        auth_key: Option<&str>,
-    ) -> Result<TailscaleState, ApiError> {
-        let body = TailscaleConnectRequest {
-            auth_key: auth_key.map(str::to_owned),
-        };
-        self.request(Method::POST, &["tailscale"], &[], Some(&body))
-            .await
-    }
-
-    pub async fn disconnect_tailscale(&self) -> Result<TailscaleState, ApiError> {
-        self.request(Method::DELETE, &["tailscale"], &[], NO_BODY)
-            .await
-    }
-
     /// The server's Wired; 404 on a server that wasn't given one.
     pub async fn wired(&self) -> Result<WiredState, ApiError> {
         self.request(Method::GET, &["wired"], &[], NO_BODY).await
@@ -225,21 +239,29 @@ impl ServerApi {
         self.request(Method::DELETE, &["wired"], &[], NO_BODY).await
     }
 
-    /// Makes the server the root of its own Wired network.
-    pub async fn enable_wired(&self) -> Result<WiredState, ApiError> {
-        self.request(Method::POST, &["wired"], &[], NO_BODY).await
+    /// Makes the server the root of its own Wired network, as `name` (such as `box`) when given;
+    /// else as its public address's first label, or its host's name.
+    pub async fn enable_wired(&self, name: Option<&str>) -> Result<WiredState, ApiError> {
+        let body = WiredEnableRequest {
+            name: name.map(str::to_owned),
+        };
+        self.request(Method::POST, &["wired"], &[], Some(&body))
+            .await
     }
 
-    /// Joins the network `invite` is for, serving a relay at the server's public HTTPS address (or
-    /// `relay_url`), which the root must have listed first (`add_wired_relay` there).
+    /// Joins the network `invite` is for, as `name` when given, serving a relay at the server's
+    /// public HTTPS address (or `relay_url`), which the root must have listed first
+    /// (`add_wired_relay` there).
     pub async fn join_wired(
         &self,
         invite: &str,
         relay_url: Option<&str>,
+        name: Option<&str>,
     ) -> Result<WiredState, ApiError> {
         let body = WiredJoinRequest {
             invite: invite.to_owned(),
             relay_url: relay_url.map(str::to_owned),
+            name: name.map(str::to_owned),
         };
         self.request(Method::POST, &["wired", "join"], &[], Some(&body))
             .await
@@ -255,6 +277,13 @@ impl ServerApi {
             .request(Method::POST, &["wired", "relays"], &[], Some(&body))
             .await?;
         Ok(answer.invite)
+    }
+
+    /// On the root: removes the server called `name` from the network, as when it was deleted;
+    /// its key is refused from then on, and a new server can take the name.
+    pub async fn remove_wired_member(&self, name: &str) -> Result<WiredState, ApiError> {
+        self.request(Method::DELETE, &["wired", "members", name], &[], NO_BODY)
+            .await
     }
 
     /// The backup key, sealed with `passphrase`, as a file to keep away from the server.
@@ -346,16 +375,14 @@ pub async fn set_up(server: &str, body: &SetupRequest) -> Result<SetupResponse, 
     read(reqwest::Client::new().post(url).json(body).send().await).await
 }
 
-/// Who can reach a server at its address: anyone (`Public`), only the same tailnet (`Tailnet`:
-/// `*.ts.net`, 100.64.0.0/10, fd7a:115c:a1e0::/48), only the same Wired network (`Wired`:
-/// `<service>.<name>.wired`), or only the same network (`Private`: this computer, a LAN address
-/// or a local name). Another server reaches a tailnet one only through its own Tailscale, a Wired
-/// one only once it is in that network, and a private one not at all.
+/// Who can reach a server at its address: anyone (`Public`), only the same Wired network (`Wired`:
+/// `<service>.<name>.wired`), or only the same network (`Private`: this computer, a LAN or VPN
+/// address, such as a tailnet's, or a local name). Another server reaches a Wired one only once
+/// it is in that network, and a private one not at all.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Reach {
     Public,
     Wired,
-    Tailnet,
     Private,
 }
 
@@ -366,14 +393,19 @@ pub fn reach(server: &str) -> Reach {
     match url.host() {
         Some(url::Host::Domain(name)) => {
             let name = name.to_ascii_lowercase();
-            if name.ends_with(".ts.net") {
-                Reach::Tailnet
-            } else if name.ends_with(".wired") {
+            if name.ends_with(".wired") {
                 Reach::Wired
             } else if !name.contains('.')
-                || [".local", ".lan", ".home.arpa", ".internal", ".localhost"]
-                    .iter()
-                    .any(|suffix| name.ends_with(suffix))
+                || [
+                    ".local",
+                    ".lan",
+                    ".home.arpa",
+                    ".internal",
+                    ".localhost",
+                    ".ts.net",
+                ]
+                .iter()
+                .any(|suffix| name.ends_with(suffix))
             {
                 Reach::Private
             } else {
@@ -382,9 +414,12 @@ pub fn reach(server: &str) -> Reach {
         }
         Some(url::Host::Ipv4(ip)) => {
             let [a, b, ..] = ip.octets();
-            if a == 100 && (64..=127).contains(&b) {
-                Reach::Tailnet
-            } else if ip.is_private() || ip.is_loopback() || ip.is_link_local() {
+            // 100.64.0.0/10 is carrier-grade NAT, such as a tailnet's.
+            if ip.is_private()
+                || ip.is_loopback()
+                || ip.is_link_local()
+                || (a == 100 && (64..=127).contains(&b))
+            {
                 Reach::Private
             } else {
                 Reach::Public
@@ -392,9 +427,7 @@ pub fn reach(server: &str) -> Reach {
         }
         Some(url::Host::Ipv6(ip)) => {
             let s = ip.segments();
-            if s[0] == 0xfd7a && s[1] == 0x115c && s[2] == 0xa1e0 {
-                Reach::Tailnet
-            } else if ip.is_loopback() || (s[0] & 0xfe00) == 0xfc00 || (s[0] & 0xffc0) == 0xfe80 {
+            if ip.is_loopback() || (s[0] & 0xfe00) == 0xfc00 || (s[0] & 0xffc0) == 0xfe80 {
                 Reach::Private
             } else {
                 Reach::Public
@@ -410,9 +443,9 @@ mod tests {
 
     #[test]
     fn tells_who_can_reach_an_address() {
-        assert_eq!(reach("https://home.tail1234.ts.net"), Reach::Tailnet);
-        assert_eq!(reach("http://100.101.102.103:8787"), Reach::Tailnet);
-        assert_eq!(reach("http://[fd7a:115c:a1e0::1]:8787"), Reach::Tailnet);
+        assert_eq!(reach("https://home.tail1234.ts.net"), Reach::Private);
+        assert_eq!(reach("http://100.101.102.103:8787"), Reach::Private);
+        assert_eq!(reach("http://[fd7a:115c:a1e0::1]:8787"), Reach::Private);
         assert_eq!(reach("http://192.168.1.5:8787"), Reach::Private);
         assert_eq!(reach("http://127.0.0.1:8787"), Reach::Private);
         assert_eq!(reach("http://nudge.local:8787"), Reach::Private);

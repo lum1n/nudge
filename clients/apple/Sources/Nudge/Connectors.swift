@@ -26,6 +26,8 @@ public struct Connector: Codable, Equatable, Hashable, Identifiable, Sendable {
     public var name: String
     public var baseUrl: String
     public var useFor: String
+    /// The assistant tries it first, before anything else, for what `useFor` says.
+    public var alwaysFirst: Bool
     public var docsUrl: String?
     /// What the assistant learned about using it.
     public var notes: String
@@ -62,6 +64,14 @@ public final class ObservedConnectors: Observed<ConnectorsState> {
     public func setReadPaths(_ readPaths: [String], for connector: Connector) {
         send("setReadPaths", connector, ["readPaths": .array(readPaths.map(JSONValue.string))])
     }
+    /// What the assistant uses it for.
+    public func setUseFor(_ useFor: String, for connector: Connector) {
+        send("setUseFor", connector, ["useFor": .string(useFor)])
+    }
+    /// Has the assistant try it first, before anything else, for what it's for.
+    public func setAlwaysFirst(_ alwaysFirst: Bool, for connector: Connector) {
+        send("setAlwaysFirst", connector, ["alwaysFirst": .bool(alwaysFirst)])
+    }
     public func remove(_ connector: Connector) { send("remove", connector) }
     /// For admins: every room may use it then.
     public func share(_ connector: Connector) { send("share", connector) }
@@ -85,6 +95,7 @@ private struct WireConnector: Decodable {
     var name: String
     var baseUrl: String
     var useFor: String
+    var alwaysFirst: Bool?
     var docsUrl: String?
     var notes: String?
     var auth: ConnectorAuth?
@@ -96,7 +107,8 @@ private struct WireConnector: Decodable {
 
     var connector: Connector {
         Connector(
-            id: id, name: name, baseUrl: baseUrl, useFor: useFor, docsUrl: docsUrl, notes: notes ?? "", auth: auth,
+            id: id, name: name, baseUrl: baseUrl, useFor: useFor, alwaysFirst: alwaysFirst ?? false,
+            docsUrl: docsUrl, notes: notes ?? "", auth: auth,
             allowPrivateNetwork: allowPrivateNetwork ?? false, readPaths: readPaths ?? [], addedBy: addedBy ?? "",
             shared: shared ?? false, hasKey: hasKey ?? false)
     }

@@ -2,7 +2,10 @@ import type { ExtensionSetup, RoomKind } from "@nudge/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { type ReactNode, useEffect, useState } from "react";
-import { ApiError, clientFor } from "../../api.ts";
+import { ApiError, clientFor, useRoomList } from "../../api.ts";
+import { type Appearance, lookOf } from "../../avatar/appearance.ts";
+import { Avatar } from "../../avatar/Avatar.tsx";
+import { LookPicker } from "../../avatar/LookPicker.tsx";
 import { meQuery } from "../../queries.ts";
 import { ObjectFields, RoomsContext, type Schema, withoutDefaults } from "../../schema-form.tsx";
 
@@ -31,8 +34,94 @@ function draftOf(setup: ExtensionSetup): Draft {
   };
 }
 
-/** The assistant's extensions, set up by an admin: on or off, their settings and rooms. */
+/** What an admin sets up for everyone: how the robot looks, and the extensions. */
 function Settings() {
+  const { assistant } = Route.useParams();
+  const me = useQuery(meQuery(assistant));
+  if (me.data !== undefined && !me.data.admin)
+    return <Page>Only an admin can change the assistant's settings.</Page>;
+  return (
+    <>
+      <Robot />
+      <Extensions />
+    </>
+  );
+}
+
+/** How the assistant's robot looks in everyone's apps. Room lists show a change at once. */
+function Robot() {
+  const { assistant } = Route.useParams();
+  const saved = useRoomList(assistant)?.view?.appearance;
+  const [draft, setDraft] = useState<Appearance>();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string>();
+  const look = draft ?? lookOf(saved);
+  const dirty = draft !== undefined && stable(draft) !== stable(lookOf(saved));
+
+  async function save(appearance: Appearance | null) {
+    setSaving(true);
+    setError(undefined);
+    try {
+      await clientFor(assistant).api.setAppearance(appearance);
+      setDraft(undefined);
+    } catch (caught) {
+      setError((caught as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="mx-auto flex max-w-3xl flex-col gap-3 p-3 sm:p-4">
+      <div>
+        <h2 className="text-lg font-medium">Robot</h2>
+        <p className="text-sm text-stone-600">
+          How the assistant looks to everyone who uses it, in every app.
+        </p>
+      </div>
+      <div className="flex flex-col items-center gap-4 rounded border border-stone-200 bg-white p-4 sm:flex-row sm:items-start">
+        <Avatar mood="idle" appearance={look} size={150} className="shrink-0" />
+        <div className="flex w-full min-w-0 flex-col gap-3">
+          <LookPicker look={look} onChange={setDraft} />
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={!dirty || saving}
+              onClick={() => void save(look)}
+              className="rounded bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-40"
+            >
+              Save
+            </button>
+            {dirty && (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => setDraft(undefined)}
+                className="rounded border border-stone-300 px-3 py-1.5 text-sm"
+              >
+                Discard
+              </button>
+            )}
+            {saved !== undefined && !dirty && (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void save(null)}
+                className="rounded border border-stone-300 px-3 py-1.5 text-sm"
+              >
+                Back to the app icon's
+              </button>
+            )}
+            {error !== undefined && <span className="text-sm text-red-700">{error}</span>}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** The assistant's extensions, set up by an admin: on or off, their settings and rooms. */
+function Extensions() {
   const { assistant } = Route.useParams();
   const me = useQuery(meQuery(assistant));
   const queryClient = useQueryClient();

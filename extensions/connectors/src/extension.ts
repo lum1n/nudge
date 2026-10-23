@@ -55,6 +55,12 @@ export default defineNudgeExtension({
         name: Type.String({ minLength: 1 }),
         baseUrl: Type.String({ description: "Everything calls stay under this address." }),
         useFor: Type.String({ minLength: 1, description: "When to use it, in a sentence." }),
+        alwaysFirst: Type.Optional(
+          Type.Boolean({
+            description:
+              "True when the user wants it tried first, before anything else, for those tasks.",
+          }),
+        ),
         docsUrl: Type.Optional(
           Type.String({ description: "A JSON OpenAPI spec, if the API has one." }),
         ),
@@ -76,7 +82,9 @@ export default defineNudgeExtension({
                 {
                   extension: "connectors",
                   kind: "add",
-                  summary: `Add the connector "${args.name}" (${args.baseUrl}) for: ${args.useFor}`,
+                  summary:
+                    `Add the connector "${args.name}" (${args.baseUrl}) for: ${args.useFor}` +
+                    (args.alwaysFirst === true ? " (always first)" : ""),
                   payload: { ...args },
                 },
                 now(),
@@ -97,10 +105,17 @@ export default defineNudgeExtension({
       name: "update_connector",
       description:
         "Change what you've learned about a connector (what it's for, how to use it, where its " +
-        "docs are) or its non-secret headers. Changing its base address waits for approval.",
+        "docs are) or its non-secret headers. Changing its base address, whether it comes " +
+        "first, or what one that comes first is for waits for approval.",
       parameters: Type.Object({
         connector: Type.String({ description: "From the connectors section, like c1." }),
         useFor: Type.Optional(Type.String({ minLength: 1 })),
+        alwaysFirst: Type.Optional(
+          Type.Boolean({
+            description:
+              "Whether the user wants it tried first, before anything else, for those tasks.",
+          }),
+        ),
         notes: Type.Optional(
           Type.String({ description: "What you've learned about using this API." }),
         ),
@@ -108,7 +123,7 @@ export default defineNudgeExtension({
         headers: Type.Optional(Type.Record(Type.String(), Type.String())),
         baseUrl: Type.Optional(Type.String()),
       }),
-      execute: async ({ connector: id, baseUrl, ...rest }, api, context) => {
+      execute: async ({ connector: id, baseUrl, useFor, alwaysFirst, ...rest }, api, context) => {
         const room = await roomOf(api, api.conversationId, context);
         if (baseUrl !== undefined) {
           try {
@@ -135,12 +150,50 @@ export default defineNudgeExtension({
             return text((error as Error).message, true);
           }
         }
+        const current = (await visibleConnectors(api, room.id, context)).find((c) => c.id === id);
+        // Which connector comes first, and for what, is the people's rule: the model only asks.
+        const rule: { useFor?: string; alwaysFirst?: boolean } = {
+          ...(alwaysFirst !== undefined && alwaysFirst !== (current?.alwaysFirst === true)
+            ? { alwaysFirst }
+            : {}),
+          ...(useFor !== undefined && (alwaysFirst === true || current?.alwaysFirst === true)
+            ? { useFor }
+            : {}),
+        };
+        const patch = { ...rest, ...(useFor === undefined || "useFor" in rule ? {} : { useFor }) };
+        const done: string[] = [];
         try {
-          const updated = await api.commit((tx) => updateConnector(tx, room.id, id, rest), context);
-          void panels.changed(room.id);
-          return text(`Updated connector ${updated.id}.`);
+          if (Object.keys(patch).length > 0 || Object.keys(rule).length === 0) {
+            const updated = await api.commit(
+              (tx) => updateConnector(tx, room.id, id, patch),
+              context,
+            );
+            void panels.changed(room.id);
+            done.push(`Updated connector ${updated.id}.`);
+          }
+          if (Object.keys(rule).length > 0) {
+            if (current === undefined) return text(`No connector "${id}" in this room`, true);
+            const approval = await api.commit(
+              (tx) =>
+                requestApproval(
+                  tx,
+                  room.id,
+                  {
+                    extension: "connectors",
+                    kind: "rule",
+                    summary: ruleSummary(current, rule),
+                    payload: { connector: id, ...rule },
+                  },
+                  now(),
+                ),
+              context,
+            );
+            done.push(`Waiting for approval ${approval.id}.`);
+            return { ...text(done.join(" ")), details: { approval: approval.id } };
+          }
+          return text(done.join(" "));
         } catch (error) {
-          return text((error as Error).message, true);
+          return text([...done, (error as Error).message].join(" "), done.length === 0);
         }
       },
     });
@@ -252,21 +305,7 @@ export default defineNudgeExtension({
         section("connectors", async (input, context) => {
           const room = await roomOf(input.read, input.conversationId, context);
           const connectors = await visibleConnectors(input.read, room.id, context);
-          if (connectors.length === 0) return undefined;
-          return (
-            "APIs this conversation can call — prefer one of these over browsing or your own " +
-            "knowledge when a task matches:\n" +
-            connectors
-              .map(
-                (c) =>
-                  `- ${c.id} ${c.name}: ${c.useFor}` +
-                  (c.notes ? ` (notes: ${c.notes})` : "") +
-                  (c.auth && secrets.get(room.id, c.id) === undefined
-                    ? " (no API key set yet)"
-                    : ""),
-              )
-              .join("\n")
-          );
+          return connectorsSection(connectors, (c) => secrets.get(room.id, c.id) !== undefined);
         }),
       ],
       approvals: {
@@ -275,6 +314,7 @@ export default defineNudgeExtension({
             name: string;
             baseUrl: string;
             useFor: string;
+            alwaysFirst?: boolean;
             docsUrl?: string;
             headers?: Record<string, string>;
             auth?: Connector["auth"];
@@ -306,6 +346,24 @@ export default defineNudgeExtension({
             return { text: (error as Error).message, isError: true };
           }
         },
+        rule: async (payload, run) => {
+          const { connector: id, ...rule } = payload as {
+            connector: string;
+            useFor?: string;
+            alwaysFirst?: boolean;
+          };
+          try {
+            const updated = await run.commit((tx) => updateConnector(tx, run.room.id, id, rule));
+            void panels.changed(run.room.id);
+            return {
+              text: updated.alwaysFirst
+                ? `Connector ${updated.id} now comes first for: ${updated.useFor}`
+                : `Connector ${updated.id} no longer comes first.`,
+            };
+          } catch (error) {
+            return { text: (error as Error).message, isError: true };
+          }
+        },
         call: async (payload) => {
           const { roomId, connector, args } = payload as {
             roomId: string;
@@ -319,6 +377,51 @@ export default defineNudgeExtension({
     };
   },
 });
+
+/** What an approval to change which connector comes first, or for what, asks. */
+function ruleSummary(
+  connector: Connector,
+  rule: { useFor?: string; alwaysFirst?: boolean },
+): string {
+  const useFor = rule.useFor ?? connector.useFor;
+  if (rule.alwaysFirst === false)
+    return (
+      `Stop using "${connector.name}" first` +
+      (rule.useFor === undefined ? "" : `, and use it for: ${rule.useFor}`)
+    );
+  if (rule.alwaysFirst === true) return `Always use "${connector.name}" first for: ${useFor}`;
+  return `Always use "${connector.name}" first for: ${useFor} (was: ${connector.useFor})`;
+}
+
+/** The connectors section: the ones people asked to come first, then the rest. */
+export function connectorsSection(
+  connectors: readonly Connector[],
+  hasKey: (connector: Connector) => boolean,
+): string | undefined {
+  if (connectors.length === 0) return undefined;
+  const line = (c: Connector) =>
+    `- ${c.id} ${c.name}: ${c.useFor}` +
+    (c.notes ? ` (notes: ${c.notes})` : "") +
+    (c.auth && !hasKey(c) ? " (no API key set yet)" : "");
+  const first = connectors.filter((c) => c.alwaysFirst === true);
+  const rest = connectors.filter((c) => c.alwaysFirst !== true);
+  const parts: string[] = [];
+  if (first.length > 0)
+    parts.push(
+      "APIs the people here asked you to always use first. When a task matches one, call it " +
+        "before browsing, searching, other tools or your own knowledge, and fall back to those " +
+        "only when it fails or doesn't have the answer (say so when you do):\n" +
+        first.map(line).join("\n"),
+    );
+  if (rest.length > 0)
+    parts.push(
+      (first.length > 0 ? "Other APIs" : "APIs") +
+        " this conversation can call — prefer one of these over browsing or your own " +
+        "knowledge when a task matches:\n" +
+        rest.map(line).join("\n"),
+    );
+  return parts.join("\n\n");
+}
 
 /** The text of a tool-shaped result, for approval outcomes (which take `{ text, isError? }`). */
 function resultText(result: { output: readonly { text: string }[] }): string {

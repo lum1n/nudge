@@ -1,20 +1,50 @@
 import { appendFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import {
   type AssistantConfig,
   type Assistants,
+  type DeepDetector,
   findAssistant,
   loadConfig,
   loadExtensions,
   type Nudge,
+  type NudgeConfig,
   type NudgeOptions,
+  startLocalModel,
 } from "@nudge/core";
+
+let localModel: DeepDetector | undefined;
+
+/** Where a server keeps the local model's files: `server/models` beside its config. */
+export function modelsDir(configPath: string): string {
+  return join(dirname(resolve(configPath)), "server", "models");
+}
+
+/**
+ * The local model every assistant in this process shares (ADR 14), downloaded the first time and
+ * started once.
+ */
+export function sharedLocalModel(configPath: string): DeepDetector {
+  localModel ??= startLocalModel(modelsDir(configPath), (line) => console.log(line));
+  return localModel;
+}
+
+/** Whether the config turns the local model on: it is off unless asked for (ADR 15). */
+export function localModelWanted(config: NudgeConfig | undefined): boolean {
+  const deep = config?.privacy?.deep;
+  return deep !== undefined && deep !== "off";
+}
 
 /**
  * What every command that runs an assistant passes to it: new databases encrypted, errors to
- * stderr, and with NUDGE_DEBUG_REQUESTS=1 every request, exactly as the provider gets it, appended
- * next to the database.
+ * stderr, the local model when the config turns it on, and with NUDGE_DEBUG_REQUESTS=1 every
+ * request, exactly as the provider gets it, appended next to the database.
  */
-export function hostOptions(assistant: AssistantConfig): Partial<NudgeOptions> {
+export function hostOptions(
+  assistant: AssistantConfig,
+  config: NudgeConfig,
+  configPath: string,
+): Partial<NudgeOptions> {
   const dump = process.env.NUDGE_DEBUG_REQUESTS
     ? `${assistant.database}.requests.jsonl`
     : undefined;
@@ -23,9 +53,12 @@ export function hostOptions(assistant: AssistantConfig): Partial<NudgeOptions> {
     // Every database the CLI makes is encrypted (ADR 11); backups carry its key file.
     encryptNew: true,
     onReport: (error) => console.error(error),
-    privacy: dump
-      ? { onRequest: (request) => appendFileSync(dump, `${JSON.stringify(request)}\n`) }
-      : undefined,
+    privacy: {
+      ...(dump === undefined
+        ? {}
+        : { onRequest: (request) => appendFileSync(dump, `${JSON.stringify(request)}\n`) }),
+      ...(localModelWanted(config) ? { deep: sharedLocalModel(configPath) } : {}),
+    },
   };
 }
 

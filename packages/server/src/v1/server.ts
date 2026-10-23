@@ -1,5 +1,6 @@
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
+  addressOf,
   type AssistantConfig,
   AssistantExists,
   AssistantNotFound,
@@ -7,14 +8,18 @@ import {
   ConfigError,
   DEFAULT_MODEL,
   defaultExtensions,
+  fetchKeys,
   LastOwner,
   type Nudge,
+  ownerFromHome,
+  parseAddress,
+  type PlayerHome,
   type NudgeConfig,
   sealRecoveryKit,
+  type ServerIdentity,
   type ServerKeys,
   type ServerOwner,
   type ServerOwners,
-  type TailscaleState,
   WiredError,
 } from "@nudge/core";
 import {
@@ -31,12 +36,14 @@ import {
   type ServerAssistant,
   type ServerAssistantsResponse,
   type ServerInfoResponse,
+  type ServerOwner as ShownOwner,
+  type ServerKeyResponse,
   type ServerOwnersResponse,
   ServerSessionRequest,
   type ServerSessionResponse,
   SetProviderKeyRequest,
   SetUpdatesRequest,
-  TailscaleConnectRequest,
+  WiredEnableRequest,
   WiredJoinRequest,
   WiredRelayRequest,
   type WiredRelayResponse,
@@ -57,6 +64,10 @@ export type ServerControl = {
   readonly assistants: Assistants;
   readonly keys: ServerKeys;
   readonly owners: ServerOwners;
+  /** The server's own keys, that owners' homes vouch for them to. */
+  readonly identity: ServerIdentity;
+  /** How the server reaches owners' homes for their keys; default the global `fetch`. */
+  readonly fetch?: typeof fetch;
   /** Backs up the assistant `config` holds before it is deleted; returns the backup's name. */
   backupBeforeDelete(config: NudgeConfig): Promise<string>;
   /** Sends one tiny request with the key, throwing with the provider's answer when it fails. */
@@ -65,8 +76,6 @@ export type ServerControl = {
   backupKey(): Promise<Buffer>;
   /** Self-update, for a server `nudge-server` runs; absent otherwise. */
   readonly updates?: UpdateControl;
-  /** The server's own Tailscale, on Linux; absent elsewhere. */
-  readonly tailscale?: TailscaleControl;
   /** The server's Wired; absent where the server wasn't given one. */
   readonly wired?: WiredControl;
 };
@@ -74,22 +83,19 @@ export type ServerControl = {
 /** What owners see of and do with the server's Wired. */
 export type WiredControl = {
   state(): WiredState;
-  /** Makes this server the network's root. */
-  enable(): Promise<WiredState>;
+  /** Makes this server the network's root, as `name` when given. */
+  enable(name?: string): Promise<WiredState>;
   /** On the root: lists a new server's relay and answers with the invite it joins with. */
   addRelay(url: string): Promise<string>;
-  /** Joins the network an invite is for, serving a relay at the public address or `relayUrl`. */
-  join(invite: string, relayUrl?: string): Promise<WiredState>;
+  /**
+   * Joins the network an invite is for, as `name` when given, serving a relay at the public
+   * address or `relayUrl`.
+   */
+  join(invite: string, options: { name?: string; relayUrl?: string }): Promise<WiredState>;
+  /** On the root: removes a server from the network, freeing its name. */
+  remove(name: string): Promise<WiredState>;
   /** Leaves the network, or stops holding it, and forgets it. */
   disable(): Promise<WiredState>;
-};
-
-/** What owners see of and do with the server's Tailscale. */
-export type TailscaleControl = {
-  state(): Promise<TailscaleState>;
-  /** Joins the tailnet, with a login URL in the state when no key was given. */
-  connect(authKey?: string): Promise<TailscaleState>;
-  disconnect(): Promise<TailscaleState>;
 };
 
 /** What owners see of and do with updates. */
@@ -111,26 +117,47 @@ type Env = { Variables: { owner: ServerOwner; clientId: string } };
 
 /**
  * The server's own API (ADR 11), to mount at `/v1/server`: for its owners, with a server token,
- * to create, change and delete assistants and to set the model keys. A player of one of its
- * assistants who is an owner trades their player token for a server token at `POST /session`.
+ * to create, change and delete assistants and to set the model keys. An owner who lives on one of
+ * its assistants trades their player token for a server token at `POST /session`; one whose home
+ * is elsewhere trades an assertion from it, sealed for the server's own keys at `GET /key`.
  */
 export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
   const { control } = options;
   const app = new Hono<Env>();
 
+  app.get("/key", (c) => c.json(control.identity.publicKeys() satisfies ServerKeyResponse));
+
   app.post("/session", async (c) => {
     const body = await readJson(c, ServerSessionRequest);
-    const nudge = control.assistants.running.get(body.assistant);
-    const token = bearer(c);
-    const credential =
-      nudge === undefined || token === undefined
-        ? undefined
-        : await nudge.players.authenticate(token, context);
-    if (credential === undefined) throw new HttpError(401, "Missing or unknown token");
-    const owner = control.owners.ownerOf(body.assistant, credential.player.id);
-    if (owner === undefined) throw new HttpError(403, "Only the server's owners may do that");
+    let owner: ServerOwner | undefined;
+    if (body.assertion !== undefined) {
+      // Their home vouching for them, to this server itself.
+      const signedIn = await ownerFromHome(body.assertion, {
+        identity: control.identity,
+        owners: control.owners,
+        fetch: control.fetch ?? fetch,
+      });
+      if (!("owner" in signedIn)) throw new HttpError(signedIn.status, signedIn.error);
+      owner = signedIn.owner;
+    } else {
+      // The token of their player on the assistant they live on.
+      const nudge =
+        body.assistant === undefined ? undefined : control.assistants.running.get(body.assistant);
+      const token = bearer(c);
+      const credential =
+        nudge === undefined || token === undefined
+          ? undefined
+          : await nudge.players.authenticate(token, context);
+      if (credential === undefined) throw new HttpError(401, "Missing or unknown token");
+      const { player } = credential;
+      owner =
+        player.home === undefined
+          ? control.owners.ownerOf(body.assistant!, player.id)
+          : control.owners.ownerAt(player.home);
+      if (owner === undefined) throw new HttpError(403, "Only the server's owners may do that");
+    }
     const issued = control.owners.issue(owner.id, body.client);
-    return c.json({ ...issued, owner } satisfies ServerSessionResponse, 201);
+    return c.json({ ...issued, owner: shownOwner(owner) } satisfies ServerSessionResponse, 201);
   });
 
   const authenticate: MiddlewareHandler<Env> = async (c, next) => {
@@ -146,7 +173,7 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
   app.get("/", async (c) =>
     c.json({
       version: options.version,
-      owner: c.var.owner,
+      owner: shownOwner(c.var.owner),
       assistants: await listAssistants(control),
       ...(control.updates === undefined ? {} : { updates: control.updates.state() }),
     } satisfies ServerInfoResponse),
@@ -168,21 +195,6 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
     return c.json(await updates().setAutomatic(automatic));
   });
 
-  const tailscale = () => {
-    if (control.tailscale === undefined)
-      throw new HttpError(404, "This server can't run Tailscale: it only runs on Linux");
-    return control.tailscale;
-  };
-
-  app.get("/tailscale", async (c) => c.json(await tailscale().state()));
-
-  app.post("/tailscale", async (c) => {
-    const { authKey } = await readJson(c, TailscaleConnectRequest);
-    return c.json(await tailscale().connect(authKey));
-  });
-
-  app.delete("/tailscale", async (c) => c.json(await tailscale().disconnect()));
-
   const wired = () => {
     if (control.wired === undefined) throw new HttpError(404, "This server has no Wired");
     return control.wired;
@@ -190,13 +202,23 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
 
   app.get("/wired", (c) => c.json(wired().state() satisfies WiredState));
 
-  app.post("/wired", async (c) => c.json((await wired().enable()) satisfies WiredState));
+  app.post("/wired", async (c) => {
+    // A body is optional: without one, the server takes its usual name.
+    const { name } = c.req.header("content-type")?.includes("json")
+      ? await readJson(c, WiredEnableRequest)
+      : {};
+    return c.json((await guard(() => wired().enable(name))) satisfies WiredState);
+  });
 
   app.delete("/wired", async (c) => c.json((await wired().disable()) satisfies WiredState));
 
   app.post("/wired/join", async (c) => {
-    const { invite, relayUrl } = await readJson(c, WiredJoinRequest);
-    return c.json((await guard(() => wired().join(invite, relayUrl))) satisfies WiredState);
+    const { invite, relayUrl, name } = await readJson(c, WiredJoinRequest);
+    const options = {
+      ...(name === undefined ? {} : { name }),
+      ...(relayUrl === undefined ? {} : { relayUrl }),
+    };
+    return c.json((await guard(() => wired().join(invite, options))) satisfies WiredState);
   });
 
   app.post("/wired/relays", async (c) => {
@@ -204,6 +226,10 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
     const invite = await guard(() => wired().addRelay(url));
     return c.json({ invite } satisfies WiredRelayResponse);
   });
+
+  app.delete("/wired/members/:name", async (c) =>
+    c.json((await guard(() => wired().remove(c.req.param("name")))) satisfies WiredState),
+  );
 
   app.delete("/session", (c) => {
     control.owners.revoke(c.var.clientId);
@@ -327,19 +353,43 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
     return c.json({ kit } satisfies RecoveryKitResponse);
   });
 
-  app.get("/owners", (c) =>
-    c.json({ owners: control.owners.list() } satisfies ServerOwnersResponse),
+  app.get("/owners", async (c) =>
+    c.json({
+      owners: control.owners.list().map(shownOwner),
+    } satisfies ServerOwnersResponse),
   );
 
   app.post("/owners", async (c) => {
     const body = await readJson(c, AddOwnerRequest);
+    if (body.address !== undefined) {
+      const home = parseAddress(body.address);
+      if (home === undefined) throw new HttpError(400, `Not an address: ${body.address}`);
+      return c.json(shownOwner(await addFromHome(home)), 201);
+    }
+    if (body.assistant === undefined || body.playerId === undefined)
+      throw new HttpError(400, "Give an address, or an assistant and a player there");
     const nudge = control.assistants.running.get(body.assistant);
     if (nudge === undefined) throw new HttpError(404, `No assistant "${body.assistant}"`);
-    if ((await nudge.players.get(body.playerId, context)) === undefined)
+    const player = await nudge.players.get(body.playerId, context);
+    if (player === undefined)
       throw new HttpError(404, `No player "${body.playerId}" in ${body.assistant}`);
     if (body.admin === true) await nudge.players.setAdmin(body.playerId, true, context);
-    return c.json(control.owners.add(body.assistant, body.playerId), 201);
+    // Someone who joined from their home elsewhere owns the server by their address.
+    const owner =
+      player.home === undefined
+        ? control.owners.add(body.assistant, body.playerId)
+        : await addFromHome(player.home);
+    return c.json(shownOwner(owner), 201);
   });
+
+  /** Makes the person at `home` an owner, with their home's keys pinned. */
+  const addFromHome = async (home: PlayerHome): Promise<ServerOwner> => {
+    const known = control.owners.ownerAt(home);
+    if (known !== undefined) return known;
+    const keys = await fetchKeys(home, control.fetch ?? fetch);
+    if (keys === undefined) throw new HttpError(502, `Could not reach ${home.server}`);
+    return control.owners.addAddress(addressOf(home), keys)!;
+  };
 
   app.delete("/owners/:id", (c) => {
     let removed: boolean;
@@ -417,4 +467,16 @@ async function guard<T>(work: () => Promise<T>): Promise<T> {
 
 function bearer(c: HonoContext): string | undefined {
   return /^Bearer\s+(\S+)$/i.exec(c.req.header("authorization") ?? "")?.[1];
+}
+
+/** An owner as the API shows them: without their home's keys. */
+function shownOwner(owner: ServerOwner): ShownOwner {
+  const { id, addedAt, assistant, playerId, address } = owner;
+  return {
+    id,
+    addedAt,
+    ...(assistant === undefined ? {} : { assistant }),
+    ...(playerId === undefined ? {} : { playerId }),
+    ...(address === undefined ? {} : { address }),
+  };
 }

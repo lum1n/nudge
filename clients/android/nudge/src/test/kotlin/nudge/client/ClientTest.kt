@@ -18,6 +18,7 @@ import nudge.ffi.NudgeException
 import nudge.ffi.PanelStatus
 import nudge.ffi.Part
 import nudge.ffi.PendingState
+import nudge.ffi.PersonalUpdate
 import nudge.ffi.ProfileUpdate
 import nudge.ffi.Sent
 import nudge.ffi.SyncStatus
@@ -405,6 +406,40 @@ class ClientTest {
         )) {
             assertEquals(bad, null, JoinLink.parse(bad))
         }
+    }
+
+    @Test
+    fun signInLinks() = runBlocking {
+        assertEquals(
+            SignInLink("https://nudge.example/x", "r1"),
+            SignInLink.parse("nudge://sign-in?server=https%3A%2F%2Fnudge.example%2Fx&request=r1"),
+        )
+        for (bad in listOf(
+            "nudge://sign-in?server=ftp%3A%2F%2Fx&request=r1",
+            "nudge://sign-in?server=https%3A%2F%2Fx",
+            "nudge://join?server=https%3A%2F%2Fx&request=r1",
+            "not a link",
+        )) {
+            assertEquals(bad, null, SignInLink.parse(bad))
+        }
+        try {
+            client(MemoryTokens(ann)).approveSignIn("expired")
+            error("not refused")
+        } catch (e: NudgeException.Status) {
+            assertEquals(404.toUShort(), e.status)
+        }
+    }
+
+    @Test
+    fun keepsPersonalDetailsAndALocation() = runBlocking {
+        val home = client(MemoryTokens(ann))
+        val details = home.updatePersonal(PersonalUpdate(email = "ann@example.com", phone = "+47 912 34 567"))
+        assertEquals("ann@example.com", details.email)
+        assertEquals(null, home.updatePersonal(PersonalUpdate(phone = "")).phone)
+        val located = home.shareLocation(59.913868, 10.752245, "Oslo S")
+        assertEquals("Oslo S (59.9139, 10.7522)", located.location?.text)
+        assertEquals(null, home.forgetLocation().location)
+        assertEquals("ann@example.com", home.personal().email)
     }
 
     @Test

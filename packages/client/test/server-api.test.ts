@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { fauxProvider } from "@earendil-works/pi-ai/providers/faux";
-import { Assistants, openAssistant, ServerKeys, ServerOwners } from "@nudge/core";
+import { Assistants, openAssistant, ServerIdentity, ServerKeys, ServerOwners } from "@nudge/core";
 import { createApp } from "@nudge/server";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { Api, ApiError, memoryTokens, ServerApi } from "../src/index.ts";
@@ -40,6 +40,7 @@ it("signs an owner in to the server and manages its assistants", async () => {
       assistants,
       keys: new ServerKeys(undefined, () => []),
       owners,
+      identity: new ServerIdentity(undefined),
       backupBeforeDelete: async () => "backup",
       testKey: async () => {},
       backupKey: async () => Buffer.alloc(32, 1),

@@ -6,29 +6,47 @@ import SwiftUI
 struct TimelineRow: View {
     let item: TimelineItem
     let me: String?
+    /// The assistant's display name, over each of its answers.
+    let assistant: String
+    /// How its robot looks, beside them.
+    var look: RobotLook = .nudge
 
     var body: some View {
         switch item {
         // Someone else's private message: the server sent it empty, so it is a line, not a bubble.
         case .user(_, let text, _, _, _, _, let privateTo?) where text.isEmpty:
             PrivateLine(text: "\(privateTo.displayName) sent a private message")
-        case .user(_, let text, let author, _, _, _, let privateTo):
+        case .user(_, let text, let author, let sentAt, _, _, let privateTo):
             let mine = author == nil || author?.id == me
             VStack(alignment: mine ? .trailing : .leading, spacing: 2) {
                 if privateTo != nil { OnlyYou() }
-                MessageBubble(text: text, mine: mine, author: mine ? nil : author?.displayName)
+                MessageBubble(text: text, mine: mine, author: mine ? nil : author?.displayName, sentAt: sentAt)
             }
             .frame(maxWidth: .infinity, alignment: mine ? .trailing : .leading)
         case .nudge, .approval:
             EmptyView()
-        case .answer(_, let status, _, _, let privateTo?) where privateTo.id != me:
+        case .answer(_, let status, _, _, _, _, let privateTo?) where privateTo.id != me:
             PrivateLine(
                 text: status == .running
                     ? "Answering \(privateTo.displayName) privately…" : "Answered \(privateTo.displayName) privately")
-        case .answer(_, let status, let error, let parts, let privateTo):
-            VStack(alignment: .leading, spacing: 4) {
+        case .answer(_, let status, let error, let parts, let startedAt, let promptedBy, let privateTo):
+            // On a surface of its own, under the assistant's name, so it reads apart from the
+            // messages around it and from the answer before. One no one asked for just now, to a
+            // nudge or a watch, is tinted by what prompted it.
+            VStack(alignment: .leading, spacing: 8) {
+                AnswerHeader(name: assistant, startedAt: startedAt, promptedBy: promptedBy, appearance: look)
                 if privateTo != nil { OnlyYou() }
                 AnswerView(status: status, error: error, parts: parts)
+            }
+            .padding(14)
+            .background {
+                let shape = RoundedRectangle(cornerRadius: 22)
+                if let promptedBy {
+                    shape.fill(promptedBy.color.opacity(0.12))
+                        .overlay(shape.strokeBorder(promptedBy.color.opacity(0.35)))
+                } else {
+                    shape.fill(.fill.quinary)
+                }
             }
         case .marker(_, let kind):
             Text(kind == .compacted ? "Earlier messages summarized" : "Conversation started over")
@@ -44,6 +62,83 @@ struct TimelineRow: View {
 
 func date(_ milliseconds: Double) -> Date {
     Date(timeIntervalSince1970: milliseconds / 1000)
+}
+
+extension PromptedBy {
+    var label: String {
+        switch self {
+        case .nudge: "Nudge"
+        case .watch: "Watch"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .nudge: "bell.fill"
+        case .watch: "eye.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .nudge: .orange
+        case .watch: .indigo
+        }
+    }
+}
+
+/// Whose answer it is, its robot at rest, when it started, and the nudge or watch that prompted it.
+struct AnswerHeader: View {
+    let name: String
+    let startedAt: Double?
+    var promptedBy: PromptedBy? = nil
+    var appearance: RobotLook = .nudge
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Portrait(appearance: appearance, size: 20)
+            Text(name).font(.subheadline.weight(.semibold))
+            if let promptedBy {
+                Label(promptedBy.label, systemImage: promptedBy.symbol)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(promptedBy.color)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(promptedBy.color.opacity(0.15), in: .capsule)
+            }
+            if let startedAt {
+                Text(date(startedAt), format: .dateTime.hour().minute())
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+/// Where a new day starts in the transcript: "Today", "Yesterday" or the date.
+struct DayDivider: View {
+    let at: Double
+
+    var body: some View {
+        HStack(spacing: 10) {
+            line
+            Text(label).font(.caption.weight(.medium)).foregroundStyle(.secondary).fixedSize()
+            line
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var line: some View { Rectangle().fill(.separator).frame(height: 1) }
+
+    private var label: String {
+        let day = date(at)
+        let calendar = Calendar.current
+        if calendar.isDateInToday(day) { return "Today" }
+        if calendar.isDateInYesterday(day) { return "Yesterday" }
+        let thisYear = calendar.isDate(day, equalTo: .now, toGranularity: .year)
+        let format = Date.FormatStyle.dateTime.weekday(.wide).day().month(.wide)
+        return day.formatted(thisYear ? format : format.year())
+    }
 }
 
 /// Something private to someone else happened here; the server didn't say what.
@@ -85,6 +180,8 @@ struct MessageBubble: View {
     let mine: Bool
     /// Someone else's name, shown above their message.
     let author: String?
+    /// When it was sent, in ms since the epoch, shown under it.
+    var sentAt: Double? = nil
 
     var body: some View {
         VStack(alignment: mine ? .trailing : .leading, spacing: 3) {
@@ -96,6 +193,12 @@ struct MessageBubble: View {
                 .padding(.vertical, 9)
                 .foregroundStyle(mine ? Color.white : Color.primary)
                 .glassEffect(mine ? .regular.tint(.accentColor) : .regular, in: .rect(cornerRadius: 20))
+            if let sentAt {
+                Text(date(sentAt), format: .dateTime.hour().minute())
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+            }
         }
         .frame(maxWidth: .infinity, alignment: mine ? .trailing : .leading)
         .padding(mine ? .leading : .trailing, 40)

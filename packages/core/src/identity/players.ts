@@ -39,8 +39,6 @@ export const PAIRING_TTL_MS = 10 * 60 * 1000;
 export class Players {
   constructor(
     private readonly harness: Harness,
-    /** Keeps a display name from the model before anything can mention it. */
-    private readonly protectName: (name: string) => Promise<void>,
     private readonly now: () => number,
   ) {}
 
@@ -69,7 +67,6 @@ export class Players {
   async addRoaming(home: PlayerHome, displayName: string, context: Context): Promise<Invitation> {
     const name = displayName.trim();
     if (name === "") throw new Error("A player needs a name");
-    await this.protectName(name);
     const token = newToken();
     const clientId = `client-${randomUUID()}`;
     const player = await this.harness.commit(async (tx) => {
@@ -99,6 +96,45 @@ export class Players {
     );
   }
 
+  /**
+   * Binds a player who lives here to their home elsewhere, as when the server was set up from it
+   * (ADR 11): from then on joining from that home lands on them. Refuses a player who has a home
+   * already, and a home another player has.
+   */
+  async setHome(
+    playerId: string,
+    home: PlayerHome,
+    startedFrom: NonNullable<Player["startedFrom"]>,
+    context: Context,
+  ): Promise<Player> {
+    return this.harness.commit(async (tx) => {
+      const directory = await tx.doc(DirectoryDoc);
+      const player = directory.players[playerId];
+      if (player === undefined) throw new Error(`No player "${playerId}"`);
+      if (player.home !== undefined) throw new Error(`"${playerId}" has a home already`);
+      if (
+        Object.values(directory.players).some((p) => p.home !== undefined && sameHome(p.home, home))
+      )
+        throw new Error("Another player has that home");
+      player.home = { ...home };
+      player.startedFrom = copyOfStart(startedFrom);
+      return copyOf(player);
+    }, context);
+  }
+
+  /** Pins the keys a player's home was found to have, once their setup proof checked out. */
+  async confirmHome(
+    playerId: string,
+    keys: { signingKey: string; encryptionKey: string },
+    context: Context,
+  ): Promise<void> {
+    await this.harness.commit(async (tx) => {
+      const player = (await tx.doc(DirectoryDoc)).players[playerId];
+      if (player?.startedFrom === undefined) return;
+      player.startedFrom = { keys: { ...keys } };
+    }, context);
+  }
+
   /** Adds a player with a fresh id taken from the name and no token; pair a client for one. */
   async create(displayName: string, context: Context): Promise<Player> {
     return this.add(displayName, undefined, context);
@@ -111,7 +147,6 @@ export class Players {
   ): Promise<Player> {
     const name = displayName.trim();
     if (name === "") throw new Error("A player needs a name");
-    await this.protectName(name);
     return this.harness.commit(async (tx) => {
       const directory = await tx.doc(DirectoryDoc);
       const id = freeId(slug(name, "player"), (id) => id in directory.players);
@@ -131,7 +166,6 @@ export class Players {
   async ensure(id: string, displayName: string, context: Context): Promise<Player> {
     const name = displayName.trim();
     if (name === "") throw new Error("A player needs a name");
-    await this.protectName(name);
     return this.harness.commit(async (tx) => {
       const directory = await tx.doc(DirectoryDoc);
       const existing = directory.players[id];
@@ -149,7 +183,6 @@ export class Players {
   async rename(id: string, displayName: string, context: Context): Promise<Player> {
     const name = displayName.trim();
     if (name === "") throw new Error("A player needs a name");
-    await this.protectName(name);
     return this.harness.commit(async (tx) => {
       const player = (await tx.doc(DirectoryDoc)).players[id];
       if (player === undefined) throw new Error(`No player "${id}"`);
@@ -289,5 +322,18 @@ function dropExpired(pairing: NonNullable<DirectoryState["pairing"]>, now: numbe
 
 /** A player out of a commit, as plain data: nested objects are the document's until copied. */
 function copyOf(player: Player): Player {
-  return { ...player, ...(player.home === undefined ? {} : { home: { ...player.home } }) };
+  return {
+    ...player,
+    ...(player.home === undefined ? {} : { home: { ...player.home } }),
+    ...(player.startedFrom === undefined ? {} : { startedFrom: copyOfStart(player.startedFrom) }),
+  };
+}
+
+function copyOfStart(
+  start: NonNullable<Player["startedFrom"]>,
+): NonNullable<Player["startedFrom"]> {
+  return {
+    ...(start.keys === undefined ? {} : { keys: { ...start.keys } }),
+    ...(start.proof === undefined ? {} : { proof: { ...start.proof } }),
+  };
 }

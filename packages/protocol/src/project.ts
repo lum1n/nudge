@@ -19,6 +19,7 @@ import type {
 } from "@nudge/core";
 import { addressOf } from "@nudge/core";
 import type {
+  Appearance,
   Approval,
   Fact,
   RoomListNudge,
@@ -74,6 +75,8 @@ export type RoomSources = {
   readonly approvals: readonly CoreApproval[];
   readonly memory: readonly CoreRoomFact[];
   readonly nudges: readonly ScheduledNudge[];
+  /** Ids of the members whose location the model may know in the room. */
+  readonly sharingLocation?: readonly string[];
 };
 
 type Kept<T> = { readonly sources: readonly unknown[]; readonly value: T };
@@ -117,6 +120,18 @@ export class RoomProjector {
       nudges: this.part("nudges", [sources.nudges], () =>
         [...sources.nudges].sort((a, b) => a.fireAt - b.fireAt).map(toRoomNudge),
       ),
+      ...(sources.sharingLocation === undefined || sources.sharingLocation.length === 0
+        ? {}
+        : {
+            sharingLocation: this.part(
+              "sharingLocation",
+              [sources.sharingLocation, sources.room],
+              () =>
+                sources.room.members.filter((member) =>
+                  sources.sharingLocation!.includes(member.id),
+                ),
+            ),
+          }),
     };
   }
 
@@ -254,10 +269,15 @@ function items(
     ];
     const id = `answer:${after}`;
     const owner = before === undefined ? undefined : privateToOf(before);
+    const prompt = before === undefined ? undefined : promptedBy(before);
     timeline.push(
       keep(id, sources, () => {
         const built = buildAnswer(id, answerEntries, results, live, generated);
-        return owner === undefined ? built : { ...built, privateTo: owner };
+        return {
+          ...built,
+          ...(prompt === undefined ? {} : { promptedBy: prompt }),
+          ...(owner === undefined ? {} : { privateTo: owner }),
+        };
       }),
     );
     if (answerEntries[0] !== undefined) options.start?.(answerEntries[0].id);
@@ -342,6 +362,12 @@ function privateToOf(entry: {
   return undefined;
 }
 
+/** What an answer to this entry answers, when it isn't a message: a fired nudge or a watch. */
+function promptedBy(entry: EntryRecord): "nudge" | "watch" | undefined {
+  if (entry.kind !== FIRE_ENTRY) return undefined;
+  return (entry.data as FireEntryData).source === "watch" ? "watch" : "nudge";
+}
+
 function privately(entry: { readonly kind?: string; readonly data?: unknown }): {
   privateTo?: Player;
 } {
@@ -358,10 +384,12 @@ function buildAnswer(
 ): TimelineItem {
   const slots = new Map((live?.tools ?? []).map((slot) => [slot.callId, slot]));
   const parts: Part[] = [];
+  let first: AssistantMessage | undefined;
   let last: AssistantMessage | undefined;
   for (const entry of entries)
     for (const message of entry.model ?? [])
       if (message.role === "assistant") {
+        first ??= message;
         last = message;
         for (const content of message.content) {
           const part = toPart(content, results, slots);
@@ -373,17 +401,19 @@ function buildAnswer(
       const part = toPart(content, results, slots);
       if (part !== undefined) parts.push(part);
     }
-  if (live !== undefined) return { type: "answer", id, status: "running", parts };
-  if (last?.stopReason === "aborted") return { type: "answer", id, status: "stopped", parts };
+  // When it started: its first model response; a live one's first token, before that's saved.
+  const startedAt = (first ?? generated)?.timestamp;
+  const base = { type: "answer" as const, id, ...(startedAt === undefined ? {} : { startedAt }) };
+  if (live !== undefined) return { ...base, status: "running", parts };
+  if (last?.stopReason === "aborted") return { ...base, status: "stopped", parts };
   if (last?.stopReason === "error")
     return {
-      type: "answer",
-      id,
+      ...base,
       status: "failed",
       ...(last.errorMessage === undefined ? {} : { error: last.errorMessage }),
       parts,
     };
-  return { type: "answer", id, status: "done", parts };
+  return { ...base, status: "done", parts };
 }
 
 function toPart(
@@ -532,6 +562,7 @@ export function toApproval(approval: CoreApproval): Approval {
     ...(approval.decidedAt === undefined ? {} : { decidedAt: approval.decidedAt }),
     ...(approval.result === undefined ? {} : { result: approval.result }),
     ...(approval.privateTo === undefined ? {} : { privateTo: player(approval.privateTo) }),
+    ...(approval.adminOnly === true ? { adminOnly: true } : {}),
   };
 }
 
@@ -569,6 +600,7 @@ export type RoomListSources = {
   readonly player: Player;
   readonly rooms: readonly RoomListEntry[];
   readonly nudges: readonly ScheduledNudge[];
+  readonly appearance?: Appearance;
 };
 
 export function projectRoomList(sources: RoomListSources): RoomListView {
@@ -576,6 +608,7 @@ export function projectRoomList(sources: RoomListSources): RoomListView {
     player: sources.player,
     rooms: [...sources.rooms],
     nudges: [...sources.nudges].sort((a, b) => a.fireAt - b.fireAt).map(toRoomListNudge),
+    ...(sources.appearance === undefined ? {} : { appearance: sources.appearance }),
   };
 }
 

@@ -28,19 +28,27 @@ import {
   useCallback,
   useContext,
   useEffect,
+  use,
   useMemo,
   useState,
 } from "react";
-import { clientFor, forgetToken, useConnection, useRoom } from "../../api.ts";
+import { clientFor, forgetToken, useConnection, useRoom, useRoomList } from "../../api.ts";
+import { type Appearance, lookOf, NUDGE } from "../../avatar/appearance.ts";
+import { Avatar, Portrait } from "../../avatar/Avatar.tsx";
+import type { Mood } from "../../avatar/pose.ts";
+import { useRoomMood } from "../../avatar/use-room-mood.ts";
 import {
   appendText,
   buildQueueAdapter,
+  dayLabel,
+  dayStarts,
   type Lane,
   PLACEHOLDER,
+  timeLabel,
   toThreadMessageLike,
   transcript,
 } from "../../assistant-runtime.ts";
-import { meQuery } from "../../queries.ts";
+import { assistantsQuery, meQuery } from "../../queries.ts";
 
 export const Route = createFileRoute("/$assistant/$room")({ component: Room });
 
@@ -49,6 +57,8 @@ const UNAUTHORIZED = 4401;
 
 /** The room's view, for the parts deep in the chat that need it, such as approval cards. */
 const ViewContext = createContext<RoomView | undefined>(undefined);
+/** How the assistant's robot looks, for the portraits beside its answers. */
+const LookContext = createContext<Appearance>(NUDGE);
 
 function Room() {
   const { assistant, room } = Route.useParams();
@@ -139,11 +149,27 @@ function Room() {
               Browser
             </Link>
             <Link
+              to="/$assistant/$room/desktop"
+              params={{ assistant, room }}
+              title="The room's desktop, where the assistant uses apps"
+              className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
+            >
+              Desktop
+            </Link>
+            <Link
               to="/$assistant/$room/connectors"
               params={{ assistant, room }}
               className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
             >
               Connectors
+            </Link>
+            <Link
+              to="/$assistant/$room/mcp"
+              params={{ assistant, room }}
+              title="MCP servers the assistant uses in this room"
+              className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
+            >
+              MCP
             </Link>
             <Link
               to="/$assistant/$room/lists"
@@ -170,6 +196,7 @@ function Room() {
           </div>
           <ApprovalsPanel approvals={view.approvals} />
           <MemoryPanel view={view} />
+          <LocationPanel view={view} />
           <PrivateValuesPanel />
           <NudgesPanel view={view} />
           <ExtensionsPanel />
@@ -202,6 +229,7 @@ function Room() {
           ) : connection.kind === "closed" ? (
             <p className="text-sm text-red-700">Disconnected: {connection.reason}.</p>
           ) : null}
+          <SharingLocation view={view} />
           <Chat store={held.store} state={held.state} view={view} />
         </div>
       </div>
@@ -285,9 +313,14 @@ function RoomName({ view }: { view: RoomView }) {
 function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view: RoomView }) {
   const { assistant, room } = Route.useParams();
   const me = useQuery(meQuery(assistant)).data?.player.id ?? "";
+  const name =
+    useQuery(assistantsQuery()).data?.assistants.find((item) => item.name === assistant)
+      ?.displayName ?? assistant;
   // Only in a shared room is there anyone to keep a message from.
   const shared = view.room.kind !== "personal";
   const [secret, setSecret] = useState(false);
+  const mood = useRoomMood(view);
+  const look = lookOf(useRoomList(assistant)?.view?.appearance);
   const dispatch = useCallback(
     (message: AppendMessage, lane: Lane) => {
       const text = appendText(message).trim();
@@ -312,6 +345,7 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
     () => transcript(state.timeline, view.approvals),
     [state.timeline, view.approvals],
   );
+  const days = useMemo(() => dayStarts(messages), [messages]);
   const runtime = useExternalStoreRuntime({
     messages,
     convertMessage,
@@ -327,62 +361,124 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <div className="flex h-full min-h-0 flex-col gap-3">
-        <StatusLine status={view.live.status} />
-        <ThreadPrimitive.Viewport className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-x-hidden overflow-y-auto">
-          <ThreadPrimitive.LoadEarlier className="self-center text-sm text-stone-500 underline disabled:text-stone-300 disabled:no-underline">
-            Load earlier
-          </ThreadPrimitive.LoadEarlier>
-          {state.earlierError !== undefined && (
-            <p className="self-center text-sm text-red-700">{state.earlierError}</p>
-          )}
-          <ThreadPrimitive.Messages>
-            {({ message }) => <MessageRow message={message} />}
-          </ThreadPrimitive.Messages>
-        </ThreadPrimitive.Viewport>
-        <FailedSends store={store} pending={state.pending} />
-        <ComposerPrimitive.Root className="flex shrink-0 flex-col gap-2">
-          <ComposerPrimitive.Queue>
-            {({ queueItem }) => (
-              <p key={queueItem.id} className="text-sm [overflow-wrap:anywhere] text-stone-500">
-                Waiting: {queueItem.prompt}
-              </p>
+      <LookContext value={look}>
+        <div className="flex h-full min-h-0 flex-col gap-3">
+          <StatusLine status={view.live.status} />
+          <ThreadPrimitive.Viewport className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto">
+            <ThreadPrimitive.LoadEarlier className="self-center text-sm text-stone-500 underline disabled:text-stone-300 disabled:no-underline">
+              Load earlier
+            </ThreadPrimitive.LoadEarlier>
+            {state.earlierError !== undefined && (
+              <p className="self-center text-sm text-red-700">{state.earlierError}</p>
             )}
-          </ComposerPrimitive.Queue>
-          <div className="flex gap-2">
-            {shared && (
-              <button
-                type="button"
-                aria-pressed={secret}
-                onClick={() => setSecret((on) => !on)}
-                title="Only you see a private message and the answer to it; the others see that there was one"
-                className={`shrink-0 rounded border px-2 text-sm ${
-                  secret ? "border-violet-700 bg-violet-700 text-white" : "bg-white text-stone-600"
-                }`}
-              >
-                Private
-              </button>
-            )}
-            <ComposerPrimitive.Input
-              placeholder={
-                secret && shared ? "Private message: only you see it and the answer" : "Message"
-              }
-              className="max-h-40 min-w-0 flex-1 resize-none rounded border border-stone-300 bg-white px-2 py-1.5"
-            />
-            {view.live.running ? (
-              <ComposerPrimitive.Cancel className="shrink-0 rounded border bg-white px-3">
-                Stop
-              </ComposerPrimitive.Cancel>
-            ) : (
-              <ComposerPrimitive.Send className="shrink-0 rounded border bg-white px-3">
-                Send
-              </ComposerPrimitive.Send>
-            )}
-          </div>
-        </ComposerPrimitive.Root>
-      </div>
+            <ThreadPrimitive.Empty>
+              <div className="m-auto flex flex-col items-center gap-2 py-8 text-stone-500">
+                <Avatar mood={mood} appearance={look} size={160} title={name} />
+                <p>Say hello to {name}.</p>
+              </div>
+            </ThreadPrimitive.Empty>
+            <ThreadPrimitive.Messages>
+              {({ message }) => (
+                <>
+                  {days.has(message.id) && <DayDivider at={days.get(message.id)!} />}
+                  <MessageRow message={message} assistant={name} />
+                </>
+              )}
+            </ThreadPrimitive.Messages>
+          </ThreadPrimitive.Viewport>
+          <FailedSends store={store} pending={state.pending} />
+          {messages.length > 0 && <Presence mood={mood} look={look} view={view} name={name} />}
+          <ComposerPrimitive.Root className="flex shrink-0 flex-col gap-2">
+            <ComposerPrimitive.Queue>
+              {({ queueItem }) => (
+                <p key={queueItem.id} className="text-sm [overflow-wrap:anywhere] text-stone-500">
+                  Waiting: {queueItem.prompt}
+                </p>
+              )}
+            </ComposerPrimitive.Queue>
+            <div className="flex gap-2">
+              {shared && (
+                <button
+                  type="button"
+                  aria-pressed={secret}
+                  onClick={() => setSecret((on) => !on)}
+                  title="Only you see a private message and the answer to it; the others see that there was one"
+                  className={`shrink-0 rounded border px-2 text-sm ${
+                    secret
+                      ? "border-violet-700 bg-violet-700 text-white"
+                      : "bg-white text-stone-600"
+                  }`}
+                >
+                  Private
+                </button>
+              )}
+              <ComposerPrimitive.Input
+                placeholder={
+                  secret && shared ? "Private message: only you see it and the answer" : "Message"
+                }
+                className="max-h-40 min-w-0 flex-1 resize-none rounded border border-stone-300 bg-white px-2 py-1.5"
+              />
+              {view.live.running ? (
+                <ComposerPrimitive.Cancel className="shrink-0 rounded border bg-white px-3">
+                  Stop
+                </ComposerPrimitive.Cancel>
+              ) : (
+                <ComposerPrimitive.Send className="shrink-0 rounded border bg-white px-3">
+                  Send
+                </ComposerPrimitive.Send>
+              )}
+            </div>
+          </ComposerPrimitive.Root>
+        </div>
+      </LookContext>
     </AssistantRuntimeProvider>
   );
+}
+
+/** The robot, live, and a word on what it is doing. */
+function Presence({
+  mood,
+  look,
+  view,
+  name,
+}: {
+  mood: Mood;
+  look: Appearance;
+  view: RoomView;
+  name: string;
+}) {
+  return (
+    <div className="flex shrink-0 items-center gap-2 text-sm text-stone-500">
+      <Avatar mood={mood} appearance={look} size={40} title={name} />
+      <span aria-live="polite">{presenceLabel(mood, view)}</span>
+    </div>
+  );
+}
+
+function presenceLabel(mood: Mood, view: RoomView): string {
+  switch (mood) {
+    case "working": {
+      const answer = view.timeline.findLast((item) => item.type === "answer");
+      const part = answer?.parts.at(-1);
+      return part?.type === "tool" ? `Using ${part.name}…` : "Working…";
+    }
+    case "thinking":
+      return view.live.status?.kind === "compacting" ? "Tidying up older messages…" : "Thinking…";
+    case "speaking":
+      return "Answering…";
+    case "waiting":
+      return "Waiting for an approval";
+    case "puzzled":
+      return "Trying again…";
+    case "sad":
+      return "That didn't work";
+    case "asleep":
+      return "Dozing";
+    case "happy":
+    case "idle":
+    case "listening":
+      return "";
+  }
 }
 
 /** Messages the server didn't take, with a way to send each again or let it go. */
@@ -444,12 +540,28 @@ function StatusLine({ status }: { status?: Status }) {
   }
 }
 
-function MessageRow({ message }: { message: MessageState }) {
+/** Where a new day starts in the chat. */
+function DayDivider({ at }: { at: number }) {
+  return (
+    <div className="my-2 flex items-center gap-3 text-xs font-medium text-stone-500">
+      <hr className="flex-1 border-stone-200" />
+      {dayLabel(at)}
+      <hr className="flex-1 border-stone-200" />
+    </div>
+  );
+}
+
+/** When a message was sent or an answer started, from `metadata.custom.at`. */
+function timeOfMessage(message: MessageState): number | undefined {
+  return (message.metadata.custom as { at?: number } | undefined)?.at;
+}
+
+function MessageRow({ message, assistant }: { message: MessageState; assistant: string }) {
   switch (message.role) {
     case "user":
       return <UserMessage message={message} />;
     case "assistant":
-      return <AssistantMessage message={message} />;
+      return <AssistantMessage message={message} name={assistant} />;
     case "system":
       return <SystemMessage message={message} />;
   }
@@ -460,9 +572,10 @@ function UserMessage({ message }: { message: MessageState }) {
     | { author?: string; mine?: boolean; private?: boolean }
     | undefined;
   const mine = custom?.mine ?? false;
+  const at = timeOfMessage(message);
   return (
     <MessagePrimitive.Root>
-      <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+      <div className={`flex flex-col ${mine ? "items-end" : "items-start"}`}>
         <div
           className={`max-w-[85%] min-w-0 rounded-2xl px-3 py-2 [overflow-wrap:anywhere] md:max-w-[75%] ${
             mine ? "bg-sky-600 text-white" : "bg-stone-200 text-stone-900"
@@ -476,18 +589,79 @@ function UserMessage({ message }: { message: MessageState }) {
           {custom?.private === true && <OnlyYou light={mine} />}
           <MessagePrimitive.Parts components={{ Text: TextPart }} />
         </div>
+        {at !== undefined && (
+          <time
+            dateTime={new Date(at).toISOString()}
+            className="mt-0.5 px-1 text-xs text-stone-400"
+          >
+            {timeLabel(at)}
+          </time>
+        )}
       </div>
     </MessagePrimitive.Root>
   );
 }
 
-function AssistantMessage({ message }: { message: Extract<MessageState, { role: "assistant" }> }) {
+/** How an answer to a fired nudge, or to what a watch found, looks. */
+const PROMPTS = {
+  nudge: {
+    label: "Nudge",
+    glyph: "🔔",
+    card: "border-amber-200 border-l-amber-500 bg-amber-50",
+    badge: "bg-amber-100 text-amber-800",
+  },
+  watch: {
+    label: "Watch",
+    glyph: "👀",
+    card: "border-indigo-200 border-l-indigo-500 bg-indigo-50",
+    badge: "bg-indigo-100 text-indigo-800",
+  },
+} as const;
+
+function AssistantMessage({
+  message,
+  name,
+}: {
+  message: Extract<MessageState, { role: "assistant" }>;
+  name: string;
+}) {
   const { assistant, room } = Route.useParams();
-  const secret = (message.metadata.custom as { private?: boolean } | undefined)?.private === true;
+  const custom = message.metadata.custom as
+    | { private?: boolean; promptedBy?: "nudge" | "watch" }
+    | undefined;
+  const secret = custom?.private === true;
+  // An answer no one asked for just now stands out from the rest, by what prompted it.
+  const prompt = custom?.promptedBy === undefined ? undefined : PROMPTS[custom.promptedBy];
+  const at = timeOfMessage(message);
   return (
     <MessagePrimitive.Root>
       <div className="flex justify-start">
-        <div className="max-w-full min-w-0 rounded-2xl border border-stone-200 bg-white px-3 py-2 [overflow-wrap:anywhere] md:max-w-[85%]">
+        <div
+          className={`max-w-full min-w-0 rounded-2xl border border-l-4 px-3 py-2 [overflow-wrap:anywhere] md:max-w-[85%] ${
+            prompt?.card ?? "border-stone-200 border-l-teal-500 bg-white"
+          }`}
+        >
+          <p className="mb-1 flex flex-wrap items-baseline gap-2 text-xs">
+            <span className="font-semibold text-stone-700">
+              <Portrait
+                appearance={use(LookContext)}
+                size={18}
+                className="mr-1 inline-block align-[-4px]"
+              />
+              {name}
+            </span>
+            {prompt !== undefined && (
+              <span className={`rounded-full px-2 py-0.5 font-medium ${prompt.badge}`}>
+                <span aria-hidden>{prompt.glyph} </span>
+                {prompt.label}
+              </span>
+            )}
+            {at !== undefined && (
+              <time dateTime={new Date(at).toISOString()} className="text-stone-400">
+                {timeLabel(at)}
+              </time>
+            )}
+          </p>
           {secret && <OnlyYou />}
           <MessagePrimitive.Parts
             components={{
@@ -817,6 +991,87 @@ function MemoryPanel({ view }: { view: RoomView }) {
           />
           Share my own facts ({mine.data.facts.length}) with all my rooms
         </label>
+      )}
+      {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
+    </section>
+  );
+}
+
+/** Whose location the assistant knows here, above the chat, so everyone in the room sees it. */
+function SharingLocation({ view }: { view: RoomView }) {
+  const { assistant } = Route.useParams();
+  const me = useQuery(meQuery(assistant)).data?.player.id;
+  const sharing = view.sharingLocation ?? [];
+  if (sharing.length === 0) return null;
+  const names = sharing.map((player) => (player.id === me ? "you" : player.displayName));
+  return (
+    <p className="mb-2 rounded border border-sky-200 bg-sky-50 px-3 py-1 text-sm text-sky-900">
+      📍 The assistant knows where {names.join(" and ")}{" "}
+      {names.length === 1 && names[0] !== "you" ? "is" : "are"} here, as a hidden value.
+    </p>
+  );
+}
+
+/**
+ * Whether the assistant knows where the player is in this room. A personal room always has it
+ * once a device shared it; a shared room only once the player says so here, and then for anyone
+ * in the room.
+ */
+function LocationPanel({ view }: { view: RoomView }) {
+  const { assistant, room } = Route.useParams();
+  const me = useQuery(meQuery(assistant)).data?.player.id;
+  const personal = useQuery({
+    queryKey: [assistant, "personal"],
+    queryFn: () => clientFor(assistant).api.personal(),
+  });
+  const queryClient = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  if (view.room.kind === "lobby" || me === undefined) return null;
+  const sharing = (view.sharingLocation ?? []).some((player) => player.id === me);
+  const known = personal.data?.location !== undefined;
+
+  async function onShare(shared: boolean) {
+    setBusy(true);
+    setError(undefined);
+    try {
+      queryClient.setQueryData(
+        [assistant, "personal"],
+        await clientFor(assistant).api.shareLocation(room, shared),
+      );
+    } catch (caught) {
+      setError((caught as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="flex flex-col gap-2 rounded border border-stone-200 bg-white p-3">
+      <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">Location</h3>
+      {view.room.kind === "personal" ? (
+        <p className="text-sm text-stone-600">
+          {known
+            ? "The assistant knows where you are here, for the weather, the way somewhere and what is near."
+            : "Not shared. Turn on Share where I am in the apps, or share it once from your profile."}
+        </p>
+      ) : (
+        <>
+          <label className="flex items-center gap-2 text-sm text-stone-600">
+            <input
+              type="checkbox"
+              checked={sharing}
+              disabled={busy}
+              onChange={(event) => void onShare(event.target.checked)}
+            />
+            Let the assistant know where I am in this room
+          </label>
+          <p className="text-xs text-stone-500">
+            Anyone here can then ask it about what is near you. Everyone in the room sees that you
+            share it; the place itself stays hidden from them and the model.
+            {sharing && !known && " Your devices haven't shared where you are yet."}
+          </p>
+        </>
       )}
       {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
     </section>

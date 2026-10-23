@@ -11,6 +11,8 @@ import {
 } from "@nudge/core";
 import {
   AdminPlayer,
+  AppearanceResponse,
+  type AssistantsResponse,
   CLOSE,
   ExtensionSetupsResponse,
   MeResponse,
@@ -20,11 +22,14 @@ import {
   PlayerMemoryResponse,
   PlayersResponse,
   PlayerSettingsResponse,
+  PersonalDetails,
   Profile,
   Room,
   RoomsResponse,
   type RoomView,
   ServerFrame,
+  SignInResponse,
+  SignInStatusResponse,
   type TimelineItem,
   TimelineResponse,
   TokensResponse,
@@ -191,6 +196,73 @@ describe("v1 HTTP", () => {
     expect((await rename(tokens.Ann, "lobby", { name: "Hall" })).json.name).toBe("Hall");
     const rooms = await call("GET", "/admin/rooms", { token: tokens.Ann, schema: RoomsResponse });
     expect(rooms.json.rooms.map((room: Room) => room.name)).toEqual(["Hall", "Rome"]);
+  });
+
+  it("keeps the caller's personal details apart from their profile", async () => {
+    expect(
+      await call("GET", "/me/personal", { token: tokens.Bo, schema: PersonalDetails }),
+    ).toEqual({ status: 200, json: {} });
+    const changed = await call("PATCH", "/me/personal", {
+      token: tokens.Bo,
+      body: {
+        email: "bo@example.com",
+        phone: "+47 912 34 567",
+        location: { latitude: 59.9139, longitude: 10.7522 },
+      },
+      schema: PersonalDetails,
+    });
+    expect(changed.json).toEqual({
+      email: "bo@example.com",
+      phone: "+47 912 34 567",
+      location: { text: "59.9139, 10.7522", at: expect.any(Number) },
+    });
+    expect(
+      (await call("PATCH", "/me/personal", { token: tokens.Bo, body: { phone: null } })).json.phone,
+    ).toBeUndefined();
+    expect(
+      await call("PATCH", "/me/personal", { token: tokens.Bo, body: { email: "nope" } }),
+    ).toMatchObject({ status: 400, json: { error: expect.stringContaining("nope") } });
+    expect(
+      (
+        await call("PATCH", "/me/personal", {
+          token: tokens.Bo,
+          body: { location: { latitude: 100, longitude: 0 } },
+        })
+      ).status,
+    ).toBe(400);
+    expect((await call("GET", "/me/profile", { token: tokens.Bo })).json).not.toHaveProperty(
+      "email",
+    );
+    expect((await call("GET", "/me/personal", { token: tokens.Ann })).json).toEqual({});
+  });
+
+  it("shares where the caller is in a shared room only when they say so", async () => {
+    const shared = await call("PUT", "/rooms/trip/location", {
+      token: tokens.Bo,
+      body: { shared: true },
+      schema: PersonalDetails,
+    });
+    expect(shared).toEqual({ status: 200, json: { locationRooms: ["trip"] } });
+    expect((await call("GET", "/me/personal", { token: tokens.Bo })).json).toEqual({
+      locationRooms: ["trip"],
+    });
+    // Not for someone outside the room, nor in rooms that aren't shared.
+    expect(
+      (await call("PUT", "/rooms/trip/location", { token: tokens.Cy, body: { shared: true } }))
+        .status,
+    ).toBe(404);
+    expect(
+      (await call("PUT", "/rooms/lobby/location", { token: tokens.Bo, body: { shared: true } }))
+        .status,
+    ).toBe(400);
+    expect(
+      (await call("PUT", "/rooms/trip/location", { token: tokens.Bo, body: { shared: "yes" } }))
+        .status,
+    ).toBe(400);
+    expect(
+      (await call("PUT", "/rooms/trip/location", { token: tokens.Bo, body: { shared: false } }))
+        .json,
+    ).toEqual({});
   });
 
   it("reads and changes the caller's own profile", async () => {
@@ -427,6 +499,47 @@ describe("v1 HTTP", () => {
     expect((await call("GET", "/admin/tokens", { token: tokens.Ann })).json.tokens).toHaveLength(4);
   });
 
+  it("signs a browser in when an app approves its QR code", async () => {
+    const at = async (method: string, path: string, token?: string) => {
+      const response = await fetch(`${server.url}/v1${path}`, {
+        method,
+        headers: token === undefined ? {} : { authorization: `Bearer ${token}` },
+      });
+      const text = await response.text();
+      return { status: response.status, json: (text === "" ? undefined : JSON.parse(text)) as any };
+    };
+    const started = await at("POST", "/sign-in");
+    expect(started.status).toBe(201);
+    expect(Value.Check(SignInResponse, started.json)).toBe(true);
+    const { id, secret, link } = started.json as SignInResponse;
+    expect(link.startsWith("nudge://sign-in?")).toBe(true);
+    expect(Object.fromEntries(new URL(link).searchParams)).toEqual({
+      server: "https://nudge.example",
+      request: id,
+    });
+    expect(link).not.toContain(secret);
+
+    // Only the browser, with its secret, learns the answer.
+    expect((await at("GET", `/sign-in/${id}`, secret)).json).toEqual({ status: "waiting" });
+    expect((await at("GET", `/sign-in/${id}`)).status).toBe(404);
+    expect((await at("GET", `/sign-in/${id}`, id)).status).toBe(404);
+
+    // An app approves it with its own token; only once.
+    expect((await call("POST", `/sign-in/${id}`)).status).toBe(401);
+    expect((await call("POST", `/sign-in/nope`, { token: tokens.Bo })).status).toBe(404);
+    expect((await call("POST", `/sign-in/${id}`, { token: tokens.Bo })).status).toBe(204);
+    expect((await call("POST", `/sign-in/${id}`, { token: tokens.Ann })).status).toBe(404);
+
+    const approved = await at("GET", `/sign-in/${id}`, secret);
+    expect(Value.Check(SignInStatusResponse, approved.json)).toBe(true);
+    expect(approved.json).toMatchObject({ status: "approved", assistant: "robin" });
+    const paired = await call("POST", "/pair", {
+      body: { code: approved.json.code, client: { name: "Firefox", platform: "web" } },
+      schema: PairResponse,
+    });
+    expect(paired.json.player).toEqual({ id: "bo", displayName: "Bo" });
+  });
+
   it("keeps a player's own memory, shared with their rooms only when they say so", async () => {
     const added = await call("POST", "/me/memory", {
       token: tokens.Ann,
@@ -461,6 +574,47 @@ describe("v1 HTTP", () => {
     expect(
       (await call("POST", "/me/memory", { token: tokens.Ann, body: { text: " " } })).status,
     ).toBe(400);
+  });
+
+  it("lets an admin pick the robot's look, and lists it with the assistant", async () => {
+    const appearance = {
+      body: ["#127a4a", "#a5e86a"],
+      eyes: "#b8ff8a",
+      sparks: "#e4f36a",
+      eyeShape: "round",
+      accessory: "sprout",
+    };
+    const list = async () =>
+      ((await (await fetch(`${server.url}/v1/a`)).json()) as AssistantsResponse).assistants[0];
+    expect(await list()).toEqual({ name: "robin", displayName: "Nudge" });
+
+    expect(
+      (await call("PUT", "/admin/appearance", { token: tokens.Bo, body: { appearance } })).status,
+    ).toBe(403);
+    const set = await call("PUT", "/admin/appearance", {
+      token: tokens.Ann,
+      body: { appearance },
+      schema: AppearanceResponse,
+    });
+    expect(set.json).toEqual({ appearance });
+    expect(await list()).toEqual({ name: "robin", displayName: "Nudge", appearance });
+
+    for (const wrong of [
+      { ...appearance, eyes: "blue" },
+      { ...appearance, body: ["#000000"] },
+      { ...appearance, accessory: "cape" },
+    ])
+      expect(
+        (await call("PUT", "/admin/appearance", { token: tokens.Ann, body: { appearance: wrong } }))
+          .status,
+      ).toBe(400);
+
+    const cleared = await call("PUT", "/admin/appearance", {
+      token: tokens.Ann,
+      body: { appearance: null },
+    });
+    expect(cleared).toMatchObject({ status: 200, json: {} });
+    expect(await list()).toEqual({ name: "robin", displayName: "Nudge" });
   });
 
   it("lets an admin manage players, tokens, rooms and nudges while serving", async () => {

@@ -84,7 +84,7 @@ struct RoomsView: View {
             #endif
         } detail: {
             if let room = model.selectedRoom, let at = model.session(for: room.account) {
-                RoomView(client: at.client, roomId: room.room, me: at.me?.player.id).id(room)
+                RoomView(client: at.client, roomId: room.room, me: at.me?.player.id, assistant: at.account.assistantName, look: at.look).id(room)
             } else {
                 ContentUnavailableView("Pick a room", systemImage: "bubble.left.and.bubble.right")
             }

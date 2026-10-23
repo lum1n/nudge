@@ -19,6 +19,8 @@ public struct RoomState: Equatable, Sendable {
     public var approvals: [Approval]
     public var memory: [Fact]
     public var nudges: [RoomNudge]
+    /// The members whose location the model may know in the room.
+    public var sharingLocation: [Player]
     public var timeline: [TimelineItem]
     public var canLoadEarlier: Bool
     public var loadingEarlier: Bool
@@ -35,6 +37,7 @@ public struct RoomState: Equatable, Sendable {
         approvals = update.approvals
         memory = update.memory
         nudges = update.nudges
+        sharingLocation = update.sharingLocation
         self.timeline = timeline
         canLoadEarlier = update.canLoadEarlier
         loadingEarlier = update.loadingEarlier
@@ -64,7 +67,7 @@ extension TimelineItem {
     public var id: String {
         switch self {
         case .user(let id, _, _, _, _, _, _), .nudge(let id, _, _, _),
-            .approval(let id, _, _, _, _, _), .answer(let id, _, _, _, _), .marker(let id, _):
+            .approval(let id, _, _, _, _, _), .answer(let id, _, _, _, _, _, _), .marker(let id, _):
             id
         }
     }

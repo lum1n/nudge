@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AssistantRouteRouteImport } from './routes/$assistant/route'
+import { Route as AvatarRouteImport } from './routes/avatar'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as AssistantIndexRouteImport } from './routes/$assistant/index'
@@ -20,8 +21,10 @@ import { Route as AssistantSettingsRouteImport } from './routes/$assistant/setti
 import { Route as AssistantRoomActivityRouteImport } from './routes/$assistant/$room_.activity'
 import { Route as AssistantRoomBrowserRouteImport } from './routes/$assistant/$room_.browser'
 import { Route as AssistantRoomConnectorsRouteImport } from './routes/$assistant/$room_.connectors'
+import { Route as AssistantRoomDesktopRouteImport } from './routes/$assistant/$room_.desktop'
 import { Route as AssistantRoomDocumentsRouteImport } from './routes/$assistant/$room_.documents'
 import { Route as AssistantRoomListsRouteImport } from './routes/$assistant/$room_.lists'
+import { Route as AssistantRoomMcpRouteImport } from './routes/$assistant/$room_.mcp'
 import { Route as AssistantRoomModelRouteImport } from './routes/$assistant/$room_.model'
 
 const IndexRoute = IndexRouteImport.update({
@@ -32,6 +35,11 @@ const IndexRoute = IndexRouteImport.update({
 const AssistantRouteRoute = AssistantRouteRouteImport.update({
   id: '/$assistant',
   path: '/$assistant',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AvatarRoute = AvatarRouteImport.update({
+  id: '/avatar',
+  path: '/avatar',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -79,6 +87,11 @@ const AssistantRoomConnectorsRoute = AssistantRoomConnectorsRouteImport.update({
   path: '/$room/connectors',
   getParentRoute: () => AssistantRouteRoute,
 } as any)
+const AssistantRoomDesktopRoute = AssistantRoomDesktopRouteImport.update({
+  id: '/$room_/desktop',
+  path: '/$room/desktop',
+  getParentRoute: () => AssistantRouteRoute,
+} as any)
 const AssistantRoomDocumentsRoute = AssistantRoomDocumentsRouteImport.update({
   id: '/$room_/documents',
   path: '/$room/documents',
@@ -87,6 +100,11 @@ const AssistantRoomDocumentsRoute = AssistantRoomDocumentsRouteImport.update({
 const AssistantRoomListsRoute = AssistantRoomListsRouteImport.update({
   id: '/$room_/lists',
   path: '/$room/lists',
+  getParentRoute: () => AssistantRouteRoute,
+} as any)
+const AssistantRoomMcpRoute = AssistantRoomMcpRouteImport.update({
+  id: '/$room_/mcp',
+  path: '/$room/mcp',
   getParentRoute: () => AssistantRouteRoute,
 } as any)
 const AssistantRoomModelRoute = AssistantRoomModelRouteImport.update({
@@ -98,6 +116,7 @@ const AssistantRoomModelRoute = AssistantRoomModelRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$assistant': typeof AssistantRouteRouteWithChildren
+  '/avatar': typeof AvatarRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/$assistant/$room': typeof AssistantRoomRoute
@@ -107,12 +126,15 @@ export interface FileRoutesByFullPath {
   '/$assistant/$room/activity': typeof AssistantRoomActivityRoute
   '/$assistant/$room/browser': typeof AssistantRoomBrowserRoute
   '/$assistant/$room/connectors': typeof AssistantRoomConnectorsRoute
+  '/$assistant/$room/desktop': typeof AssistantRoomDesktopRoute
   '/$assistant/$room/documents': typeof AssistantRoomDocumentsRoute
   '/$assistant/$room/lists': typeof AssistantRoomListsRoute
+  '/$assistant/$room/mcp': typeof AssistantRoomMcpRoute
   '/$assistant/$room/model': typeof AssistantRoomModelRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/avatar': typeof AvatarRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/$assistant/$room': typeof AssistantRoomRoute
@@ -122,14 +144,17 @@ export interface FileRoutesByTo {
   '/$assistant/$room/activity': typeof AssistantRoomActivityRoute
   '/$assistant/$room/browser': typeof AssistantRoomBrowserRoute
   '/$assistant/$room/connectors': typeof AssistantRoomConnectorsRoute
+  '/$assistant/$room/desktop': typeof AssistantRoomDesktopRoute
   '/$assistant/$room/documents': typeof AssistantRoomDocumentsRoute
   '/$assistant/$room/lists': typeof AssistantRoomListsRoute
+  '/$assistant/$room/mcp': typeof AssistantRoomMcpRoute
   '/$assistant/$room/model': typeof AssistantRoomModelRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$assistant': typeof AssistantRouteRouteWithChildren
+  '/avatar': typeof AvatarRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/$assistant/$room': typeof AssistantRoomRoute
@@ -139,8 +164,10 @@ export interface FileRoutesById {
   '/$assistant/$room_/activity': typeof AssistantRoomActivityRoute
   '/$assistant/$room_/browser': typeof AssistantRoomBrowserRoute
   '/$assistant/$room_/connectors': typeof AssistantRoomConnectorsRoute
+  '/$assistant/$room_/desktop': typeof AssistantRoomDesktopRoute
   '/$assistant/$room_/documents': typeof AssistantRoomDocumentsRoute
   '/$assistant/$room_/lists': typeof AssistantRoomListsRoute
+  '/$assistant/$room_/mcp': typeof AssistantRoomMcpRoute
   '/$assistant/$room_/model': typeof AssistantRoomModelRoute
 }
 export interface FileRouteTypes {
@@ -148,6 +175,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/$assistant'
+    | '/avatar'
     | '/login'
     | '/setup'
     | '/$assistant/$room'
@@ -157,12 +185,15 @@ export interface FileRouteTypes {
     | '/$assistant/$room/activity'
     | '/$assistant/$room/browser'
     | '/$assistant/$room/connectors'
+    | '/$assistant/$room/desktop'
     | '/$assistant/$room/documents'
     | '/$assistant/$room/lists'
+    | '/$assistant/$room/mcp'
     | '/$assistant/$room/model'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/avatar'
     | '/login'
     | '/setup'
     | '/$assistant/$room'
@@ -172,13 +203,16 @@ export interface FileRouteTypes {
     | '/$assistant/$room/activity'
     | '/$assistant/$room/browser'
     | '/$assistant/$room/connectors'
+    | '/$assistant/$room/desktop'
     | '/$assistant/$room/documents'
     | '/$assistant/$room/lists'
+    | '/$assistant/$room/mcp'
     | '/$assistant/$room/model'
   id:
     | '__root__'
     | '/'
     | '/$assistant'
+    | '/avatar'
     | '/login'
     | '/setup'
     | '/$assistant/$room'
@@ -188,14 +222,17 @@ export interface FileRouteTypes {
     | '/$assistant/$room_/activity'
     | '/$assistant/$room_/browser'
     | '/$assistant/$room_/connectors'
+    | '/$assistant/$room_/desktop'
     | '/$assistant/$room_/documents'
     | '/$assistant/$room_/lists'
+    | '/$assistant/$room_/mcp'
     | '/$assistant/$room_/model'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AssistantRouteRoute: typeof AssistantRouteRouteWithChildren
+  AvatarRoute: typeof AvatarRoute
   LoginRoute: typeof LoginRoute
   SetupRoute: typeof SetupRoute
 }
@@ -214,6 +251,13 @@ declare module '@tanstack/react-router' {
       path: '/$assistant'
       fullPath: '/$assistant'
       preLoaderRoute: typeof AssistantRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/avatar': {
+      id: '/avatar'
+      path: '/avatar'
+      fullPath: '/avatar'
+      preLoaderRoute: typeof AvatarRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -279,6 +323,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AssistantRoomConnectorsRouteImport
       parentRoute: typeof AssistantRouteRoute
     }
+    '/$assistant/$room_/desktop': {
+      id: '/$assistant/$room_/desktop'
+      path: '/$room/desktop'
+      fullPath: '/$assistant/$room/desktop'
+      preLoaderRoute: typeof AssistantRoomDesktopRouteImport
+      parentRoute: typeof AssistantRouteRoute
+    }
     '/$assistant/$room_/documents': {
       id: '/$assistant/$room_/documents'
       path: '/$room/documents'
@@ -291,6 +342,13 @@ declare module '@tanstack/react-router' {
       path: '/$room/lists'
       fullPath: '/$assistant/$room/lists'
       preLoaderRoute: typeof AssistantRoomListsRouteImport
+      parentRoute: typeof AssistantRouteRoute
+    }
+    '/$assistant/$room_/mcp': {
+      id: '/$assistant/$room_/mcp'
+      path: '/$room/mcp'
+      fullPath: '/$assistant/$room/mcp'
+      preLoaderRoute: typeof AssistantRoomMcpRouteImport
       parentRoute: typeof AssistantRouteRoute
     }
     '/$assistant/$room_/model': {
@@ -311,8 +369,10 @@ interface AssistantRouteRouteChildren {
   AssistantRoomActivityRoute: typeof AssistantRoomActivityRoute
   AssistantRoomBrowserRoute: typeof AssistantRoomBrowserRoute
   AssistantRoomConnectorsRoute: typeof AssistantRoomConnectorsRoute
+  AssistantRoomDesktopRoute: typeof AssistantRoomDesktopRoute
   AssistantRoomDocumentsRoute: typeof AssistantRoomDocumentsRoute
   AssistantRoomListsRoute: typeof AssistantRoomListsRoute
+  AssistantRoomMcpRoute: typeof AssistantRoomMcpRoute
   AssistantRoomModelRoute: typeof AssistantRoomModelRoute
 }
 
@@ -324,8 +384,10 @@ const AssistantRouteRouteChildren: AssistantRouteRouteChildren = {
   AssistantRoomActivityRoute: AssistantRoomActivityRoute,
   AssistantRoomBrowserRoute: AssistantRoomBrowserRoute,
   AssistantRoomConnectorsRoute: AssistantRoomConnectorsRoute,
+  AssistantRoomDesktopRoute: AssistantRoomDesktopRoute,
   AssistantRoomDocumentsRoute: AssistantRoomDocumentsRoute,
   AssistantRoomListsRoute: AssistantRoomListsRoute,
+  AssistantRoomMcpRoute: AssistantRoomMcpRoute,
   AssistantRoomModelRoute: AssistantRoomModelRoute,
 }
 
@@ -336,6 +398,7 @@ const AssistantRouteRouteWithChildren = AssistantRouteRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AssistantRouteRoute: AssistantRouteRouteWithChildren,
+  AvatarRoute: AvatarRoute,
   LoginRoute: LoginRoute,
   SetupRoute: SetupRoute,
 }

@@ -10,6 +10,8 @@ import { type ExtensionSettings, restRoutes } from "./rest.ts";
 import { type ServerControl, serverRoutes } from "./server.ts";
 import { type SetupControl, setupRoutes } from "./setup.ts";
 
+export { HttpError } from "./rest.ts";
+
 export type V1Options = {
   readonly assistants: ReadonlyMap<string, Nudge>;
   readonly upgradeWebSocket: UpgradeWebSocket;

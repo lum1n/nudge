@@ -3,7 +3,11 @@ import type { Models } from "@earendil-works/pi-ai";
 import { type AssistantConfig, ConfigError, DEFAULT_MODEL, type NudgeConfig } from "./config.ts";
 import { loadExtensions } from "./extensions/loader.ts";
 import { buildModels } from "./models/providers.ts";
-import { type RedactedHistory, redactHistory } from "./privacy/redact-history.ts";
+import {
+  type RedactedHistory,
+  redactHistory,
+  redactWhenOutdated,
+} from "./privacy/redact-history.ts";
 import {
   ExtensionNotFound,
   type InstalledExtension,
@@ -33,11 +37,13 @@ export {
   type ServerSettings,
 } from "./config.ts";
 export {
+  AdminOnly,
   AlreadyDecided,
   APPROVAL_ENTRY,
   type Approval,
   type ApprovalDraft,
   type ApprovalEntryData,
+  type ApprovalDenialHandler,
   type ApprovalHandler,
   ApprovalNotFound,
   type ApprovalOutcome,
@@ -59,6 +65,28 @@ export {
   Assistants,
   type AssistantsOptions,
 } from "./server/assistants.ts";
+export {
+  ASSERTION_TTL_MS,
+  federationEndpoint,
+  fetchKeys,
+  HomeBody,
+  type Keys,
+  KeysBody,
+  KeysClaim,
+  OwnerClaim,
+  SKEW_MS,
+} from "./federation/keys.ts";
+export {
+  checkSigned,
+  newKey,
+  open,
+  peek,
+  publicKeyOf,
+  seal,
+  type Sealed,
+  type Signed,
+  signPayload,
+} from "./federation/signing.ts";
 export { defaultExtensions } from "./server/defaults.ts";
 export { defaultConfigPath, serverHome } from "./server/home.ts";
 export {
@@ -75,6 +103,15 @@ export {
   ServerOwners,
   serverOwnersFile,
 } from "./server/owners.ts";
+export {
+  HomeRefused,
+  homeAtSetup,
+  ownerFromHome,
+  type OwnerSignIn,
+  ServerIdentity,
+  serverIdentityDir,
+  type VouchedHome,
+} from "./server/identity.ts";
 export { openRecoveryKit, RecoveryKitError, sealRecoveryKit } from "./server/recovery.ts";
 export {
   canonicalJson,
@@ -90,18 +127,10 @@ export {
   type UpdateState,
 } from "./server/updates.ts";
 export {
-  isTailnetHost,
-  routeOutgoing,
-  stateOfStatus,
-  Tailscale,
-  TailscaleError,
-  type TailscaleOptions,
-  type TailscaleState,
-} from "./server/tailscale.ts";
-export {
   isWiredHost,
   loadWired,
   type RelayFront,
+  routeOutgoing,
   ServerWired,
   serverWiredName,
   WiredError,
@@ -146,7 +175,7 @@ export {
   RoomEvents,
 } from "./room-events.ts";
 export { Presence } from "./presence.ts";
-export { describeRoom, formatHour } from "./extensions/builtin.ts";
+export { describeRoom, formatToday } from "./extensions/builtin.ts";
 export {
   defineNudgeExtension,
   ROOMS_SETTING,
@@ -194,7 +223,9 @@ export {
   type Player,
   type PlayerHome,
   addressOf,
+  assistantAddressOf,
   parseAddress,
+  parseAssistantAddress,
   sameHome,
   type Room,
   type RoomKind,
@@ -230,7 +261,26 @@ export {
   Profiles,
   type ProfileUpdate,
 } from "./identity/profiles.ts";
+export {
+  InvalidPersonal,
+  locationText,
+  type LocationUpdate,
+  MAX_PERSONAL_LENGTH,
+  PERSONAL_FIELDS,
+  Personal,
+  type PersonalDetails,
+  PersonalDoc,
+  type PersonalField,
+  type PersonalUpdate,
+} from "./identity/personal.ts";
 export { Rooms, type SharedRoomDraft } from "./identity/rooms.ts";
+export {
+  ACCESSORIES,
+  type Appearance,
+  EYE_SHAPES,
+  InvalidAppearance,
+  Looks,
+} from "./identity/appearance.ts";
 export { scrubSecrets, SecretStore } from "./secrets.ts";
 export { type NudgeDraft, Nudges } from "./nudges/nudges.ts";
 export { formatTime, parseTime, ScheduleDoc, type ScheduledNudge } from "./nudges/schedule.ts";
@@ -240,13 +290,32 @@ export { RedactingModels, type RedactionOptions } from "./models/redacting-model
 export {
   builtinDetectors,
   type PiiDetector,
+  quasiIdentifierDetectors,
   regexDetector,
+  secretDetector,
   type Span,
 } from "./privacy/detectors.ts";
+export { addressDetector, nameDetector } from "./privacy/people.ts";
+export { AMBIGUOUS, CUES, FIRST_NAMES, LAST_NAMES } from "./privacy/name-lists.ts";
 export { Vault, type VaultEntry } from "./privacy/vault.ts";
+export {
+  type DeepDetector,
+  type DeepFinding,
+  DeepUnavailable,
+  pendingDeepDetector,
+} from "./privacy/deep/detector.ts";
+export { DeepScanner, type DeepMode, piecesOf, textsToScan } from "./privacy/deep/scanner.ts";
+export {
+  checkLocalModel,
+  ensureLocalModel,
+  LOCAL_MODEL,
+  localModelDir,
+  openLocalModel,
+  startLocalModel,
+} from "./privacy/deep/local-model.ts";
 export { keepsPlaceholders } from "./privacy/tool-values.ts";
 export type { RedactedHistory };
-export { currentTurn, type Owner, type Turn } from "./privacy/turn.ts";
+export { currentTurn, inTurn, type Owner, type Turn } from "./privacy/turn.ts";
 export {
   type DatabaseEncryption,
   type DatabaseKey,
@@ -287,7 +356,7 @@ export function findAssistant(config: NudgeConfig, name?: string): AssistantConf
 
 /**
  * Opens one configured assistant with its extensions. Pass `models` to share one catalog between
- * assistants.
+ * assistants. History stored under older detectors is rewritten first (`redactWhenOutdated`).
  */
 export async function openAssistant(
   config: NudgeConfig,
@@ -295,7 +364,9 @@ export async function openAssistant(
   context: Context,
   overrides: Partial<NudgeOptions> & { models?: Models } = {},
 ): Promise<Nudge> {
-  return Nudge.open(await assistantOptions(config, assistant, overrides), context);
+  const options = await assistantOptions(config, assistant, overrides);
+  await redactWhenOutdated(options, (o, c) => Nudge.open(o, c), context);
+  return Nudge.open(options, context);
 }
 
 /**
@@ -331,6 +402,11 @@ async function assistantOptions(
     extensions: await loadExtensions(assistant.extensions ?? []),
     ...(assistant.budget === undefined ? {} : { budget: assistant.budget }),
     ...overrides,
+    privacy: {
+      ...(config.privacy?.deep === undefined ? {} : { deepMode: config.privacy.deep }),
+      ...(config.privacy?.allow === undefined ? {} : { allow: config.privacy.allow }),
+      ...overrides.privacy,
+    },
   };
 }
 

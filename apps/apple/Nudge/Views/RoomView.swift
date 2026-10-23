@@ -6,21 +6,40 @@ struct RoomView: View {
     let client: NudgeClient
     let roomId: String
     let me: String?
+    /// The assistant's display name, over its answers.
+    let assistant: String
+    /// How its robot looks.
+    let look: RobotLook
     @State private var observed: ObservedRoom?
     @State private var draft = ""
     @State private var secret = false
     @State private var showing: Sheet?
     @State private var activity = false
     @State private var problem: String?
+    /// The composer's dictation, here so the robot listens along.
+    @State private var dictation = Dictation()
+    /// How the last turn ended, shown for a moment while nothing else goes on.
+    @State private var afterglow: Mood?
+    /// The time, again every minute: enough to notice the room going quiet.
+    @State private var now = Date.now
+
+    /// Whose location the assistant knows here, for everyone in the room to see; empty for none.
+    private var locationNote: String {
+        let names = (state?.sharingLocation ?? []).map { $0.id == me ? "you" : $0.displayName }
+        guard !names.isEmpty else { return "" }
+        let verb = names == ["you"] || names.count > 1 ? "are" : "is"
+        return "📍 Knows where \(names.joined(separator: " and ")) \(verb)"
+    }
 
     enum Sheet: String, Identifiable {
-        case lists, info, browser
+        case info, browser
         var id: String { rawValue }
     }
 
     var body: some View {
         content
             .navigationTitle(state?.room?.name ?? "")
+            .navigationSubtitle(locationNote)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -28,23 +47,22 @@ struct RoomView: View {
                 ToolbarItemGroup(placement: .primaryAction) {
                     Button("Activity", systemImage: "list.bullet.rectangle") { activity.toggle() }
                         .help("Tool calls, nudges, watches and approvals")
-                    Button("Lists", systemImage: "checklist") { showing = .lists }
                     Button("Room", systemImage: "info.circle") { showing = .info }
                 }
             }
             .sheet(item: $showing) { sheet in
                 switch sheet {
-                case .lists: ListsView(client: client, roomId: roomId)
                 case .info: RoomInfoView(client: client, roomId: roomId, observed: observed)
                 case .browser: PanelSheet { BrowserView(client: client, roomId: roomId) }
                 }
             }
             // Behind the transcript: from the right on macOS, a sheet on iOS.
             .inspector(isPresented: $activity) {
-                ActivityView(observed: observed, isPresented: $activity)
+                ActivityView(observed: observed)
                     .inspectorColumnWidth(min: 300, ideal: 380, max: 560)
                     #if os(iOS)
                     .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
                     #endif
             }
             .environment(\.openBrowser, { showing = .browser })
@@ -58,9 +76,43 @@ struct RoomView: View {
             // room opened again can appear before it disappeared from the last time, which
             // left it with nothing observed and loading for good.
             .onAppear { if observed == nil { observed = client.observeRoomState(roomId) } }
+            .onChange(of: RoomMood.lastAnswerMark(state?.timeline ?? [])) { before, after in
+                afterglow = RoomMood.afterglow(from: before, to: after)
+            }
+            .task(id: afterglow) {
+                guard let afterglow else { return }
+                try? await Task.sleep(for: .seconds(RoomMood.duration(afterglow)))
+                if !Task.isCancelled { self.afterglow = nil }
+            }
+            .task {
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(60))
+                    now = .now
+                }
+            }
     }
 
     private var state: RoomState? { observed?.value }
+
+    /// The robot's mood, with a moment of joy or gloom when a turn ends while watching.
+    private var mood: Mood {
+        let mood = RoomMood.of(
+            timeline: state?.timeline ?? [], live: state?.live, approvals: state?.approvals ?? [],
+            now: now.timeIntervalSince1970 * 1000, listening: dictation.phase == .listening)
+        if let afterglow, mood == .idle { return afterglow }
+        return mood
+    }
+
+    /// The microphone's loudness while dictating, for the robot to follow.
+    private var level: (@MainActor () -> Double)? {
+        guard dictation.phase == .listening else { return nil }
+        return { [dictation] in Double(dictation.level) }
+    }
+
+    /// Nothing said in the room yet, nor on its way.
+    private var empty: Bool {
+        transcript.isEmpty && queued.isEmpty && (state?.pending.isEmpty ?? true)
+    }
 
     @ViewBuilder private var content: some View {
         if let state, state.status == .gone {
@@ -80,9 +132,15 @@ struct RoomView: View {
                                     decide(approval.id, approve)
                                 }
                             }
-                            if let status = state?.live?.status { LiveStatusView(status: status) }
+                            if !empty {
+                                Presence(
+                                    mood: mood, look: look, level: level, status: state?.live?.status,
+                                    label: RoomMood.label(mood, timeline: state?.timeline ?? [], live: state?.live))
+                            } else if let status = state?.live?.status {
+                                LiveStatusView(status: status)
+                            }
                             Composer(
-                                draft: $draft, running: state?.live?.running == true,
+                                draft: $draft, running: state?.live?.running == true, dictation: dictation,
                                 // Only in a shared room is there anyone to keep a message from.
                                 secret: state?.room?.kind == .personal ? nil : $secret,
                                 send: { text in Task { await send(text) } },
@@ -117,8 +175,11 @@ struct RoomView: View {
                         Text(error).font(.footnote).foregroundStyle(.red)
                     }
                     // Tool calls, nudges and ended approvals are in the activity.
+                    let transcript = transcript
+                    let days = transcript.dayStarts()
                     ForEach(transcript, id: \.id) { item in
-                        TimelineRow(item: item, me: me)
+                        if let day = days[item.id] { DayDivider(at: day) }
+                        TimelineRow(item: item, me: me, assistant: assistant, look: look)
                     }
                     ForEach(queued, id: \.id) { message in
                         let mine = message.author == nil || message.author?.id == me
@@ -145,7 +206,14 @@ struct RoomView: View {
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: scrollKey) { proxy.scrollTo(Self.bottom, anchor: .bottom) }
             .overlay {
-                if state == nil || (state?.room == nil && state?.status == .syncing) { ProgressView() }
+                if state == nil || (state?.room == nil && state?.status == .syncing) {
+                    ProgressView()
+                } else if empty {
+                    VStack(spacing: 12) {
+                        AvatarView(mood: mood, appearance: look, size: 160, level: level)
+                        Text("Say hello to \(assistant).").foregroundStyle(.secondary)
+                    }
+                }
             }
         }
     }
@@ -164,7 +232,7 @@ struct RoomView: View {
     }
 
     private func answerLength(_ item: TimelineItem) -> String {
-        guard case .answer(let id, _, _, let parts, _) = item else { return item.id }
+        guard case .answer(let id, _, _, let parts, _, _, _) = item else { return item.id }
         return "\(id):\(parts.count):\(parts.last.map(partLength) ?? 0)"
     }
 
@@ -209,6 +277,8 @@ struct RoomView: View {
 struct Composer: View {
     @Binding var draft: String
     let running: Bool
+    /// The mic's: its room's, which the robot follows.
+    let dictation: Dictation
     /// Whether the next message is private; nil where there is nobody to keep it from.
     var secret: Binding<Bool>?
     let send: (String) -> Void
@@ -216,7 +286,6 @@ struct Composer: View {
     @Environment(AppModel.self) private var model
     @FocusState private var focused: Bool
     @Namespace private var glass
-    @State private var dictation = Dictation()
     /// Whether the field shows a dictation: typing takes over from it.
     @State private var dictating = false
     /// The draft when dictation started, and the draft it wrote last.
@@ -395,6 +464,32 @@ struct Composer: View {
             dictation.cancel()
         }
         send(draft)
+    }
+}
+
+/// The robot, live, by the composer, and a word on what it is doing: the live status when there is
+/// one.
+struct Presence: View {
+    let mood: Mood
+    let look: RobotLook
+    let level: (@MainActor () -> Double)?
+    let status: Status?
+    let label: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            AvatarView(mood: mood, appearance: look, size: 40, level: level)
+            if let status {
+                LiveStatusView(status: status)
+            } else if !label.isEmpty {
+                Text(label)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .transition(.opacity)
+            }
+            Spacer(minLength: 0)
+        }
+        .animation(.smooth, value: label)
     }
 }
 

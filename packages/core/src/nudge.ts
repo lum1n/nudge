@@ -41,17 +41,31 @@ import {
 import { attach, MESSAGE_ENTRY, type MessageDraft, submitMessage } from "./host-api.ts";
 import { DirectoryDoc, type Room } from "./identity/directory.ts";
 import { Players } from "./identity/players.ts";
+import { Looks } from "./identity/appearance.ts";
+import { Personal } from "./identity/personal.ts";
 import { Profiles } from "./identity/profiles.ts";
 import { Rooms } from "./identity/rooms.ts";
 import { Memory } from "./memory/memory.ts";
 import { Nudges } from "./nudges/nudges.ts";
 import { RedactingModels, type RedactionOptions } from "./models/redacting-models.ts";
-import { builtinDetectors, type PiiDetector } from "./privacy/detectors.ts";
-import { mapStrings } from "./privacy/redact.ts";
+import {
+  builtinDetectors,
+  type PiiDetector,
+  quasiIdentifierDetectors,
+} from "./privacy/detectors.ts";
+import type { DeepDetector } from "./privacy/deep/detector.ts";
+import {
+  DeepScanner,
+  DeepSeenDoc,
+  type DeepMode,
+  MAX_SEEN,
+  textsToScan,
+} from "./privacy/deep/scanner.ts";
+import { mapStrings, redactContext } from "./privacy/redact.ts";
 import { type ToolValues, withToolValues } from "./privacy/tool-values.ts";
 import { type Owner, turnOf } from "./privacy/turn.ts";
 import { PLACEHOLDER, Vault, type VaultEntry } from "./privacy/vault.ts";
-import { VaultDoc } from "./privacy/vault-doc.ts";
+import { READABLE_VERSION, VaultDoc } from "./privacy/vault-doc.ts";
 import { openDatabaseStorage } from "./encrypted-storage.ts";
 import { lockDatabase } from "./storage-lock.ts";
 import { type RoomEvent, RoomEvents } from "./room-events.ts";
@@ -63,11 +77,28 @@ export type PrivacyOptions = {
   /** Detectors to run instead of the built-in ones. Names are protected separately. */
   readonly detectors?: readonly PiiDetector[];
   readonly onRequest?: RedactionOptions["onRequest"];
+  /**
+   * The local model that reads requests first (ADR 14), shared by a host's assistants. Without
+   * one, as in tests and on Durable Objects, only the rules run.
+   */
+  readonly deep?: DeepDetector;
+  /**
+   * Default "off": names, places and organisations are readable (ADR 15). "required" refuses
+   * requests while `deep` can't run.
+   */
+  readonly deepMode?: DeepMode;
+  /** Words the local model never hides, such as a shop's name it keeps taking for a person. */
+  readonly allow?: readonly string[];
 };
 
 export type NudgeOptions = {
   /** Where the assistant lives: a SQLite file path, or `":memory:"` for nothing persisted. */
   readonly database: string;
+  /**
+   * Storage the host opened and keeps, such as a Durable Object's, used instead of `database`.
+   * Nothing is locked or written beside it: the host makes sure only one assistant has it open.
+   */
+  readonly storage?: Storage;
   /**
    * Whether a database made now is encrypted, under a key of its own in `<database>.key`, when no
    * key is set. A server's are (ADR 11); an existing unencrypted one stays so.
@@ -133,6 +164,7 @@ type Parts = {
   readonly host: HostBase;
   readonly detectors: readonly PiiDetector[];
   readonly installed: readonly SetUpExtension[];
+  readonly scanner: DeepScanner | undefined;
   readonly report: (error: unknown) => void;
   readonly events: RoomEvents;
   readonly spending: Spending;
@@ -147,6 +179,10 @@ export class Nudge {
   readonly players: Players;
   /** What each player says about themselves: time zone, language, preferences. */
   readonly profiles: Profiles;
+  /** Each player's full name, e-mail, phone, address and location, kept as their private values. */
+  readonly personal: Personal;
+  /** How its robot looks in the apps. */
+  readonly appearance: Looks;
   readonly rooms: Rooms;
   readonly nudges: Nudges;
   readonly memory: Memory;
@@ -168,7 +204,13 @@ export class Nudge {
   /** The assistant's own detectors, without its extensions'. */
   private readonly detectors: readonly PiiDetector[];
   private installed: readonly SetUpExtension[];
+  private readonly scanner: DeepScanner | undefined;
   private readonly report: (error: unknown) => void;
+
+  /** Tools whose results the local model leaves to the rules; see `ExtensionParts.publicTools`. */
+  private publicTools(): ReadonlySet<string> {
+    return publicToolsOf(this.installed);
+  }
 
   /** What reloaded extensions' tools run with; see `withToolValues`. */
   private get toolValues(): ToolValues {
@@ -192,12 +234,20 @@ export class Nudge {
     this.host = parts.host;
     this.detectors = parts.detectors;
     this.installed = parts.installed;
+    this.scanner = parts.scanner;
     this.report = parts.report;
+    const scanner = this.scanner;
+    if (scanner !== undefined)
+      this.models.scan = (input) =>
+        scanner.protectIn(
+          "messages" in input ? textsToScan(input, this.publicTools()) : input,
+          this.models.vault,
+        );
     this.events = parts.events;
     this.spending = parts.spending;
     this.timeZone = parts.timeZone;
     this.events.subscribe((event) => this.deliver(event));
-    this.players = new Players(harness, (name) => this.protect(name, "NAME").then(() => {}), now);
+    this.players = new Players(harness, now);
     const changed = (change: Change) => this.changes.emit(change);
     this.profiles = new Profiles(
       harness,
@@ -205,6 +255,27 @@ export class Nudge {
       (playerId) => changed({ kind: "profile", playerId }),
       (name, chosen) => checkPlayerSettings(this.installed, name, chosen),
     );
+    this.personal = new Personal(
+      harness,
+      this.players,
+      {
+        protect: (value, kind, owner) => this.protect(value, kind, { owner }),
+        readable: async (value, kind) => {
+          const vault = this.models.vault;
+          const placeholder = vault.protect(value, kind);
+          vault.release(placeholder);
+          await this.models.flush();
+          return placeholder;
+        },
+        forget: async (placeholder) => {
+          await this.forgetValue(placeholder);
+        },
+        entry: (placeholder) => this.models.vault.get(placeholder),
+      },
+      now,
+      (playerId) => changed({ kind: "location", playerId }),
+    );
+    this.appearance = new Looks(harness);
     this.rooms = new Rooms(
       harness,
       (room) => ({ ...agent, extensions: this.selection(room) }),
@@ -225,6 +296,10 @@ export class Nudge {
       changed,
       (text) => this.models.vault.rehydrate(text),
       (text) => this.redact(text),
+      (playerId, context) => this.players.isAdmin(playerId, context),
+      (extension, kind) =>
+        this.installed.find((installed) => installed.extension.name === extension)?.denials?.[kind],
+      parts.report,
     );
   }
 
@@ -233,6 +308,11 @@ export class Nudge {
     const displayName = options.displayName ?? "Nudge";
     const timeZone = options.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
     const registry = createRegistry();
+    // The file the assistant keeps, when it keeps one.
+    const file =
+      options.storage === undefined && options.database !== ":memory:"
+        ? options.database
+        : undefined;
     let opened: Nudge | undefined;
     let resolveOpen: (nudge: Nudge) => void = () => {};
     const open = new Promise<Nudge>((resolve) => (resolveOpen = resolve));
@@ -257,6 +337,12 @@ export class Nudge {
           nudges: () => whenOpen().nudges,
           changed: (change) => whenOpen().changes.emit(change),
           turn,
+          describe: (name) =>
+            whenOpen().installed.find(({ extension }) => extension.name === name)?.description,
+          known: (placeholder) => {
+            const entry = whenOpen().models.vault.get(placeholder);
+            return entry !== undefined && !entry.forgotten;
+          },
         }),
         values,
       ),
@@ -267,16 +353,15 @@ export class Nudge {
       timeZone,
       now,
       protect: (value, kind) => whenOpen().protect(value, kind),
+      release: (value) => whenOpen().release(value),
       documents: () => whenOpen().harness,
       assistant: whenOpen,
       whenOpen: () => open,
-      ...(options.database === ":memory:" ? {} : { dataRoot: `${options.database}.extensions` }),
+      ...(file === undefined ? {} : { dataRoot: `${file}.extensions` }),
     };
-    if (options.database !== ":memory:")
-      await mkdir(dirname(options.database), { recursive: true });
+    if (file !== undefined) await mkdir(dirname(file), { recursive: true });
     // Locked first, so an assistant open elsewhere starts none of its extensions here.
-    const unlock =
-      options.database === ":memory:" ? async () => {} : await lockDatabase(options.database);
+    const unlock = file === undefined ? async () => {} : await lockDatabase(file);
     // Extensions are in the registry before the Harness opens, so their tasks resume with it.
     let installed: SetUpExtension[];
     try {
@@ -286,7 +371,12 @@ export class Nudge {
       throw error;
     }
     for (const { extension } of installed) registry.install(withToolValues(extension, values));
-    const detectors = options.privacy?.detectors ?? builtinDetectors;
+    const deepMode = options.privacy?.deepMode ?? "off";
+    const deep = deepMode === "off" ? undefined : options.privacy?.deep;
+    // Turning the local model on asks for what ADR 14 hid, the rules for it included.
+    const detectors =
+      options.privacy?.detectors ??
+      (deep === undefined ? builtinDetectors : quasiIdentifierDetectors);
     const models = new RedactingModels(options.models, {
       detectors: withExtensionDetectors(detectors, installed),
       onRequest: options.privacy?.onRequest,
@@ -294,7 +384,7 @@ export class Nudge {
     let harness: Harness;
     try {
       harness = await Harness.open(
-        await openStorage(options.database, options.encryptNew),
+        options.storage ?? (await openStorage(options.database, options.encryptNew)),
         {
           models,
           registry,
@@ -343,6 +433,34 @@ export class Nudge {
         context,
       );
       models.refuse = () => spending.refusal();
+      const report = options.onReport ?? (() => {});
+      const scanner =
+        deep === undefined || deepMode === "off"
+          ? undefined
+          : new DeepScanner({
+              detector: deep,
+              mode: deepMode,
+              allow: [displayName, ...(options.privacy?.allow ?? [])],
+              seen: await harness.snapshot(DeepSeenDoc, context),
+              save: (model, keys) =>
+                harness.commit(async (tx) => {
+                  const doc = await tx.doc(DeepSeenDoc);
+                  if (doc.model !== model) {
+                    doc.model = model;
+                    doc.keys.splice(0);
+                  }
+                  doc.keys.push(...keys);
+                  if (doc.keys.length > MAX_SEEN) doc.keys.splice(0, doc.keys.length - MAX_SEEN);
+                }, BACKGROUND_CONTEXT),
+              report,
+            });
+      // Left for later while the local model runs, so turning it off releases them then.
+      if (scanner === undefined && (saved?.readable ?? 0) < READABLE_VERSION) {
+        await releaseReadable(models);
+        await harness.commit(async (tx) => {
+          (await tx.doc(VaultDoc)).readable = READABLE_VERSION;
+        }, BACKGROUND_CONTEXT);
+      }
       const nudge = new Nudge({
         harness,
         displayName,
@@ -354,17 +472,14 @@ export class Nudge {
         host,
         detectors,
         installed,
-        report: options.onReport ?? (() => {}),
+        scanner,
+        report,
         events,
         spending,
         timeZone,
       });
       await nudge.rooms.adoptLobby(lobby.id, context);
       const directory = await harness.snapshot(DirectoryDoc, context);
-      // Names stored before redaction existed, or before a vault was lost, go back in.
-      for (const player of Object.values(directory?.players ?? {}))
-        models.vault.protect(player.displayName, "NAME");
-      await models.flush();
       const conversationIds = [
         ...Object.values(directory?.rooms ?? {}).map((room) => room.conversationId),
         ...Object.keys(directory?.sides ?? {}).map(Number),
@@ -645,13 +760,17 @@ export class Nudge {
         ? this.spending.refusal()
         : this.spending.refusalFor(draft.author.playerId);
     if (refusal !== undefined) throw new BudgetReached(refusal);
-    // The model sees "<name>: <text>"; the name is personal, so it goes to the vault first.
-    if (draft.author !== undefined) this.models.vault.protect(draft.author.displayName, "NAME");
     // Stored with placeholders, so forgetting a value takes it out of history (ADR 9). What a
     // private message reveals for the first time is its author's alone.
     const vault = this.models.vault;
     const before = vault.version;
     const owner = draft.private === true ? draft.author?.playerId : undefined;
+    // What the local model finds now is the author's when private. Without it the message is
+    // still stored; the request it leads to waits for the model, or is refused.
+    await this.scanner?.protectIn([draft.text], vault, {
+      ...(owner === undefined ? {} : { owner }),
+      quiet: true,
+    });
     const text = vault.redact(draft.text, this.models.detectors, owner);
     await this.models.flush();
     if (owner !== undefined && vault.version !== before) this.changes.emit({ kind: "vault" });
@@ -660,6 +779,7 @@ export class Nudge {
       room.conversationId as ConversationId,
       { ...draft, text },
       this.now(),
+      this.timeZone,
       context,
     );
   }
@@ -686,6 +806,20 @@ export class Nudge {
     if (options.owner !== undefined && vault.version !== before)
       this.changes.emit({ kind: "vault" });
     return placeholder;
+  }
+
+  /**
+   * Makes a hidden value readable again, as names are (ADR 15): text no longer has it replaced,
+   * and where its placeholder is stored, the model reads the value. A value someone owns stays
+   * hidden. False when there was nothing to release.
+   */
+  async release(value: string): Promise<boolean> {
+    const vault = this.models.vault;
+    const placeholder = vault.placeholderOf(value.trim());
+    if (placeholder === undefined || !vault.release(placeholder)) return false;
+    await this.models.flush();
+    this.changes.emit({ kind: "vault" });
+    return true;
   }
 
   /**
@@ -776,9 +910,16 @@ export class Nudge {
   ): Promise<ModelViewMessage[]> {
     const conversation = await this.conversation(roomId, context);
     const view = await conversation.context(context);
+    // As a request redacts it, so thinking it leaves out isn't shown either.
+    const sent = redactContext(
+      { messages: [...view.messages] },
+      this.models.vault,
+      this.models.detectors,
+    );
+    const asSent = new Map(view.messages.map((message, i) => [message, sent.messages[i]!]));
     const shown = (message: Message) => ({
       role: message.role,
-      text: this.redact(messageText(message)),
+      text: this.redact(messageText(asSent.get(message) ?? message)),
     });
     if (viewer === undefined) return view.messages.map(shown);
     const out: ModelViewMessage[] = [];
@@ -1013,6 +1154,32 @@ function onByDefault(room: Pick<Room, "kind">, installed: SetUpExtension): boole
 
 function enabledIn(room: Pick<Room, "kind" | "extensions">, installed: SetUpExtension): boolean {
   return room.extensions?.[installed.extension.name] ?? onByDefault(room, installed);
+}
+
+function publicToolsOf(installed: readonly SetUpExtension[]): Set<string> {
+  return new Set(installed.flatMap(({ publicTools }) => publicTools ?? []));
+}
+
+/** Kinds that are no longer hidden unless someone owns the value (ADR 15). */
+const READABLE_KINDS = new Set([
+  "NAME",
+  "PLACE",
+  "ORG",
+  "ADDRESS",
+  "DOMAIN",
+  "IP",
+  "USERNAME",
+  "HOST",
+  "PLATE",
+  "VIN",
+  "BIRTHDATE",
+]);
+
+/** Releases the vault's values of readable kinds, once per vault. */
+async function releaseReadable(models: RedactingModels): Promise<void> {
+  for (const entry of models.vault.entries)
+    if (READABLE_KINDS.has(entry.kind)) models.vault.release(entry.placeholder);
+  await models.flush();
 }
 
 function withExtensionDetectors(

@@ -83,5 +83,12 @@ jobs:
           image="ghcr.io/${GITHUB_REPOSITORY_OWNER}/nudge"
           version="${GITHUB_REF_NAME#v}"
           tags="--tag $image:$version"
-          case "$version" in *-*) ;; *) tags="$tags --tag $image:stable" ;; esac
+          desktop="--tag $image:$version-desktop"
+          case "$version" in *-*) ;; *)
+            tags="$tags --tag $image:stable"
+            desktop="$desktop --tag $image:stable-desktop"
+            ;;
+          esac
           docker buildx build image --platform linux/amd64,linux/arm64 $tags --push
+          # The same with the desktop extension's apps and services.
+          docker buildx build image --platform linux/amd64,linux/arm64 --build-arg DESKTOP=true $desktop --push

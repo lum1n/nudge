@@ -18,13 +18,14 @@ import {
   RESTART_EXIT_CODE,
   ServerKeys,
   serverKeysDir,
+  fetchKeys,
+  ServerIdentity,
+  serverIdentityDir,
   ServerOwners,
   serverOwnersFile,
   SetupCodes,
-  Tailscale,
   routeOutgoing,
   ServerWired,
-  serverWiredName,
   testProviderKey,
   Updates,
   writeRawConfig,
@@ -39,7 +40,7 @@ import { renderUnicodeCompact } from "uqr";
 import { UsageError } from "../errors.ts";
 import { keyPath, scheduleBackups } from "./backup.ts";
 import { offeredProviders } from "./setup-offer.ts";
-import { hostOptions, reloadOnHangup } from "../host.ts";
+import { hostOptions, localModelWanted, reloadOnHangup, sharedLocalModel } from "../host.ts";
 
 export type ServeOptions = {
   readonly config: string;
@@ -124,7 +125,7 @@ export function startupLines(
   ];
   if (everywhere)
     lines.push(
-      "Plain HTTP: anyone on this network can read what goes over it, tokens included. Put a TLS proxy in front, or use a VPN such as Tailscale, beyond a network you trust.",
+      "Plain HTTP: anyone on this network can read what goes over it, tokens included. Put a TLS proxy in front, or use a VPN, beyond a network you trust.",
     );
   else if (host === "127.0.0.1" || host === "localhost" || host === "::1")
     lines.push(
@@ -149,13 +150,16 @@ export async function serve(options: ServeOptions): Promise<number> {
     if (error instanceof ConfigMissing) return undefined;
     throw error;
   });
+  // The local model is large: its download starts now, also while the server waits to be set up.
+  if (localModelWanted(config)) sharedLocalModel(configPath);
   const keys = new ServerKeys(serverKeysDir(configPath));
   const owners = new ServerOwners(serverOwnersFile(configPath));
+  const identity = new ServerIdentity(serverIdentityDir(configPath));
   const assistants = await Assistants.open({
     configPath,
     open: (config, assistant) =>
       openAssistant(config, assistant, context, {
-        ...hostOptions(assistant),
+        ...hostOptions(assistant, config, configPath),
         models: buildModels(config.providers, keys.credentialsFor(assistant.name)),
       }),
     context,
@@ -184,14 +188,16 @@ export async function serve(options: ServeOptions): Promise<number> {
     say,
   );
   const publicUrl = () => options.publicUrl ?? config?.server?.publicUrl;
-  const tailscale = serverTailscale(configPath, publicUrl, say);
-  const wired = new ServerWired({ dir: join(dirname(configPath), "server", "wired"), publicUrl, say });
+  // Where the server's own Tailscale was, before Wired replaced it: its binaries and state.
+  void rm(join(dirname(configPath), "server", "tailscale"), { recursive: true, force: true });
+  const wired = new ServerWired({
+    dir: join(dirname(configPath), "server", "wired"),
+    publicUrl,
+    say,
+  });
   await wired.load();
   const relayFront = wired.relayFront();
-  routeOutgoing(
-    () => tailscale?.proxy,
-    () => wired.dispatcher(),
-  );
+  routeOutgoing(() => wired.dispatcher());
   // Where the network reaches this server's API; known once it listens.
   let apiAddr: string | undefined;
   try {
@@ -203,6 +209,7 @@ export async function serve(options: ServeOptions): Promise<number> {
       assistants,
       keys,
       owners,
+      identity,
       backupBeforeDelete: async (only) => {
         const dir = join(dirname(configPath), "server", "deleted");
         const file = await createBackup({
@@ -217,21 +224,21 @@ export async function serve(options: ServeOptions): Promise<number> {
       testKey,
       backupKey: theBackupKey,
       ...(updates === undefined ? {} : { updates: updates.control }),
-      ...(tailscale === undefined ? {} : { tailscale }),
       wired: {
         state: () => wired.state(),
-        enable: async () => {
+        enable: async (name) => {
           if (apiAddr === undefined) throw new Error("The server isn't listening yet");
-          return wired.enableRoot(serverWiredName(publicUrl()), apiAddr);
+          return wired.enableRoot(apiAddr, name);
         },
         addRelay: (url) => wired.addRelay(url),
+        remove: (name) => wired.remove(name),
         disable: async () => {
           await wired.forget();
           return wired.state();
         },
-        join: async (invite, relayUrl) => {
+        join: async (invite, options) => {
           if (apiAddr === undefined) throw new Error("The server isn't listening yet");
-          return wired.join(invite, serverWiredName(publicUrl()), apiAddr, relayUrl);
+          return wired.join(invite, apiAddr, options);
         },
       },
     };
@@ -253,7 +260,7 @@ export async function serve(options: ServeOptions): Promise<number> {
             testKey,
             complete: async (choices, client) => {
               const result = await completeSetup(
-                { configPath, assistants, keys, owners },
+                { configPath, assistants, keys, owners, identity },
                 choices,
                 client,
                 context,
@@ -281,7 +288,16 @@ export async function serve(options: ServeOptions): Promise<number> {
       },
     });
     apiAddr = loopbackOf(server.url);
-    await wired.resume(serverWiredName(publicUrl()), apiAddr);
+    await wired.resume(apiAddr);
+    // Owners from before servers had keys of their own (v0.6.0) become owners by address.
+    void owners
+      .migrate(
+        async (owner) =>
+          (await assistants.running.get(owner.assistant!)?.players.get(owner.playerId!, context))
+            ?.home,
+        (home) => fetchKeys(home, (url) => fetch(url, { signal: AbortSignal.timeout(10_000) })),
+      )
+      .catch((error: unknown) => console.error("Moving owners over failed:", error));
     const lines =
       codes === undefined
         ? startupLines(server.url, options.host, [...assistants.running.keys()], web)
@@ -297,7 +313,6 @@ export async function serve(options: ServeOptions): Promise<number> {
     stopReloading();
     stopUpdates();
     stopBackups();
-    tailscale?.stop();
     await wired.stop();
     console.log(restarting ? "Restarting into the new release…" : "Stopping…");
     await server.close();
@@ -308,34 +323,9 @@ export async function serve(options: ServeOptions): Promise<number> {
 }
 
 /**
- * The server's own Tailscale, on Linux, where Tailscale's static builds run: started again if an
- * owner connected it before; `routeOutgoing` sends requests to tailnet addresses through it. It is
- * named for the server's address, such as `nudge-robin` for `https://robin.exe.xyz`.
- */
-function serverTailscale(
-  configPath: string,
-  publicUrl: () => string | undefined,
-  say: (line: string) => void,
-): Tailscale | undefined {
-  if (process.platform !== "linux") return undefined;
-  const tailscale = new Tailscale({
-    dir: join(dirname(configPath), "server", "tailscale"),
-    // A release has Node in node/bin and Tailscale in tailscale/.
-    bundled: join(dirname(process.execPath), "..", "..", "tailscale"),
-    hostname: () => {
-      const label = /^https?:\/\/([a-z0-9-]+)/i.exec(publicUrl() ?? "")?.[1];
-      return label === undefined ? "nudge" : `nudge-${label.toLowerCase()}`;
-    },
-    say,
-  });
-  void tailscale.resume();
-  return tailscale;
-}
-
-/**
  * Self-update (ADR 11) when `nudge-server` started this server, which says so with
  * `NUDGE_RELEASES` and `NUDGE_VERSION`: a check 10 minutes after starting (or
- * `NUDGE_UPDATE_DELAY` seconds) and every day after, installing what it finds while `automatic`
+ * `NUDGE_UPDATE_DELAY` seconds) and every hour after, installing what it finds while `automatic`
  * says so. After 30 s of running, this release confirms itself, so a rollback no longer happens.
  */
 function selfUpdates(
@@ -405,15 +395,15 @@ function selfUpdates(
         () => void updates.confirm().catch((error: Error) => say(error.message)),
         30_000,
       );
-      let daily: ReturnType<typeof setInterval> | undefined;
+      let hourly: ReturnType<typeof setInterval> | undefined;
       const first = setTimeout(() => {
         void check();
-        daily = setInterval(() => void check(), 24 * 60 * 60_000);
+        hourly = setInterval(() => void check(), 60 * 60_000);
       }, delay);
       return () => {
         clearTimeout(confirm);
         clearTimeout(first);
-        clearInterval(daily);
+        clearInterval(hourly);
       };
     },
   };

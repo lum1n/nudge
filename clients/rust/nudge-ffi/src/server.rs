@@ -118,8 +118,11 @@ pub struct ProviderKey {
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
 pub struct ServerOwner {
     pub id: String,
-    pub assistant: String,
-    pub player_id: String,
+    /// For someone who lives on one of the server's assistants: it, and their id there.
+    pub assistant: Option<String>,
+    pub player_id: Option<String>,
+    /// For someone whose home is elsewhere, which vouches for them: their address.
+    pub address: Option<String>,
     pub added_at: f64,
 }
 
@@ -129,30 +132,6 @@ pub struct UpdateState {
     pub automatic: bool,
     pub available: Option<String>,
     pub checked_at: Option<f64>,
-    pub error: Option<String>,
-}
-
-/// How far the server's own Tailscale is.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
-pub enum TailscaleStatus {
-    Off,
-    Starting,
-    /// Someone approves it at `auth_url`.
-    NeedsLogin,
-    /// A tailnet admin approves the machine.
-    NeedsApproval,
-    Connected,
-    Error,
-}
-
-/// The server's own Tailscale, so it can reach assistants only in its owner's tailnet.
-#[derive(Clone, Debug, PartialEq, uniffi::Record)]
-pub struct TailscaleState {
-    pub state: TailscaleStatus,
-    pub auth_url: Option<String>,
-    /// Its MagicDNS name, such as `nudge-robin.tail1234.ts.net`.
-    pub name: Option<String>,
-    pub addresses: Vec<String>,
     pub error: Option<String>,
 }
 
@@ -245,6 +224,13 @@ pub struct SetupChoices {
     /// The address the app reached the server at.
     pub public_url: Option<String>,
     pub backups: bool,
+    /// Federation for its assistant, so it can be part of the person's cluster; false sets it up
+    /// standalone.
+    pub federation: bool,
+    /// An owner assertion from the person's home, from `NudgeClient::owner_assertion` with this
+    /// server, when they are signed in there: its first player is them, so it can join their
+    /// cluster later. `None` makes them a new home there.
+    pub home_assertion: Option<String>,
 }
 
 /// The tokens are shown only here: the player's for the assistant, the owner's for the server.
@@ -339,6 +325,7 @@ impl From<p::ServerOwner> for ServerOwner {
             id: o.id,
             assistant: o.assistant,
             player_id: o.player_id,
+            address: o.address,
             added_at: o.added_at,
         }
     }
@@ -352,25 +339,6 @@ impl From<p::UpdateState> for UpdateState {
             available: u.available,
             checked_at: u.checked_at,
             error: u.error,
-        }
-    }
-}
-
-impl From<p::TailscaleState> for TailscaleState {
-    fn from(t: p::TailscaleState) -> Self {
-        TailscaleState {
-            state: match t.state {
-                p::TailscaleStatus::Off => TailscaleStatus::Off,
-                p::TailscaleStatus::Starting => TailscaleStatus::Starting,
-                p::TailscaleStatus::NeedsLogin => TailscaleStatus::NeedsLogin,
-                p::TailscaleStatus::NeedsApproval => TailscaleStatus::NeedsApproval,
-                p::TailscaleStatus::Connected => TailscaleStatus::Connected,
-                p::TailscaleStatus::Error => TailscaleStatus::Error,
-            },
-            auth_url: t.auth_url,
-            name: t.name,
-            addresses: t.addresses.unwrap_or_default(),
-            error: t.error,
         }
     }
 }
@@ -458,6 +426,18 @@ impl ServerClient {
         let (api, info) = (self.api.clone(), self.info.clone());
         let session =
             run(async move { api.sign_in(&assistant, &player_token, info).await }).await?;
+        Ok(session.owner.into())
+    }
+
+    /// Trades an assertion from the owner's home, from `NudgeClient::owner_assertion`, for a server
+    /// token, and stores it: for an owner whose home is elsewhere.
+    pub async fn sign_in_from_home(&self, assertion: String) -> Result<ServerOwner, NudgeError> {
+        let assertion: p::Sealed =
+            serde_json::from_str(&assertion).map_err(|error| NudgeError::Decode {
+                detail: format!("Not an assertion: {error}"),
+            })?;
+        let (api, info) = (self.api.clone(), self.info.clone());
+        let session = run(async move { api.sign_in_from_home(assertion, info).await }).await?;
         Ok(session.owner.into())
     }
 
@@ -598,6 +578,14 @@ impl ServerClient {
         )
     }
 
+    /// Makes the person at `address` an owner too, vouched for by their home when they sign in.
+    pub async fn add_owner_at(&self, address: String) -> Result<ServerOwner, NudgeError> {
+        let api = self.api.clone();
+        Ok(run(async move { api.add_owner_at(&address).await })
+            .await?
+            .into())
+    }
+
     /// Invites `address` to an assistant here through its federation: the join link, for an
     /// owner joining it from home.
     pub async fn invite(&self, assistant: String, address: String) -> Result<String, NudgeError> {
@@ -622,33 +610,6 @@ impl ServerClient {
             .into())
     }
 
-    /// The server's own Tailscale; fails with 404 where it can't run.
-    pub async fn tailscale(&self) -> Result<TailscaleState, NudgeError> {
-        let api = self.api.clone();
-        Ok(run(async move { api.tailscale().await }).await?.into())
-    }
-
-    /// Joins the server to a tailnet: at once with `auth_key`, else open the state's `auth_url`
-    /// and ask `tailscale()` until it is connected.
-    pub async fn connect_tailscale(
-        &self,
-        auth_key: Option<String>,
-    ) -> Result<TailscaleState, NudgeError> {
-        let api = self.api.clone();
-        Ok(
-            run(async move { api.connect_tailscale(auth_key.as_deref()).await })
-                .await?
-                .into(),
-        )
-    }
-
-    pub async fn disconnect_tailscale(&self) -> Result<TailscaleState, NudgeError> {
-        let api = self.api.clone();
-        Ok(run(async move { api.disconnect_tailscale().await })
-            .await?
-            .into())
-    }
-
     /// The server's Wired; fails with 404 on a server that wasn't given one.
     pub async fn wired(&self) -> Result<WiredState, NudgeError> {
         let api = self.api.clone();
@@ -661,10 +622,23 @@ impl ServerClient {
         Ok(run(async move { api.disable_wired().await }).await?.into())
     }
 
-    /// Makes the server the root of its own Wired network, as a home server is.
-    pub async fn enable_wired(&self) -> Result<WiredState, NudgeError> {
+    /// On the server that holds the network: removes the server called `name` from it, as when
+    /// that server was deleted, so a new one can take the name.
+    pub async fn remove_wired_member(&self, name: String) -> Result<WiredState, NudgeError> {
         let api = self.api.clone();
-        Ok(run(async move { api.enable_wired().await }).await?.into())
+        Ok(run(async move { api.remove_wired_member(&name).await })
+            .await?
+            .into())
+    }
+
+    /// Makes the server the root of its own Wired network, as a home server is, as `name` (such
+    /// as `box`) when given; else as its public address's first label, or its host's name.
+    #[uniffi::method(default(name = None))]
+    pub async fn enable_wired(&self, name: Option<String>) -> Result<WiredState, NudgeError> {
+        let api = self.api.clone();
+        Ok(run(async move { api.enable_wired(name.as_deref()).await })
+            .await?
+            .into())
     }
 
     /// On the root: lists the relay another server will serve at `url`, its public HTTPS address,
@@ -674,26 +648,36 @@ impl ServerClient {
         Ok(run(async move { api.add_wired_relay(&url).await }).await?)
     }
 
-    /// Joins the network `invite` is for, serving a relay at the server's public HTTPS address.
-    pub async fn join_wired(&self, invite: String) -> Result<WiredState, NudgeError> {
+    /// Joins the network `invite` is for, as `name` when given, serving a relay at the server's
+    /// public HTTPS address.
+    #[uniffi::method(default(name = None))]
+    pub async fn join_wired(
+        &self,
+        invite: String,
+        name: Option<String>,
+    ) -> Result<WiredState, NudgeError> {
         let api = self.api.clone();
-        Ok(run(async move { api.join_wired(&invite, None).await })
-            .await?
-            .into())
+        Ok(
+            run(async move { api.join_wired(&invite, None, name.as_deref()).await })
+                .await?
+                .into(),
+        )
     }
 
     /// Puts `other`, a server with a public HTTPS address, in this server's Wired network: this
-    /// one (the root) lists `other`'s relay, and `other` joins with the invite. The invite never
-    /// leaves this call.
+    /// one (the root) lists `other`'s relay, and `other` joins with the invite, as `name` when
+    /// given. The invite never leaves this call.
+    #[uniffi::method(default(name = None))]
     pub async fn connect_wired(
         &self,
         other: Arc<ServerClient>,
         other_url: String,
+        name: Option<String>,
     ) -> Result<WiredState, NudgeError> {
         let (home, other) = (self.api.clone(), other.api.clone());
         Ok(run(async move {
             let invite = home.add_wired_relay(&other_url).await?;
-            other.join_wired(&invite, None).await
+            other.join_wired(&invite, None, name.as_deref()).await
         })
         .await?
         .into())
@@ -712,11 +696,9 @@ impl ServerClient {
 pub enum Reach {
     /// Anyone.
     Public,
-    /// Only the same tailnet: another server needs its own Tailscale connected.
-    Tailnet,
     /// Only the same Wired network (`nudge.<name>.wired`): another server has to join it.
     Wired,
-    /// Only the same network, such as a LAN address: no other server.
+    /// Only the same network, such as a LAN or tailnet address: no other server.
     Private,
 }
 
@@ -725,7 +707,6 @@ pub enum Reach {
 pub fn reach(server: String) -> Reach {
     match nudge_client::reach(&server) {
         nudge_client::Reach::Public => Reach::Public,
-        nudge_client::Reach::Tailnet => Reach::Tailnet,
         nudge_client::Reach::Wired => Reach::Wired,
         nudge_client::Reach::Private => Reach::Private,
     }
@@ -797,6 +778,14 @@ pub async fn set_up(
     client_name: String,
     platform: String,
 ) -> Result<SetupResult, NudgeError> {
+    let home = match choices.home_assertion {
+        None => None,
+        Some(assertion) => Some(serde_json::from_str::<p::Sealed>(&assertion).map_err(|error| {
+            NudgeError::Decode {
+                detail: format!("Not an assertion: {error}"),
+            }
+        })?),
+    };
     let body = p::SetupRequest {
         code: choices.code,
         client: client_info(&client_name, &platform),
@@ -812,6 +801,8 @@ pub async fn set_up(
         },
         public_url: choices.public_url,
         backups: Some(choices.backups),
+        federation: Some(choices.federation),
+        home,
     };
     let done = run(async move { nudge_client::set_up(&server, &body).await }).await?;
     Ok(SetupResult {

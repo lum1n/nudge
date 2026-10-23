@@ -1,3 +1,7 @@
+import { domainDetector, ipDetector, usernameDetector } from "./hosts.ts";
+import { addressDetector, nameDetector } from "./people.ts";
+import { orgDetector, placeDetector } from "./places.ts";
+
 /** A run of text a detector found: `text.slice(start, end)` is the personal value. */
 export type Span = { readonly start: number; readonly end: number };
 
@@ -42,6 +46,25 @@ export const phoneDetector = regexDetector(
   (match) => digits(match).length >= 8,
 );
 
+const PHONE_CUE =
+  /(?<![\p{L}])(?:tlf|tel|telefon|telefonnummer|telefonnummeret|nummer|nummeret|nr|mobil|mobilnummer|mobilnummeret|mob|phone|cell|mobile|call|ring|ringe|sms|text|vipps|vippse|whatsapp|kontakt)(?![\p{L}])[^\n\d]{0,30}?(?<![\p{N}+])(?<number>[2-9]\d{7})(?![\p{L}\p{N}])/giu;
+
+/**
+ * Norwegian eight-digit numbers written without spaces after a word that makes them a phone
+ * number: "Mobil: 90512477", "ring 41234567", "nummeret er 48219553". Without such a word they stay
+ * readable, as `phoneDetector` leaves them.
+ */
+export const phoneCueDetector: PiiDetector = {
+  kind: "PHONE",
+  *find(text) {
+    for (const match of text.matchAll(PHONE_CUE)) {
+      const number = match.groups!.number!;
+      const start = match.index + match[0].length - number.length;
+      yield { start, end: start + number.length };
+    }
+  },
+};
+
 /** IBANs, checked with mod 97. */
 export const ibanDetector = regexDetector(
   "IBAN",
@@ -70,14 +93,114 @@ export const norwegianAccountDetector = regexDetector(
   (match) => accountValid(digits(match)),
 );
 
-/** The detectors every assistant runs. Names come from the directory, not from a detector. */
+/** Norwegian licence plates (`AB 12345`), leaving codes such as `EN 12345` and `NO 12345` alone. */
+export const plateDetector = regexDetector(
+  "PLATE",
+  /(?<![\p{L}\p{N}])[A-Z]{2} ?\d{5}(?![\p{L}\p{N}])/u,
+  (match) =>
+    !["EN", "NO", "ID", "EU", "UK", "US", "PR", "NS", "IS", "ES"].includes(match.slice(0, 2)),
+);
+
+/** Vehicle identification numbers: 17 capitals and digits without I, O or Q, of both kinds. */
+export const vinDetector = regexDetector(
+  "VIN",
+  /(?<![\p{L}\p{N}])[A-HJ-NPR-Z0-9]{17}(?![\p{L}\p{N}])/u,
+  (match) => /[A-Z].*[A-Z]/.test(match) && /\d.*\d/.test(match),
+);
+
+const MONTHS =
+  "januar|februar|mars|april|mai|juni|juli|august|september|oktober|november|desember|january|february|march|may|june|july|october|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|okt|oct|nov|des|dec";
+const DATE = `\\d{1,2}\\.\\s?\\d{1,2}\\.\\s?(?:\\d{4}|\\d{2})|\\d{4}-\\d{2}-\\d{2}|\\d{1,2}\\.?\\s+(?:${MONTHS})\\.?(?:\\s+\\d{4})?|(?:${MONTHS})\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?,?(?:\\s+\\d{4})?|\\d{1,2}/\\d{1,2}/\\d{2,4}`;
+const BIRTH = new RegExp(
+  `(?<![\\p{L}])(?:født|f\\.|fødselsdatoen|fødselsdato|fødselsdagen|fødselsdag|bursdagen|bursdag|born|dob|date of birth|birth date|birthday|birthdate)(?:\\s+(?:den|on|the|er|is|:))?[:\\s]+(?:[^\\n\\d]{0,12}?)(?<date>${DATE})(?![\\p{L}\\p{N}])`,
+  "giu",
+);
+/** A list under a heading such as "Bursdager:", one person per line. */
+const BIRTH_LIST =
+  /(?<![\p{L}])(?:bursdager|bursdagar|fødselsdager|fødselsdatoer|birthdays|birth dates)[^\n]*:[ \t]*\n(?<lines>(?:[ \t]*[-*•][^\n]*(?:\n|$))+)/giu;
+const DATES = new RegExp(`(?<![\\p{L}\\p{N}])(?:${DATE})(?![\\p{L}\\p{N}])`, "giu");
+
+/**
+ * Dates of birth: a date after "født", "bursdag", "born", "DOB" and the like, or in a list under
+ * "Bursdager:" or "Birthdays:". Other dates stay.
+ */
+export const birthDateDetector: PiiDetector = {
+  kind: "BIRTHDATE",
+  *find(text) {
+    for (const match of text.matchAll(BIRTH)) {
+      const date = match.groups!.date!;
+      const start = match.index + match[0].length - date.length;
+      yield { start, end: start + date.length };
+    }
+    for (const list of text.matchAll(BIRTH_LIST)) {
+      const lines = list.groups!.lines!;
+      const offset = list.index + list[0].length - lines.length;
+      for (const date of lines.matchAll(DATES))
+        yield { start: offset + date.index, end: offset + date.index + date[0].length };
+    }
+  },
+};
+
+/**
+ * Secrets that let someone act as their owner: keys and tokens of well-known formats, private key
+ * blocks, JSON web tokens, bearer tokens, and what follows "password:" or "passord:".
+ */
+const SECRET = new RegExp(
+  [
+    // Provider keys: OpenAI and Anthropic, GitHub, GitLab, Slack, Stripe, Google, AWS, npm, HF.
+    String.raw`(?<![\w-])(?:sk-(?:ant-|proj-)?[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,}|glpat-[A-Za-z0-9_-]{20,}|xox[abposr]-[A-Za-z0-9-]{10,}|[rs]k_(?:live|test)_[A-Za-z0-9]{20,}|AIza[A-Za-z0-9_-]{35}|AKIA[A-Z0-9]{16}|npm_[A-Za-z0-9]{36}|hf_[A-Za-z0-9]{30,})(?![\w-])`,
+    String.raw`-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----`,
+    String.raw`(?<![\w-])eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}(?![\w-])`,
+  ].join("|"),
+  "g",
+);
+const SECRET_CUE =
+  /(?<![\p{L}])(?:password|passwd|passord|pwd|passphrase|api[ _-]?key|secret|token|bearer)(?:\s+(?:is|er))?(?:\s*[:=]\s*|\s+)(?<secret>[^\s"'`]{6,})/giu;
+
+export const secretDetector: PiiDetector = {
+  kind: "SECRET",
+  *find(text) {
+    for (const match of text.matchAll(SECRET))
+      yield { start: match.index, end: match.index + match[0].length };
+    for (const match of text.matchAll(SECRET_CUE)) {
+      const secret = match.groups!.secret!.replace(/[.,;:!?)]+$/u, "");
+      // A word, not a secret: "the password is wrong", "token expired".
+      if (!/\d|[^\p{L}\d]/u.test(secret)) continue;
+      const start = match.index + match[0].length - match.groups!.secret!.length;
+      yield { start, end: start + secret.length };
+    }
+  },
+};
+
+/**
+ * The detectors every assistant runs: only what does harm on its own (ADR 15). Names, places,
+ * organisations, hosts and the like stay readable; the detectors for them are here for the local
+ * model and for hosts that want them.
+ */
 export const builtinDetectors: readonly PiiDetector[] = [
+  secretDetector,
   emailDetector,
   ibanDetector,
   cardDetector,
   norwegianIdDetector,
   norwegianAccountDetector,
   phoneDetector,
+  phoneCueDetector,
+];
+
+/** Everything ADR 14 hid: the built-in detectors and those for names, places and hosts. */
+export const quasiIdentifierDetectors: readonly PiiDetector[] = [
+  ...builtinDetectors,
+  usernameDetector,
+  domainDetector,
+  ipDetector,
+  plateDetector,
+  vinDetector,
+  birthDateDetector,
+  addressDetector,
+  orgDetector,
+  placeDetector(),
+  nameDetector(),
 ];
 
 export function luhnValid(number: string): boolean {

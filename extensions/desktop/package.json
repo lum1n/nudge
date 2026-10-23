@@ -1,0 +1,31 @@
+{
+  "name": "@nudge/ext-desktop",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Text-only desktop use for Nudge on Linux: apps on a virtual display, read and driven through the accessibility tree (AT-SPI)",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "@nudge/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "eval": "node eval/run.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "1.2.0",
+    "@earendil-works/pi-durable": "1.2.0",
+    "@nudge/core": "workspace:*",
+    "@particle/dbus-next": "0.11.4",
+    "typebox": "1.3.27"
+  },
+  "devDependencies": {
+    "@earendil-works/chord": "1.2.0"
+  }
+}

@@ -336,6 +336,7 @@ function createTimer(host: Pick<ExtensionHost<unknown>, "assistant" | "now">) {
                   nudgeId: `watch-${watchId}`,
                   message: `Watch ${watchId}: ${fresh.length} new — ${watch.what}`,
                   fireAt: host.now(),
+                  source: "watch",
                   ...(watch.privateTo === undefined ? {} : { privateTo: watch.privateTo }),
                 } satisfies FireEntryData,
               },

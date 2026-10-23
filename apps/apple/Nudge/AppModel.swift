@@ -12,6 +12,11 @@ struct Account: Codable, Equatable, Hashable {
     var assistant: String
     /// The assistant's display name, for titles.
     var assistantName: String
+    /// Signed in as a person of its own there, not joined from home: a standalone server, outside
+    /// the person's cluster, which home's memberships never name.
+    var standalone: Bool?
+
+    var isStandalone: Bool { standalone == true }
 
     var keychainAccount: String { "\(server)|\(assistant)" }
 
@@ -82,12 +87,16 @@ final class AppModel {
     var pendingLink: PairingLink?
     /// A join link: an admin elsewhere invited the player.
     var pendingJoin: JoinLink?
+    /// A sign-in link from the QR code of a browser that shows the web UI.
+    var pendingSignIn: SignInLink?
     /// Why the app signed out on its own, for the sign-in screen.
     var signedOutBecause: String?
     /// The servers this device owns, and the exe.dev token it makes new ones with.
     let servers = Servers()
     /// Speech to text for the composer, on this device.
     let speech = Speech()
+    /// Where the player is, told to home while the app is open, if they turned it on.
+    let location = LocationSharing()
 
     var account: Account? { session?.account }
     var client: NudgeClient? { session?.client }
@@ -143,19 +152,39 @@ final class AppModel {
     }
 
     /// Sets a server up with what the wizard asked (ADR 11), and signs in as its owner. Signed out,
-    /// its new assistant becomes the person's home. Signed in at home, it is joined from there
-    /// instead, so they keep one home: at once, or once the server is in the home's tailnet when
-    /// the home is only there, which the answer says (`.needsTailscale`).
+    /// its new assistant becomes the person's home. Signed in at home, it is started from there:
+    /// home vouches for the person, so its first player is them and its owner their address. With
+    /// federation it is joined from home at once, landing on that player; without, it stays
+    /// standalone, and can join the cluster later (`joinCluster`).
     func setUpServer(_ server: String, choices: SetupChoices) async throws -> SetUpServer {
-        if session != nil, let problem = homeProblem { throw problem }
+        if session != nil, choices.federation, let problem = homeProblem { throw problem }
+        var choices = choices
+        if let home = session, memberships?.address != nil {
+            do {
+                choices.homeAssertion = try await home.client.ownerAssertion(server: server.trimmingCharacters(in: ["/"]))
+            } catch {
+                // A standalone server home can't vouch for becomes a home of its own instead.
+                if choices.federation { throw error }
+            }
+        }
         let done = try await setUp(server: server, choices: choices, clientName: "nudge-apple", platform: Push.platformName)
         servers.remember(server, token: done.serverToken)
+        if session != nil, !choices.federation {
+            let account = Account(
+                server: server, assistant: done.assistant,
+                assistantName: choices.displayName ?? done.assistant, standalone: true)
+            KeychainTokens(account: account.keychainAccount).set(token: done.token)
+            if let place = open(account) {
+                places.append(place)
+                savePlaces()
+            }
+            return .standalone
+        }
         if session != nil {
             // The owner API invites and joins from here on; the setup player's token isn't needed.
             var setupConfig = config(for: Account(server: server, assistant: done.assistant, assistantName: done.assistant))
             setupConfig.cachePath = nil
             try? await NudgeClient(config: setupConfig, tokens: MemoryTokens(done.token)).signOut()
-            if homeReach == .tailnet { return .needsTailscale(assistant: done.assistant) }
             try await joinFromHome(server: server, assistant: done.assistant)
             return .joined
         }
@@ -181,8 +210,7 @@ final class AppModel {
         return reach(server: home.account.server)
     }
 
-    /// Why the home can't join assistants on other servers yet, if it can't. A home only in a
-    /// tailnet can, once the other server is in that tailnet too, which is up to each server.
+    /// Why the home can't join assistants on other servers yet, if it can't.
     var homeProblem: ServerProblem? {
         guard session != nil else { return nil }
         if homeReach == .private { return .privateHome }
@@ -207,11 +235,19 @@ final class AppModel {
     /// Sets the address other servers know the home by: federation's `server`, turned on.
     private func setHomeAddress(_ server: String) async throws {
         guard let home = session else { return }
-        let setups = try await home.client.extensionSetups()
+        try await setFederationAddress(of: home.client, server)
+        memberships = try await home.client.memberships()
+        homeFederation = true
+    }
+
+    /// Turns federation on for the assistant `client` is signed in to, at `server`, the address
+    /// other servers know it by. Needs the player to be an admin there.
+    private func setFederationAddress(of client: NudgeClient, _ server: String) async throws {
+        let setups = try await client.extensionSetups()
         guard let federation = setups.first(where: { $0.from.hasSuffix("federation") }) else {
             throw ServerProblem.noFederationExtension
         }
-        _ = try await home.client.saveExtensionSetups(
+        _ = try await client.saveExtensionSetups(
             extensions: setups
                 .filter { $0.configured || $0.from == federation.from }
                 .map { setup in
@@ -219,8 +255,41 @@ final class AppModel {
                         ? setup.saved(enabled: true, settings: setup.settings.merging(["server": .string(server)]) { _, new in new }, rooms: setup.rooms)
                         : setup.saved(enabled: setup.enabled, settings: setup.settings, rooms: setup.rooms)
                 })
-        memberships = try await home.client.memberships()
-        homeFederation = true
+    }
+
+    /// Whether a standalone assistant was started from this person's home, so it can join their
+    /// cluster: its player there is them, by their address. Independent ones never can.
+    func canJoinCluster(_ place: Session) -> Bool {
+        guard place.account.isStandalone, let address = memberships?.address else { return false }
+        return place.me?.player.address == address
+    }
+
+    /// Joins a standalone assistant started from home to the person's cluster (ADR 11): turns its
+    /// federation on at the address this device reaches it by, and joins it from home, which lands
+    /// on the same player, so its rooms and history stay. From then on it is one of home's
+    /// memberships, on all their devices.
+    func joinCluster(_ place: Session) async throws {
+        guard let home = session, canJoinCluster(place) else { return }
+        if let homeProblem { throw homeProblem }
+        let server = place.account.server
+        try await setFederationAddress(of: place.client, server.trimmingCharacters(in: ["/"]))
+        try await ensureReachesHome(server)
+        let old = KeychainTokens(account: place.account.keychainAccount).get()
+        let joined = try await join(from: home, server: server, assistant: place.account.assistant)
+        if let at = places.firstIndex(where: { $0 === place }) {
+            places[at] = joined
+        } else {
+            places.append(joined)
+        }
+        savePlaces()
+        place.close()
+        // The standalone token is the same player's; the joined one replaced it in the keychain.
+        if let old {
+            var oldConfig = config(for: place.account)
+            oldConfig.cachePath = nil
+            try? await NudgeClient(config: oldConfig, tokens: MemoryTokens(old)).signOut()
+        }
+        await syncPlaces()
     }
 
     /// The home's name in its Wired network, `box` for `nudge.box.wired`, when its address is a
@@ -235,15 +304,10 @@ final class AppModel {
         return labels.count == 3 ? String(labels[1]) : nil
     }
 
-    /// Makes sure `server` reaches the home as other servers do: through its own Tailscale for a
-    /// home only in a tailnet, or in the home's Wired network for a home on Wired, which this device
-    /// puts it in when it owns the server holding that network.
+    /// Makes sure `server` reaches the home as other servers do: in the home's Wired network for a
+    /// home on Wired, which this device puts it in when it owns the server holding that network.
     private func ensureReachesHome(_ server: String) async throws {
         switch homeReach {
-        case .tailnet:
-            if (try? await servers.client(server).tailscale())?.state != .connected {
-                throw ServerProblem.needsTailscale
-            }
         case .wired:
             guard let name = homeWiredName else { return }
             let owner = try servers.client(server)
@@ -276,9 +340,9 @@ final class AppModel {
     }
 
     /// Joins an assistant on a server this device owns from home, as its owner: invites the home's
-    /// address, joins, and makes that guest an admin there and an owner of the server. A home
-    /// only in a tailnet needs the server's own Tailscale connected first; a home on Wired, the
-    /// server in its network, which this does when it can.
+    /// address, joins, and makes that guest an admin there; the server makes the person an owner by
+    /// their address, so deleting the assistant later leaves them its owner. A home on Wired needs
+    /// the server in its network, which this does when it can.
     func joinFromHome(server: String, assistant: String) async throws {
         guard session != nil else { return }
         if let homeProblem { throw homeProblem }
@@ -295,6 +359,12 @@ final class AppModel {
         _ = try await owner.addOwner(assistant: assistant, playerId: guest, admin: true)
         // An admin now: Settings shows its extensions and invites.
         place.me = (try? await place.client.me()) ?? place.me
+        // On the list at home, for the person's other devices; the next sync puts it there otherwise.
+        if let home = session,
+            let listed = try? await home.client.addOwnedServer(server: server.trimmingCharacters(in: ["/"]))
+        {
+            servers.setAtHome(Set(listed.map(\.server)))
+        }
     }
 
     /// Makes an assistant on a server this device owns. One that is "for me" is joined from home
@@ -312,15 +382,111 @@ final class AppModel {
     }
 
     /// Removes a server made on exe.dev, with everything on it: leaves its assistants joined from
-    /// home, deletes the VM, and forgets it here.
+    /// home, takes it out of home's Wired network, deletes the VM, and forgets it here.
     func removeExeServer(_ server: String) async throws {
         guard let token = servers.exeToken, let vm = exeVmName(server) else { throw ServerProblem.notOnExe }
         for membership in memberships?.memberships ?? []
         where membership.server.trimmingCharacters(in: ["/"]) == server.trimmingCharacters(in: ["/"]) {
             try? await leave(membership)
         }
+        // Out of home's Wired network first, so a new server at this address can take its name.
+        if let state = try? await servers.client(server).wired(), state.state == .member, let name = state.name,
+            let root = await servers.wiredRoot(except: server, holding: name)
+        {
+            _ = try? await servers.client(root).removeWiredMember(name: name)
+        }
         try await ExeClient(token: token).delete(name: vm)
+        try await removeServer(server)
+    }
+
+    /// Takes a server off the person's list at home and signs this device out of it; their other
+    /// devices follow when they next look. They stay its owner, and nothing on the server changes.
+    func removeServer(_ server: String) async throws {
+        if let home = session {
+            do {
+                try await home.client.removeOwnedServer(server: server.trimmingCharacters(in: ["/"]))
+            } catch NudgeError.Status(404, _) {
+                // Not on the list, or no federation at home: there is nothing to take off.
+            }
+        }
         await servers.forget(server)
+    }
+
+    /// The servers the person joined assistants on from home that this device doesn't manage:
+    /// ones they may own but took off their list, or that it couldn't sign in to.
+    var joinedServers: [String] {
+        let owned = Set(servers.owned.map { $0.trimmingCharacters(in: ["/"]) })
+        let joined = (memberships?.memberships ?? []).map { $0.server.trimmingCharacters(in: ["/"]) }
+        return Set(joined).subtracting(owned).sorted()
+    }
+
+    /// Signs this device in to a server as its owner, with home vouching for them, and puts it back
+    /// on their list at home; throws why not, as when they aren't its owner.
+    func manageServer(_ server: String) async throws {
+        guard let home = session else { throw ServerProblem.noFederation }
+        let assertion = try await home.client.ownerAssertion(server: server)
+        // The client keeps the server token it gets.
+        _ = try await servers.client(server).signInFromHome(assertion: assertion)
+        servers.remember(server)
+        do {
+            let listed = try await home.client.addOwnedServer(server: server)
+            servers.setAtHome(Set(listed.map(\.server)))
+        } catch NudgeError.Status(404, _) {
+            // No federation at home: this device keeps it to itself.
+        }
+    }
+
+    /// Matches the servers this device owns to the person's list at home (ADR 11): signs in to the
+    /// ones another device put there, with an assertion from home; puts there the ones only this
+    /// device knew, when their owner is the person at home; and forgets the ones taken off elsewhere.
+    private func syncServers(_ home: Session) async {
+        guard let address = memberships?.address, let listed = try? await home.client.ownedServers(),
+            session === home
+        else { return }
+        var atHome = Set(listed.map { $0.server.trimmingCharacters(in: ["/"]) })
+        let homeServer = home.account.server.trimmingCharacters(in: ["/"])
+        for server in servers.owned {
+            let key = server.trimmingCharacters(in: ["/"])
+            if atHome.contains(key) || key == homeServer { continue }
+            if servers.wasAtHome(key) {
+                await servers.forget(server)
+                continue
+            }
+            // Set up before owners had addresses, this device may be signed in as the setup's
+            // player, beside the owner its home vouches for.
+            let client = try? servers.client(server)
+            guard let owner = try? await client?.info().owner else { continue }
+            if owner.address != address {
+                guard let owners = try? await client?.owners(), owners.contains(where: { $0.address == address })
+                else { continue }
+            }
+            if (try? await home.client.addOwnedServer(server: key)) != nil {
+                atHome.insert(key)
+            }
+        }
+        for owned in listed {
+            let local = servers.owned.first { $0.trimmingCharacters(in: ["/"]) == owned.server }
+            if let local {
+                // Still signed in, unless its token was revoked, as with the player it was through.
+                do {
+                    _ = try await servers.client(local).info()
+                    continue
+                } catch NudgeError.Status(401, _) {
+                } catch {
+                    continue
+                }
+            }
+            let server = local ?? owned.server
+            do {
+                let assertion = try await home.client.ownerAssertion(server: owned.server)
+                // The client keeps the server token it gets.
+                _ = try await servers.client(server).signInFromHome(assertion: assertion)
+                servers.remember(server)
+            } catch {
+                // Unreachable for now, or no longer theirs: tried again next time.
+            }
+        }
+        servers.setAtHome(atHome)
     }
 
     /// Signs in to the home's server as its owner, when the player is one; quietly not otherwise.
@@ -345,6 +511,7 @@ final class AppModel {
         // a second time.
         let places = places
         self.session = nil
+        location.client = nil
         self.places = []
         memberships = nil
         homeFederation = nil
@@ -367,6 +534,7 @@ final class AppModel {
             }
         }
         if active { Task { await syncPlaces() } }
+        location.setActive(active)
     }
 
     /// From the push service: register it with every server once signed in.
@@ -397,10 +565,32 @@ final class AppModel {
     }
 
     /// A `nudge://pair` link: sign in with it, or ask first when signed in elsewhere. A
-    /// `nudge://join` link: ask to join that assistant from home.
+    /// `nudge://join` link: ask to join that assistant from home. A `nudge://sign-in` link: ask to
+    /// sign in the browser that shows it.
     func handle(_ url: URL) {
         if let link = PairingLink(url) { pendingLink = link }
         if let link = JoinLink(url) { pendingJoin = link }
+        if let link = SignInLink(url) { pendingSignIn = link }
+    }
+
+    /// Signs in the browser that shows `link`'s QR code as the player, at an assistant on the server
+    /// the link names, home first; returns that assistant's name. A browser may reach the server by
+    /// another address than this device, so the other assistants are asked too: only the server that
+    /// made the QR code knows its request, and the others answer 404 or 401.
+    func approveSignIn(_ link: SignInLink) async throws -> String {
+        let sessions = (session.map { [$0] } ?? []) + places
+        let named = sessions.filter {
+            $0.account.server.trimmingCharacters(in: ["/"]) == link.server.trimmingCharacters(in: ["/"])
+        }
+        for candidate in named + sessions.filter({ place in !named.contains { $0 === place } }) {
+            do {
+                try await candidate.client.approveSignIn(request: link.request)
+                return candidate.account.assistantName
+            } catch NudgeError.Status(let status, _) where status == 401 || status == 404 {
+                continue
+            }
+        }
+        throw SignInProblem.unknown(host: URL(string: link.server)?.host() ?? link.server)
     }
 
     /// Joins the assistant a link names, with the home vouching for the player; an admin there
@@ -441,9 +631,18 @@ final class AppModel {
         memberships = try? await home.client.memberships()
     }
 
+    /// Signs this device out of a standalone assistant; nothing at home changes.
+    func signOut(of place: Session) async {
+        places.removeAll { $0 === place }
+        savePlaces()
+        await forget(place)
+    }
+
     private func start(_ account: Account, client existing: NudgeClient? = nil) {
         guard let session = open(account, client: existing) else { return }
         self.session = session
+        // Only home learns where the player is, never the assistants they joined.
+        location.client = session.client
         // The assistants joined, as this device last knew them, until home says.
         places = savedPlaces().compactMap { place in
             KeychainTokens(account: place.keychainAccount).get() == nil ? nil : open(place)
@@ -496,7 +695,7 @@ final class AppModel {
         memberships = found
         homeFederation = true
         let gone = before.filter { place in
-            places.contains { $0 === place }
+            !place.account.isStandalone && places.contains { $0 === place }
                 && !found.memberships.contains { place.account.isAt(server: $0.server, assistant: $0.assistant) }
         }
         places.removeAll { place in gone.contains { $0 === place } }
@@ -514,6 +713,7 @@ final class AppModel {
         savePlaces()
         for place in gone { await forget(place) }
         await rejoinSignedOut()
+        await syncServers(home)
     }
 
     /// Joins again, with a fresh assertion from home, the assistants whose token stopped working
@@ -521,7 +721,8 @@ final class AppModel {
     /// signed out.
     func rejoinSignedOut() async {
         guard let home = session else { return }
-        for place in places where place.signedOut && !rejoining.contains(place.account.keychainAccount) {
+        for place in places
+        where place.signedOut && !place.account.isStandalone && !rejoining.contains(place.account.keychainAccount) {
             let key = place.account.keychainAccount
             rejoining.insert(key)
             defer { rejoining.remove(key) }
@@ -612,21 +813,31 @@ enum JoinProblem: LocalizedError {
     var errorDescription: String? { "That is your home." }
 }
 
+enum SignInProblem: LocalizedError {
+    case unknown(host: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .unknown(let host):
+            "That code has expired or was used, or none of your assistants is on \(host). Reload the sign-in page for a new one."
+        }
+    }
+}
+
 /// How setting a server up ended for this device.
 enum SetUpServer: Equatable {
     /// Its assistant is the person's home now.
     case home
     /// Joined from home.
     case joined
-    /// The home is only in a tailnet: the server joins it before the home can join the assistant.
-    case needsTailscale(assistant: String)
+    /// Outside the person's cluster: signed in to as a person of its own.
+    case standalone
 }
 
 enum ServerProblem: LocalizedError {
     case noFederation
     case noFederationExtension
     case privateHome
-    case needsTailscale
     case needsWired
     case wiredElsewhere
     case notJoined
@@ -636,8 +847,7 @@ enum ServerProblem: LocalizedError {
         switch self {
         case .noFederation: "Your home has no federation yet, so it can't join assistants on other servers."
         case .noFederationExtension: "Your home's server has no federation extension to turn on. Update it first."
-        case .privateHome: "This device reaches your home at a local address, which other servers can't reach. Sign in to your home at its Tailscale or public address."
-        case .needsTailscale: "Your home is only in your tailnet, so this server has to join it first: under Settings → Servers, open the server and connect it under Tailscale."
+        case .privateHome: "This device reaches your home at a local address, which other servers can't reach. Sign in to your home at its public address, or hold a Wired network at home and use its address: under Settings → Servers, open your home's server."
         case .needsWired: "Your home is on Wired, but none of your servers here holds its network. Open your home under Settings → Servers and hold a network there, then try again."
         case .wiredElsewhere: "This server is in another Wired network. Turn Wired off on it under Settings → Servers, then try again: it joins your home's."
         case .notJoined: "Joining the assistant from home didn't work."

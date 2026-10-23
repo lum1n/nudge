@@ -25,14 +25,16 @@ export type PanelOutput =
   | { type: "error"; message: string; ref?: string };
 
 /**
- * What it takes. Keys, the private network and `readPaths` are set here by people, never by the
- * model; sharing with every room is for admins.
+ * What it takes. Keys, the private network, `readPaths` and whether a connector comes first are
+ * set here by people, never by the model; sharing with every room is for admins.
  */
 export type PanelInput = { ref?: string } & (
   | { type: "setKey"; connector: string; value: string }
   | { type: "clearKey"; connector: string }
   | { type: "setPrivateNetwork"; connector: string; allow: boolean }
   | { type: "setReadPaths"; connector: string; readPaths: string[] }
+  | { type: "setUseFor"; connector: string; useFor: string }
+  | { type: "setAlwaysFirst"; connector: string; alwaysFirst: boolean }
   | { type: "remove"; connector: string }
   | { type: "share"; connector: string }
   | { type: "unshare"; connector: string }
@@ -184,6 +186,19 @@ export class Panels {
         await documents.commit((tx) => updateConnector(tx, roomId, id, { readPaths }), context);
         return roomId;
       }
+      case "setUseFor": {
+        await own();
+        const useFor = typeof input.useFor === "string" ? input.useFor : "";
+        await documents.commit((tx) => updateConnector(tx, roomId, id, { useFor }), context);
+        return roomId;
+      }
+      case "setAlwaysFirst":
+        await own();
+        await documents.commit(
+          (tx) => updateConnector(tx, roomId, id, { alwaysFirst: input.alwaysFirst === true }),
+          context,
+        );
+        return roomId;
       case "remove":
         await own();
         await documents.commit((tx) => removeConnector(tx, roomId, id), context);

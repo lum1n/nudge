@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import type { Context } from "@earendil-works/chord";
 import type { JsonValue, Message } from "@earendil-works/pi-ai";
 import { ApprovalsDoc } from "../approvals/approvals.ts";
@@ -41,13 +44,21 @@ export async function redactHistory(
     // Read beside the open assistant; written once it has closed, so its caches can't go stale.
     const raw = await openRawDatabase(options.database);
     try {
-      for (const row of raw.all("SELECT id, record FROM entries ORDER BY id") as {
+      const rows = raw.all("SELECT id, record FROM entries ORDER BY id") as {
         id: number;
         record: string;
-      }[]) {
-        const record = JSON.parse(row.record) as EntryJson;
-        const redacted = JSON.stringify(redactEntry(record, (text) => nudge.redact(text)));
-        if (redacted !== row.record) changed.push({ id: row.id, record: redacted });
+      }[];
+      // A value found in a later entry may be written out in earlier ones: go again until the
+      // vault stops growing.
+      for (let pass = 0; pass < 3; pass++) {
+        const before = nudge.vaultVersion;
+        changed.length = 0;
+        for (const row of rows) {
+          const record = JSON.parse(row.record) as EntryJson;
+          const redacted = JSON.stringify(redactEntry(record, (text) => nudge.redact(text)));
+          if (redacted !== row.record) changed.push({ id: row.id, record: redacted });
+        }
+        if (nudge.vaultVersion === before) break;
       }
     } finally {
       raw.close();
@@ -70,6 +81,38 @@ export async function redactHistory(
     }
   }
   return { entries: changed.length, documents };
+}
+
+/**
+ * Goes up when the detectors find more, so history stored before is rewritten once: 2 added
+ * places, organisations, hosts, user names, plates and the rest (ADR 14), and drops thinking that
+ * held values.
+ */
+export const REDACTION_VERSION = 2;
+
+/**
+ * Rewrites an assistant's history with today's detectors when it was stored under older ones, so
+ * what they find now is out of the database too, not only out of requests. The version is kept in
+ * a file beside the database. Needs the database to itself.
+ */
+export async function redactWhenOutdated(
+  options: NudgeOptions,
+  open: (options: NudgeOptions, context: Context) => Promise<Nudge>,
+  context: Context,
+): Promise<RedactedHistory | undefined> {
+  // Only a database file can be rewritten: not one in memory, nor storage a host brings, such as
+  // a Durable Object's.
+  if (options.database === ":memory:" || options.storage !== undefined) return undefined;
+  const marker = `${options.database}.redaction`;
+  const stored = existsSync(marker) ? Number((await readFile(marker, "utf8")).trim()) : 0;
+  if (stored >= REDACTION_VERSION) return undefined;
+  const done = existsSync(options.database)
+    ? await redactHistory(options, open, context)
+    : { entries: 0, documents: 0 };
+  // A new database's directory may not be there yet; opening it makes the same one.
+  await mkdir(dirname(marker), { recursive: true });
+  await writeFile(marker, `${REDACTION_VERSION}\n`, { mode: 0o600 });
+  return done;
 }
 
 type EntryJson = {
@@ -97,7 +140,10 @@ function redactEntry(record: EntryJson, redact: (text: string) => string): Entry
   };
 }
 
-/** The same walk as requests get (`redactContext`): text, tool calls and results, never thinking. */
+/**
+ * The same walk as requests get (`redactContext`): text, tool calls and results. Thinking that
+ * held a value is stored redacted and loses its signature, so it is never replayed to a provider.
+ */
 function redactMessages(messages: Message[], redact: (text: string) => string): Message[] {
   const text = <T extends { type: string }>(blocks: readonly T[]): T[] =>
     blocks.map((block) =>
@@ -137,7 +183,9 @@ function redactMessages(messages: Message[], redact: (text: string) => string): 
               ? { ...block, text: redact(block.text) }
               : block.type === "toolCall"
                 ? { ...block, arguments: mapStrings(block.arguments, redact) }
-                : block,
+                : block.type === "thinking" && !block.redacted
+                  ? redactThinking(block, redact)
+                  : block,
           ),
         };
       case "toolResult":
@@ -150,6 +198,16 @@ function redactMessages(messages: Message[], redact: (text: string) => string): 
         } as Message;
     }
   });
+}
+
+function redactThinking<T extends { thinking: string; thinkingSignature?: string }>(
+  block: T,
+  redact: (text: string) => string,
+): T {
+  const thinking = redact(block.thinking);
+  if (thinking === block.thinking) return block;
+  const { thinkingSignature: _, ...rest } = block;
+  return { ...rest, thinking } as T;
 }
 
 /** Memory, approvals and pending nudges, rewritten with placeholders. Returns how many changed. */

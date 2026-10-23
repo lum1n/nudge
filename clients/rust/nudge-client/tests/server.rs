@@ -496,6 +496,50 @@ async fn renames_a_room_keeping_its_id() {
     assert_eq!(ann.rename_room("lobby", "Hall").await.unwrap().name, "Hall");
 }
 
+#[tokio::test]
+async fn approves_a_browsers_sign_in_by_qr_code() {
+    let Some(server) = faux_server().await else {
+        return;
+    };
+    // What the web UI does: start a sign-in, and show its link as a QR code.
+    let http = reqwest::Client::new();
+    let started: Value = http
+        .post(format!("{}/v1/sign-in", server.url))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let id = started["id"].as_str().unwrap();
+    let status = || async {
+        http.get(format!("{}/v1/sign-in/{id}", server.url))
+            .bearer_auth(started["secret"].as_str().unwrap())
+            .send()
+            .await
+            .unwrap()
+            .json::<Value>()
+            .await
+            .unwrap()
+    };
+    assert_eq!(status().await["status"], "waiting");
+
+    let bo = Api::new(&server.url, "robin", tokens(Some(&server.bo))).unwrap();
+    bo.approve_sign_in(id).await.unwrap();
+    assert_eq!(
+        bo.approve_sign_in(id).await.unwrap_err().status(),
+        Some(404)
+    );
+    let approved = status().await;
+    assert_eq!(approved["assistant"], "robin");
+    let browser = Api::new(&server.url, "robin", tokens(None)).unwrap();
+    let paired = browser
+        .pair(approved["code"].as_str().unwrap(), client_info())
+        .await
+        .unwrap();
+    assert_eq!(paired.player.id, "bo");
+}
+
 /// Hears a panel socket, for the test.
 struct Panel(tokio::sync::mpsc::UnboundedSender<Result<Value, PanelStatus>>);
 
@@ -691,6 +735,57 @@ async fn sets_up_extensions_for_admins() {
     assert_eq!(documents.settings["maxMegabytes"], 5);
     let refused = api
         .save_extension_setups(saved(serde_json::json!({ "maxMegabytes": "lots" })))
+        .await
+        .unwrap_err();
+    assert_eq!(refused.status(), Some(400));
+}
+
+#[tokio::test]
+async fn keeps_personal_details_and_a_location() {
+    let Some(server) = faux_server().await else {
+        return;
+    };
+    let api = Api::new(&server.url, "robin", tokens(Some(&server.ann))).unwrap();
+    let details = api
+        .update_personal(&UpdatePersonalRequest {
+            email: Some(Some("ann@example.com".into())),
+            location: Some(Some(LocationRequest {
+                latitude: 59.913868,
+                longitude: 10.752245,
+                place: Some("Oslo S".into()),
+            })),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(details.email.as_deref(), Some("ann@example.com"));
+    assert_eq!(
+        details
+            .location
+            .as_ref()
+            .map(|location| location.text.as_str()),
+        Some("Oslo S (59.9139, 10.7522)")
+    );
+    let cleared = api
+        .update_personal(&UpdatePersonalRequest {
+            location: Some(None),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(cleared.location, None);
+    assert_eq!(api.personal().await.unwrap(), cleared);
+    let shared = api.share_location_in("trip", true).await.unwrap();
+    assert_eq!(shared.location_rooms, Some(vec!["trip".to_owned()]));
+    let shared = api.share_location_in("trip", false).await.unwrap();
+    assert_eq!(shared.location_rooms, None);
+    let refused = api.share_location_in("lobby", true).await.unwrap_err();
+    assert_eq!(refused.status(), Some(400));
+    let refused = api
+        .update_personal(&UpdatePersonalRequest {
+            email: Some(Some("nope".into())),
+            ..Default::default()
+        })
         .await
         .unwrap_err();
     assert_eq!(refused.status(), Some(400));

@@ -8,6 +8,7 @@ import {
 } from "@earendil-works/pi-ai/providers/faux";
 import { describe, expect, it } from "vitest";
 import {
+  AdminOnly,
   AlreadyDecided,
   APPROVAL_ENTRY,
   ApprovalsDoc,
@@ -25,8 +26,11 @@ import {
 const context = BACKGROUND_CONTEXT;
 const by = { playerId: "owner", displayName: "Vegard" };
 
-/** A `send_mail` tool that only asks; its handler records what it was asked to send. */
-function mailer(sent: string[]) {
+/**
+ * A `send_mail` tool that only asks; its handler records what it was asked to send, and its
+ * denial handler what it was refused.
+ */
+function mailer(sent: string[], refused: string[] = []) {
   return defineNudgeExtension({
     name: "mailer",
     version: "1",
@@ -48,6 +52,7 @@ function mailer(sent: string[]) {
                     kind: "send",
                     summary: `Send a mail to ${to}`,
                     payload: { to },
+                    adminOnly: to === "everyone@example.com",
                   },
                   now(),
                 ),
@@ -68,11 +73,16 @@ function mailer(sent: string[]) {
           return { text: `Sent to ${to}.` };
         },
       },
+      denials: {
+        send: async (payload) => {
+          refused.push((payload as { to: string }).to);
+        },
+      },
     }),
   });
 }
 
-function setup(sent: string[]) {
+function setup(sent: string[], refused: string[] = []) {
   const faux = fauxProvider();
   const models = createModels();
   models.setProvider(faux.provider);
@@ -86,7 +96,7 @@ function setup(sent: string[]) {
     models,
     model: { provider: faux.provider.id, modelId: faux.getModel().id },
     timeZone: "Europe/Oslo",
-    extensions: [mailer(sent)],
+    extensions: [mailer(sent, refused)],
   };
   const askToSend = (to: string) => {
     faux.setResponses([
@@ -113,6 +123,29 @@ function lastInput(request: ModelContext | undefined): string {
 }
 
 describe("approvals", () => {
+  it("lets only an admin decide one that asks for an admin", async () => {
+    const sent: string[] = [];
+    const { options, askToSend } = setup(sent);
+    const nudge = await createNudge(options, context);
+    // The first player is an admin.
+    const admin = (await nudge.players.invite("Vegard", context)).player;
+    const ann = (await nudge.players.invite("Ann", context)).player;
+    askToSend("everyone@example.com");
+    await say(nudge, "Mail everyone");
+    const [pending] = await nudge.approvals.list(LOBBY, context);
+    expect(pending?.adminOnly).toBe(true);
+    const asAnn = { playerId: ann.id, displayName: ann.displayName };
+    await expect(
+      nudge.approvals.decide(LOBBY, "a1", { approve: true, by: asAnn }, context),
+    ).rejects.toThrow(AdminOnly);
+    expect(sent).toEqual([]);
+    const asAdmin = { playerId: admin.id, displayName: admin.displayName };
+    expect(
+      await nudge.approvals.decide(LOBBY, "a1", { approve: true, by: asAdmin }, context),
+    ).toMatchObject({ status: "done" });
+    expect(sent).toEqual(["everyone@example.com"]);
+  });
+
   it("waits for a person, then runs the action and tells the room", async () => {
     const sent: string[] = [];
     const { options, requests, askToSend } = setup(sent);
@@ -157,7 +190,8 @@ describe("approvals", () => {
 
   it("does nothing when denied, and reports a failing action", async () => {
     const sent: string[] = [];
-    const { options, requests, askToSend } = setup(sent);
+    const refused: string[] = [];
+    const { options, requests, askToSend } = setup(sent, refused);
     const nudge = await createNudge(options, context);
     askToSend("bo@example.com");
     await say(nudge, "Mail Bo");
@@ -166,6 +200,8 @@ describe("approvals", () => {
     await nudge.harness.waitForIdle(context);
     expect(lastInput(requests.at(-1))).toContain("denied approval a1");
     expect(sent).toEqual([]);
+    // The extension hears of it, with the values put back.
+    expect(refused).toEqual(["bo@example.com"]);
 
     askToSend("nobody");
     await say(nudge, "Mail nobody");

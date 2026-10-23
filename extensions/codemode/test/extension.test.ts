@@ -98,8 +98,8 @@ describe("codemode", () => {
     );
     expect(offered(requests[0])).toContain("codemode");
     expect(offered(requests[0])).not.toContain("pi.codemode.models.classify");
-    expect(output).toContain("Ann: call ⟦PHONE1⟧");
-    expect(output).toContain("Bo: call ⟦PHONE1⟧");
+    // The phone number is hidden; the names stay readable (ADR 15).
+    expect(output).toContain("Ann: call ⟦PHONE1⟧\nBo: call ⟦PHONE1⟧");
     expect(JSON.stringify(requests)).not.toContain("987 65 432");
   });
 

@@ -5,7 +5,7 @@ export type OwnerOptions = {
   readonly config: string;
   readonly assistant?: string;
   readonly verb?: string;
-  /** A player id for add and token, an owner id for remove. */
+  /** A player id for add and token, or an address for add; an owner id for remove. */
   readonly id?: string;
 };
 
@@ -21,11 +21,19 @@ export async function owner(options: OwnerOptions): Promise<void> {
       const all = owners.list();
       if (all.length === 0)
         console.log("No owners yet: nudge owner add <player> makes a player an owner");
-      for (const o of all) console.log(`${o.id}  ${o.playerId} of ${o.assistant}`);
+      for (const o of all)
+        console.log(`${o.id}  ${o.address ?? `${o.playerId} of ${o.assistant}`}`);
       return;
     }
     case "add": {
       const playerId = need(options.id, "add needs a player id: nudge owner add <player>");
+      if (playerId.includes("@")) {
+        // Someone whose home is elsewhere; their home's keys are pinned when they first sign in.
+        const added = owners.addAddress(playerId);
+        if (added === undefined) throw new UsageError(`Not an address: ${playerId}`);
+        console.log(`${added.address} is an owner of this server (${added.id}).`);
+        return;
+      }
       const assistant = await assistantName(options);
       const added = owners.add(assistant, playerId);
       console.log(`${playerId} of ${assistant} is an owner of this server (${added.id}).`);
@@ -54,7 +62,9 @@ export async function owner(options: OwnerOptions): Promise<void> {
       return;
     }
     default:
-      throw new UsageError("Usage: nudge owner [list|add <player>|remove <id>|token <player>]");
+      throw new UsageError(
+        "Usage: nudge owner [list|add <player or address>|remove <id>|token <player>]",
+      );
   }
 }
 

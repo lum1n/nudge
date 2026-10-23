@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -8,9 +9,14 @@ import { fauxProvider } from "@earendil-works/pi-ai/providers/faux";
 import {
   Assistants,
   completeSetup,
+  federationEndpoint,
+  newKey,
   openAssistant,
   openRecoveryKit,
+  publicKeyOf,
+  seal,
   ServerKeys,
+  ServerIdentity,
   ServerOwners,
   SetupCodes,
 } from "@nudge/core";
@@ -28,7 +34,34 @@ describe("setup mode", () => {
   let assistants: Assistants;
   let keys: ServerKeys;
   let codes: SetupCodes;
+  let owners: ServerOwners;
+  let identity: ServerIdentity;
   let app: Hono;
+  // Ann's home, which the server reaches while `homeUp`.
+  const nest = { server: "https://home.example", assistant: "nest" };
+  const nestSigning = newKey("ed25519");
+  const nestKeys = {
+    signingKey: publicKeyOf(nestSigning),
+    encryptionKey: publicKeyOf(newKey("x25519")),
+  };
+  let homeUp = true;
+  const homeFetch = (async (url: string) =>
+    homeUp && url === federationEndpoint(nest, "/key")
+      ? Response.json({ ...nest, ...nestKeys })
+      : new Response(null, { status: 404 })) as typeof fetch;
+  /** An owner assertion from Ann's home, as its `/owner-assertion` makes one. */
+  const fromHome = ({ to = identity, signer = nestSigning, nonce = randomUUID() } = {}) => {
+    const server = to.publicKeys();
+    const now = Date.now();
+    return seal(signer, server.encryptionKey, {
+      kind: "nudge.owner",
+      home: { ...nest, playerId: "ann" },
+      audience: { server: "https://robin.example", key: server.signingKey },
+      issuedAt: now,
+      expiresAt: now + 60_000,
+      nonce,
+    });
+  };
   const faux = fauxProvider();
   const models = createModels();
   models.setProvider(faux.provider);
@@ -67,7 +100,9 @@ describe("setup mode", () => {
       allowMissing: true,
     });
     keys = new ServerKeys(join(dir, "server", "keys"), () => []);
-    const owners = new ServerOwners(join(dir, "server", "owners.json"));
+    owners = new ServerOwners(join(dir, "server", "owners.json"));
+    identity = new ServerIdentity(undefined);
+    homeUp = true;
     codes = new SetupCodes(CODE, 3);
     const testKey = async (_provider: string, key: string) => {
       if (key !== "good") throw new Error("invalid x-api-key");
@@ -78,6 +113,7 @@ describe("setup mode", () => {
         assistants,
         keys,
         owners,
+        identity,
         backupBeforeDelete: async () => "backup",
         testKey,
         backupKey: async () => Buffer.alloc(32, 7),
@@ -100,7 +136,7 @@ describe("setup mode", () => {
         testKey,
         complete: (setupChoices, setupClient) =>
           completeSetup(
-            { configPath, assistants, keys, owners },
+            { configPath, assistants, keys, owners, identity, fetch: homeFetch },
             setupChoices,
             setupClient,
             context,
@@ -192,5 +228,45 @@ describe("setup mode", () => {
       (await call("POST", "/server/recovery-kit", { passphrase: "short" }, done.json.serverToken))
         .status,
     ).toBe(400);
+  });
+
+  it("binds the first player to the home it was set up from, and makes its address the owner", async () => {
+    const done = await call("POST", "/setup", choices({ federation: false, home: fromHome() }));
+    expect(done.status).toBe(201);
+    expect(done.json.owner).toMatchObject({ address: "ann@home.example/nest" });
+    expect(done.json.owner.assistant).toBeUndefined();
+    const me = await call("GET", "/a/robin/me", undefined, done.json.token);
+    expect(me.json).toMatchObject({ admin: true, player: { address: "ann@home.example/nest" } });
+    expect(owners.list()).toMatchObject([{ address: "ann@home.example/nest", keys: nestKeys }]);
+    const ann = await assistants.running.get("robin")!.players.get(done.json.player.id, context);
+    expect(ann?.startedFrom).toEqual({ keys: nestKeys });
+    expect((await call("GET", "/server", undefined, done.json.serverToken)).status).toBe(200);
+  });
+
+  it("keeps the assertion as proof when the home can't be reached yet", async () => {
+    homeUp = false;
+    const done = await call("POST", "/setup", choices({ home: fromHome() }));
+    expect(done.status).toBe(201);
+    expect(owners.list()).toMatchObject([{ address: "ann@home.example/nest" }]);
+    expect(owners.list()[0]!.keys).toBeUndefined();
+    const ann = await assistants.running.get("robin")!.players.get(done.json.player.id, context);
+    expect(ann?.startedFrom?.proof).toBeDefined();
+    expect(ann?.startedFrom?.keys).toBeUndefined();
+  });
+
+  it("refuses an assertion for another server, signed by another key, or used twice", async () => {
+    const other = new ServerIdentity(undefined);
+    expect((await call("POST", "/setup", choices({ home: fromHome({ to: other }) }))).status).toBe(
+      403,
+    );
+    const forged = fromHome({ signer: newKey("ed25519") });
+    expect((await call("POST", "/setup", choices({ home: forged }))).status).toBe(403);
+    expect(existsSync(configPath)).toBe(false);
+    // One used before, as by a sign-in, is refused; a fresh one still sets it up.
+    const nonce = randomUUID();
+    owners.useNonce(nonce, Date.now() + 60_000);
+    expect((await call("POST", "/setup", choices({ home: fromHome({ nonce }) }))).status).toBe(403);
+    expect(existsSync(configPath)).toBe(false);
+    expect((await call("POST", "/setup", choices({ home: fromHome() }))).status).toBe(201);
   });
 });

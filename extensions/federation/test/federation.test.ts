@@ -6,7 +6,14 @@ import { createApp } from "@nudge/server";
 import type { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
-import { federationExtension, newKey, publicKeyOf, seal } from "../src/index.ts";
+import {
+  federationExtension,
+  newKey,
+  open as openSealed,
+  publicKeyOf,
+  seal,
+  signPayload,
+} from "../src/index.ts";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -192,6 +199,114 @@ describe("federation", () => {
       memberships: [
         { server: AWAY, assistant: "team", since: expect.any(Number), carryMemory: false },
       ],
+    });
+  });
+
+  describe("a server set up from the person's home", () => {
+    const address = "vegard@home.example/robin";
+    const nest = { server: HOME, assistant: "robin", playerId: "vegard" };
+    /** Vegard as AWAY's first player would be had it been set up from his home: a local token. */
+    const startedFrom = async (start: Parameters<Nudge["players"]["setHome"]>[2]) => {
+      const local = await away.players.invite("Vegard", context);
+      await away.players.setHome(local.player.id, nest, start, context);
+      return local;
+    };
+    const homeKeys = async () => {
+      const { signingKey, encryptionKey } = (await call(HOME, "GET", "/ext/federation/key")).json;
+      return { signingKey, encryptionKey };
+    };
+    const join = async () =>
+      call(AWAY, "POST", "/ext/federation/join", { body: { assertion: await assertion() } });
+
+    it("lets them join without an invite, landing on the same player", async () => {
+      const local = await startedFrom({ keys: await homeKeys() });
+      const room = await call(AWAY, "POST", "/rooms", {
+        token: local.token,
+        body: { name: "Plans", members: [] },
+      });
+      expect(room.status).toBe(201);
+
+      const joined = await join();
+      expect(joined).toMatchObject({
+        status: 201,
+        json: { player: { id: local.player.id, address } },
+      });
+      expect(
+        (await away.players.list(context)).filter((p) => p.displayName === "Vegard"),
+      ).toHaveLength(1);
+      // The rooms and the token from setup stay theirs.
+      const timeline = `/rooms/${room.json.id}/timeline`;
+      expect((await call(AWAY, "GET", timeline, { token: joined.json.token })).status).toBe(200);
+      expect((await call(AWAY, "GET", "/me", { token: local.token })).json.player).toEqual({
+        id: local.player.id,
+        displayName: "Vegard",
+        address,
+      });
+      // Another device lands there too, and home lists the membership.
+      expect(await join()).toMatchObject({
+        status: 201,
+        json: { player: { id: local.player.id } },
+      });
+      expect(
+        (await call(HOME, "GET", "/ext/federation/memberships", { token: vegard })).json
+          .memberships,
+      ).toMatchObject([{ server: AWAY, assistant: "team" }]);
+    });
+
+    it("checks the setup proof on the first join, when setup couldn't reach the home", async () => {
+      // The owner assertion home made for AWAY's server, opened as AWAY's server would.
+      const serverEncryption = newKey("x25519");
+      keysAt.set(AWAY, {
+        signingKey: publicKeyOf(newKey("ed25519")),
+        encryptionKey: publicKeyOf(serverEncryption),
+      });
+      const made = await call(HOME, "POST", "/ext/federation/owner-assertion", {
+        token: vegard,
+        body: { server: AWAY },
+      });
+      keysAt.clear();
+      const proof = openSealed(serverEncryption, made.json.assertion)!;
+      const local = await startedFrom({ proof });
+
+      expect(await join()).toMatchObject({
+        status: 201,
+        json: { player: { id: local.player.id } },
+      });
+      expect((await away.players.get(local.player.id, context))?.startedFrom).toEqual({
+        keys: await homeKeys(),
+      });
+    });
+
+    it("refuses a proof the home didn't sign, invited or not", async () => {
+      const forged = signPayload(newKey("ed25519"), { kind: "nudge.owner", home: nest });
+      await startedFrom({ proof: forged });
+      expect((await join()).status).toBe(403);
+      await call(AWAY, "POST", "/ext/federation/invites", { token: ann, body: { address } });
+      expect((await join()).status).toBe(403);
+    });
+
+    it("lets no one else take that player over", async () => {
+      const local = await startedFrom({ keys: await homeKeys() });
+      const bo = (await home.players.invite("Bo", context)).token;
+      const boJoins = async () =>
+        call(AWAY, "POST", "/ext/federation/join", {
+          body: {
+            assertion: (
+              await call(HOME, "POST", "/ext/federation/assert", {
+                token: bo,
+                body: { server: AWAY, assistant: "team" },
+              })
+            ).json.assertion,
+          },
+        });
+      expect((await boJoins()).status).toBe(403);
+      await call(AWAY, "POST", "/ext/federation/invites", {
+        token: ann,
+        body: { address: "bo@home.example/robin" },
+      });
+      const joined = await boJoins();
+      expect(joined.status).toBe(201);
+      expect(joined.json.player.id).not.toBe(local.player.id);
     });
   });
 

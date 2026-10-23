@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import type { Context } from "@earendil-works/chord";
 import type { Extension, JsonObject, Session } from "@earendil-works/pi-durable";
-import type { ApprovalHandler } from "../approvals/approvals.ts";
+import type { ApprovalDenialHandler, ApprovalHandler } from "../approvals/approvals.ts";
 import { type Static, type TSchema, Type } from "typebox";
 import { Value } from "typebox/value";
 import { ConfigError } from "../config.ts";
@@ -11,6 +11,7 @@ import type { PiiDetector } from "../privacy/detectors.ts";
 import type { RoomEvent } from "../room-events.ts";
 import type { Nudge } from "../nudge.ts";
 import { SecretStore } from "../secrets.ts";
+import { settingsProblems } from "./settings-errors.ts";
 
 /** What an extension's `setup` gets from the assistant it is installed in. */
 export type ExtensionHost<Settings, PlayerSettings = undefined> = {
@@ -33,6 +34,8 @@ export type ExtensionHost<Settings, PlayerSettings = undefined> = {
   readonly now: () => number;
   /** Keeps a value from the model from now on; see `Nudge.protect`. Usable once the assistant is open. */
   readonly protect: (value: string, kind?: string) => Promise<string>;
+  /** Makes a hidden value readable again; see `Nudge.release`. Usable once the assistant is open. */
+  readonly release: (value: string) => Promise<boolean>;
   /** A directory of the extension's own next to the assistant's database; absent when nothing is persisted. */
   readonly dataDir?: string;
   /** Keys and passwords the extension keeps for itself, encrypted at rest; never reaches the model. */
@@ -135,6 +138,11 @@ export const MAX_ROUTE_BODY = 64 * 1024;
 export type ExtensionParts = Omit<Extension, "name"> & {
   /** Personal data the extension knows how to find; they run after the assistant's own. */
   readonly detectors?: readonly PiiDetector[];
+  /**
+   * Tools whose results are the public web, such as a web search: the local model doesn't read
+   * them, so the names of shops and places they return stay readable. Known values stay hidden.
+   */
+  readonly publicTools?: readonly string[];
   /** A WebSocket per room for the extension's own client UI. */
   readonly roomSocket?: RoomSocketHandler;
   /** HTTP routes of its own, such as for other assistants or webhooks to call. */
@@ -142,10 +150,17 @@ export type ExtensionParts = Omit<Extension, "name"> & {
   /** Models the extension calls itself, so `nudge doctor` can check their credentials. */
   readonly models?: readonly { readonly provider: string; readonly modelId: string }[];
   /**
+   * What keeps the extension from working on this machine, such as programs it needs that are
+   * missing, for `nudge doctor`; none when it can work.
+   */
+  readonly problems?: () => readonly string[] | Promise<readonly string[]>;
+  /**
    * Runs actions people approved, by kind. The extension's tools ask with `requestApproval`
    * under the extension's name.
    */
   readonly approvals?: Readonly<Record<string, ApprovalHandler>>;
+  /** Hears that people denied an action, by kind, such as to tell whoever asked for it no. */
+  readonly denials?: Readonly<Record<string, ApprovalDenialHandler>>;
   /**
    * Hears about answers and approvals in the rooms the extension is on in, after they are
    * committed, such as to pass them on to a phone. Must not block; a throw or rejection is reported.
@@ -246,10 +261,13 @@ export type SetUpExtension = {
   /** Default every kind; see `ExtensionUse.rooms`. */
   readonly rooms?: readonly RoomKind[];
   readonly detectors: readonly PiiDetector[];
+  readonly publicTools?: readonly string[];
   readonly roomSocket?: RoomSocketHandler;
   readonly routes: readonly ExtensionRoute[];
   readonly models: readonly { readonly provider: string; readonly modelId: string }[];
+  readonly problems?: () => readonly string[] | Promise<readonly string[]>;
   readonly approvals: Readonly<Record<string, ApprovalHandler>>;
+  readonly denials?: Readonly<Record<string, ApprovalDenialHandler>>;
   readonly onRoomEvent?: (event: RoomEvent) => void | Promise<void>;
   readonly close?: () => void | Promise<void>;
   readonly retire?: (context: Context) => void | Promise<void>;
@@ -289,10 +307,13 @@ export async function setUpExtension(
   const secrets = new SecretStore(dataDir === undefined ? undefined : join(dataDir, "secrets"));
   const {
     detectors = [],
+    publicTools,
     roomSocket,
     routes = [],
     models = [],
+    problems,
     approvals = {},
+    denials,
     onRoomEvent,
     close,
     retire,
@@ -315,6 +336,9 @@ export async function setUpExtension(
     routes,
     models,
     approvals,
+    ...(publicTools === undefined ? {} : { publicTools }),
+    ...(denials === undefined ? {} : { denials }),
+    ...(problems === undefined ? {} : { problems }),
     ...(roomSocket === undefined ? {} : { roomSocket }),
     ...(onRoomEvent === undefined ? {} : { onRoomEvent }),
     ...(close === undefined ? {} : { close }),
@@ -330,11 +354,9 @@ function checkSettings(extension: NudgeExtension, settings: unknown): unknown {
   }
   const value = Value.Default(extension.settings, Value.Clone(settings ?? {}));
   if (!Value.Check(extension.settings, value)) {
-    const problems = [...Value.Errors(extension.settings, value)]
-      .slice(0, 5)
-      .map((error) => `${error.instancePath || "/"} ${error.message}`);
+    const problems = settingsProblems(extension.settings, value);
     throw new ConfigError(
-      `Invalid settings for extension "${extension.name}":\n  ${problems.join("\n  ")}`,
+      `Settings for the ${extension.name} extension need fixing:\n  ${problems.join("\n  ")}`,
     );
   }
   return value;
@@ -420,10 +442,10 @@ export function checkPlayerSettings(
     throw new InvalidProfile(`Extension "${name}" takes no player settings`);
   const value = Value.Default(schema, Value.Clone(chosen));
   if (!Value.Check(schema, value)) {
-    const problems = [...Value.Errors(schema, value)]
-      .slice(0, 5)
-      .map((error) => `${error.instancePath || "/"} ${error.message}`);
-    throw new InvalidProfile(`Invalid settings for extension "${name}": ${problems.join("; ")}`);
+    const problems = settingsProblems(schema, value);
+    throw new InvalidProfile(
+      `Settings for the ${name} extension need fixing: ${problems.join(" ")}`,
+    );
   }
 }
 

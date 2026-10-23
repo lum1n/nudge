@@ -13,6 +13,7 @@ import nudge.ffi.GoneReason
 import nudge.ffi.Live
 import nudge.ffi.NudgeClient
 import nudge.ffi.PendingMessage
+import nudge.ffi.Player
 import nudge.ffi.QueuedMessage
 import nudge.ffi.Room
 import nudge.ffi.RoomListListener
@@ -41,6 +42,8 @@ data class RoomState(
     val approvals: List<Approval>,
     val memory: List<Fact>,
     val nudges: List<RoomNudge>,
+    /** The members whose location the model may know in the room. */
+    val sharingLocation: List<Player>,
     val timeline: List<TimelineItem>,
     val canLoadEarlier: Boolean,
     val loadingEarlier: Boolean,
@@ -147,6 +150,7 @@ private fun RoomUpdate.toState(timeline: List<TimelineItem>) = RoomState(
     approvals = approvals,
     memory = memory,
     nudges = nudges,
+    sharingLocation = sharingLocation,
     timeline = timeline,
     canLoadEarlier = canLoadEarlier,
     loadingEarlier = loadingEarlier,

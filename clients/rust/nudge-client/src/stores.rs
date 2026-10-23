@@ -683,6 +683,7 @@ mod tests {
             approvals: vec![],
             memory: vec![],
             nudges: vec![],
+            sharing_location: None,
         }
     }
 

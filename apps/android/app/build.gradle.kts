@@ -68,4 +68,5 @@ dependencies {
     implementation(libs.coroutines.android)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
+    testImplementation(libs.junit)
 }

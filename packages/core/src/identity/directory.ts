@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { Context } from "@earendil-works/chord";
 import { type DocumentReader, defineDoc } from "@earendil-works/pi-durable";
+import type { Appearance } from "./appearance.ts";
 
 // Stored in a document, so plain JSON: no readonly arrays.
 export type Player = {
@@ -12,7 +13,16 @@ export type Player = {
   admin?: boolean;
   /** Set for someone whose home is another assistant, which vouches for them (ADR 10). */
   home?: PlayerHome;
+  /**
+   * Set for the first player of a server set up from their home, which vouched for them then
+   * (ADR 11): they join from it without an invite, landing on this player. `keys` are the home's
+   * when setup reached it; else `proof` is its signed owner assertion, checked on the first join.
+   */
+  startedFrom?: { keys?: { signingKey: string; encryptionKey: string }; proof?: Signed };
 };
+
+/** A JSON payload and its Ed25519 signature, as federation signs them. */
+type Signed = { payload: string; signature: string };
 
 /** Where a roaming player's home is: the server, the assistant on it, and their id there. */
 export type PlayerHome = {
@@ -55,6 +65,20 @@ export function parseAddress(address: string): PlayerHome | undefined {
   }
   if (url.search !== "" || url.hash !== "" || url.username !== "") return undefined;
   return { server: `${url.origin}${url.pathname.replace(/\/+$/, "")}`, assistant, playerId };
+}
+
+/** How people write an assistant: `nudge.example.com/robin`, an address without the person. */
+export function assistantAddressOf(place: { server: string; assistant: string }): string {
+  return addressOf({ ...place, playerId: "x" }).slice("x@".length);
+}
+
+/** The server and assistant an assistant's address names; undefined when it isn't one. */
+export function parseAssistantAddress(
+  address: string,
+): { server: string; assistant: string } | undefined {
+  if (address.includes("@")) return undefined;
+  const home = parseAddress(`x@${address.trim()}`);
+  return home === undefined ? undefined : { server: home.server, assistant: home.assistant };
 }
 
 /** Whether two homes are the same person's. */
@@ -101,6 +125,8 @@ export type Room = {
 
 export type DirectoryState = {
   players: Record<string, Player>;
+  /** How the assistant's robot looks; the app icon's when absent. */
+  appearance?: Appearance;
   /** Keyed by the token's SHA-256, hex. */
   tokens: Record<string, TokenRecord>;
   rooms: Record<string, Room>;

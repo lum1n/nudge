@@ -37,6 +37,8 @@ export type Approval = {
   result?: string;
   /** Asked for in answer to something private: only this player sees and decides it. */
   privateTo?: Owner;
+  /** Only an admin may decide it, as for an action that runs a program on the server. */
+  adminOnly?: true;
 };
 
 export type ApprovalsState = {
@@ -73,6 +75,8 @@ export type ApprovalDraft = {
   readonly kind: string;
   readonly summary: string;
   readonly payload: JsonValue;
+  /** Only an admin may decide it. */
+  readonly adminOnly?: boolean;
 };
 
 /** What an approved action's handler gets. */
@@ -95,6 +99,12 @@ export type ApprovalOutcome = {
 
 /** Runs one kind of approved action. A throw counts as a failure with its message. */
 export type ApprovalHandler = (payload: JsonValue, run: ApprovalRun) => Promise<ApprovalOutcome>;
+
+/**
+ * Hears that one kind of action was denied, such as to tell whoever asked for it no. A throw is
+ * reported; the room hears of the denial either way.
+ */
+export type ApprovalDenialHandler = (payload: JsonValue, run: ApprovalRun) => Promise<void>;
 
 export const MAX_PENDING = 20;
 /** Decided approvals kept per room for history. */
@@ -127,6 +137,7 @@ export async function requestApproval(
     status: "pending",
   };
   if (privateTo !== undefined) approval.privateTo = { ...privateTo };
+  if (draft.adminOnly === true) approval.adminOnly = true;
   state.next += 1;
   state.items.push(structuredClone(approval));
   return approval;
@@ -138,6 +149,11 @@ export class ApprovalNotFound extends Error {
 
 export class AlreadyDecided extends Error {
   override name = "AlreadyDecided";
+}
+
+/** An approval only an admin may decide, decided by someone else. */
+export class AdminOnly extends Error {
+  override name = "AdminOnly";
 }
 
 export type Decision = {
@@ -159,6 +175,15 @@ export class Approvals {
     private readonly rehydrate: (text: string) => string = (text) => text,
     /** What an action reports is stored with placeholders too. */
     private readonly redact: (text: string) => string = (text) => text,
+    /** Whether a player may decide approvals only an admin may. */
+    private readonly isAdmin: (playerId: string, context: Context) => Promise<boolean> = async () =>
+      false,
+    /** The denial handler an installed extension has for `kind`, if any. */
+    private readonly denial: (
+      extension: string,
+      kind: string,
+    ) => ApprovalDenialHandler | undefined = () => undefined,
+    private readonly report: (error: unknown) => void = () => {},
   ) {}
 
   /** Newest first. */
@@ -184,15 +209,24 @@ export class Approvals {
     const room = await this.rooms.get(roomId, context);
     if (room === undefined) throw new Error(`No room "${roomId}"`);
     const by = { playerId: decision.by.playerId, displayName: decision.by.displayName };
+    const admin = await this.isAdmin(by.playerId, context);
     const decided = await this.update(roomId, id, context, (item) => {
       if (item.privateTo !== undefined && item.privateTo.playerId !== by.playerId)
         throw new ApprovalNotFound(`No approval ${id} in room "${roomId}"`);
       if (item.status !== "pending") throw new AlreadyDecided(`Approval ${id} is ${item.status}`);
+      if (item.adminOnly === true && !admin)
+        throw new AdminOnly(`Only an admin may decide approval ${id}`);
       item.status = decision.approve ? "approved" : "denied";
       item.decidedBy = by;
       item.decidedAt = this.now();
     });
     if (!decision.approve) {
+      const denied = this.denial(decided.extension, decided.kind);
+      if (denied !== undefined)
+        await denied(
+          mapStrings(decided.payload, this.rehydrate),
+          this.runFor(room, decided, context),
+        ).catch(this.report);
       await this.tell(room, decided, context);
       return decided;
     }
@@ -247,17 +281,21 @@ export class Approvals {
       // What the action asks for in turn, such as another approval, stays as private as it is.
       const turn = approval.privateTo === undefined ? {} : { privateTo: approval.privateTo };
       return await inTurn(turn, () =>
-        handler(mapStrings(approval.payload, this.rehydrate), {
-          room,
-          approval,
-          commit: (apply) => this.harness.commit(apply, context),
-          models: this.models,
-          context,
-        }),
+        handler(mapStrings(approval.payload, this.rehydrate), this.runFor(room, approval, context)),
       );
     } catch (error) {
       return { text: (error as Error).message, isError: true };
     }
+  }
+
+  private runFor(room: Room, approval: Approval, context: Context): ApprovalRun {
+    return {
+      room,
+      approval,
+      commit: (apply) => this.harness.commit(apply, context),
+      models: this.models,
+      context,
+    };
   }
 
   private async update(

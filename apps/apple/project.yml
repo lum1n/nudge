@@ -59,6 +59,7 @@ targets:
         UILaunchScreen: {}
         NSLocalNetworkUsageDescription: Nudge reaches a Nudge server on your network.
         NSMicrophoneUsageDescription: Nudge writes out what you say into a message, on this device.
+        NSLocationWhenInUseUsageDescription: While Nudge is open, it tells your home assistant where you are, if you turn that on in your profile. The model only sees a placeholder for it.
         # Plain HTTP only to servers on the local network (private addresses, .local names);
         # everywhere else HTTPS, as App Transport Security wants.
         NSAppTransportSecurity:
@@ -101,6 +102,8 @@ targets:
         com.apple.security.network.client: true
         # Dictation in the composer.
         com.apple.security.device.audio-input: true
+        # Sharing where the player is, when they turn it on.
+        com.apple.security.personal-information.location: true
         com.apple.developer.aps-environment: development
         keychain-access-groups: [$(AppIdentifierPrefix)app.nudge.dev.push]
     info:
@@ -117,6 +120,8 @@ targets:
         NudgeKeychainGroup: $(AppIdentifierPrefix)app.nudge.dev.push
         LSApplicationCategoryType: public.app-category.productivity
         NSMicrophoneUsageDescription: Nudge writes out what you say into a message, on this Mac.
+        NSLocationUsageDescription: While Nudge is open, it tells your home assistant where you are, if you turn that on in your profile. The model only sees a placeholder for it.
+        NSLocationWhenInUseUsageDescription: While Nudge is open, it tells your home assistant where you are, if you turn that on in your profile. The model only sees a placeholder for it.
         # Plain HTTP only to servers on the local network (private addresses, .local names);
         # everywhere else HTTPS, as App Transport Security wants.
         NSAppTransportSecurity:

@@ -148,6 +148,12 @@ impl Api {
         self.request(Method::GET, &["me"], &[], NO_BODY).await
     }
 
+    /// Signs in the browser whose QR code holds sign-in `id`, as the caller.
+    pub async fn approve_sign_in(&self, id: &str) -> Result<(), ApiError> {
+        self.request_empty(Method::POST, &["sign-in", id], &[], NO_BODY)
+            .await
+    }
+
     /// Revokes this client's own token, and forgets it.
     pub async fn sign_out(&self) -> Result<(), ApiError> {
         self.request_empty(Method::DELETE, &["me", "token"], &[], NO_BODY)
@@ -388,6 +394,34 @@ impl Api {
         .await
     }
 
+    /// The caller's full name, e-mail, phone, address and location; only they see the values.
+    pub async fn personal(&self) -> Result<PersonalDetails, ApiError> {
+        self.request(Method::GET, &["me", "personal"], &[], NO_BODY)
+            .await
+    }
+
+    /// Changes the details `update` sets; 400 for one that isn't one, such as an e-mail address,
+    /// 403 for a player whose home is another assistant.
+    pub async fn update_personal(
+        &self,
+        update: &UpdatePersonalRequest,
+    ) -> Result<PersonalDetails, ApiError> {
+        self.request(Method::PATCH, &["me", "personal"], &[], Some(update))
+            .await
+    }
+
+    /// Lets the model in a shared room know where the caller is, for anyone there, or stops it.
+    /// 400 for a room that isn't shared, 403 for a player whose home is another assistant.
+    pub async fn share_location_in(
+        &self,
+        room: &str,
+        shared: bool,
+    ) -> Result<PersonalDetails, ApiError> {
+        let body = ShareLocationRequest { shared };
+        self.request(Method::PUT, &["rooms", room, "location"], &[], Some(&body))
+            .await
+    }
+
     /// The caller's profile: name, avatar, time zone, language and preferences.
     pub async fn profile(&self) -> Result<Profile, ApiError> {
         self.request(Method::GET, &["me", "profile"], &[], NO_BODY)
@@ -487,7 +521,73 @@ impl Api {
         .await
     }
 
+    // The servers the caller owns, kept at their home so all their devices see them (ADR 11). On
+    // another device, `owner_assertion` and `ServerApi::sign_in_from_home` give a server token.
+
+    /// The servers the caller owns, as their home keeps them.
+    pub async fn owned_servers(&self) -> Result<Vec<OwnedServer>, ApiError> {
+        let response: OwnedServersResponse = self
+            .request(Method::GET, &["ext", "federation", "servers"], &[], NO_BODY)
+            .await?;
+        Ok(response.servers)
+    }
+
+    /// Keeps a server the caller owns at home.
+    pub async fn add_owned_server(&self, server: &str) -> Result<Vec<OwnedServer>, ApiError> {
+        let body = ServerRequest {
+            server: server.to_owned(),
+        };
+        let response: OwnedServersResponse = self
+            .request(
+                Method::PUT,
+                &["ext", "federation", "servers"],
+                &[],
+                Some(&body),
+            )
+            .await?;
+        Ok(response.servers)
+    }
+
+    /// Takes a server off the caller's list at home; nothing on the server changes.
+    pub async fn remove_owned_server(&self, server: &str) -> Result<(), ApiError> {
+        self.request_empty(
+            Method::DELETE,
+            &["ext", "federation", "servers"],
+            &[("server", server)],
+            NO_BODY,
+        )
+        .await
+    }
+
+    /// Has the caller's home vouch for them to a server they own, sealed for that server.
+    pub async fn owner_assertion(&self, server: &str) -> Result<Sealed, ApiError> {
+        let body = ServerRequest {
+            server: server.to_owned(),
+        };
+        let response: AssertResponse = self
+            .request(
+                Method::POST,
+                &["ext", "federation", "owner-assertion"],
+                &[],
+                Some(&body),
+            )
+            .await?;
+        Ok(response.assertion)
+    }
+
     // Admin routes, for players with the admin flag.
+
+    /// How the assistant's robot looks; `None` goes back to the app icon's. Room lists show it.
+    pub async fn set_appearance(
+        &self,
+        appearance: Option<Appearance>,
+    ) -> Result<Option<Appearance>, ApiError> {
+        let body = SetAppearanceRequest { appearance };
+        let response: AppearanceResponse = self
+            .request(Method::PUT, &["admin", "appearance"], &[], Some(&body))
+            .await?;
+        Ok(response.appearance)
+    }
 
     /// Gives a player the admin flag, or with `false` takes it; the first player keeps it.
     pub async fn set_admin(&self, player_id: &str, admin: bool) -> Result<AdminPlayer, ApiError> {

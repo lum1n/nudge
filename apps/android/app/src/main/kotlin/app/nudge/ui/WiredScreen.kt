@@ -137,7 +137,7 @@ fun WiredCard(model: AppModel, server: String) {
             title = { Text("Use http://nudge.$name.wired as your home's address?") },
             text = {
                 Text(
-                    "Your other servers then reach your home over Wired, without Tailscale. Your home's address is " +
+                    "Your other servers then reach your home over Wired. Your home's address is " +
                         "who it is to other assistants: the ones you joined from home have to be joined again.",
                 )
             },

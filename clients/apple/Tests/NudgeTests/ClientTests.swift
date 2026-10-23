@@ -222,6 +222,39 @@ final class ClientTests: XCTestCase {
         }
     }
 
+    func testSignInLinks() async throws {
+        let link = SignInLink(URL(string: "nudge://sign-in?server=https%3A%2F%2Fnudge.example%2Fx&request=r1")!)
+        XCTAssertEqual(link, SignInLink(server: "https://nudge.example/x", request: "r1"))
+        for bad in [
+            "nudge://sign-in?server=ftp%3A%2F%2Fx&request=r1",
+            "nudge://sign-in?server=https%3A%2F%2Fx",
+            "nudge://join?server=https%3A%2F%2Fx&request=r1",
+        ] {
+            XCTAssertNil(SignInLink(URL(string: bad)!), bad)
+        }
+        do {
+            try await client(MemoryTokens(server.ann)).approveSignIn(request: "expired")
+            XCTFail("not refused")
+        } catch NudgeError.Status(let status, _) {
+            XCTAssertEqual(status, 404)
+        }
+    }
+
+    func testKeepsPersonalDetailsAndALocation() async throws {
+        let home = try client(MemoryTokens(server.ann))
+        let details = try await home.updatePersonal(
+            update: PersonalUpdate(email: "ann@example.com", phone: "+47 912 34 567"))
+        XCTAssertEqual(details.email, "ann@example.com")
+        let cleared = try await home.updatePersonal(update: PersonalUpdate(phone: ""))
+        XCTAssertNil(cleared.phone)
+        let located = try await home.shareLocation(latitude: 59.913868, longitude: 10.752245, place: "Oslo S")
+        XCTAssertEqual(located.location?.text, "Oslo S (59.9139, 10.7522)")
+        let forgotten = try await home.forgetLocation()
+        XCTAssertNil(forgotten.location)
+        let personal = try await home.personal()
+        XCTAssertEqual(personal.email, "ann@example.com")
+    }
+
     func testEditsTheProfileAndJoinsAnotherAssistantFromHome() async throws {
         let home = try client(MemoryTokens(server.ann))
         let profile = try await home.updateProfile(
@@ -295,7 +328,7 @@ final class ClientTests: XCTestCase {
         var texts: [String] = []
         let done = try await within {
             try await room.first { state in
-                guard case .answer(_, let status, _, let parts, _) = state.timeline.first(where: { if case .answer = $0 { true } else { false } }) else { return false }
+                guard case .answer(_, let status, _, let parts, _, _, _) = state.timeline.first(where: { if case .answer = $0 { true } else { false } }) else { return false }
                 texts.append(parts.map { if case .text(let text) = $0 { text } else { "" } }.joined())
                 return status == .done
             }

@@ -17,6 +17,7 @@ import hello from "../../../extensions/hello/src/index.ts";
 import {
   ConfigError,
   createNudge,
+  type ExtensionHost,
   ExtensionNotFound,
   defineNudgeExtension,
   defineTool,
@@ -113,7 +114,9 @@ describe("extensions", () => {
         { ...options, extensions: [{ extension: hello, settings: { maxSides: 1 } }] },
         context,
       ),
-    ).rejects.toThrow(/Invalid settings for extension "hello":\n {2}\/maxSides/);
+    ).rejects.toThrow(
+      "Settings for the hello extension need fixing:\n  Max sides: must be at least 2.",
+    );
     const plain = defineNudgeExtension({ name: "plain", version: "1", setup: () => ({}) });
     await expect(
       createNudge({ ...options, extensions: [{ extension: plain, settings: { a: 1 } }] }, context),
@@ -132,7 +135,8 @@ describe("extensions", () => {
   });
 
   it("reloads in place: replaces, adds and removes, and changes nothing when one fails", async () => {
-    const { options, requests, last } = setup({ extensions: [hello] });
+    // Without the built-in detectors, which find plates too, so hello's detector is seen leaving.
+    const { options, requests, last } = setup({ extensions: [hello], privacy: { detectors: [] } });
     const nudge = await createNudge(options, context);
     const extra = defineNudgeExtension({
       name: "extra",
@@ -177,6 +181,23 @@ describe("extensions", () => {
     expect(current(requests.at(-1)).prompt).not.toContain("Morn");
     // The plate detector left with hello.
     expect(last()).toContain("EV 12345");
+    await nudge.close(context);
+  });
+
+  it("tells the model which extensions are on, also those turned on mid-conversation", async () => {
+    const { options, requests } = setup();
+    const nudge = await createNudge(options, context);
+    await say(nudge, "Roll a die");
+    expect(current(requests.at(-1)).prompt).not.toContain("Extensions on in this conversation");
+
+    await nudge.reloadExtensions([hello]);
+    await say(nudge, "Roll a die now");
+    const { prompt, tools } = current(requests.at(-1));
+    expect(tools).toContain("roll_dice");
+    expect(prompt).toContain(
+      "Extensions on in this conversation now:\n- hello: Greets in your words",
+    );
+    expect(prompt).toContain("not by what earlier replies said you could do");
     await nudge.close(context);
   });
 
@@ -261,20 +282,25 @@ describe("extensions", () => {
   });
 
   it("lets an extension protect values once the assistant is open", async () => {
-    let protect: ((value: string, kind?: string) => Promise<string>) | undefined;
+    let host: ExtensionHost<unknown, unknown> | undefined;
     const contacts = defineNudgeExtension({
       name: "contacts",
       version: "1",
-      setup: (host) => {
-        protect = host.protect;
+      setup: (given) => {
+        host = given;
         return {};
       },
     });
     const { options, last } = setup({ extensions: [contacts] });
     const nudge = await createNudge(options, context);
-    expect(await protect!("Storgata 1", "ADDRESS")).toBe("⟦ADDRESS1⟧");
+    expect(await host!.protect("Storgata 1", "ADDRESS")).toBe("⟦ADDRESS1⟧");
     await say(nudge, "I live in Storgata 1.");
     expect(last()).toContain("I live in ⟦ADDRESS1⟧.");
+    // Released, it is readable again, also where the model read it before.
+    expect(await host!.release("Storgata 1")).toBe(true);
+    expect(await host!.release("Storgata 1")).toBe(false);
+    await say(nudge, "Still there.");
+    expect(last()).toContain("I live in Storgata 1.");
     await nudge.close(context);
   });
 
@@ -573,7 +599,7 @@ describe("memory", () => {
     await send(annsRoom.id, "My sister is Eli");
     expect(outputs).toEqual(["Remembered m1.", "Remembered m2."]);
     await send(annsRoom.id, "What do you know?");
-    expect(current(requests.at(-1)).prompt).toContain("- m1: ⟦NAME1⟧ is vegetarian");
+    expect(current(requests.at(-1)).prompt).toContain("- m1: Ann is vegetarian");
     await send(LOBBY, "What do you know?");
     expect(JSON.stringify(requests.at(-1))).not.toContain("vegetarian");
 

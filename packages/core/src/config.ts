@@ -90,8 +90,23 @@ const ServerSchema = Type.Object({
   updates: Type.Optional(Type.Union([Type.Literal("auto"), Type.Literal("off")])),
 });
 
+/** What is kept from the models beyond the rules (ADR 14, ADR 15). */
+const PrivacySchema = Type.Object({
+  /**
+   * The local model that hides names, places and organisations too, which are readable otherwise.
+   * "off" (default) never downloads or runs it, "required" refuses requests while it is missing,
+   * "preferred" sends them with the rules alone meanwhile.
+   */
+  deep: Type.Optional(
+    Type.Union([Type.Literal("required"), Type.Literal("preferred"), Type.Literal("off")]),
+  ),
+  /** Words the local model never hides, such as a shop it keeps taking for a person. */
+  allow: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
+});
+
 export const NudgeConfigSchema = Type.Object({
   server: Type.Optional(ServerSchema),
+  privacy: Type.Optional(PrivacySchema),
   /** None on a server set up but not given one yet, or whose last assistant was deleted. */
   assistants: Type.Array(AssistantSchema),
   providers: Type.Optional(Type.Array(LocalProviderSchema)),
@@ -103,6 +118,7 @@ export type AssistantConfig = Static<typeof AssistantSchema>;
 export type ExtensionConfig = Static<typeof ExtensionSchema>;
 export type LocalProviderConfig = Static<typeof LocalProviderSchema>;
 export type ServerSettings = Static<typeof ServerSchema>;
+export type PrivacySettings = Static<typeof PrivacySchema>;
 export type ModelChoice = Static<typeof ModelRefSchema>;
 
 export const DEFAULT_MODEL: ModelChoice = { provider: "anthropic", modelId: "claude-sonnet-5" };

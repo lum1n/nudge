@@ -210,7 +210,7 @@ class Listeners {
 /**
  * One room's `RoomView`: the conversation watch, plus memory, approvals and nudges read again
  * after a commit that added or changed entries (tools change them inside a turn) and when
- * `Nudge.changes` names the room.
+ * `Nudge.changes` names the room, and whose location the model may know when a member's changes.
  */
 export class RoomHub implements Hub<RoomView> {
   private readonly listeners = new Listeners();
@@ -232,6 +232,7 @@ export class RoomHub implements Hub<RoomView> {
     private approvals: readonly Approval[],
     private memory: readonly RoomFact[],
     private nudges: readonly ScheduledNudge[],
+    private sharingLocation: readonly string[],
     private readonly report: (error: unknown) => void,
   ) {
     this.room = this.projectRoom();
@@ -247,10 +248,11 @@ export class RoomHub implements Hub<RoomView> {
     if (core === undefined) throw new Error(`No room "${roomId}"`);
     const watch = await nudge.watchRoom(roomId, context);
     try {
-      const [approvals, memory, nudges] = await Promise.all([
+      const [approvals, memory, nudges, sharingLocation] = await Promise.all([
         nudge.approvals.list(roomId, context),
         nudge.memory.visible(roomId, context),
         nudge.nudges.list(context, [roomId]),
+        nudge.personal.sharingIn(roomId, context),
       ]);
       const hub = new RoomHub(
         nudge,
@@ -262,6 +264,7 @@ export class RoomHub implements Hub<RoomView> {
         approvals,
         memory,
         nudges,
+        sharingLocation,
         report,
       );
       hub.start();
@@ -284,6 +287,7 @@ export class RoomHub implements Hub<RoomView> {
       approvals: this.approvals,
       memory: this.memory,
       nudges: this.nudges,
+      sharingLocation: this.sharingLocation,
     });
     return this.projected;
   }
@@ -323,7 +327,9 @@ export class RoomHub implements Hub<RoomView> {
       this.nudge.changes.subscribe((change: Change) => {
         // Who may see which values changed: every viewer's copy is worked out again.
         if (change.kind === "vault") this.listeners.changed();
-        else if ("roomId" in change && change.roomId === this.roomId) this.read([change.kind]);
+        else if (change.kind === "location") {
+          if (this.core.members.includes(change.playerId)) this.read(["location"]);
+        } else if ("roomId" in change && change.roomId === this.roomId) this.read([change.kind]);
       }),
       this.directory.listen(() => {
         const core = this.directory.value.rooms[this.roomId];
@@ -336,22 +342,26 @@ export class RoomHub implements Hub<RoomView> {
       }),
     );
     // Whatever changed between the first reads and the subscriptions above.
-    this.read(["approvals", "memory", "nudges"]);
+    this.read(["approvals", "memory", "nudges", "location"]);
   }
 
-  private read(kinds: readonly ("approvals" | "memory" | "nudges")[]): void {
+  private read(kinds: readonly ("approvals" | "memory" | "nudges" | "location")[]): void {
     this.reading = this.reading
       .then(async () => {
         if (this.stopped) return;
-        const [approvals, memory, nudges] = await Promise.all([
+        const [approvals, memory, nudges, sharingLocation] = await Promise.all([
           kinds.includes("approvals") ? this.nudge.approvals.list(this.roomId, context) : undefined,
           kinds.includes("memory") ? this.nudge.memory.visible(this.roomId, context) : undefined,
           kinds.includes("nudges") ? this.nudge.nudges.list(context, [this.roomId]) : undefined,
+          kinds.includes("location")
+            ? this.nudge.personal.sharingIn(this.roomId, context)
+            : undefined,
         ]);
         if (this.stopped) return;
         if (approvals !== undefined) this.approvals = approvals;
         if (memory !== undefined) this.memory = memory;
         if (nudges !== undefined) this.nudges = nudges;
+        if (sharingLocation !== undefined) this.sharingLocation = sharingLocation;
         this.update();
       })
       .catch((error: unknown) => {
@@ -411,9 +421,14 @@ export class RoomListHub implements Hub<RoomListView> {
       rooms.push(this.row(lease.hub));
       nudges.push(...lease.hub.nudgesNow());
     }
-    this.projected = this.hubs
-      .viewer(this.playerId)
-      .roomList(projectRoomList({ player: this.player, rooms, nudges }));
+    this.projected = this.hubs.viewer(this.playerId).roomList(
+      projectRoomList({
+        player: this.player,
+        rooms,
+        nudges,
+        appearance: this.directory.value.appearance,
+      }),
+    );
     return this.projected;
   }
 

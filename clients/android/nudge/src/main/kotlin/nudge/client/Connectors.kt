@@ -40,6 +40,8 @@ data class Connector(
     val name: String,
     val baseUrl: String,
     val useFor: String,
+    /** The assistant tries it first, before anything else, for what [useFor] says. */
+    val alwaysFirst: Boolean = false,
     val docsUrl: String? = null,
     /** What the assistant learned about using it. */
     val notes: String = "",
@@ -78,6 +80,12 @@ class ObservedConnectors internal constructor() : AutoCloseable {
     fun setReadPaths(connector: Connector, readPaths: List<String>) = send("setReadPaths", connector) {
         putJsonArray("readPaths") { readPaths.forEach { add(it) } }
     }
+    /** What the assistant uses it for. */
+    fun setUseFor(connector: Connector, useFor: String) =
+        send("setUseFor", connector) { put("useFor", useFor) }
+    /** Has the assistant try it first, before anything else, for what it's for. */
+    fun setAlwaysFirst(connector: Connector, alwaysFirst: Boolean) =
+        send("setAlwaysFirst", connector) { put("alwaysFirst", alwaysFirst) }
     fun remove(connector: Connector) = send("remove", connector)
     /** For admins: every room may use it then. */
     fun share(connector: Connector) = send("share", connector)
