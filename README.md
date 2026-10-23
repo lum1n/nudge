@@ -380,7 +380,7 @@ An entry's `rooms` lists the kinds of room it is on in by default (`"lobby"`, `"
 - Each tool becomes `mcp__<server>__<tool>`. They are not offered to the model up front: it finds the ones a task needs with `tool_search`, so a server with many tools doesn't fill the prompt.
 - Calls to tools the server doesn't mark read-only wait for someone in the room to approve them, like the connectors' writes. Set a server's `approval` to `"always"` or `"never"` to change that, and `tools` to offer only some of its tools.
 - `${NAME}` in `env` and `headers` comes from Nudge's environment, so keys stay out of `nudge.json`. A started program gets only those variables plus `PATH`, `HOME` and the locale, not Nudge's own keys.
-- Results reach the model through the same redaction as everything else. Images in results are left out unless a server sets `"images": true`, since redaction only reads text.
+- Results reach the model through the same redaction as everything else, but redaction only reads text. **Images are not redacted.** So images in results are left out by default, and the model gets the line `[an image, not shown]` instead. A server that should show the model its images has to say so itself, with `"unredactedImages": true`. Then whatever its pictures show, such as names, numbers, addresses or faces in a screenshot, reaches the model's provider as it is. `nudge doctor` prints a `warn` line for each such server, and the server logs one at startup. The old key `"images": true` is still read, with a warning to rename it; `unredactedImages` wins when both are set. Servers rooms add can't pass images at all. ADR 12 sketches how images could be redacted later.
 - The tool lists are read when the extension is installed; `nudge reload` reads them again. A server that can't be reached then is left out and reported. Connections close after `idleMinutes` (default 5) unused, and on reload and shutdown.
 
 Rooms can also add servers from the chat ("add the Linear MCP server, https://mcp.linear.app/mcp"):
@@ -389,6 +389,7 @@ Rooms can also add servers from the chat ("add the Linear MCP server, https://mc
 - Keys never go in the chat. The assistant names the headers or variables a server needs, and people set them on the room's **MCP** page (web) or **MCP servers** in About this room (apps). A remote server that signs in with OAuth gets a **Sign in** button there: it opens the server's sign-in page, which comes back to this server's `/v1/a/<assistant>/ext/mcp/oauth/callback`, so the browser you sign in with must reach the server at the address your app uses. Keys and tokens are kept encrypted in the extension's secrets, and scrubbed from results.
 - The assistant sees a room's servers in its prompt, lists their tools with `mcp_tools` and calls them with `mcp_call`. Calls to tools that aren't read-only wait for approval; the page can make a server ask before every call, or never.
 - A started program gets only its variables plus `PATH`, `HOME` and the locale, and works in its own directory under the extension's data. It is not sandboxed.
+- Images in a room's servers' results are always left out, as `[an image, not shown]`: there is no setting for a room to turn them on.
 
 ### Web search
 

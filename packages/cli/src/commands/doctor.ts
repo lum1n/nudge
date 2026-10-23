@@ -36,6 +36,8 @@ export async function doctor(options: DoctorOptions): Promise<boolean> {
     ok &&= passed;
     console.log(`${passed ? "ok  " : "FAIL"} ${text}`);
   };
+  // Works, but someone should know; doesn't fail the doctor.
+  const warn = (text: string) => console.log(`warn ${text}`);
 
   const [major = 0, minor = 0] = process.versions.node.split(".").map(Number);
   check(
@@ -118,6 +120,8 @@ export async function doctor(options: DoctorOptions): Promise<boolean> {
         for (const extension of installed) {
           for (const problem of extension.problems)
             check(false, `${assistant.name}: ${extension.name}: ${problem}`);
+          for (const warning of extension.warnings)
+            warn(`${assistant.name}: ${extension.name}: ${warning}`);
           for (const used of extension.models) {
             const what = `${assistant.name}: ${extension.name} uses ${used.provider}/${used.modelId}`;
             if (models.getModel(used.provider, used.modelId) === undefined) {

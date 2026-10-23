@@ -56,6 +56,8 @@ export async function checkExtensions(entries: readonly ExtensionConfig[]): Prom
     models: readonly { provider: string; modelId: string }[];
     /** What keeps it from working on this machine (`problems`). */
     problems: readonly string[];
+    /** What works but someone should know about (`warnings`). */
+    warnings: readonly string[];
   }[]
 > {
   const host = {
@@ -76,14 +78,19 @@ export async function checkExtensions(entries: readonly ExtensionConfig[]): Prom
   };
   const checked: Awaited<ReturnType<typeof checkExtensions>> = [];
   for (const input of await loadExtensions(entries)) {
-    const { extension, version, models, problems, close } = await setUpExtension(input, host);
+    const { extension, version, models, problems, warnings, close } = await setUpExtension(
+      input,
+      host,
+    );
     const found = (await problems?.()) ?? [];
+    const warned = (await warnings?.()) ?? [];
     await close?.();
     checked.push({
       name: extension.name,
       ...(version === undefined ? {} : { version }),
       models,
       problems: found,
+      warnings: warned,
     });
   }
   return checked;
