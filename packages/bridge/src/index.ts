@@ -5,6 +5,8 @@ export {
   ChatBridge,
   fillVariables,
   type Inbound,
+  keepPolling,
+  type PollOptions,
   type Sender,
   sleep,
   split,
