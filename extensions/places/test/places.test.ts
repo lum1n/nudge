@@ -29,7 +29,15 @@ async function until(check: () => boolean | Promise<boolean>, timeout = 8_000): 
   }
 }
 
+/** Where the map was told people are. */
+const followed: { latitude: number; longitude: number }[] = [];
+
 const geo: Geo = {
+  follow: async (point) => {
+    followed.push(point);
+    // Only around Oslo so far; abroad is on its way.
+    return Math.abs(point.latitude - 59.9) < 1 ? "ready" : "fetching";
+  },
   search: async (query) =>
     /storgata/i.test(query)
       ? [{ ...HOME, address: "Storgata 5, 0151 Oslo", city: "Oslo" }]
@@ -108,6 +116,7 @@ describe("places", () => {
       if (/walk to oslo s/i.test(text))
         return call("route", { from: "home", to: "Oslo S", mode: "foot" });
       if (/forget home/i.test(text)) return call("forget_place", { place: "⟦PLACE:home⟧" });
+      if (/a pharmacy near me/i.test(text)) return call("find_place", { query: "pharmacy" });
       return fauxAssistantMessage([fauxText("Okay.")]);
     };
     faux.setResponses(Array.from({ length: 200 }, () => answer));
@@ -245,6 +254,55 @@ describe("places", () => {
     expect(await say("Forget home")).toContain("Forgot home");
     expect(nudge.showTo(ann.id, "⟦PLACE:home⟧")).toBe("⟦PLACE:home⟧");
     expect((await route("GET", "/places")).body).toMatchObject({ places: [] });
+  });
+});
+
+describe("places abroad", () => {
+  it("has the map follow people, and says when it doesn't cover them yet", async () => {
+    followed.length = 0;
+    const faux = fauxProvider();
+    const models = createModels();
+    models.setProvider(faux.provider);
+    faux.setResponses(
+      Array.from({ length: 20 }, () => (request: ModelContext) => {
+        const last = request.messages.findLast((m) => m.role !== "system");
+        if (last?.role === "toolResult")
+          return fauxAssistantMessage([fauxText(textOf(last.content))]);
+        return fauxAssistantMessage([fauxToolCall("find_place", { query: "pharmacy" })], {
+          stopReason: "toolUse",
+        });
+      }),
+    );
+    const nudge = await createNudge(
+      {
+        database: ":memory:",
+        models,
+        model: { provider: faux.provider.id, modelId: faux.getModel().id },
+        extensions: [createPlacesExtension({ geo })],
+      },
+      context,
+    );
+    const ann = (await nudge.players.invite("Ann", context)).player;
+    await nudge.rooms.ensurePersonal(ann.id, context);
+    const events: RoomEvent[] = [];
+    nudge.events.subscribe((event) => events.push(event));
+    // In Lisbon, before the map has Portugal.
+    const lisbon = { latitude: 38.72, longitude: -9.14 };
+    await nudge.personal.update(ann.id, { location: lisbon }, context);
+    await until(() => followed.length > 0);
+    expect(followed[0]).toEqual(lisbon);
+    await (
+      await nudge.submit(
+        `personal-${ann.id}`,
+        { text: "a pharmacy near me", author: { playerId: ann.id, displayName: "Ann" } },
+        context,
+      )
+    ).wait(context);
+    const answer = events.findLast((e) => e.type === "answer");
+    expect(answer?.type === "answer" ? answer.text : "").toContain(
+      "doesn't cover that area yet: it is fetching it now",
+    );
+    await nudge.close(context);
   });
 });
 

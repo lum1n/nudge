@@ -62,11 +62,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.nudge.AppModel
 import app.nudge.exeVmName
 import app.nudge.explain
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import nudge.ffi.AssistantFor
 import nudge.ffi.AssistantSettings
-import nudge.ffi.GeoState
 import nudge.ffi.GeoStatus
 import nudge.ffi.KeySource
 import nudge.ffi.MadeAssistant
@@ -155,7 +153,7 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
     var kit by remember { mutableStateOf(false) }
     var removing by remember { mutableStateOf(false) }
     var geo by remember { mutableStateOf<GeoStatus?>(null) }
-    var pickingRegion by remember { mutableStateOf(false) }
+    var maps by remember { mutableStateOf(false) }
     // Followed, so assistants show as joined once they are.
     val places by model.places.collectAsStateWithLifecycle()
     val home by model.session.collectAsStateWithLifecycle()
@@ -178,14 +176,11 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
     }
 
     LaunchedEffect(server) { act {} }
-    // Followed while the map downloads, so its progress shows.
-    LaunchedEffect(geo?.state) {
-        while (geo?.state == GeoState.DOWNLOADING || geo?.state == GeoState.IMPORTING) {
-            delay(3_000)
-            geo = runCatching { client.geo() }.getOrNull() ?: break
-        }
+    if (maps) {
+        BackHandler { maps = false }
+        MapsScreen(client, close = { maps = false; scope.launch { geo = runCatching { client.geo() }.getOrNull() } })
+        return
     }
-
     editing?.let { assistant ->
         BackHandler { editing = null }
         AssistantScreen(
@@ -245,31 +240,6 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
                 }) { Text(if (busy) "Trying…" else "Save") }
             },
             dismissButton = { TextButton(enabled = !busy, onClick = { settingKey = null }) { Text("Cancel") } },
-        )
-    }
-
-    if (pickingRegion) geo?.let { status ->
-        AlertDialog(
-            onDismissRequest = { pickingRegion = false },
-            title = { Text("Maps") },
-            text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
-                    Text("Addresses, places and routes for reminders when someone gets somewhere. The server downloads the map of one region and keeps it, so where people go stays here. It takes a few GB of disk.")
-                    (status.regions.map { it.code to it.name } + (null to "None")).forEach { (code, name) ->
-                        Row(
-                            Modifier.fillMaxWidth().selectable(selected = status.region == code) {
-                                pickingRegion = false
-                                act { geo = client.setGeo(code) }
-                            }.padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            RadioButton(selected = status.region == code, onClick = null)
-                            Text(name, Modifier.padding(start = 12.dp))
-                        }
-                    }
-                }
-            },
-            confirmButton = { TextButton(onClick = { pickingRegion = false }) { Text("Close") } },
         )
     }
 
@@ -429,24 +399,12 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
                     }
                     geo?.let { status ->
                         add { shapes ->
-                            val region = status.regions.firstOrNull { it.code == status.region }?.name
                             SegmentedListItem(
-                                onClick = { pickingRegion = true },
+                                onClick = { maps = true },
                                 shapes = shapes,
                                 leadingContent = { Icon(Icons.Outlined.Map, null) },
-                                supportingContent = {
-                                    Text(
-                                        when (status.state) {
-                                            GeoState.OFF -> "Off. Pick a region for places and routes."
-                                            GeoState.DOWNLOADING, GeoState.IMPORTING ->
-                                                "Getting ${status.step ?: region} ready" +
-                                                    (status.progress?.let { " (${(it * 100).toInt()}%)" } ?: "…")
-                                            GeoState.READY -> "$region, kept up to date every month"
-                                            GeoState.FAILED -> status.error ?: "Failed"
-                                        },
-                                    )
-                                },
-                            ) { Text(if (region == null) "Maps" else "Maps: $region") }
+                                supportingContent = { Text(mapsSummary(status)) },
+                            ) { Text("Maps") }
                         }
                     }
                     add { shapes ->

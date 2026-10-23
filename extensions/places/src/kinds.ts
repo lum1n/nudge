@@ -1,6 +1,7 @@
 /**
- * Kinds of place a reminder can be for, such as "any grocery store", by the words people use, in
- * English and Norwegian, and the OpenStreetMap tags (`key:value`) that mark them.
+ * Kinds of place a reminder can be for, such as "any grocery store", by the English words the
+ * model is told to use whatever language people speak (a few Norwegian ones too), and the
+ * OpenStreetMap tags (`key:value`) that mark them anywhere in the world.
  */
 export const KINDS: readonly {
   readonly words: readonly string[];
@@ -20,7 +21,13 @@ export const KINDS: readonly {
     ],
     tags: ["shop:supermarket", "shop:convenience", "shop:grocery"],
   },
-  { words: ["pharmacy", "chemist", "apotek"], tags: ["amenity:pharmacy", "shop:chemist"] },
+  {
+    words: ["pharmacy", "chemist", "drugstore", "apotek"],
+    tags: ["amenity:pharmacy", "shop:chemist"],
+  },
+  { words: ["hospital", "sykehus"], tags: ["amenity:hospital"] },
+  { words: ["restaurant"], tags: ["amenity:restaurant"] },
+  { words: ["train station", "railway station", "togstasjon"], tags: ["railway:station"] },
   { words: ["bakery", "bakeri"], tags: ["shop:bakery"] },
   { words: ["liquor store", "wine monopoly", "vinmonopolet", "polet"], tags: ["shop:alcohol"] },
   {

@@ -1033,19 +1033,43 @@ fn server_and_setup_bodies_match_the_schema() {
     check(
         "GeoStatus",
         &GeoStatus {
-            region: Some("no".into()),
-            state: GeoState::Downloading,
-            step: Some("roads of Norway".into()),
-            progress: Some(0.5),
-            updated_at: Some(1.0),
+            state: GeoState::Working,
+            follow: true,
+            limit_gb: 20.0,
+            used_bytes: 1.0,
+            regions: vec![GeoRegionStatus {
+                id: "us/california".into(),
+                name: "California".into(),
+                by: GeoRegionBy::Follow,
+                state: GeoRegionState::Downloading,
+                step: Some("roads of California".into()),
+                progress: Some(0.5),
+                bytes: Some(1.0),
+                updated_at: Some(1.0),
+                used_at: Some(1.0),
+                error: Some("x".into()),
+            }],
             error: Some("x".into()),
+        },
+    );
+    check(
+        "SetGeoRequest",
+        &SetGeoRequest {
+            regions: Some(vec!["norway".into()]),
+            follow: Some(false),
+            limit_gb: Some(10.0),
+        },
+    );
+    check(
+        "GeoRegionsResponse",
+        &GeoRegionsResponse {
             regions: vec![GeoRegion {
-                code: "no".into(),
-                name: "Norway".into(),
+                id: "us/california".into(),
+                name: "California".into(),
+                parent: Some("north-america".into()),
             }],
         },
     );
-    check("SetGeoRequest", &SetGeoRequest { region: None });
     check(
         "ArrivalRegionsResponse",
         &ArrivalRegionsResponse {
@@ -1090,12 +1114,6 @@ fn server_and_setup_bodies_match_the_schema() {
                 kind: Some("grocery store".into()),
                 message: "Water the plants".into(),
             }],
-        },
-    );
-    check(
-        "SetGeoRequest",
-        &SetGeoRequest {
-            region: Some("se".into()),
         },
     );
     check(

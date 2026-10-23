@@ -7591,21 +7591,38 @@
         }
       }
     },
-    "GeoStatus": {
+    "GeoRegionStatus": {
       "type": "object",
       "required": [
-        "state",
-        "regions"
+        "id",
+        "name",
+        "by",
+        "state"
       ],
       "properties": {
-        "region": {
+        "id": {
           "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "by": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "owner"
+            },
+            {
+              "type": "string",
+              "const": "follow"
+            }
+          ]
         },
         "state": {
           "anyOf": [
             {
               "type": "string",
-              "const": "off"
+              "const": "waiting"
             },
             {
               "type": "string",
@@ -7631,47 +7648,182 @@
         "progress": {
           "type": "number"
         },
+        "bytes": {
+          "type": "number"
+        },
         "updatedAt": {
+          "type": "number"
+        },
+        "usedAt": {
           "type": "number"
         },
         "error": {
           "type": "string"
+        }
+      }
+    },
+    "GeoStatus": {
+      "type": "object",
+      "required": [
+        "state",
+        "follow",
+        "limitGb",
+        "usedBytes",
+        "regions"
+      ],
+      "properties": {
+        "state": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "off"
+            },
+            {
+              "type": "string",
+              "const": "working"
+            },
+            {
+              "type": "string",
+              "const": "ready"
+            },
+            {
+              "type": "string",
+              "const": "failed"
+            }
+          ]
+        },
+        "follow": {
+          "type": "boolean"
+        },
+        "limitGb": {
+          "type": "number"
+        },
+        "usedBytes": {
+          "type": "number"
         },
         "regions": {
           "type": "array",
           "items": {
             "type": "object",
             "required": [
-              "code",
-              "name"
+              "id",
+              "name",
+              "by",
+              "state"
             ],
             "properties": {
-              "code": {
+              "id": {
                 "type": "string"
               },
               "name": {
                 "type": "string"
+              },
+              "by": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "owner"
+                  },
+                  {
+                    "type": "string",
+                    "const": "follow"
+                  }
+                ]
+              },
+              "state": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "waiting"
+                  },
+                  {
+                    "type": "string",
+                    "const": "downloading"
+                  },
+                  {
+                    "type": "string",
+                    "const": "importing"
+                  },
+                  {
+                    "type": "string",
+                    "const": "ready"
+                  },
+                  {
+                    "type": "string",
+                    "const": "failed"
+                  }
+                ]
+              },
+              "step": {
+                "type": "string"
+              },
+              "progress": {
+                "type": "number"
+              },
+              "bytes": {
+                "type": "number"
+              },
+              "updatedAt": {
+                "type": "number"
+              },
+              "usedAt": {
+                "type": "number"
+              },
+              "error": {
+                "type": "string"
               }
             }
           }
+        },
+        "error": {
+          "type": "string"
         }
       }
     },
     "SetGeoRequest": {
       "type": "object",
+      "properties": {
+        "regions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "follow": {
+          "type": "boolean"
+        },
+        "limitGb": {
+          "type": "number",
+          "minimum": 1
+        }
+      }
+    },
+    "GeoRegionsResponse": {
+      "type": "object",
       "required": [
-        "region"
+        "regions"
       ],
       "properties": {
-        "region": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
+        "regions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "name"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "parent": {
+                "type": "string"
+              }
             }
-          ]
+          }
         }
       }
     },

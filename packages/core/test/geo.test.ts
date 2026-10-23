@@ -1,15 +1,21 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   checkGeo,
+  contains,
   distanceMeters,
   graphhopperConfig,
   graphhopperRoute,
+  parseGeofabrik,
   photonPlaces,
+  placeRegions,
   processFailure,
+  regionFor,
+  regionsAt,
   ServerGeo,
+  sourcesFor,
 } from "../src/index.ts";
 
 describe("the map's answers", () => {
@@ -146,33 +152,157 @@ describe("the map's answers", () => {
   });
 });
 
+/** A small world: squares around Norway, the US and California, Germany and Bavaria, Britain. */
+const square = (west: number, south: number, east: number, north: number) => [
+  [
+    [west, south],
+    [east, south],
+    [east, north],
+    [west, north],
+    [west, south],
+  ],
+];
+const feature = (
+  id: string,
+  parent: string | undefined,
+  box: [number, number, number, number],
+  codes: { iso?: string[]; sub?: string[] } = {},
+) => ({
+  properties: {
+    id,
+    name: id,
+    ...(parent === undefined ? {} : { parent }),
+    urls: { pbf: `http://127.0.0.1:1/${id}-latest.osm.pbf` },
+    ...(codes.iso === undefined ? {} : { "iso3166-1:alpha2": codes.iso }),
+    ...(codes.sub === undefined ? {} : { "iso3166-2": codes.sub }),
+  },
+  geometry: { type: "Polygon", coordinates: square(...box) },
+});
+const WORLD = {
+  features: [
+    feature("europe", undefined, [-30, 30, 50, 80]),
+    feature("norway", "europe", [4, 57, 31, 72], { iso: ["NO"] }),
+    feature("germany", "europe", [5, 47, 15, 55], { iso: ["DE"] }),
+    feature("bayern", "germany", [9, 47, 14, 50.5]),
+    feature("great-britain", "europe", [-8, 50, 2, 59]),
+    feature("england", "great-britain", [-6, 50, 2, 55.8]),
+    feature("north-america", undefined, [-170, 10, -50, 80]),
+    feature("us", "north-america", [-125, 24, -66, 50], { iso: ["US"] }),
+    feature("us/california", "north-america", [-124.5, 32.5, -114, 42], { sub: ["US-CA"] }),
+  ],
+};
+
+describe("the world's regions", () => {
+  const regions = parseGeofabrik(WORLD);
+  const OSLO = { latitude: 59.91, longitude: 10.75 };
+  const MUNICH = { latitude: 48.14, longitude: 11.58 };
+  const LA = { latitude: 34.05, longitude: -118.24 };
+
+  it("gives every region its countries, from its own codes or those it is part of", () => {
+    expect(regions.find((r) => r.id === "us/california")?.name).toBe("California");
+    const countries = Object.fromEntries(regions.map((r) => [r.id, r.countries]));
+    expect(countries).toMatchObject({
+      norway: ["NO"],
+      bayern: ["DE"],
+      england: ["GB"],
+      "us/california": ["US"],
+      europe: [],
+    });
+  });
+
+  it("finds the regions a point is in, largest first, holes and all", () => {
+    expect(regionsAt(regions, MUNICH).map((r) => r.id)).toEqual(["europe", "germany", "bayern"]);
+    expect(regionsAt(regions, LA).map((r) => r.id)).toEqual([
+      "north-america",
+      "us",
+      "us/california",
+    ]);
+    expect(regionsAt(regions, { latitude: 0, longitude: 0 })).toEqual([]);
+    const ring = {
+      outline: [[...square(0, 0, 10, 10), ...square(4, 4, 6, 6)]] as [number, number][][][],
+      bbox: [0, 0, 10, 10] as const,
+    };
+    expect(contains(ring, { latitude: 2, longitude: 2 })).toBe(true);
+    expect(contains(ring, { latitude: 5, longitude: 5 })).toBe(false);
+  });
+
+  it("fetches the largest region that fits, never a continent", async () => {
+    const sizes: Record<string, number> = {
+      germany: 4e9,
+      bayern: 8e8,
+      us: 1e10,
+      "us/california": 1.2e9,
+      norway: 1.4e9,
+    };
+    const size = async (r: { id: string }) => sizes[r.id];
+    expect((await regionFor(regions, MUNICH, size, 1.5e9))?.id).toBe("bayern");
+    expect((await regionFor(regions, OSLO, size, 1.5e9))?.id).toBe("norway");
+    expect((await regionFor(regions, LA, size, 1.5e9))?.id).toBe("us/california");
+    // Nothing fits: the smallest.
+    expect((await regionFor(regions, OSLO, size, 1e8))?.id).toBe("norway");
+    expect(await regionFor(regions, { latitude: 0, longitude: 0 }, size, 1e9)).toBeUndefined();
+  });
+
+  it("takes addresses from the smallest dump that holds the country, cut to the outline", () => {
+    expect(sourcesFor({ countries: ["NO"] }).map((s) => s.path)).toEqual(["europe/norway"]);
+    expect(sourcesFor({ countries: ["IE"] }).map((s) => s.path)).toEqual(["europe/ireland"]);
+    expect(sourcesFor({ countries: ["US"] }).map((s) => s.path)).toEqual(["north-america/usa"]);
+    expect(sourcesFor({ countries: ["AQ"] })).toEqual([]);
+    const line = (lon: number, lat: number) =>
+      `{"type":"Place","content":[{"country_code":"de","centroid":[${lon},${lat}],"name":{"name":"x"}}]}`;
+    const germany = regions.filter((r) => r.id === "germany" || r.id === "bayern");
+    expect(placeRegions(line(11.58, 48.14), germany).sort()).toEqual(["bayern", "germany"]);
+    expect(placeRegions(line(13.4, 52.5), germany)).toEqual(["germany"]);
+    expect(placeRegions(line(2.35, 48.85), germany)).toEqual([]);
+    expect(placeRegions('{"type":"CountryInfo","content":[]}', germany)).toEqual([]);
+  });
+});
+
 describe("the server's map", () => {
-  it("is off until a region is picked, refuses unknown ones, and says what is missing", async () => {
+  it("holds what owners pick and where people are, and says what is missing", async () => {
     const dir = await mkdtemp(join(tmpdir(), "nudge-geo-"));
     try {
-      const geo = new ServerGeo({ dir });
+      await writeFile(join(dir, "regions.json"), JSON.stringify(WORLD));
+      const geo = new ServerGeo({ dir, download: false });
       await geo.load();
-      expect(geo.status()).toMatchObject({
-        state: "off",
-        regions: expect.arrayContaining([{ code: "no", name: "Norway" }]),
+      expect(geo.status()).toMatchObject({ state: "off", follow: true, limitGb: 20, regions: [] });
+      await expect(geo.geo.search("Oslo S")).rejects.toThrow("The map has no regions yet");
+      expect((await geo.available()).map((r) => r.id)).toContain("us/california");
+      await expect(geo.configure({ regions: ["atlantis"] })).rejects.toThrow(
+        'No region "atlantis"',
+      );
+
+      expect(await geo.configure({ regions: ["norway"], limitGb: 10 })).toMatchObject({
+        state: "working",
+        limitGb: 10,
+        regions: [{ id: "norway", by: "owner", state: "waiting" }],
       });
-      await expect(geo.setRegion("atlantis")).rejects.toThrow('No region "atlantis"');
-      await expect(geo.geo.search("Oslo S")).rejects.toThrow("an owner picks a region");
-      expect(await checkGeo(dir)).toEqual([]);
+      // Someone in Munich: Bavaria follows them (no sizes known here, so the smallest).
+      expect(await geo.follow({ latitude: 48.14, longitude: 11.58 })).toBe("fetching");
+      expect(await geo.follow({ latitude: 48.2, longitude: 11.6 })).toBe("fetching");
+      expect(geo.status().regions.map((r) => [r.id, r.by])).toEqual([
+        ["norway", "owner"],
+        ["bayern", "follow"],
+      ]);
+      // In the middle of the ocean there is nothing to fetch.
+      expect(await geo.follow({ latitude: 0, longitude: -30 })).toBe("outside");
+      await geo.configure({ follow: false });
+      expect(await geo.follow({ latitude: 34.05, longitude: -118.24 })).toBe("outside");
+      // Owners' picks go when they unpick them; regions that followed someone stay.
+      await geo.configure({ regions: [] });
+      expect(geo.status().regions.map((r) => r.id)).toEqual(["bayern"]);
       await geo.close();
 
-      // A region picked but not fetched yet, as after a restart mid-download.
-      const { writeFile } = await import("node:fs/promises");
-      await writeFile(join(dir, "geo.json"), JSON.stringify({ region: "no" }));
       expect(await checkGeo(dir)).toEqual([
-        "The map of Norway isn't ready yet: it downloads while the server runs",
+        "The map of bayern isn't ready yet: it downloads while the server runs",
       ]);
-      await writeFile(
-        join(dir, "geo.json"),
-        JSON.stringify({ region: "no", installed: { region: "no", at: 1, photon: "a", osm: "b" } }),
-      );
-      expect((await checkGeo(dir)).length).toBe(5);
-      expect(JSON.parse(await readFile(join(dir, "geo.json"), "utf8")).region).toBe("no");
+      const saved = JSON.parse(await readFile(join(dir, "geo.json"), "utf8"));
+      saved.regions.bayern.installed = { at: 1, photon: {}, osm: "x", bytes: 1 };
+      await writeFile(join(dir, "geo.json"), JSON.stringify(saved));
+      expect(await checkGeo(dir)).toEqual([
+        "The map is missing the roads of bayern; pick the region again to fetch them",
+        "The map is missing its Java; pick a region again to fetch it",
+      ]);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

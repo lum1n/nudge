@@ -51,7 +51,18 @@ export type Geo = {
     limit: number,
   ): Promise<GeoPlace[]>;
   route(from: GeoPoint, to: GeoPoint, mode: TravelMode): Promise<GeoRoute>;
+  /**
+   * Whether the map covers `point`, and on a host whose map follows people, fetches the region it
+   * is in when it doesn't, as someone's phone reports them abroad. Absent where the map is fixed.
+   */
+  follow?(point: GeoPoint): Promise<GeoCoverage>;
 };
+
+/**
+ * `ready`: the map has it; `fetching`: it is on its way; `outside`: the map doesn't have it and
+ * won't fetch it (it doesn't follow people, or it is over its disk limit).
+ */
+export type GeoCoverage = "ready" | "fetching" | "outside";
 
 /** The service isn't there: not set up on this server, still downloading, or stopped. */
 export class GeoUnavailable extends Error {

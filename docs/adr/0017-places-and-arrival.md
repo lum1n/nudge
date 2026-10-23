@@ -21,10 +21,18 @@
 
 **A reminder is private unless the room may know where they are.** An arrival fires as a nudge does (`FIRE_ENTRY`, `source: "arrival"`, shown as a nudge). "Ann just got home" tells a room where Ann is. So in a shared room it is private to her unless she lets the model know where she is there (ADR 14's consent). Her personal room has no such limit. The places section follows the same rules: her places and reminders in her personal room and private turns, and only "Ann is at their home" and her open reminders in a shared room she shares her location with.
 
-**The map is the server's own.** Addresses and routes come from Photon (geocoding, and search by OpenStreetMap tag around a point) and GraphHopper (car, bike and foot), both single Java jars. The server downloads a JRE, the jars and the data for a region the owner picks, then runs both on 127.0.0.1 when asked and stops them when idle. Asking a public geocoder would tell it every address people save and every route they ask for. The extension talks to the map through a small `Geo` interface (`provideGeo`). Hosts without one, such as Cloudflare, keep saved places and reminders that need no search.
+**The map is the server's own, and follows people anywhere in the world.** Addresses and routes come from Photon (geocoding, and search by OpenStreetMap tag around a point) and GraphHopper (car, bike and foot), both single Java jars that the server runs on a JRE it downloads. Asking a public geocoder would tell it every address people save and every route they ask for. So nothing is asked outside, ever; only map data comes in.
+
+- **The whole planet won't fit, so the map holds regions.** It would need about 95 GB of addresses, 80 GB of roads and 64 GB of memory to import. A region is one of Geofabrik's 554, from countries down to the states and provinces of large ones. Their outlines come from Geofabrik's index, fetched and kept by the server.
+- **A region's roads** are its own OpenStreetMap extract and a graph of its own. A route needs a region that holds both ends, the smallest one if there are several. Each region's router starts when it is asked for and stops when idle.
+- **A region's addresses** come from GraphHopper's Photon dump that holds its country: 115 dumps, 236 countries (`geo-sources.ts`, written by `scripts/geo-sources.mjs`). The dump is cut to the region's outline as it streams in, so California doesn't keep the whole of the US. The addresses of all regions are imported into one Photon database.
+- **Owners pick regions, and the map follows people.** Every location an app sends goes to the map (`Geo.follow`). When no region holds it, the server fetches the largest region around that point whose roads take at most 1.5 GB: Norway, or Bavaria rather than all of Germany. A trip abroad is ready within minutes to an hour. Regions fetched this way are dropped, the longest unused first, when the map would pass its disk limit (20 GB by default). Regions owners picked are never dropped, and one bigger than the limit by itself fails.
+- **Outside the map, the tools say so.** They say the region is being fetched, or that it won't be. They never ask anyone else.
+
+The extension talks to the map through a small `Geo` interface (`provideGeo`). Hosts without one, such as Cloudflare, keep saved places and arrival reminders, which need no search.
 
 What this doesn't do:
-- Public transport isn't routed.
+- Public transport isn't routed, nor routes between two regions the map holds apart (Oslo to Stockholm needs a region holding both, which owners can add).
 - A place of a kind is found only around where the phone last asked from. Far from there, the phone has to leave its refresh circle first.
 - A phone that isn't allowed to use location all the time sees nothing in the background. The server's check then works only while the app is open.
 - The web registers no geofences.

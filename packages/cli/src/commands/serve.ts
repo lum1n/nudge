@@ -230,7 +230,11 @@ export async function serve(options: ServeOptions): Promise<number> {
       testKey,
       backupKey: theBackupKey,
       ...(updates === undefined ? {} : { updates: updates.control }),
-      geo: { status: () => geo.status(), setRegion: (region) => geo.setRegion(region) },
+      geo: {
+        status: () => geo.status(),
+        available: () => geo.available(),
+        configure: (change) => geo.configure(change),
+      },
       wired: {
         state: () => wired.state(),
         enable: async (name) => {

@@ -234,13 +234,18 @@ impl ServerApi {
         self.request(Method::GET, &["geo"], &[], NO_BODY).await
     }
 
-    /// Gets the map of `region` (a code from `GeoStatus::regions`) ready, or removes the map and
-    /// its data with none.
-    pub async fn set_geo(&self, region: Option<&str>) -> Result<GeoStatus, ApiError> {
-        let body = SetGeoRequest {
-            region: region.map(str::to_owned),
-        };
-        self.request(Method::PUT, &["geo"], &[], Some(&body)).await
+    /// Changes what the map holds: `regions` is the whole list owners want; `follow` and
+    /// `limit_gb` change when given.
+    pub async fn configure_geo(&self, change: &SetGeoRequest) -> Result<GeoStatus, ApiError> {
+        self.request(Method::PUT, &["geo"], &[], Some(change)).await
+    }
+
+    /// Every region the map can hold, anywhere in the world.
+    pub async fn geo_regions(&self) -> Result<Vec<GeoRegion>, ApiError> {
+        let answer: GeoRegionsResponse = self
+            .request(Method::GET, &["geo", "regions"], &[], NO_BODY)
+            .await?;
+        Ok(answer.regions)
     }
 
     /// The server's Wired; 404 on a server that wasn't given one.

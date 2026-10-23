@@ -322,6 +322,7 @@ export {
   type GeoPlace,
   type GeoPoint,
   type GeoRoute,
+  type GeoCoverage,
   type GeoStep,
   GeoUnavailable,
   providedGeo,
@@ -331,13 +332,23 @@ export {
 export { type GeoEndpoints, graphhopperRoute, httpGeo, photonPlaces } from "./geo/http.ts";
 export {
   checkGeo,
-  GEO_REGIONS,
+  type GeoRegionStatus,
   type GeoStatus,
   graphhopperConfig,
   reason as processFailure,
   ServerGeo,
   type ServerGeoOptions,
 } from "./server/geo.ts";
+export {
+  contains,
+  type GeoRegion,
+  type GeoSource,
+  parseGeofabrik,
+  placeRegions,
+  regionFor,
+  regionsAt,
+  sourcesFor,
+} from "./server/geo-catalog.ts";
 export {
   type DatabaseEncryption,
   type DatabaseKey,

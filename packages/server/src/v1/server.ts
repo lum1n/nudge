@@ -50,6 +50,7 @@ import {
   WiredRelayRequest,
   type WiredRelayResponse,
   type WiredState,
+  type GeoRegionsResponse,
   type GeoStatus,
   type UpdateState,
   UpdateAssistantRequest,
@@ -106,7 +107,8 @@ export type WiredControl = {
 /** What owners see of and do with the server's map. */
 export type GeoControl = {
   status(): GeoStatus;
-  setRegion(region: string | null): Promise<GeoStatus>;
+  available(): Promise<GeoRegionsResponse["regions"]>;
+  configure(change: SetGeoRequest): Promise<GeoStatus>;
 };
 
 /** What owners see of and do with updates. */
@@ -213,9 +215,13 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
 
   app.get("/geo", (c) => c.json(geo().status() satisfies GeoStatus));
 
+  app.get("/geo/regions", async (c) =>
+    c.json({ regions: await guard(() => geo().available()) } satisfies GeoRegionsResponse),
+  );
+
   app.put("/geo", async (c) => {
-    const { region } = await readJson(c, SetGeoRequest);
-    return c.json((await guard(() => geo().setRegion(region))) satisfies GeoStatus);
+    const change = await readJson(c, SetGeoRequest);
+    return c.json((await guard(() => geo().configure(change))) satisfies GeoStatus);
   });
 
   const wired = () => {

@@ -139,31 +139,55 @@ pub struct UpdateState {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
 pub enum GeoState {
     Off,
+    Working,
+    Ready,
+    Failed,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum GeoRegionState {
+    Waiting,
     Downloading,
     Importing,
     Ready,
     Failed,
 }
 
+/// One region of the server's map.
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
-pub struct GeoRegion {
-    pub code: String,
+pub struct GeoRegionStatus {
+    pub id: String,
     pub name: String,
-}
-
-/// The server's own map: addresses, places and routes for the places extension, from
-/// OpenStreetMap data of one region the owner picks.
-#[derive(Clone, Debug, PartialEq, uniffi::Record)]
-pub struct GeoStatus {
-    pub region: Option<String>,
-    pub state: GeoState,
-    /// What it is getting ready while downloading or importing.
+    /// Picked by an owner; false for one fetched because someone was there.
+    pub by_owner: bool,
+    pub state: GeoRegionState,
     pub step: Option<String>,
     /// Of the current download, from 0 to 1.
     pub progress: Option<f64>,
+    pub bytes: Option<f64>,
     pub updated_at: Option<f64>,
+    pub used_at: Option<f64>,
     pub error: Option<String>,
-    pub regions: Vec<GeoRegion>,
+}
+
+/// The server's own map, for regions anywhere in the world: those owners pick, and those people's
+/// phones say they are in when `follow` is on, within `limit_gb`.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct GeoStatus {
+    pub state: GeoState,
+    pub follow: bool,
+    pub limit_gb: f64,
+    pub used_bytes: f64,
+    pub regions: Vec<GeoRegionStatus>,
+    pub error: Option<String>,
+}
+
+/// A region the map can hold, such as `norway` or `us/california` in `north-america`.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct GeoRegion {
+    pub id: String,
+    pub name: String,
+    pub parent: Option<String>,
 }
 
 /// How far the server's Wired is.
@@ -377,26 +401,38 @@ impl From<p::UpdateState> for UpdateState {
 impl From<p::GeoStatus> for GeoStatus {
     fn from(g: p::GeoStatus) -> Self {
         GeoStatus {
-            region: g.region,
             state: match g.state {
                 p::GeoState::Off => GeoState::Off,
-                p::GeoState::Downloading => GeoState::Downloading,
-                p::GeoState::Importing => GeoState::Importing,
+                p::GeoState::Working => GeoState::Working,
                 p::GeoState::Ready => GeoState::Ready,
                 p::GeoState::Failed => GeoState::Failed,
             },
-            step: g.step,
-            progress: g.progress,
-            updated_at: g.updated_at,
-            error: g.error,
+            follow: g.follow,
+            limit_gb: g.limit_gb,
+            used_bytes: g.used_bytes,
             regions: g
                 .regions
                 .into_iter()
-                .map(|r| GeoRegion {
-                    code: r.code,
+                .map(|r| GeoRegionStatus {
+                    id: r.id,
                     name: r.name,
+                    by_owner: r.by == p::GeoRegionBy::Owner,
+                    state: match r.state {
+                        p::GeoRegionState::Waiting => GeoRegionState::Waiting,
+                        p::GeoRegionState::Downloading => GeoRegionState::Downloading,
+                        p::GeoRegionState::Importing => GeoRegionState::Importing,
+                        p::GeoRegionState::Ready => GeoRegionState::Ready,
+                        p::GeoRegionState::Failed => GeoRegionState::Failed,
+                    },
+                    step: r.step,
+                    progress: r.progress,
+                    bytes: r.bytes,
+                    updated_at: r.updated_at,
+                    used_at: r.used_at,
+                    error: r.error,
                 })
                 .collect(),
+            error: g.error,
         }
     }
 }
@@ -674,12 +710,37 @@ impl ServerClient {
         Ok(run(async move { api.geo().await }).await?.into())
     }
 
-    /// Gets the map of `region` ready, or removes it and its data with none.
-    pub async fn set_geo(&self, region: Option<String>) -> Result<GeoStatus, NudgeError> {
+    /// Changes what the map holds: `regions`, when given, is the whole list owners want (ids
+    /// from `geo_regions`); `follow` and `limit_gb` change when given.
+    pub async fn configure_geo(
+        &self,
+        regions: Option<Vec<String>>,
+        follow: Option<bool>,
+        limit_gb: Option<f64>,
+    ) -> Result<GeoStatus, NudgeError> {
         let api = self.api.clone();
-        Ok(run(async move { api.set_geo(region.as_deref()).await })
+        let change = p::SetGeoRequest {
+            regions,
+            follow,
+            limit_gb,
+        };
+        Ok(run(async move { api.configure_geo(&change).await })
             .await?
             .into())
+    }
+
+    /// Every region the map can hold, anywhere in the world.
+    pub async fn geo_regions(&self) -> Result<Vec<GeoRegion>, NudgeError> {
+        let api = self.api.clone();
+        Ok(run(async move { api.geo_regions().await })
+            .await?
+            .into_iter()
+            .map(|r| GeoRegion {
+                id: r.id,
+                name: r.name,
+                parent: r.parent,
+            })
+            .collect())
     }
 
     /// The server's Wired; fails with 404 on a server that wasn't given one.

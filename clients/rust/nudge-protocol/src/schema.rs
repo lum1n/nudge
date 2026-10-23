@@ -1603,42 +1603,92 @@ pub struct SetUpdatesRequest {
 #[serde(rename_all = "kebab-case")]
 pub enum GeoState {
     Off,
+    Working,
+    Ready,
+    Failed,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GeoRegionState {
+    Waiting,
     Downloading,
     Importing,
     Ready,
     Failed,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct GeoRegion {
-    pub code: String,
-    pub name: String,
+/// Picked by an owner, or fetched because someone was there.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GeoRegionBy {
+    Owner,
+    Follow,
 }
 
-/// The server's own map: addresses, places and routes from OpenStreetMap data of one region.
+/// One region of the server's map.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GeoStatus {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub region: Option<String>,
-    pub state: GeoState,
-    /// What it is getting ready while downloading or importing.
+pub struct GeoRegionStatus {
+    /// Geofabrik's id, such as `norway` or `us/california`.
+    pub id: String,
+    pub name: String,
+    pub by: GeoRegionBy,
+    pub state: GeoRegionState,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub step: Option<String>,
     /// Of the current download, from 0 to 1.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub progress: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bytes: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub updated_at: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub used_at: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
-    pub regions: Vec<GeoRegion>,
 }
 
-/// A region to get the map of, or none to remove it and its data.
+/// The server's own map: addresses, places and routes from OpenStreetMap, for regions anywhere in
+/// the world.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GeoStatus {
+    pub state: GeoState,
+    /// Whether it fetches the region someone's phone says they are in.
+    pub follow: bool,
+    pub limit_gb: f64,
+    pub used_bytes: f64,
+    pub regions: Vec<GeoRegionStatus>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+/// What changes: the regions owners want (the whole list), following people, the disk limit.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SetGeoRequest {
-    pub region: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub regions: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub follow: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit_gb: Option<f64>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct GeoRegion {
+    pub id: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent: Option<String>,
+}
+
+/// Every region the map can hold.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct GeoRegionsResponse {
+    pub regions: Vec<GeoRegion>,
 }
 
 /// How far the server's Wired is.

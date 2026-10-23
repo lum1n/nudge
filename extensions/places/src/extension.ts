@@ -131,9 +131,24 @@ export function createPlacesExtension(options: PlacesExtensionOptions = {}) {
         const service = options.geo ?? providedGeo();
         if (service === undefined)
           throw new GeoUnavailable(
-            "This server has no map service: an owner turns it on under the server's Maps settings",
+            "This assistant's host has no map: places by address, finding places and routes don't work here",
           );
         return service;
+      };
+
+      /**
+       * What to say when the map found nothing near `point`: that it doesn't cover it yet, and is
+       * fetching it, where the map follows people (ADR 17).
+       */
+      const coverage = async (point: GeoPoint | undefined): Promise<string> => {
+        const service = options.geo ?? providedGeo();
+        if (point === undefined || service?.follow === undefined) return "";
+        const covered = await service.follow(point).catch(() => "outside" as const);
+        return covered === "fetching"
+          ? " The server's map doesn't cover that area yet: it is fetching it now, which takes a few minutes to an hour. Say so, and try again later."
+          : covered === "outside"
+            ? " The server's map doesn't cover that area, and won't fetch it (an owner can add it under the server's Maps settings)."
+            : "";
       };
       const nudge = (): Nudge => host.assistant();
       const read = async (playerId: string, context: Context): Promise<PlayerPlaces> =>
@@ -282,7 +297,11 @@ export function createPlacesExtension(options: PlacesExtensionOptions = {}) {
             address = result.address ?? result.name;
           } else {
             const found = await lookUp(given, player.playerId, context);
-            if (found === undefined) return text(`The map doesn't know "${given}".`, true);
+            if (found === undefined)
+              return text(
+                `The map doesn't know "${given}".${await coverage(await whereNow(player.playerId, context))}`,
+                true,
+              );
             point = found;
             address = found.address ?? found.name ?? nudge().showTo(player.playerId, given);
             // What they wrote stays theirs too, wherever they write it again.
@@ -355,7 +374,11 @@ export function createPlacesExtension(options: PlacesExtensionOptions = {}) {
           '"Oslo S", near the person you are talking to or near a place. You get names, kinds and ' +
           "distances, and a placeholder for each that routes, reminders and save_place take.",
         parameters: Type.Object({
-          query: Type.String(),
+          query: Type.String({
+            description:
+              "A name or address as they gave it, or a kind of place in English, such as " +
+              '"grocery store" or "pharmacy", whatever language they speak.',
+          }),
           near: Type.Optional(
             Type.String({
               description:
@@ -380,7 +403,8 @@ export function createPlacesExtension(options: PlacesExtensionOptions = {}) {
                   limit: 8,
                   ...(near === undefined ? {} : { near }),
                 });
-          if (places.length === 0) return text(`Nothing found for "${args.query}".`);
+          if (places.length === 0)
+            return text(`Nothing found for "${args.query}".${await coverage(near)}`);
           const lines: string[] = [];
           const results: Record<string, FoundPlace> = {};
           for (const place of places) {
@@ -492,7 +516,8 @@ export function createPlacesExtension(options: PlacesExtensionOptions = {}) {
           where: Type.String({
             description:
               'A saved place\'s name or placeholder, a placeholder from find_place, "here", an ' +
-              'address, or a kind of place such as "grocery store", "pharmacy" or "post office".',
+              "address, or a kind of place in English, whatever language they speak, such as " +
+              '"grocery store", "pharmacy", "post office" or "petrol station".',
           }),
           message: Type.String({ description: "What to remind them of, with every detail." }),
           on: Type.Optional(
@@ -552,7 +577,10 @@ export function createPlacesExtension(options: PlacesExtensionOptions = {}) {
             } else {
               const found = await lookUp(where, player.playerId, context);
               if (found === undefined)
-                return text(`The map doesn't know "${where}", and it isn't a saved place.`, true);
+                return text(
+                  `The map doesn't know "${where}", and it isn't a saved place.${await coverage(await whereNow(player.playerId, context))}`,
+                  true,
+                );
               point = found;
               address = found.address;
               named ??= found.name ?? where;
@@ -747,9 +775,11 @@ export function createPlacesExtension(options: PlacesExtensionOptions = {}) {
       /** Where the player is, from the app or the web: the server's own check, besides the phone's. */
       const onLocation = async (playerId: string, location: LocationUpdate) => {
         const context = BACKGROUND_CONTEXT;
+        const point = { latitude: location.latitude, longitude: location.longitude };
+        // The map follows people wherever they go, so places and routes work there too.
+        void (options.geo ?? providedGeo())?.follow?.(point).catch(() => {});
         let state = await read(playerId, context);
         if (state.reminders.length === 0 && state.inside.length === 0) return;
-        const point = { latitude: location.latitude, longitude: location.longitude };
         const tags = [
           ...new Set(state.reminders.flatMap((r) => ("tags" in r.target ? r.target.tags : []))),
         ];
@@ -801,6 +831,9 @@ export function createPlacesExtension(options: PlacesExtensionOptions = {}) {
             Math.abs(longitude) <= 180
               ? { latitude, longitude }
               : undefined;
+          // Where the phone is, so the map has the shops there by the time they are wanted.
+          if (point !== undefined)
+            void (options.geo ?? providedGeo())?.follow?.(point).catch(() => {});
           const state = await read(playerId, context);
           const wanted = new Set(
             state.reminders.flatMap((r) => ("place" in r.target ? [r.target.place] : [])),

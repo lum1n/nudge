@@ -5,8 +5,8 @@ import { GeoUnavailable } from "./geo.ts";
 export type GeoEndpoints = {
   /** Photon's address, such as `http://127.0.0.1:41234`. */
   readonly photon: () => Promise<string>;
-  /** GraphHopper's address. */
-  readonly graphhopper: () => Promise<string>;
+  /** The address of a GraphHopper whose roads join `from` and `to`. */
+  readonly graphhopper: (from: GeoPoint, to: GeoPoint) => Promise<string>;
 };
 
 /** One feature of a Photon answer (GeoJSON). */
@@ -154,7 +154,7 @@ export function httpGeo(endpoints: GeoEndpoints, language = "en"): Geo {
       });
       params.append("point", `${from.latitude},${from.longitude}`);
       params.append("point", `${to.latitude},${to.longitude}`);
-      return graphhopperRoute(await get(endpoints.graphhopper(), "/route", params));
+      return graphhopperRoute(await get(endpoints.graphhopper(from, to), "/route", params));
     },
   };
 }

@@ -1156,16 +1156,15 @@ export type UpdateState = Static<typeof UpdateState>;
 export const SetUpdatesRequest = Type.Object({ automatic: Type.Boolean() });
 export type SetUpdatesRequest = Static<typeof SetUpdatesRequest>;
 
-/**
- * The server's own map (ADR 17): addresses, places and routes from OpenStreetMap data of one
- * region, served on the server itself so nothing about where people go leaves it.
- */
-export const GeoStatus = Type.Object({
-  /** The region picked, by code from `regions`. */
-  region: Type.Optional(Type.String()),
-  /** `downloading` and `importing`: getting it ready, as `step` says; `failed`: see `error`. */
+/** One region of the server's map: picked by an owner, or fetched because someone was there. */
+export const GeoRegionStatus = Type.Object({
+  /** Geofabrik's id, such as `norway`, `us/california` or `bayern`. */
+  id: Type.String(),
+  name: Type.String(),
+  /** Only regions fetched for someone are dropped to make room, the longest unused first. */
+  by: Type.Union([Type.Literal("owner"), Type.Literal("follow")]),
   state: Type.Union([
-    Type.Literal("off"),
+    Type.Literal("waiting"),
     Type.Literal("downloading"),
     Type.Literal("importing"),
     Type.Literal("ready"),
@@ -1174,17 +1173,51 @@ export const GeoStatus = Type.Object({
   step: Type.Optional(Type.String()),
   /** Of the current download, from 0 to 1. */
   progress: Type.Optional(Type.Number()),
-  /** When the data in use was fetched; it is fetched again once a month. */
+  bytes: Type.Optional(Type.Number()),
+  /** When its data was fetched; it is fetched again once a month. */
   updatedAt: Type.Optional(Type.Number()),
+  /** When someone was last there. */
+  usedAt: Type.Optional(Type.Number()),
   error: Type.Optional(Type.String()),
-  /** The regions an owner can pick. */
-  regions: Type.Array(Type.Object({ code: Type.String(), name: Type.String() })),
+});
+export type GeoRegionStatus = Static<typeof GeoRegionStatus>;
+
+/**
+ * The server's own map (ADR 17): addresses, places and routes from OpenStreetMap, for regions
+ * anywhere in the world, served on the server itself so nothing about where people go leaves it.
+ */
+export const GeoStatus = Type.Object({
+  state: Type.Union([
+    Type.Literal("off"),
+    Type.Literal("working"),
+    Type.Literal("ready"),
+    Type.Literal("failed"),
+  ]),
+  /** Whether it fetches the region someone's phone says they are in. */
+  follow: Type.Boolean(),
+  /** Most the regions may take on disk; those fetched for someone make room, oldest use first. */
+  limitGb: Type.Number(),
+  usedBytes: Type.Number(),
+  regions: Type.Array(GeoRegionStatus),
+  error: Type.Optional(Type.String()),
 });
 export type GeoStatus = Static<typeof GeoStatus>;
 
-/** A region to get the map of, or `null` to remove it and its data. */
-export const SetGeoRequest = Type.Object({ region: Type.Union([Type.String(), Type.Null()]) });
+/** What changes: the regions owners want (the whole list), following people, the disk limit. */
+export const SetGeoRequest = Type.Object({
+  regions: Type.Optional(Type.Array(Type.String())),
+  follow: Type.Optional(Type.Boolean()),
+  limitGb: Type.Optional(Type.Number({ minimum: 1 })),
+});
 export type SetGeoRequest = Static<typeof SetGeoRequest>;
+
+/** Every region the map can hold, for owners to pick from. */
+export const GeoRegionsResponse = Type.Object({
+  regions: Type.Array(
+    Type.Object({ id: Type.String(), name: Type.String(), parent: Type.Optional(Type.String()) }),
+  ),
+});
+export type GeoRegionsResponse = Static<typeof GeoRegionsResponse>;
 
 /**
  * The server's Wired: an encrypted network between Nudge servers that needs no open port at
@@ -1471,8 +1504,10 @@ export const SCHEMAS = {
   ServerSessionResponse,
   UpdateState,
   SetUpdatesRequest,
+  GeoRegionStatus,
   GeoStatus,
   SetGeoRequest,
+  GeoRegionsResponse,
   WiredState,
   WiredEnableRequest,
   WiredJoinRequest,
