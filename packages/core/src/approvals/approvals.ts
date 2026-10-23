@@ -171,8 +171,12 @@ export class Approvals {
     /** The handler an installed extension has for `kind`, looked up when an approval runs. */
     private readonly handler: (extension: string, kind: string) => ApprovalHandler | undefined,
     private readonly changed: (change: Change) => void = () => {},
-    /** Puts values back in a payload, which is stored with placeholders. */
-    private readonly rehydrate: (text: string) => string = (text) => text,
+    /**
+     * Puts the values `viewer` may see back in a payload, which is stored with placeholders. The
+     * viewer is who decided: an action never gets a value its decider may not see.
+     */
+    private readonly rehydrate: (viewer: string | undefined, text: string) => string = (_, text) =>
+      text,
     /** What an action reports is stored with placeholders too. */
     private readonly redact: (text: string) => string = (text) => text,
     /** Whether a player may decide approvals only an admin may. */
@@ -223,10 +227,9 @@ export class Approvals {
     if (!decision.approve) {
       const denied = this.denial(decided.extension, decided.kind);
       if (denied !== undefined)
-        await denied(
-          mapStrings(decided.payload, this.rehydrate),
-          this.runFor(room, decided, context),
-        ).catch(this.report);
+        await denied(this.payloadFor(decided), this.runFor(room, decided, context)).catch(
+          this.report,
+        );
       await this.tell(room, decided, context);
       return decided;
     }
@@ -281,11 +284,17 @@ export class Approvals {
       // What the action asks for in turn, such as another approval, stays as private as it is.
       const turn = approval.privateTo === undefined ? {} : { privateTo: approval.privateTo };
       return await inTurn(turn, () =>
-        handler(mapStrings(approval.payload, this.rehydrate), this.runFor(room, approval, context)),
+        handler(this.payloadFor(approval), this.runFor(room, approval, context)),
       );
     } catch (error) {
       return { text: (error as Error).message, isError: true };
     }
+  }
+
+  /** The payload with the values its decider may see put back. */
+  private payloadFor(approval: Approval): Approval["payload"] {
+    const viewer = approval.decidedBy?.playerId;
+    return mapStrings(approval.payload, (text) => this.rehydrate(viewer, text));
   }
 
   private runFor(room: Room, approval: Approval, context: Context): ApprovalRun {

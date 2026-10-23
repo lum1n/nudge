@@ -25,7 +25,8 @@ export type ToolValues = {
   /** The turn of a conversation, see `turnOf`. */
   readonly turn: (conversationId: ConversationId, context: Context) => Promise<Turn>;
   readonly redact: (text: string) => string;
-  readonly rehydrate: (text: string) => string;
+  /** Puts back the values `viewer` may see; see `Vault.rehydrateFor`. */
+  readonly rehydrate: (viewer: string | undefined, text: string) => string;
   /** Models that put values back, for tools that act on what a model answers. */
   readonly models: () => ToolExecutionApi["models"];
 };
@@ -60,7 +61,11 @@ function wrap(tool: ToolRegistration, values: ToolValues): ToolRegistration {
         diagnostic: (diagnostic) =>
           api.diagnostic({ ...diagnostic, message: redact(diagnostic.message) }),
       };
-      const given = placeholders ? args : mapStrings(args as JsonValue, rehydrate);
+      // Only what the player the turn acts for may see: others' private values stay placeholders.
+      const viewer = (turn.by ?? turn.privateTo)?.playerId;
+      const given = placeholders
+        ? args
+        : mapStrings(args as JsonValue, (text) => rehydrate(viewer, text));
       const result = await inTurn({ ...turn, redact }, () =>
         tool.execute(given as typeof args, shown, context),
       );

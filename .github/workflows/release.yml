@@ -1,5 +1,6 @@
 # A Nudge server release (ADR 11), from a tag such as v0.2.0 (v0.3.0-beta.1 makes a pre-release,
-# which servers on the stable channel skip):
+# which servers on the stable channel skip). It first passes the checks in ci.yml, so a broken tag
+# never reaches the servers that update themselves. Then:
 #   - an archive per architecture, each built on its own machine (the SQLite module is native),
 #   - the Chromium the browser extension runs, per architecture, which the archive names,
 #   - manifest.json, signed with the NUDGE_RELEASE_KEY secret, that servers update from,
@@ -11,7 +12,11 @@ on:
     tags: ["v*"]
 
 jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+
   bundle:
+    needs: checks
     strategy:
       matrix:
         include:
@@ -23,18 +28,18 @@ jobs:
             docker: arm64
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.5.1
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
       - run: pnpm install --frozen-lockfile
       - run: packages/release/scripts/bundle.sh "${GITHUB_REF_NAME#v}"
         env:
           NUDGE_RELEASE_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-${{ matrix.arch }}
           path: |
@@ -48,8 +53,8 @@ jobs:
       contents: write
       packages: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           path: out
           merge-multiple: true
@@ -71,9 +76,9 @@ jobs:
           cp out/nudge-*-linux-x64.tar.gz image/linux-amd64.tar.gz
           cp out/nudge-*-linux-arm64.tar.gz image/linux-arm64.tar.gz
           cp packages/release/Dockerfile image/
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}

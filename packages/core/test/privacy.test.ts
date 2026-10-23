@@ -231,6 +231,44 @@ describe("redaction in a running assistant", () => {
     expect(sent[0]).toContain("Vegard");
   });
 
+  it("gives a tool only the private values the turn's sender may see", async () => {
+    const seenByTool: string[] = [];
+    const lookup = defineTool({
+      name: "lookup",
+      description: "Look something up",
+      parameters: Type.Object({ query: Type.String() }),
+      execute: async (args) => {
+        seenByTool.push(args.query);
+        return { output: [{ type: "text", text: "Nothing found." }] };
+      },
+    });
+    const { faux, options } = setup();
+    const nudge = await createNudge(
+      { ...options, extensions: [defineExtension({ name: "lookup", tools: [lookup] })] },
+      context,
+    );
+    const placeholder = await nudge.protect("Storgata 1", "PRIVATE", { owner: "ann" });
+    expect(placeholder).toBe("⟦PRIVATE1⟧");
+    for (const author of [
+      { playerId: "bo", displayName: "Bo" },
+      { playerId: "ann", displayName: "Ann" },
+    ]) {
+      faux.setResponses([
+        fauxAssistantMessage([fauxToolCall("lookup", { query: placeholder })], {
+          stopReason: "toolUse",
+        }),
+        fauxAssistantMessage("Nothing there."),
+      ]);
+      const settled = await (
+        await nudge.submit(LOBBY, { text: "Look it up", author }, context)
+      ).wait(context);
+      expect(settled.status).toBe("done");
+    }
+    // The room is shared, but only Ann's turn acts on her value.
+    expect(seenByTool).toEqual([placeholder, "Storgata 1"]);
+    await nudge.close(context);
+  });
+
   it("rewrites history from before placeholders were stored, and vacuums it out of the file", async () => {
     const { faux, options } = setup();
     faux.setResponses([fauxAssistantMessage("Noted, ⟦EMAIL1⟧.")]);

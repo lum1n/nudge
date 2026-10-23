@@ -190,6 +190,19 @@ export class Vault {
   }
 
   /**
+   * Puts back only the values `viewer` may see, as `showTo` decides: for what a player's turn or
+   * decision acts on, such as a tool's arguments. Without a viewer, owned values stay placeholders.
+   */
+  rehydrateFor(viewer: string | undefined, text: string): string {
+    if (!text.includes("⟦")) return text;
+    return text.replace(PLACEHOLDER, (placeholder) =>
+      this.visibleTo(viewer, placeholder)
+        ? (this.byPlaceholder.get(placeholder)?.value ?? placeholder)
+        : placeholder,
+    );
+  }
+
+  /**
    * Text as `viewer` may see it: values someone else owns become their placeholders, also where
    * they are written out, and placeholders of values the viewer may see are put back. Without a
    * viewer, every owned value is hidden.

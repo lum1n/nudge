@@ -188,6 +188,26 @@ describe("approvals", () => {
     await nudge.close(context);
   });
 
+  it("gives an action only the private values its decider may see", async () => {
+    const sent: string[] = [];
+    const { options, askToSend } = setup(sent);
+    const nudge = await createNudge(options, context);
+    const placeholder = await nudge.protect("Storgata 1", "PRIVATE", { owner: "ann" });
+    const ann = { playerId: "ann", displayName: "Ann" };
+    const bo = { playerId: "bo", displayName: "Bo" };
+    for (const id of ["a1", "a2"]) {
+      askToSend(placeholder);
+      await (await nudge.submit(LOBBY, { text: "Mail me", author: ann }, context)).wait(context);
+      expect(await nudge.approvals.get(LOBBY, id, context)).toMatchObject({
+        payload: { to: placeholder },
+      });
+    }
+    await nudge.approvals.decide(LOBBY, "a1", { approve: true, by: bo }, context);
+    await nudge.approvals.decide(LOBBY, "a2", { approve: true, by: ann }, context);
+    expect(sent).toEqual([placeholder, "Storgata 1"]);
+    await nudge.close(context);
+  });
+
   it("does nothing when denied, and reports a failing action", async () => {
     const sent: string[] = [];
     const refused: string[] = [];
