@@ -11,6 +11,7 @@ import {
   ConfigMissing,
   createBackup,
   detectLocalServers,
+  errorFields,
   loadConfig,
   newSetupCode,
   openAssistant,
@@ -40,7 +41,14 @@ import { renderUnicodeCompact } from "uqr";
 import { UsageError } from "../errors.ts";
 import { keyPath, scheduleBackups } from "./backup.ts";
 import { offeredProviders } from "./setup-offer.ts";
-import { hostOptions, localModelWanted, reloadOnHangup, sharedLocalModel } from "../host.ts";
+import {
+  hostLog,
+  hostOptions,
+  localModelWanted,
+  modelErrors,
+  reloadOnHangup,
+  sharedLocalModel,
+} from "../host.ts";
 
 export type ServeOptions = {
   readonly config: string;
@@ -280,6 +288,8 @@ export async function serve(options: ServeOptions): Promise<number> {
       publicUrl,
       trustProxy: () => options.trustProxy === true || config?.server?.trustProxy === true,
       server: control,
+      logger: hostLog,
+      modelErrors,
       ...(relayFront === undefined ? {} : { relay: relayFront }),
       ...(setup === undefined ? {} : { setup }),
       extensionSettings: {
@@ -297,7 +307,7 @@ export async function serve(options: ServeOptions): Promise<number> {
             ?.home,
         (home) => fetchKeys(home, (url) => fetch(url, { signal: AbortSignal.timeout(10_000) })),
       )
-      .catch((error: unknown) => console.error("Moving owners over failed:", error));
+      .catch((error: unknown) => hostLog.error("Moving owners over failed", errorFields(error)));
     const lines =
       codes === undefined
         ? startupLines(server.url, options.host, [...assistants.running.keys()], web)

@@ -7508,6 +7508,32 @@
         }
       }
     },
+    "ModelErrorShown": {
+      "type": "object",
+      "required": [
+        "at",
+        "provider",
+        "model",
+        "message"
+      ],
+      "properties": {
+        "at": {
+          "type": "number"
+        },
+        "assistant": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
     "ServerInfoResponse": {
       "type": "object",
       "required": [
@@ -7628,6 +7654,56 @@
               "type": "string"
             }
           }
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "at",
+              "provider",
+              "model",
+              "message"
+            ],
+            "properties": {
+              "at": {
+                "type": "number"
+              },
+              "assistant": {
+                "type": "string"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "HealthResponse": {
+      "type": "object",
+      "required": [
+        "ok",
+        "assistants"
+      ],
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "assistants": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "lastModelErrorAgeSeconds": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     },

@@ -125,6 +125,8 @@ export type NudgeOptions = {
   /** Clock for timestamps and timers; tests inject a fake one. */
   readonly now?: () => number;
   readonly onReport?: (error: unknown) => void;
+  /** Told of every model request that failed, for the host's logs and health. */
+  readonly onModelError?: RedactionOptions["onModelError"];
 };
 
 /** An installed extension, as `Nudge.extensions` lists it. */
@@ -380,6 +382,7 @@ export class Nudge {
     const models = new RedactingModels(options.models, {
       detectors: withExtensionDetectors(detectors, installed),
       onRequest: options.privacy?.onRequest,
+      onModelError: options.onModelError,
     });
     let harness: Harness;
     try {

@@ -3,7 +3,7 @@ import type { IncomingMessage } from "node:http";
 import { join } from "node:path";
 import { upgradeWebSocket as nodeUpgradeWebSocket } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
-import type { Nudge } from "@nudge/core";
+import { errorFields, type LogFields, type Logger, loggerFromEnv, type Nudge } from "@nudge/core";
 import { type Context, Hono, type MiddlewareHandler } from "hono";
 import type { UpgradeWebSocket } from "hono/ws";
 import { HttpError } from "./v1/rest.ts";
@@ -14,7 +14,12 @@ export type AppOptions = {
   readonly assistants: ReadonlyMap<string, Nudge>;
   /** A built web UI (a directory with `index.html`) to serve at every path outside `/v1`. */
   readonly web?: string;
-  readonly onError?: (error: unknown) => void;
+  /** Told of every unexpected error instead of `logger`, with the route and assistant it was for. */
+  readonly onError?: (error: unknown, fields: LogFields) => void;
+  /** Where errors go; default one as `NUDGE_LOG_LEVEL` and `NUDGE_LOG_FORMAT` ask, on stderr. */
+  readonly logger?: Logger;
+  /** The host's last model errors, for `GET /v1/health` and owners at `GET /v1/server`. */
+  readonly modelErrors?: V1Options["modelErrors"];
   /** The runtime's WebSocket upgrade; default Node's. */
   readonly upgradeWebSocket?: UpgradeWebSocket;
   /** Told to v1 clients in `welcome`. */
@@ -39,11 +44,25 @@ export type AppOptions = {
 /** Nudge's HTTP and WebSocket API (protocol v1, under `/v1`) over one or more assistants. */
 export function createApp(options: AppOptions): Hono {
   const app = new Hono();
-  const report = options.onError ?? ((error) => console.error(error));
+  const log = options.logger ?? loggerFromEnv(process.env, process.stderr.isTTY === true);
+  const report =
+    options.onError ??
+    ((error: unknown, fields: LogFields) =>
+      log.error(fields.route === undefined ? "Background error" : "Request failed", {
+        ...fields,
+        ...errorFields(error),
+      }));
 
   app.onError((error, c) => {
     if (error instanceof HttpError) return c.json({ error: error.message }, error.status);
-    report(error);
+    // The route's pattern, not its path, and only the ids that say whose it was: no tokens.
+    const params = c.req.param() as Record<string, string | undefined>;
+    report(error, {
+      method: c.req.method,
+      route: c.req.routePath,
+      assistant: params.assistant,
+      room: params.room,
+    });
     return c.json({ error: "Internal error" }, 500);
   });
   app.notFound((c) => c.json({ error: "Not found" }, 404));
@@ -54,7 +73,8 @@ export function createApp(options: AppOptions): Hono {
       assistants: options.assistants,
       upgradeWebSocket: options.upgradeWebSocket ?? nodeUpgradeWebSocket,
       version: options.version ?? "0.0.0",
-      report,
+      report: (error, fields) => report(error, fields ?? {}),
+      modelErrors: options.modelErrors,
       timing: options.timing,
       publicUrl: options.publicUrl,
       trustProxy: options.trustProxy,

@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
-import type { Nudge } from "@nudge/core";
-import { CLOSE } from "@nudge/protocol";
+import type { LogFields, ModelErrors, Nudge } from "@nudge/core";
+import { CLOSE, type HealthResponse } from "@nudge/protocol";
 import { type Context as HonoContext, Hono } from "hono";
 import type { UpgradeWebSocket } from "hono/ws";
 import { Connection, type ConnectionOptions } from "./connection.ts";
@@ -23,7 +23,10 @@ export type V1Options = {
   readonly assistants: ReadonlyMap<string, Nudge>;
   readonly upgradeWebSocket: UpgradeWebSocket;
   readonly version: string;
-  readonly report: (error: unknown) => void;
+  /** Told of what fails in the background, with the assistant and room it was for. */
+  readonly report: (error: unknown, fields?: LogFields) => void;
+  /** The host's last model errors, for `GET /v1/health` and owners at `GET /v1/server`. */
+  readonly modelErrors?: Pick<ModelErrors, "recent" | "lastAt">;
   /**
    * The server's address as clients reach it, for pairing links; default each request's origin.
    * Read on every request, since setup may set it.
@@ -80,9 +83,29 @@ export function v1Routes(options: V1Options): Hono {
   const hubs = new WeakMap<Nudge, Hubs>();
   const hubsOf = (nudge: Nudge) => {
     let found = hubs.get(nudge);
-    if (found === undefined) hubs.set(nudge, (found = new Hubs(nudge, options.report)));
+    if (found === undefined) {
+      const assistant = nameOf(nudge);
+      found = new Hubs(nudge, (error, fields) => options.report(error, { assistant, ...fields }));
+      hubs.set(nudge, found);
+    }
     return found;
   };
+  const nameOf = (nudge: Nudge) => {
+    for (const [name, open] of options.assistants) if (open === nudge) return name;
+    return undefined;
+  };
+
+  // For a load balancer or a monitor, without a token: it names nothing and tells no secret.
+  app.get("/health", (c) => {
+    const last = options.modelErrors?.lastAt();
+    return c.json({
+      ok: true,
+      assistants: options.assistants.size,
+      ...(last === undefined
+        ? {}
+        : { lastModelErrorAgeSeconds: Math.max(0, Math.floor((Date.now() - last) / 1000)) }),
+    } satisfies HealthResponse);
+  });
 
   // The socket authenticates with its first frame: browsers cannot set headers on a WebSocket.
   app.get(
@@ -107,7 +130,7 @@ export function v1Routes(options: V1Options): Hono {
               heartbeatMs: options.timing?.heartbeatMs ?? 25_000,
               flushMs: options.timing?.flushMs ?? 50,
               helloTimeoutMs: options.timing?.helloTimeoutMs ?? 10_000,
-              report: options.report,
+              report: (error) => options.report(error, { assistant: c.req.param("assistant") }),
             },
           );
         },
@@ -130,7 +153,12 @@ export function v1Routes(options: V1Options): Hono {
               nudge,
               c.req.param("room") ?? "",
               c.req.param("extension") ?? "",
-              options.report,
+              (error) =>
+                options.report(error, {
+                  assistant: c.req.param("assistant"),
+                  room: c.req.param("room"),
+                  extension: c.req.param("extension"),
+                }),
             );
       return {
         onOpen: (_event, ws) => {
@@ -146,7 +174,13 @@ export function v1Routes(options: V1Options): Hono {
   if (options.server !== undefined)
     app.route(
       "/server",
-      serverRoutes({ control: options.server, version: options.version, publicUrl, trustProxy }),
+      serverRoutes({
+        control: options.server,
+        version: options.version,
+        publicUrl,
+        trustProxy,
+        modelErrors: options.modelErrors,
+      }),
     );
   if (options.setup !== undefined) app.route("/setup", setupRoutes(options.setup));
 

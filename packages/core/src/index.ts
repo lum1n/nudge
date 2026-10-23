@@ -288,6 +288,19 @@ export { formatTime, parseTime, ScheduleDoc, type ScheduledNudge } from "./nudge
 export { FIRE_ENTRY, type FireEntryData, NudgeTimer } from "./nudges/timer-task.ts";
 export { buildModels } from "./models/providers.ts";
 export { RedactingModels, type RedactionOptions } from "./models/redacting-models.ts";
+export { type ModelError, ModelErrors, type ModelFailure } from "./models/model-errors.ts";
+export {
+  createLogger,
+  errorFields,
+  LOG_LEVELS,
+  type LogFields,
+  type LogFormat,
+  type Logger,
+  type LoggerOptions,
+  loggerFromEnv,
+  type LogLevel,
+  scrubLog,
+} from "./log.ts";
 export {
   builtinDetectors,
   type PiiDetector,

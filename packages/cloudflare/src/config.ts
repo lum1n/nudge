@@ -12,6 +12,8 @@ export type NudgeEnv = {
   readonly NUDGE_CLAIM_SECRET?: string;
   /** The Worker's address as clients reach it, for pairing links; default each request's origin. */
   readonly NUDGE_PUBLIC_URL?: string;
+  /** debug, info, warn or error; default info. Lines are JSON, for Workers Logs. */
+  readonly NUDGE_LOG_LEVEL?: string;
 };
 
 /** `NUDGE_CONFIG`, checked; one assistant named "nudge" without it. */

@@ -45,6 +45,8 @@ It installs the newest release with its own Node into `~/.local/share/nudge` (or
 
 A server updates itself: every hour it looks for a newer release, installs one the project signed, and starts it. If the new one stops with an error before it has run for 30 seconds, `nudge-server` goes back to the one before and doesn't try it again. Owners see this at `GET /v1/server` and can turn it off (`PUT /v1/server/updates`).
 
+Errors go to stderr as JSON lines, one object each with `time`, `level`, `msg` and the assistant, room and route they were for (`journalctl -u nudge` or `docker compose logs`). `NUDGE_LOG_LEVEL` sets the lowest level written (`debug`, `info`, `warn`, `error`; default `info`) and `NUDGE_LOG_FORMAT` the shape (`json`, or `text` for a person; default `text` on a terminal, `json` otherwise). Keys, tokens, e-mail addresses and phone numbers are scrubbed from every line, and a failed model request is logged as the provider answered it, with placeholders where personal values were. `GET /v1/health` answers without a token, for a monitor: `{ ok, assistants, lastModelErrorAgeSeconds? }`, naming nothing. Owners see the last 20 failed model requests under `errors` at `GET /v1/server`.
+
 Releases are made by pushing a tag such as `v0.2.0` ([`.github/workflows/release.yml`](.github/workflows/release.yml)): an archive per architecture from [`packages/release/scripts/bundle.sh`](packages/release/scripts/bundle.sh), a `manifest.json` signed with the `NUDGE_RELEASE_KEY` secret, and the image. Make that key once with `node packages/release/scripts/keygen.mjs`, and put its public half in `RELEASE_KEYS` (`packages/core/src/server/updates.ts`); until then servers don't update themselves.
 
 ## Run on Cloudflare

@@ -4,9 +4,12 @@ import {
   type AssistantConfig,
   type Assistants,
   type DeepDetector,
+  errorFields,
   findAssistant,
   loadConfig,
   loadExtensions,
+  loggerFromEnv,
+  ModelErrors,
   type Nudge,
   type NudgeConfig,
   type NudgeOptions,
@@ -14,6 +17,15 @@ import {
 } from "@nudge/core";
 
 let localModel: DeepDetector | undefined;
+
+/**
+ * Where this process's errors go: stderr, at `NUDGE_LOG_LEVEL` (default info), as JSON lines or,
+ * on a terminal, as text (`NUDGE_LOG_FORMAT` says which).
+ */
+export const hostLog = loggerFromEnv(process.env, process.stderr.isTTY === true);
+
+/** The last model errors of every assistant in this process, for the health check and owners. */
+export const modelErrors = new ModelErrors();
 
 /** Where a server keeps the local model's files: `server/models` beside its config. */
 export function modelsDir(configPath: string): string {
@@ -37,8 +49,9 @@ export function localModelWanted(config: NudgeConfig | undefined): boolean {
 
 /**
  * What every command that runs an assistant passes to it: new databases encrypted, errors to
- * stderr, the local model when the config turns it on, and with NUDGE_DEBUG_REQUESTS=1 every
- * request, exactly as the provider gets it, appended next to the database.
+ * `hostLog`, model errors kept in `modelErrors`, the local model when the config turns it on,
+ * and with NUDGE_DEBUG_REQUESTS=1 every request, exactly as the provider gets it, appended next
+ * to the database.
  */
 export function hostOptions(
   assistant: AssistantConfig,
@@ -52,7 +65,17 @@ export function hostOptions(
   return {
     // Every database the CLI makes is encrypted (ADR 11); backups carry its key file.
     encryptNew: true,
-    onReport: (error) => console.error(error),
+    onReport: (error) =>
+      hostLog.error("Assistant error", { assistant: assistant.name, ...errorFields(error) }),
+    onModelError: (failure) => {
+      const kept = modelErrors.record({ ...failure, assistant: assistant.name });
+      hostLog.warn("Model request failed", {
+        assistant: assistant.name,
+        provider: kept.provider,
+        model: kept.model,
+        detail: kept.message,
+      });
+    },
     privacy: {
       ...(dump === undefined
         ? {}
