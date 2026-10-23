@@ -371,7 +371,10 @@ export function accExtension(options: AccOptions = {}) {
               ctx,
             );
             asked.trusts.set(room.id, approval.id, entry.name);
-            return text(`Waiting for an admin to approve it (${approval.id}).`);
+            return {
+              ...text(`Waiting for an admin to approve it (${approval.id}).`),
+              details: { approval: approval.id },
+            };
           }
           const here = hosts.usableIn(room.id);
           if (here.length === 0)

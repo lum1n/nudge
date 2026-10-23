@@ -952,7 +952,10 @@ class Peers {
             ),
           context,
         );
-        return toolText(`Waiting for an admin to approve the request (${approval.id}).`);
+        return {
+          ...toolText(`Waiting for an admin to approve the request (${approval.id}).`),
+          details: { approval: approval.id },
+        };
       },
     });
   }
