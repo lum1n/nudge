@@ -52,7 +52,7 @@ export class RedactingModels implements Models {
   private ownDetectors: readonly PiiDetector[];
   private ownRefuse: () => string | undefined = () => undefined;
   private ownScan: Scan = async () => {};
-  private valued: RedactingModels | undefined;
+  private readonly valued = new Map<string | undefined, RedactingModels>();
 
   /**
    * By default what comes back keeps its placeholders, as the transcript stores it (ADR 9);
@@ -63,6 +63,8 @@ export class RedactingModels implements Models {
     private readonly options: RedactionOptions,
     /** Shares the vault, detectors and budget of another, and puts values back in what comes back. */
     private readonly root?: RedactingModels,
+    /** With `root`: whose values are put back, as `Vault.rehydrateFor` decides. */
+    private readonly viewer?: string,
   ) {
     this.ownDetectors = options.detectors;
   }
@@ -99,16 +101,25 @@ export class RedactingModels implements Models {
 
   /**
    * The same models with values put back in what comes back, for code that acts on the answer
-   * itself rather than storing it, such as a browser worker that types into a page.
+   * itself rather than storing it, such as a browser worker that types into a page. Only the
+   * values `viewer` may see come back: the player a tool call or approved action acts for. Without
+   * one, values someone owns stay placeholders.
    */
-  withValues(): RedactingModels {
-    if (this.root !== undefined) return this;
-    this.valued ??= new RedactingModels(this.inner, this.options, this);
-    return this.valued;
+  withValues(viewer?: string): RedactingModels {
+    if (this.root !== undefined) return this.root.withValues(viewer);
+    let valued = this.valued.get(viewer);
+    if (valued === undefined) {
+      valued = new RedactingModels(this.inner, this.options, this, viewer);
+      this.valued.set(viewer, valued);
+    }
+    return valued;
   }
 
-  private get rehydrating(): boolean {
-    return this.root !== undefined;
+  /** What puts values back in what comes back: the viewer's, or none. */
+  private get values(): Rehydrator {
+    if (this.root === undefined) return KEEP_PLACEHOLDERS;
+    const vault = this.vault;
+    return { rehydrate: (text) => vault.rehydrateFor(this.viewer, text) };
   }
 
   /** Connects the vault once its storage is open. Requests before this fail. */
@@ -226,10 +237,11 @@ export class RedactingModels implements Models {
     };
     await this.flush();
     const result = await this.inner.generateImages(model, redacted, options);
+    const values = this.values;
     return {
       ...result,
       output: result.output.map((block) =>
-        block.type === "text" ? { ...block, text: this.vault.rehydrate(block.text) } : block,
+        block.type === "text" ? { ...block, text: values.rehydrate(block.text) } : block,
       ),
     };
   }
@@ -246,7 +258,7 @@ export class RedactingModels implements Models {
     options?: ModelsDeferredFetchOptions,
   ) {
     const message = await this.inner.fetchDeferred(model, handle, options);
-    return this.rehydrating ? rehydrateMessage(message, this.vault) : message;
+    return this.root === undefined ? message : rehydrateMessage(message, this.values);
   }
 
   // Everything else passes through. Spelled out: `inner` is a class instance, so spreading it
@@ -311,7 +323,7 @@ export class RedactingModels implements Models {
     shown: Map<number, string>,
   ): AssistantMessageEvent {
     // Placeholders stay; only one cut off at the end of the text so far is held back.
-    const vault = this.rehydrating ? this.vault : KEEP_PLACEHOLDERS;
+    const vault = this.values;
     switch (event.type) {
       case "done":
         return { ...event, message: rehydrateMessage(event.message, vault) };
@@ -384,8 +396,10 @@ export class RedactingModels implements Models {
 /** What `RedactingModels.scan` reads: a whole request, or the texts of a classifier or image one. */
 export type Scan = (input: Context | readonly string[]) => Promise<void>;
 
+type Rehydrator = Pick<Vault, "rehydrate">;
+
 /** Puts nothing back: what `rehydrateEvent` uses when placeholders are to stay. */
-const KEEP_PLACEHOLDERS = { rehydrate: (text: string) => text } as Vault;
+const KEEP_PLACEHOLDERS: Rehydrator = { rehydrate: (text) => text };
 
 /** A request the assistant would not send, such as one past its budget. */
 export class RequestRefused extends Error {

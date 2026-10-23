@@ -241,7 +241,7 @@ export class Nudge {
       turn: (id, context) => turnOf(this.harness, id, context),
       redact: (text) => this.redact(text),
       rehydrate: (viewer, text) => this.models.vault.rehydrateFor(viewer, text),
-      models: () => this.models.withValues(),
+      models: (viewer) => this.models.withValues(viewer),
     };
   }
   private reloading: Promise<unknown> = Promise.resolve();
@@ -313,8 +313,8 @@ export class Nudge {
       harness,
       this.rooms,
       now,
-      // Actions act on values, so their models put them back (ADR 9).
-      parts.models.withValues(),
+      // Actions act on values, so their models put back those their decider may see (ADR 9).
+      (viewer) => parts.models.withValues(viewer),
       (extension, kind) =>
         this.installed.find((installed) => installed.extension.name === extension)?.approvals[kind],
       changed,
@@ -350,7 +350,7 @@ export class Nudge {
       turn,
       redact: (text) => whenOpen().redact(text),
       rehydrate: (viewer, text) => whenOpen().models.vault.rehydrateFor(viewer, text),
-      models: () => whenOpen().models.withValues(),
+      models: (viewer) => whenOpen().models.withValues(viewer),
     };
     registry.install(
       withToolValues(

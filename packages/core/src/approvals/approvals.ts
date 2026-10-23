@@ -167,7 +167,8 @@ export class Approvals {
     private readonly harness: Harness,
     private readonly rooms: Rooms,
     private readonly now: () => number,
-    private readonly models: Models,
+    /** Models that put back the values `viewer` may see; the viewer is who decided. */
+    private readonly models: (viewer: string | undefined) => Models,
     /** The handler an installed extension has for `kind`, looked up when an approval runs. */
     private readonly handler: (extension: string, kind: string) => ApprovalHandler | undefined,
     private readonly changed: (change: Change) => void = () => {},
@@ -302,7 +303,7 @@ export class Approvals {
       room,
       approval,
       commit: (apply) => this.harness.commit(apply, context),
-      models: this.models,
+      models: this.models(approval.decidedBy?.playerId),
       context,
     };
   }

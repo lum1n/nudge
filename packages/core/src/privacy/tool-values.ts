@@ -30,8 +30,8 @@ export type ToolValues = {
   readonly redact: (text: string) => string;
   /** Puts back the values `viewer` may see; see `Vault.rehydrateFor`. */
   readonly rehydrate: (viewer: string | undefined, text: string) => string;
-  /** Models that put values back, for tools that act on what a model answers. */
-  readonly models: () => ToolExecutionApi["models"];
+  /** Models that put back the values `viewer` may see, for tools that act on what a model answers. */
+  readonly models: (viewer: string | undefined) => ToolExecutionApi["models"];
 };
 
 /**
@@ -55,9 +55,12 @@ function wrap(tool: ToolRegistration, values: ToolValues): ToolRegistration {
     execute: async (args, api, context) => {
       const turn =
         (await setTurnOf(api, context)) ?? (await values.turn(api.conversationId, context));
+      // Only what the player the turn acts for may see: others' private values stay placeholders,
+      // in the arguments and in what its models answer.
+      const viewer = (turn.by ?? turn.privateTo)?.playerId;
       const shown: ToolExecutionApi = {
         ...api,
-        ...(placeholders ? {} : { models: values.models() }),
+        ...(placeholders ? {} : { models: values.models(viewer) }),
         // Replaced output can't take skips past this transform (see `outputWindow`).
         outputWindow: undefined,
         output: (chunk, skipped) =>
@@ -66,8 +69,6 @@ function wrap(tool: ToolRegistration, values: ToolValues): ToolRegistration {
         diagnostic: (diagnostic) =>
           api.diagnostic({ ...diagnostic, message: redact(diagnostic.message) }),
       };
-      // Only what the player the turn acts for may see: others' private values stay placeholders.
-      const viewer = (turn.by ?? turn.privateTo)?.playerId;
       const given = placeholders
         ? args
         : mapStrings(args as JsonValue, (text) => rehydrate(viewer, text));

@@ -295,6 +295,47 @@ describe("redaction in a running assistant", () => {
     await nudge.close(context);
   });
 
+  it("gives a tool's models only the private values the turn's sender may see", async () => {
+    const { faux, options } = setup();
+    const answered: string[] = [];
+    const draft = defineTool({
+      name: "draft",
+      description: "Draft a note",
+      parameters: Type.Object({}),
+      execute: async (_, api) => {
+        const reply = await api.models.completeSimple(faux.getModel(), {
+          messages: [{ role: "user", content: "Where to?", timestamp: 0 }],
+        });
+        answered.push(
+          reply.content.map((block) => (block.type === "text" ? block.text : "")).join(""),
+        );
+        return { output: [{ type: "text", text: "Drafted." }] };
+      },
+    });
+    const nudge = await createNudge(
+      { ...options, extensions: [defineExtension({ name: "draft", tools: [draft] })] },
+      context,
+    );
+    const placeholder = await nudge.protect("Storgata 1", "PRIVATE", { owner: "ann" });
+    for (const author of [
+      { playerId: "bo", displayName: "Bo" },
+      { playerId: "ann", displayName: "Ann" },
+    ]) {
+      faux.setResponses([
+        fauxAssistantMessage([fauxToolCall("draft", {})], { stopReason: "toolUse" }),
+        fauxAssistantMessage(`Go to ${placeholder}.`),
+        fauxAssistantMessage("Done."),
+      ]);
+      const settled = await (
+        await nudge.submit(LOBBY, { text: "Draft it", author }, context)
+      ).wait(context);
+      expect(settled.status).toBe("done");
+    }
+    // The room is shared, but only Ann's turn gets her value back from the model.
+    expect(answered).toEqual([`Go to ${placeholder}.`, "Go to Storgata 1."]);
+    await nudge.close(context);
+  });
+
   it("rewrites history from before placeholders were stored, and vacuums it out of the file", async () => {
     const { faux, options } = setup();
     faux.setResponses([fauxAssistantMessage("Noted, ⟦EMAIL1⟧.")]);
