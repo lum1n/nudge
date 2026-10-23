@@ -1,5 +1,7 @@
 // A tiny MCP server on stdio for the tests: `lookup` (read-only), `save`, `env` (read-only, the
-// variables it got), `pid` (read-only) and `picture` (read-only, an image).
+// variables it got), `pid` (read-only), `picture` (read-only, an image) and `read` (read-only, a
+// file's text, or why it can't).
+import { readFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 
 const tools = [
@@ -17,6 +19,11 @@ const tools = [
   { name: "env", inputSchema: { type: "object" }, annotations: { readOnlyHint: true } },
   { name: "pid", inputSchema: { type: "object" }, annotations: { readOnlyHint: true } },
   { name: "picture", inputSchema: { type: "object" }, annotations: { readOnlyHint: true } },
+  {
+    name: "read",
+    inputSchema: { type: "object", properties: { path: { type: "string" } } },
+    annotations: { readOnlyHint: true },
+  },
 ];
 const saved = [];
 
@@ -35,6 +42,12 @@ function answer(name, args) {
       return { content: [{ type: "text", text: String(process.pid) }] };
     case "picture":
       return { content: [{ type: "image", data: "aGk=", mimeType: "image/png" }] };
+    case "read":
+      try {
+        return { content: [{ type: "text", text: readFileSync(args.path, "utf8") }] };
+      } catch (error) {
+        return { content: [{ type: "text", text: error.code }], isError: true };
+      }
     default:
       return { content: [{ type: "text", text: `No tool ${name}` }], isError: true };
   }

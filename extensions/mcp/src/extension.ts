@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import type { Context } from "@earendil-works/chord";
 import type { DocumentReader, ToolRegistration } from "@earendil-works/pi-durable";
 import { type CallToolResult, type Tool, toLlmContent } from "@earendil-works/pi-mcp";
@@ -46,7 +47,22 @@ const ServerSettings = Type.Object({
     }),
   ),
   cwd: Type.Optional(
-    Type.String({ title: "Working directory", description: "The folder the program starts in." }),
+    Type.String({
+      title: "Working directory",
+      description:
+        "The folder the program starts in; in the sandbox, it may read and write it. Its own home when left out.",
+    }),
+  ),
+  /**
+   * Run the program in a bubblewrap sandbox (the default), which shows it the system, its own home
+   * and working directory, and none of Nudge's files. Off runs it as Nudge's user, able to read
+   * Nudge's database and keys.
+   */
+  sandbox: Type.Optional(
+    Type.Boolean({
+      description:
+        "Run the program in a bubblewrap sandbox without Nudge's files (the default). Off runs it as Nudge's user, able to read Nudge's database and keys.",
+    }),
   ),
   url: Type.Optional(
     Type.String({
@@ -70,12 +86,24 @@ const ServerSettings = Type.Object({
   ),
   /**
    * Which calls wait for someone in the room to approve: `writes` (the default) all but the tools
-   * the server marks read-only, `always` every one, `never` none.
+   * the server marks read-only, once `trustReadOnlyHint` is on, `always` every one, `never` none.
    */
   approval: Type.Optional(
     Type.Union([Type.Literal("writes"), Type.Literal("always"), Type.Literal("never")], {
       description:
         "Which calls wait for someone in the room to approve: writes (all but read-only tools, the default), always or never.",
+    }),
+  ),
+  /**
+   * Whether tools the server marks read-only skip approval under `writes`. Off by default: the
+   * server sets the mark itself, so with it on, the server decides which of its calls are asked.
+   */
+  trustReadOnlyHint: Type.Optional(
+    Type.Boolean({
+      title: "Trust read-only marks",
+      description:
+        "Let tools the server marks read-only run without approval under writes. Off by default: " +
+        "the server sets the mark itself, so until this is on, every call is approved.",
     }),
   ),
   /**
@@ -148,10 +176,37 @@ export function fillVariables(
   });
 }
 
-type Server = {
+/** A warning for each configured program that runs outside the sandbox, for doctor. */
+export function sandboxWarnings(
+  servers: Readonly<Record<string, { readonly command?: string; readonly sandbox?: boolean }>>,
+): string[] {
+  return Object.entries(servers)
+    .filter(([, server]) => server.command !== undefined && server.sandbox === false)
+    .map(
+      ([name]) =>
+        `server ${name} runs its program without a sandbox, as Nudge's user, so it can read ` +
+        "Nudge's database and keys",
+    );
+}
+
+type Approving = {
+  readonly approval: "writes" | "always" | "never";
+  readonly trustReadOnlyHint?: boolean;
+};
+
+/**
+ * Whether a call to `tool` waits for approval. Under `writes`, only a tool the server marks
+ * read-only skips it, and only where the server's settings trust that mark.
+ */
+export function needsApproval(server: Approving, tool: Pick<Tool, "annotations">): boolean {
+  if (server.approval === "never") return false;
+  if (server.approval === "always") return true;
+  return server.trustReadOnlyHint !== true || tool.annotations?.readOnlyHint !== true;
+}
+
+type Server = Approving & {
   readonly name: string;
   readonly config: ServerConfig;
-  readonly approval: "writes" | "always" | "never";
   readonly images: boolean;
   readonly tools: readonly Tool[];
 };
@@ -175,6 +230,12 @@ export default defineNudgeExtension({
         "The MCP servers to use, by name in lowercase letters, digits, - and _; the name becomes part of each tool's name.",
     }),
     /** Close a server's connection, and stop a started program, after this long unused. */
+    /** For started programs in the sandbox, configured and added by rooms. */
+    readable: Type.Array(Type.String(), {
+      default: [],
+      description:
+        "More directories MCP servers' programs may read in the sandbox, at the same paths, such as where node or uv is installed outside /usr and /opt.",
+    }),
     idleMinutes: Type.Number({
       default: 5,
       minimum: 0,
@@ -208,11 +269,21 @@ export default defineNudgeExtension({
               );
         const env = fill(server.env);
         const headers = fill(server.headers);
+        const sandboxed = server.command !== undefined && server.sandbox !== false;
         configs.set(name, {
           ...(server.command === undefined ? {} : { command: server.command }),
           ...(server.args === undefined ? {} : { args: server.args }),
           ...(env === undefined ? {} : { env }),
-          ...(server.cwd === undefined ? {} : { cwd: server.cwd }),
+          ...(server.cwd === undefined || sandboxed ? {} : { cwd: server.cwd }),
+          ...(sandboxed
+            ? {
+                sandbox: {
+                  ...(dataDir === undefined ? {} : { home: join(dataDir, "servers", name) }),
+                  ...(server.cwd === undefined ? {} : { cwd: server.cwd }),
+                  readable: settings.readable,
+                },
+              }
+            : {}),
           ...(server.url === undefined ? {} : { url: server.url }),
           ...(headers === undefined ? {} : { headers }),
           timeoutMs: (server.timeoutSeconds ?? 60) * 1000,
@@ -229,7 +300,14 @@ export default defineNudgeExtension({
       VERSION,
     );
     const logins = new OAuthLogins(secrets, assistant, now);
-    const rooms: RoomServers = new RoomServers(pool, secrets, logins, 60_000, dataDir);
+    const rooms: RoomServers = new RoomServers(
+      pool,
+      secrets,
+      logins,
+      60_000,
+      dataDir,
+      settings.readable,
+    );
     const panels = new Panels(documents, secrets, rooms, logins);
     // Tools are registered now, so each server is asked for its list once, at setup. One that
     // can't be reached is left out, and reported, rather than keeping the assistant from opening.
@@ -244,6 +322,7 @@ export default defineNudgeExtension({
             name,
             config,
             approval: settingsOf.approval ?? "writes",
+            trustReadOnlyHint: settingsOf.trustReadOnlyHint === true,
             images: passesImages(settingsOf),
             tools: wanted === undefined ? listed : listed.filter((t) => wanted.includes(t.name)),
           });
@@ -254,12 +333,8 @@ export default defineNudgeExtension({
     );
     servers.sort((a, b) => a.name.localeCompare(b.name));
     for (const problem of failed) console.error(`mcp: left out server ${problem}`);
-    const warnings = imageWarnings(settings.servers);
+    const warnings = [...imageWarnings(settings.servers), ...sandboxWarnings(settings.servers)];
     for (const warning of warnings) console.error(`mcp: ${warning}`);
-
-    const needsApproval = (server: Server, tool: Tool) =>
-      server.approval === "always" ||
-      (server.approval === "writes" && tool.annotations?.readOnlyHint !== true);
 
     const call = async (server: Server, tool: string, args: Record<string, unknown>) =>
       forModel(await pool.callTool(server.name, tool, args), server.images);
@@ -515,8 +590,8 @@ function roomServerTools({ rooms, panels, now }: RoomParts): ToolRegistration[] 
       const program = draft.command !== undefined;
       const summary = program
         ? `Start the program \`${describeServer(draft)}\` on the server as the MCP server ` +
-          `"${draft.name}", for: ${draft.useFor}. It can do anything the server's user can, so ` +
-          "only an admin can approve it."
+          `"${draft.name}", for: ${draft.useFor}. It runs in a sandbox without Nudge's files, but ` +
+          "with the network and whatever keys people give it, so only an admin can approve it."
         : `Add the MCP server "${draft.name}" at ${draft.url}, for: ${draft.useFor}`;
       try {
         const approval = await api.commit(
@@ -571,7 +646,7 @@ function roomServerTools({ rooms, panels, now }: RoomParts): ToolRegistration[] 
         const lines = matching.slice(0, LISTED).map((tool) => {
           const input = JSON.stringify(tool.inputSchema);
           return (
-            `- ${tool.name}${needsApproval(server.approval, tool) ? " (approved before it runs)" : ""}: ` +
+            `- ${tool.name}${needsApproval(server, tool) ? " (approved before it runs)" : ""}: ` +
             `${tool.description ?? tool.title ?? ""}\n  input: ` +
             (input.length > 800 ? `${input.slice(0, 800)}…` : input)
           );
@@ -591,8 +666,8 @@ function roomServerTools({ rooms, panels, now }: RoomParts): ToolRegistration[] 
   const call = defineTool({
     name: "mcp_call",
     description:
-      "Call a tool of an MCP server added in this conversation. Read-only tools run at once; " +
-      "others wait for someone in the room to approve them.",
+      "Call a tool of an MCP server added in this conversation. Calls wait for someone in the " +
+      "room to approve them, unless the room lets the server's read-only tools run at once.",
     parameters: Type.Object({
       server: Type.String(),
       tool: Type.String(),
@@ -606,7 +681,7 @@ function roomServerTools({ rooms, panels, now }: RoomParts): ToolRegistration[] 
         const tool = (await rooms.tools(room.id, server)).find((t) => t.name === args.tool);
         if (tool === undefined)
           return text(`${server.name} has no tool "${args.tool}"; see mcp_tools.`, true);
-        if (!needsApproval(server.approval, tool))
+        if (!needsApproval(server, tool))
           return forModel(await rooms.call(room.id, server, tool.name, params), ROOM_SERVER_IMAGES);
         const shown = JSON.stringify(params);
         const approval = await api.commit(
@@ -713,12 +788,6 @@ function roomApprovals({ rooms, panels, now }: RoomParts): ExtensionParts["appro
       };
     },
   };
-}
-
-function needsApproval(approval: RoomServer["approval"], tool: Tool): boolean {
-  return (
-    approval === "always" || (approval === "writes" && tool.annotations?.readOnlyHint !== true)
-  );
 }
 
 /** The page the browser shows after a sign-in. */

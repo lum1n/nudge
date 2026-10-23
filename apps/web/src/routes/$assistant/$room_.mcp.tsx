@@ -153,6 +153,22 @@ function ServerCard({ socket, server }: { socket: McpSocket; server: PanelServer
             </option>
           ))}
         </select>
+        {server.approval === "writes" ? (
+          <label className="flex items-center gap-1 text-stone-600">
+            <input
+              type="checkbox"
+              checked={server.trustReadOnlyHint === true}
+              onChange={(event) =>
+                socket.send({
+                  type: "setTrustReadOnlyHint",
+                  server: id,
+                  trust: event.target.checked,
+                })
+              }
+            />
+            Trust the server's read-only marks
+          </label>
+        ) : null}
         <button
           type="button"
           onClick={() => socket.send({ type: "refresh", server: id })}

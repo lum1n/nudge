@@ -26,6 +26,11 @@ export type RoomServer = {
   keys: ServerKey[];
   /** Which calls wait for approval, as for configured servers. People change it, never the model. */
   approval: "writes" | "always" | "never";
+  /**
+   * Whether tools the server itself marks read-only (`readOnlyHint`) skip approval under `writes`.
+   * Off unless people turn it on: the server sets the mark, so it could mark any tool so.
+   */
+  trustReadOnlyHint?: boolean;
   addedBy: string;
   addedAt: number;
 };
@@ -112,13 +117,14 @@ export async function updateServer(
   tx: Tx,
   roomId: string,
   id: string,
-  change: Partial<Pick<RoomServer, "useFor" | "approval">>,
+  change: Partial<Pick<RoomServer, "useFor" | "approval" | "trustReadOnlyHint">>,
 ): Promise<RoomServer> {
   const state = await tx.doc(RoomServersDoc, roomId, null);
   const server = state.servers.find((s) => s.id === id || s.name === id);
   if (server === undefined) throw new Error(`No MCP server "${id}" in this room`);
   if (change.useFor !== undefined) server.useFor = change.useFor;
   if (change.approval !== undefined) server.approval = change.approval;
+  if (change.trustReadOnlyHint !== undefined) server.trustReadOnlyHint = change.trustReadOnlyHint;
   return copy(server);
 }
 

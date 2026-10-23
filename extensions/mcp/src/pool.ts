@@ -7,6 +7,7 @@ import {
   StreamableHttpTransport,
   type Tool,
 } from "@earendil-works/pi-mcp";
+import { type Sandbox, sandboxed } from "./sandbox.ts";
 
 /** One MCP server as the settings give it, with `${VAR}`s already filled in. */
 export type ServerConfig = {
@@ -16,6 +17,11 @@ export type ServerConfig = {
   /** Variables for the program; it gets no others, apart from PATH, HOME and a few like them. */
   readonly env?: Readonly<Record<string, string>>;
   readonly cwd?: string;
+  /**
+   * Runs the program in a bubblewrap sandbox that shows it the system, these directories and
+   * none of Nudge's files; it runs as Nudge's user, unsandboxed, when left out.
+   */
+  readonly sandbox?: Sandbox;
   /** A Streamable HTTP server, instead of a program. */
   readonly url?: string;
   readonly headers?: Readonly<Record<string, string>>;
@@ -147,6 +153,19 @@ function transport(config: ServerConfig): McpTransport {
   for (const name of PASSED_ENV) {
     const value = process.env[name];
     if (value !== undefined) env[name] = value;
+  }
+  if (config.sandbox !== undefined) {
+    // Its own home and temp files; the host's are outside the sandbox.
+    env.HOME = config.sandbox.home ?? "/tmp";
+    env.TMPDIR = "/tmp";
+    const run = sandboxed(config.command!, config.args ?? [], config.sandbox);
+    return new StdioTransport({
+      command: run.command,
+      args: run.args,
+      env: { ...env, ...config.env },
+      inheritEnv: false,
+      stderr: "pipe",
+    });
   }
   return new StdioTransport({
     command: config.command!,

@@ -40,6 +40,7 @@ export type PanelInput = { ref?: string } & (
   | { type: "setKey"; server: string; key: string; value: string }
   | { type: "clearKey"; server: string; key: string }
   | { type: "setApproval"; server: string; approval: RoomServer["approval"] }
+  | { type: "setTrustReadOnlyHint"; server: string; trust: boolean }
   | { type: "signIn"; server: string; base: string }
   | { type: "signOut"; server: string }
   | { type: "refresh"; server: string }
@@ -161,6 +162,13 @@ export class Panels {
         if (!APPROVALS.has(input.approval)) throw new Error("Approval is writes, always or never");
         await documents.commit(
           (tx) => updateServer(tx, roomId, server.id, { approval: input.approval }),
+          BACKGROUND_CONTEXT,
+        );
+        return undefined;
+      case "setTrustReadOnlyHint":
+        if (typeof input.trust !== "boolean") throw new Error("Trust is true or false");
+        await documents.commit(
+          (tx) => updateServer(tx, roomId, server.id, { trustReadOnlyHint: input.trust }),
           BACKGROUND_CONTEXT,
         );
         return undefined;

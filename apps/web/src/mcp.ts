@@ -11,6 +11,8 @@ export type PanelServer = {
   command?: string;
   keys: { in: "header" | "env"; name: string; prefix?: string; set: boolean }[];
   approval: "writes" | "always" | "never";
+  /** Whether tools the server marks read-only run without asking, under `writes`. */
+  trustReadOnlyHint?: boolean;
   addedBy: string;
   signedIn: boolean;
   problem?: string;
@@ -22,6 +24,7 @@ export type McpInput =
   | { type: "setKey"; server: string; key: string; value: string }
   | { type: "clearKey"; server: string; key: string }
   | { type: "setApproval"; server: string; approval: PanelServer["approval"] }
+  | { type: "setTrustReadOnlyHint"; server: string; trust: boolean }
   | { type: "signIn"; server: string; base: string }
   | { type: "signOut"; server: string }
   | { type: "refresh"; server: string }
