@@ -10,6 +10,11 @@ export type VaultEntry = {
   readonly owner?: string;
   /** Dropped for good: the placeholder stays, so its number is never given to another value. */
   readonly forgotten?: true;
+  /**
+   * Readable again (ADR 15): no longer hidden, but its placeholder, wherever it is still stored,
+   * is put back in what the model sees.
+   */
+  readonly released?: true;
 };
 
 /** Placeholders look like `⟦EMAIL1⟧`: the brackets never occur in prose, Markdown or JSON. */
@@ -33,6 +38,7 @@ export function vaultKey(value: string): string {
  */
 export class Vault {
   private readonly byKey = new Map<string, VaultEntry>();
+  private readonly releasedByKey = new Map<string, VaultEntry>();
   private readonly byPlaceholder = new Map<string, VaultEntry>();
   private readonly counters = new Map<string, number>();
   private unsaved: VaultEntry[] = [];
@@ -77,6 +83,15 @@ export class Vault {
       throw new Error("Refusing to protect a value shorter than two characters");
     if (!/^[A-Z]+$/.test(kind))
       throw new Error(`Placeholder kind must be upper-case letters, got "${kind}"`);
+    const released = this.releasedByKey.get(vaultKey(trimmed));
+    if (released !== undefined) {
+      // Hidden again, under its old placeholder.
+      const { released: _, ...hidden } = released;
+      const entry = owner === undefined ? hidden : { ...hidden, owner };
+      this.insert(entry);
+      this.unsaved.push(entry);
+      return entry.placeholder;
+    }
     const existing = this.byKey.get(vaultKey(trimmed));
     if (existing !== undefined) {
       if (owner !== undefined && existing.owner === undefined) {
@@ -118,9 +133,29 @@ export class Vault {
     return true;
   }
 
+  /**
+   * Makes a value readable again: text no longer has it replaced, and its placeholder is put back
+   * wherever it is still stored, the model's requests included. Owned and forgotten values can't
+   * be released. False when there is nothing to release.
+   */
+  release(placeholder: string): boolean {
+    const entry = this.byPlaceholder.get(placeholder);
+    if (entry === undefined || entry.forgotten || entry.released || entry.owner !== undefined)
+      return false;
+    const released: VaultEntry = { ...entry, released: true };
+    this.insert(released);
+    this.unsaved.push(released);
+    return true;
+  }
+
   /** Whether the vault hides `value` already. */
   knows(value: string): boolean {
     return this.byKey.has(vaultKey(value));
+  }
+
+  /** The placeholder `value` is hidden under; undefined when it isn't hidden. */
+  placeholderOf(value: string): string | undefined {
+    return this.byKey.get(vaultKey(value))?.placeholder;
   }
 
   /** The entry behind a placeholder, forgotten ones included. */
@@ -135,7 +170,7 @@ export class Vault {
    */
   redact(text: string, detectors: readonly PiiDetector[], owner?: string): string {
     if (text === "") return text;
-    return mapOutsidePlaceholders(text, (segment) => {
+    return mapOutsidePlaceholders(this.withReleased(text), (segment) => {
       for (const span of pickSpans(segment, detectors)) {
         const value = segment.slice(span.start, span.end);
         // Only new values: an owner given here must not take a value others already saw.
@@ -180,6 +215,15 @@ export class Vault {
     );
   }
 
+  /** Text with the placeholders of released values put back. */
+  private withReleased(text: string): string {
+    if (this.releasedByKey.size === 0 || !text.includes("⟦")) return text;
+    return text.replace(PLACEHOLDER, (placeholder) => {
+      const entry = this.byPlaceholder.get(placeholder);
+      return entry?.released ? entry.value : placeholder;
+    });
+  }
+
   private hideOwned(text: string, viewer: string | undefined): string {
     let matcher = this.hiddenFrom.get(viewer);
     if (matcher === undefined) {
@@ -206,7 +250,15 @@ export class Vault {
     const match = /^⟦([A-Z]+)(\d+)⟧$/.exec(entry.placeholder);
     if (match === null) throw new Error(`Malformed placeholder ${entry.placeholder}`);
     const [, kind = "", n = "0"] = match;
-    if (!entry.forgotten) this.byKey.set(vaultKey(entry.value), entry);
+    const key = vaultKey(entry.value);
+    // An entry's last state wins: a released value is no longer hidden, and the reverse.
+    const previous = this.byPlaceholder.get(entry.placeholder);
+    if (previous !== undefined && !previous.forgotten) {
+      this.byKey.delete(vaultKey(previous.value));
+      this.releasedByKey.delete(vaultKey(previous.value));
+    }
+    if (entry.released) this.releasedByKey.set(key, entry);
+    else if (!entry.forgotten) this.byKey.set(key, entry);
     this.byPlaceholder.set(entry.placeholder, entry);
     this.counters.set(kind, Math.max(this.counters.get(kind) ?? 0, Number(n)));
     this.matcher = undefined;

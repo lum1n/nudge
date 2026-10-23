@@ -175,7 +175,7 @@ export {
   RoomEvents,
 } from "./room-events.ts";
 export { Presence } from "./presence.ts";
-export { describeRoom, formatHour } from "./extensions/builtin.ts";
+export { describeRoom, formatToday } from "./extensions/builtin.ts";
 export {
   defineNudgeExtension,
   ROOMS_SETTING,
@@ -223,7 +223,9 @@ export {
   type Player,
   type PlayerHome,
   addressOf,
+  assistantAddressOf,
   parseAddress,
+  parseAssistantAddress,
   sameHome,
   type Room,
   type RoomKind,
@@ -288,7 +290,9 @@ export { RedactingModels, type RedactionOptions } from "./models/redacting-model
 export {
   builtinDetectors,
   type PiiDetector,
+  quasiIdentifierDetectors,
   regexDetector,
+  secretDetector,
   type Span,
 } from "./privacy/detectors.ts";
 export { addressDetector, nameDetector } from "./privacy/people.ts";

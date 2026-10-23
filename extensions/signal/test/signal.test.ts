@@ -152,7 +152,7 @@ describe("signal bridge", () => {
 
     daemon.receive(ann, "Hello there", undefined, true);
     await until(() => daemon.to("uuid-ann").length === 2);
-    expect(daemon.to("uuid-ann")[1]).toBe("Answer to Ann: Hello there");
+    expect(daemon.to("uuid-ann")[1]).toMatch(/^Answer to Ann \(\d\d:\d\d\): Hello there$/);
 
     daemon.drop();
     await until(() => daemon.connections === 0);

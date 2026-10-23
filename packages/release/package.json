@@ -12,6 +12,7 @@
     "@nudge/ext-calendar": "workspace:*",
     "@nudge/ext-codemode": "workspace:*",
     "@nudge/ext-connectors": "workspace:*",
+    "@nudge/ext-contacts": "workspace:*",
     "@nudge/ext-desktop": "workspace:*",
     "@nudge/ext-documents": "workspace:*",
     "@nudge/ext-federation": "workspace:*",
@@ -20,12 +21,14 @@
     "@nudge/ext-matrix": "workspace:*",
     "@nudge/ext-mcp": "workspace:*",
     "@nudge/ext-ner": "workspace:*",
+    "@nudge/ext-peers": "workspace:*",
     "@nudge/ext-push": "workspace:*",
     "@nudge/ext-rss": "workspace:*",
     "@nudge/ext-search": "workspace:*",
     "@nudge/ext-signal": "workspace:*",
     "@nudge/ext-telegram": "workspace:*",
     "@nudge/ext-terminal": "workspace:*",
+    "@nudge/ext-triggers": "workspace:*",
     "@nudge/ext-watches": "workspace:*"
   }
 }

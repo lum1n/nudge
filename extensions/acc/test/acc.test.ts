@@ -339,8 +339,8 @@ describe("acc", () => {
     expect(acc.logs.size).toBe(0);
     const [asked] = await nudge.approvals.list(LOBBY, context);
     expect(asked).toMatchObject({ kind: "start", status: "pending" });
-    // Stored with placeholders, like every approval (ADR 9).
-    expect(asked!.summary).toContain("Start claude on ⟦HOST1⟧ in ~/proj");
+    // Machine names are readable to the model (ADR 15), so the summary names the machine.
+    expect(asked!.summary).toContain("Start claude on devbox in ~/proj");
     const done = await nudge.approvals.decide(LOBBY, asked!.id, { approve: true, by }, context);
     expect(done.status).toBe("done");
     expect(acc.logs.get("claude-s1")?.sent).toEqual([
@@ -421,9 +421,7 @@ describe("acc", () => {
     expect(acc.configs).toEqual(["local"]);
     const conversation = await nudge.conversation(LOBBY, context);
     const entries = await conversation.entries({}, 50, undefined, context);
-    expect(JSON.stringify(entries.items)).toContain(
-      "claude-here: claude in /home/⟦USERNAME1⟧/app, running",
-    );
+    expect(JSON.stringify(entries.items)).toContain("claude-here: claude in /home/me/app, running");
   });
 
   it("names machines by their address when unnamed, and keeps names apart", () => {

@@ -19,7 +19,8 @@
   },
   "dependencies": {
     "@earendil-works/pi-durable": "1.2.0",
-    "@nudge/core": "workspace:*"
+    "@nudge/core": "workspace:*",
+    "@nudge/ext-documents": "workspace:*"
   },
   "devDependencies": {
     "@earendil-works/chord": "1.2.0",

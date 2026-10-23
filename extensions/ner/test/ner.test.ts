@@ -19,9 +19,10 @@ describe("the extension", () => {
       },
       BACKGROUND_CONTEXT,
     );
+    // Its own names are hidden; the street address stays readable (ADR 15).
     expect(
       nudge.redact("Tiril og Kari Nordmann bor i Storgata 5B, 0151 Oslo. Ring 912 34 567."),
-    ).toBe("⟦NAME1⟧ og ⟦NAME2⟧ bor i ⟦ADDRESS1⟧. Ring ⟦PHONE1⟧.");
+    ).toBe("⟦NAME1⟧ og ⟦NAME2⟧ bor i Storgata 5B, 0151 Oslo. Ring ⟦PHONE1⟧.");
     await nudge.close(BACKGROUND_CONTEXT);
   });
 });

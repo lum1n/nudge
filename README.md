@@ -26,8 +26,10 @@ An extendable, multiplayer personal assistant that keeps personal data away from
 - `@nudge/ext-mcp`: gives the assistant the tools of MCP servers (`extensions/mcp`).
 - `@nudge/ext-codemode`: lets the model run short scripts that call the room's tools (`extensions/codemode`).
 - `@nudge/ext-federation`: lets people from other assistants join, with their home vouching for them (`extensions/federation`).
+- `@nudge/ext-peers`: lets linked assistants on other servers talk to each other (`extensions/peers`).
 - `@nudge/ext-push`: notifications of answers and approvals, through Web Push, APNs and FCM (`extensions/push`).
 - `@nudge/ext-rss`: RSS and Atom feeds the assistant checks first for news (`extensions/rss`).
+- `@nudge/ext-triggers`: secret web addresses that let outside events start a turn in a room (`extensions/triggers`).
 - `@nudge/ext-acc`: lets the assistant start, watch and steer coding agents on your machines over SSH (`extensions/acc`).
 
 ## Install a server
@@ -138,7 +140,7 @@ Every client, the web UI, `nudge chat --url` and the native apps, talks [protoco
 
 ## Web UI
 
-Sign in at `/login` with a token, the link `nudge invite` prints (`/login#token=…`, which never reaches the server or its logs), or a pairing code from `nudge pair`. The token lives in that browser tab's `sessionStorage` only, so opening another tab or browser needs its own sign-in, unless you tick **Remember this device**: then it is kept in the browser's `localStorage`, and every tab, and a notification opened after the tab closed, stays signed in until **Sign out**, which forgets it in both. Leave it unticked on a shared computer.
+Sign in at `/login` by scanning its QR code with your phone's camera: the Nudge app, signed in already, asks to confirm and signs the browser in as you, at the assistant the app uses on that server. Or sign in with a token, the link `nudge invite` prints (`/login#token=…`, which never reaches the server or its logs), or a pairing code from `nudge pair`. The token lives in that browser tab's `sessionStorage` only, so opening another tab or browser needs its own sign-in, unless you tick **Remember this device**: then it is kept in the browser's `localStorage`, and every tab, and a notification opened after the tab closed, stays signed in until **Sign out**, which forgets it in both. Leave it unticked on a shared computer.
 
 A room page shows the same conversation the CLI and the API see, live, for everyone in it: each message with who sent it, the assistant's answer streaming in with its tool calls, and fired nudges, rendered as markdown. Send a follow-up or steer while it's still answering — it queues the same way a second CLI client's would — or stop it; "Load earlier" fetches older history past what first loaded. A room's Memory, Nudges and approval panels list, add, forget, cancel and decide the same things `/memory`, `/nudges` and `/approve` do in the terminal, and update live whoever made the change. The web UI talks [protocol v1](docs/protocol/v1.md) through `@nudge/client`, like the native apps will. "Open my room" and "New shared room" on the room list open the same rooms `nudge chat me` and `nudge room` do.
 
@@ -191,25 +193,19 @@ Every model request's cost, as the model catalog prices it, is booked per month 
 
 ## Privacy
 
-Nudge keeps what identifies you from the model provider. Before a request leaves, it replaces these with placeholders such as `⟦EMAIL1⟧` or `⟦PLACE2⟧`:
+Nudge keeps what could do harm on its own from the model provider. Before a request leaves, it replaces these with placeholders such as `⟦EMAIL1⟧` or `⟦PHONE2⟧`:
 
-- e-mail addresses, phone numbers, IBANs, card numbers, Norwegian national identity and account numbers
-- people's names (the people chatting, by whole name, first name and family name, and names from Norwegian and English name lists) and street addresses
-- Norwegian places and rail stations
-- the kindergartens, schools, clinics and clubs you name, and their departments
-- your own hosts and domains, IP addresses, and user names in paths
-- licence plates, VINs and birth dates
+- passwords, API keys, tokens and private keys
+- Norwegian national identity numbers
+- card numbers, IBANs and Norwegian account numbers
+- e-mail addresses and phone numbers
+- whatever someone makes private, and their personal details and location (below)
 
-This covers every request, including tool rounds and the summaries made when a long conversation is compacted. Thinking that could hold a value is left out. A value keeps its placeholder for the life of the assistant. Tools still get the real values, so a journey planner gets the real station.
+This covers every request, including tool rounds and the summaries made when a long conversation is compacted. Thinking that could hold a value is left out. A value keeps its placeholder for the life of the assistant. Tools still get the real values, so a mail goes to the real address.
 
-What stays readable, on purpose:
+Names, places, stations, organisations, addresses, hosts, plates and birth dates stay readable, so the assistant can plan a trip, call an API or tell people apart. Hide one yourself with `/private` ([ADR 15](docs/adr/0015-hide-only-what-is-critical.md)).
 
-- what things are about ("has a dog", "selling the car")
-- each person's time zone and language
-- Oslo, Bergen, Trondheim and Stavanger
-- well-known public sites such as `yr.no` or `github.com`
-
-A small model on the server finds what the rules miss, such as a vet's name on its own ("hos Vethjem"). It reads each message, tool result and data section once before the provider gets it, and what it finds goes into the vault. Web search results are left to the rules, so the shops and places in them stay readable. Well-known names stay readable everywhere: famous people's full names, companies, brands, programmes and sights from Wikidata, and countries and big cities abroad. The model is GLiNER (`urchade/gliner_multi-v2.1`, Apache-2.0), run on the CPU in a process of its own. `nudge serve` and `nudge chat` download it the first time: about 260 MB, into `server/models` beside `nudge.json`. While it reads it takes about 650 MB of memory; after two minutes with nothing to read it stops, and starts again in about a second. Until it runs, requests are refused, so nothing goes out unread. In `nudge.json`, `"privacy": { "deep": "preferred" }` sends requests with the rules alone while it is missing, `"deep": "off"` never downloads it, and `"allow": ["Kiwi"]` keeps words it hides by mistake readable. Assistants on Cloudflare run the rules alone. Check what a room sends with **Model view**, and hide what slipped through with `/private` ([ADR 14](docs/adr/0014-quasi-identifiers-and-local-ner.md)).
+For more, a small model on the server hides names, places and organisations too, such as a vet's name on its own ("hos Vethjem"), along with the rules for hosts, plates and birth dates. It is off unless `nudge.json` has `"privacy": { "deep": "required" }`, which refuses requests until the model runs, or `"deep": "preferred"`, which sends them with the rules alone meanwhile. `"allow": ["Kiwi"]` keeps words it hides by mistake readable. Famous people, companies, brands and big cities abroad stay readable either way. The model is GLiNER (`urchade/gliner_multi-v2.1`, Apache-2.0), run on the CPU in a process of its own. It is downloaded the first time: about 260 MB, into `server/models` beside `nudge.json`. While it reads it takes about 650 MB of memory; after two minutes with nothing to read it stops. Assistants on Cloudflare run the rules alone ([ADR 14](docs/adr/0014-quasi-identifiers-and-local-ner.md)). Check what a room sends with **Model view**.
 
 The history is stored with the placeholders too: messages, answers, tool results, memory, approvals and nudges. The values are kept in one place, the vault, and put back only where a person sees them (and where a tool acts on them, such as sending a mail). So forgetting a value takes it out of all history at once ([ADR 9](docs/adr/0009-placeholders-at-rest-and-per-person-visibility.md)). When the detectors learn more, the history is rewritten with them once, the next time the assistant opens.
 
@@ -222,11 +218,11 @@ Your personal details help the assistant fill in forms, write mail for you and f
 
 More:
 
-- `nudge doctor --privacy` checks the detectors against sample data. `pnpm -C packages/core eval:privacy` measures what the rules and the local model hide, and what they hide that the model needed, on 256 test messages. `nudge doctor` checks the local model's files and that it finds a name.
+- `nudge doctor --privacy` checks the detectors against sample data. `pnpm -C packages/core eval:privacy` measures what the rules and the local model hide, and what they hide that the model needed, on 256 test messages. With the local model on, `nudge doctor` checks its files and that it finds a name.
 - `NUDGE_DEBUG_REQUESTS=1 nudge chat` (or `nudge serve`) writes every request, exactly as the provider receives it, to `<database>.requests.jsonl`.
 - **Model view** on a room's page in the web UI (or `GET /rooms/<id>/model-view`) shows anyone in the room what its next request sends: the instructions and sections, every message and tool call, with placeholders where the values were.
 
-`extensions/ner` adds names the lists don't have, such as relatives' (`extraNames`).
+`extensions/ner` adds names the lists don't have, such as relatives' (`extraNames`). `extensions/contacts` hides the whole names, e-mail addresses and phone numbers in your address books ([Contacts](#contacts), [ADR 16](docs/adr/0016-contacts-are-known-private-values.md)).
 
 Display names of players are always protected. Images are passed through unchanged. Extensions keep their own data (connector notes, browser site notes, uploaded documents) as they stored it.
 
@@ -315,12 +311,17 @@ An entry's `rooms` lists the kinds of room it is on in by default (`"lobby"`, `"
 `extensions/terminal` gives the model a `run_command` tool: a bash command, run in a terminal of the room's own, for command-line tools such as `pandoc`, `ffmpeg`, `jq`, `git` or a quick Python script.
 
 ```json
-{ "from": "./extensions/terminal", "settings": { "network": false, "timeoutSeconds": 60 } }
+{
+  "from": "./extensions/terminal",
+  "settings": { "network": false, "timeoutSeconds": 60, "desktopFiles": false }
+}
 ```
 
 - Every command runs in a bubblewrap sandbox. It sees the system's programs and libraries read-only, the room's workspace at `/workspace` (on the server `<database>.extensions/terminal/workspaces/conversation-<id>`, kept between commands), an empty `/tmp`, and nothing else of the machine: not your home, not Nudge's data or config, and none of Nudge's environment (its keys). It has its own processes, hostname and IPC. A command stops after `timeoutSeconds` (default 60, at most 600), and gets at most 512 processes and 1 GB per file it writes. The model gets the start and end of the output, past 30 000 characters, redacted like any tool's.
-- It has no network unless `"network": true`. Then commands reach what the server reaches: the internet, and also the local network and services on this machine, which the sandbox doesn't filter, such as Nudge's own API and a local model server. That's why it is off by default.
+- It has no network unless `"network": true`. Then commands reach the internet through [slirp4netns](https://github.com/rootless-containers/slirp4netns), without this machine's own services (`127.0.0.1`, such as signal-cli's daemon) or the local network: private, link-local and CGNAT (Tailscale) addresses are blocked in the sandbox's network, and it has a DNS server of its own. That needs `slirp4netns`, `nsenter` and `ip` on the server (in the Docker image); commands with that network run as root of their own user namespace, without any capabilities. With `"localNetwork": true` as well, commands reach what the server reaches, the local network and this machine's services too, and slirp4netns isn't needed.
 - Commands have the programs the server has. The model is told which of git, Python, Node, pandoc, ffmpeg, ImageMagick, pdftotext, sqlite3, jq and curl are there. The server image doesn't install them, so in Docker the terminal has little more than the basic tools for files, text and archives.
+- Files move between the workspace and the room's documents (`extensions/documents`, when it is on in the room): `document_to_workspace` copies an uploaded document into `/workspace`, never over a file there, and `workspace_to_documents` adds a file from it to the room's documents, where people download it from the Documents page. Files of kinds the documents don't read, such as `.docx`, are kept without their text. Both go through the sandbox, so a link in the workspace leads nowhere a command couldn't go.
+- With `"desktopFiles": true`, commands read and write the room's desktop's home (`extensions/desktop`, its apps' files) at `/desktop`, such as to convert with `pandoc` what Writer saved there.
 - Each command is read before it runs, through pipes, `&&`, `$(…)`, `sh -c`, `xargs`, `find -exec` and wrappers like `env` or `timeout`:
   - Common tools that read, search, convert, build and fetch run at once.
   - Commands that delete files (`rm`, `find -delete`, `git clean`, `git reset --hard`), send data (`curl -d`, `curl -X POST`, `git push`, `ssh`, `scp`, mail), run a script of the workspace, run a program not on the list, or that it can't read for sure (a program named by a variable, `sh` reading its input) wait for someone in the room to approve that exact command, as an approval like any other. Approving it runs it, and the room hears the output.
@@ -447,7 +448,7 @@ To make it always come first ("always use the timetable API first for departures
 - The model gets `mail_search`, `mail_read` and `mail_send`. Reading opens the inbox read-only, so nothing is marked read. Sending, replies included (kept in their thread), waits for someone in the room to approve it.
 - SMTP defaults to the IMAP host with `imap.` changed to `smtp.`, port 465 and the same login; give `smtp` to set it.
 - `rooms` lists the rooms that may use the account, by id (`*` for every room). In Settings, on the web or in the apps, you pick them by name instead; `nudge room` lists the ids.
-- Mail goes to the model like any tool output: addresses, phone numbers and the like as placeholders. Other names in a message are not detected.
+- Mail goes to the model like any tool output: e-mail addresses, phone numbers and the like as placeholders. Names are readable.
 - Some servers don't keep a copy of sent mail in Sent by themselves.
 
 ### Calendar
@@ -457,6 +458,14 @@ To make it always come first ("always use the timetable API first for departures
 - `calendar_events` lists a span of days, recurring events expanded and moved occurrences shown where they moved, in the assistant's time zone. `calendar_add` (a day without a time makes an all-day event) and `calendar_remove` (a whole series for a recurring event) wait for approval.
 - For "remind us the evening before", the model schedules a nudge, say daily at 18:00, that looks at the next day's events.
 
+### Contacts
+
+`extensions/contacts` looks people up in CardDAV address books (Fastmail, iCloud, Nextcloud, Radicale, Google through its CardDAV address), so "send it to grandma" finds her address. Accounts are set like the calendar's: `{ "id": "family", "url": "https://carddav.example.org", "user": "…", "password": "${FAMILY_CARDDAV_PASSWORD}", "addressBooks": ["Family"], "rooms": ["family"] }`. Leave out `addressBooks` to use all of them.
+
+- `contacts_search` finds people by name, nickname, relation as the contact is saved ("Mormor"), company, e-mail address or phone number, across every account the room may use, and gives their e-mail addresses, phone numbers, postal addresses and birthdays. It only reads; nothing in the address books changes.
+- Every contact's e-mail addresses and phone numbers are hidden from the model wherever they show up, also a number written without spaces or without its country code (`91234567` for `+47 912 34 567`), which the built-in rules leave alone. So are whole names of two words or more, unless `hideNames` is `false`. Names of one word ("Mom") and companies' names stay readable, as do players' display names; a player who joins later gets theirs back readable ([ADR 16](docs/adr/0016-contacts-are-known-private-values.md)).
+- The address books are read when the assistant opens and again when they are more than 15 minutes old. A value that showed up once stays hidden after its contact is gone.
+
 ### Watches
 
 `extensions/watches` lets a room ask the assistant to keep an eye on something: "tell me when a 2027 GLC under 800 000 kr shows up on Finn", "when tomorrow's power price goes above 2 kr". The model adds a watch with `add_watch` (what to check, and how often), and `list_watches` and `remove_watch` show and stop them.
@@ -464,6 +473,16 @@ To make it always come first ("always use the timetable API first for departures
 - Each check runs in a side conversation of the room, out of the room's sight but with its tools, connectors, logins and memory. The model replies with the items that match, each with a stable key such as its URL.
 - The room hears only about items it hasn't seen before. That arrives like a fired nudge, so push and chat bridges deliver it too.
 - Every check is a model run with tools, so it costs: `minMinutes` (default 30) caps how often, and `maxPerRoom` (default 10) how many.
+
+### Triggers
+
+`extensions/triggers` lets outside events start a turn. Watches can only check on a schedule. Ask "make a trigger for when the washing machine is done, and tell Ann" and the model calls `add_trigger` with a name and what to do. The room gets a secret web address, and calling it starts a turn. Good senders are a Home Assistant automation (`rest_command`), an Uptime Kuma webhook notification, a GitHub or Gitea webhook, a Paperless workflow, or an iPhone Shortcut ("Get contents of URL", method POST). `list_triggers` and `remove_trigger` show the triggers and turn them off.
+
+- Senders `POST` to `/v1/a/<assistant>/ext/triggers/hook/<secret>`. A JSON, form or text body and any query parameters come along, so `curl -X POST -d 'Washer done' <address>` works. The answer is `202` straight away. The room hears the reply like a fired nudge, so push and the chat bridges deliver it too.
+- Set `url` to the address senders reach the server at. Use the LAN or tailnet address for Home Assistant at home, and a public one for GitHub. Then the assistant gives the whole address. Without `url` it gives the part to put after the server's address.
+- The model never sees the address. It gets a placeholder, and in the room only the person who asked sees the real address. The database keeps only the secret's hash; the secret sits in the extension's encrypted secret store so the address can be shown again. A wrong secret, a removed trigger and a room that turned the extension off all get the same `404`.
+- What a call brings is untrusted: anyone with the address can send anything. The model gets it between two marked lines, with a random mark it can't fake, and is told to treat it as data, not instructions. The model reads at most `maxChars` (default 8000) of it. It passes redaction like any input. Actions that change things still wait for approval as always. This isn't proof against prompt injection, so give a trigger's room only the tools it needs.
+- Every call is a model run, so it costs. `maxPerHour` (default 12) caps the calls per trigger; past that the sender gets `429` with `Retry-After`. `maxPerRoom` (default 10) caps how many triggers a room can have. A sender's retry with the same `Idempotency-Key` or `X-GitHub-Delivery` doesn't start a second turn.
 
 ### Lists
 
@@ -512,6 +531,20 @@ In the Android and Apple apps, the account is the home: they read the membership
 
 Everything between assistants is signed and encrypted: each assistant has an Ed25519 key to sign with and an X25519 key to be written to, kept with the extension's secrets and in backups. A message is signed by its sender, names who it is for, and is encrypted for that one assistant (X25519 with a key made for the message alone, HKDF-SHA256, AES-256-GCM), so the app that carries a join and any proxy on the way read nothing. Each assistant keeps the other's keys from the first time they met, over HTTPS, and takes messages only under those keys and only newer than the last of their kind. An admin rotates them with `POST /ext/federation/keys`: the old signing key signs for the new keys, `GET /ext/federation/key` lists the last eight rotations, and other assistants follow them the next time a message doesn't check out under the key they kept. Messages sealed to the old encryption keys still open. Rotating doesn't help against a leaked key, as whoever has it can sign for keys of their own. An assistant that loses its keys can no longer vouch for its people elsewhere.
 
+### Assistants talking to each other
+
+`extensions/peers` lets this assistant talk to assistants on other servers, such as to find a time with Ann's household or hand her assistant a request (ADR 16). It needs `extensions/federation` and uses its keys: everything between the two is signed and encrypted the same way.
+
+```json
+{ "from": "./extensions/peers", "settings": { "offer": ["calendar"] } }
+```
+
+- **Link first.** Someone asks in chat ("link with nudge.ann.no/robin"); the model calls `link_assistant`, and an admin here approves sending the request. Ann's admins get an approval in their lobby and decide. An admin can also `POST /ext/peers/links` with `{ address, note }`. `list_links` and `unlink_assistant` (admins) show and end links; `GET /ext/peers/links` and `DELETE /ext/peers/links/<id>` do it for apps.
+- **A linked assistant is a guest.** Each side makes a player for the other ("Robin (assistant)"), with no token and no admin rights, and a shared room for it with the admins: "With Robin". Its messages arrive there as that player's, so redaction, the per-player budget and approvals work as for anyone, and the admins can read along. It can use only the extensions on in that room: `offer` picks them for a new link (none by default besides this one), and the room's own switches change them later.
+- **Threads.** `talk_to_assistant` (a link, a goal, and what the other side needs to know) starts a thread in a side conversation of the room, out of its sight. The model there writes with `say`, reads each reply, and ends with `finish_thread`. The room hears how it went like a fired nudge, so push and chat bridges deliver it, and `show_thread` shows the whole conversation. On the other side, the answer to each message goes back; when its people approve something later, the answer to that follows up, also after the thread ended.
+- **Privacy.** What goes out is shown as the other assistant's player may see it: values someone made private stay placeholders. The receiving side protects what arrives in its own vault. Messages from another assistant are marked as its words, not instructions, and a link's room and a thread can't start threads of their own.
+- **Limits.** `maxRounds` (default 6) replies read per thread, `replyHours` (default 24) to wait for one, `maxThreadsPerHour` (default 10) threads each linked assistant may start here, `maxChars` (default 4000) per message. `onlyAdmins` keeps starting threads to admins.
+
 ### Write an extension
 
 `extensions/hello/src/index.ts` is a whole one:
@@ -549,7 +582,7 @@ export default defineNudgeExtension({
 });
 ```
 
-- `setup` runs when the assistant opens and on every reload. It gets the settings (checked against the schema, defaults filled in), the assistant's `displayName`, `timeZone` and clock, and `protect(value, kind)` to keep a value from the model.
+- `setup` runs when the assistant opens and on every reload. It gets the settings (checked against the schema, defaults filled in), the assistant's `displayName`, `timeZone` and clock, `protect(value, kind)` to keep a value from the model and `release(value)` to make one readable again.
 - `playerSettings` is a schema of what each player chooses for themselves, such as hello's default number of sides. Players set it on their profile, and `playerSettings(playerId, context)` in `setup`'s host reads it with defaults filled in; a tool finds who asked in `currentTurn().by`. Every required one needs a default, for players who chose nothing.
 - `setup` can also return `routes`, HTTP routes under `/v1/a/<assistant>/ext/<name>/`. Each takes a standard `Request` and returns a `Response`, and says whether it needs a player's token (`auth: "player"`), an admin's (`"admin"`) or none (`"none"`); the server checks the token and the body's size (`maxBodyBytes`, default 64 KiB) first.
 - It returns a [Pi Durable extension](https://www.npmjs.com/package/@earendil-works/pi-durable) without its name (`tools`, `sections`, `hooks`, `wraps`, `tasks`) plus `detectors`, which run after the built-in ones.

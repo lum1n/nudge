@@ -534,6 +534,14 @@ impl NudgeClient {
         })
     }
 
+    /// Signs in the browser whose QR code (a `nudge://sign-in` link) holds sign-in `request`, as
+    /// this player. A 404 when it expired or was used, a 401 when this assistant doesn't know the
+    /// token, as when the QR code is another server's.
+    pub async fn approve_sign_in(&self, request: String) -> Result<(), NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.approve_sign_in(&request).await }).await?)
+    }
+
     pub async fn me(&self) -> Result<MeInfo, NudgeError> {
         let api = self.client.api().clone();
         let me = run(async move { api.me().await }).await?;

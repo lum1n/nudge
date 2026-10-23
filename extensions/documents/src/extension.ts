@@ -15,7 +15,14 @@ import {
   section,
   Type,
 } from "@nudge/core";
-import { decrypt, encrypt, extractText, UnsupportedDocument } from "./text.ts";
+import {
+  decrypt,
+  encrypt,
+  type Extracted,
+  extractText,
+  kindOf,
+  UnsupportedDocument,
+} from "./text.ts";
 
 const VERSION = "0.1.0";
 /** Characters `read_document` gives at a time. */
@@ -83,6 +90,25 @@ const Settings = Type.Object({
   }),
 });
 
+/** A room's documents as other extensions reach them, such as the terminal's workspace. */
+export type RoomDocuments = {
+  /** Largest file it takes, in bytes. */
+  readonly maxBytes: number;
+  list(roomId: string, context?: Context): Promise<DocumentInfo[]>;
+  /** A document's file as it was uploaded. */
+  file(roomId: string, id: string): Promise<Buffer>;
+  /** Adds a file of any kind, its text read when it is a PDF or text, and tells open pages. */
+  add(roomId: string, name: string, mime: string, bytes: Buffer, by: string): Promise<DocumentInfo>;
+};
+
+// Keyed by the assistant, so an extension reaches its own assistant's documents only.
+const byAssistant = new WeakMap<object, RoomDocuments>();
+
+/** The documents of the assistant `assistant` (an extension's `host.assistant()`), when it has them. */
+export function roomDocuments(assistant: object): RoomDocuments | undefined {
+  return byAssistant.get(assistant);
+}
+
 /** Keeps the files, encrypted, and their texts; serves the room's Documents page. */
 class Library {
   private readonly viewers = new Map<string, Set<(data: string) => void>>();
@@ -114,12 +140,18 @@ class Library {
     mime: string,
     bytes: Buffer,
     by: string,
+    /** Keeps a file of a kind whose text isn't read too, such as a .docx, without its text. */
+    anyKind = false,
   ): Promise<DocumentInfo> {
     const { maxMegabytes, maxPerRoom } = this.host.settings;
     if (bytes.length > maxMegabytes * 1024 * 1024)
       throw new UnsupportedDocument(`${name} is over ${maxMegabytes} MB`);
     const clean = name.replace(/[/\\]/g, "_").trim().slice(0, 200) || "document";
-    const extracted = await extractText(bytes, mime, clean);
+    const extracted: Extracted = await extractText(bytes, mime, clean).catch((error: unknown) => {
+      if (anyKind && error instanceof UnsupportedDocument && kindOf(mime, clean) === undefined)
+        return { text: "", note: "its text isn't read" };
+      throw error;
+    });
     const sha256 = createHash("sha256").update(bytes).digest("hex");
     const known = (await this.list(roomId)).find((item) => item.sha256 === sha256);
     if (known !== undefined)
@@ -315,6 +347,21 @@ export const documentsExtension = defineNudgeExtension({
   settings: Settings,
   setup: (host) => {
     const library = new Library(host);
+    // A reload sets up a new library, which takes the old one's place.
+    void host.whenOpen().then((assistant) =>
+      byAssistant.set(assistant, {
+        get maxBytes() {
+          return host.settings.maxMegabytes * 1024 * 1024;
+        },
+        list: (roomId, context) => library.list(roomId, context),
+        file: (roomId, id) => library.file(roomId, id),
+        add: async (roomId, name, mime, bytes, by) => {
+          const info = await library.add(roomId, name, mime, bytes, by, true);
+          await library.changed(roomId);
+          return info;
+        },
+      }),
+    );
     const text = (value: string, isError = false) => ({
       output: [{ type: "text" as const, text: value }],
       ...(isError ? { isError } : {}),

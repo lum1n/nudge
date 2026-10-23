@@ -47,9 +47,20 @@
           "settings": { "minMinutes": 30, "maxPerRoom": 10 }
         },
         {
+          "$comment": "Triggers: a secret web address per room that Home Assistant, Uptime Kuma, GitHub or a phone Shortcut POST to, and the assistant acts on what came. url is the address senders reach this server at. Each call is a paid model run, so maxPerHour caps how often one trigger answers.",
+          "from": "./extensions/triggers",
+          "settings": { "url": "http://192.168.1.10:8080", "maxPerHour": 12 }
+        },
+        {
           "$comment": "Coding agents (Claude Code, Codex, Cursor, Copilot, pi, opencode) through ACC: on this machine with nothing set up, and on other machines over SSH. The assistant logs in with a key of its own; acc_hosts gives the line for ~/.ssh/authorized_keys. Needs ACC's binding (pnpm acc:fetch); off here so the example works without it.",
           "from": "./extensions/acc",
           "settings": { "hosts": [{ "host": "192.168.1.20", "user": "me", "name": "devbox" }] },
+          "enabled": false
+        },
+        {
+          "$comment": "Talk to assistants on other servers once both sides' admins link them (link_assistant). Each thread runs in the background for a few rounds; a linked assistant speaks here as a guest in a room of its own and can use only what offer turns on there. Needs ./extensions/federation with its server address; off here so the example works without it.",
+          "from": "./extensions/peers",
+          "settings": { "maxRounds": 6, "replyHours": 24, "offer": ["calendar"] },
           "enabled": false
         },
         {
@@ -85,8 +96,8 @@
     }
   ],
   "privacy": {
-    "$comment": "The local model that finds names, places and organisations the rules miss (ADR 14). deep: \"required\" (the default) refuses requests until it is downloaded and running, \"preferred\" sends them with the rules alone meanwhile, \"off\" never downloads it (about 260 MB, into server/models). allow lists words it should never hide, such as a shop it takes for a person.",
-    "deep": "required",
+    "$comment": "Off by default: only secrets, ID, card and account numbers, e-mail addresses, phone numbers and what people make private are hidden (ADR 15). deep: \"required\" also hides names, places and organisations with a local model (about 260 MB, into server/models) and refuses requests until it runs, \"preferred\" sends them with the rules alone meanwhile. allow lists words it should never hide, such as a shop it takes for a person.",
+    "deep": "off",
     "allow": ["Kiwi"]
   },
   "providers": [

@@ -7,7 +7,7 @@ import { createNudge, LOBBY } from "../src/index.ts";
 const context = BACKGROUND_CONTEXT;
 
 describe("model view", () => {
-  it("shows the room as the provider gets it: placeholders, never the values", async () => {
+  it("shows the room as the provider gets it: placeholders, never the hidden values", async () => {
     const faux = fauxProvider();
     const models = createModels();
     models.setProvider(faux.provider);
@@ -30,13 +30,14 @@ describe("model view", () => {
     const view = await nudge.modelView(LOBBY, context);
     const text = JSON.stringify(view);
     expect(text).not.toContain("Storgata 5");
-    expect(text).not.toContain("Ann");
-    // The prompt's sections are there: who the assistant is, who is in the room (as placeholders).
+    // The prompt's sections are there: who the assistant is, who is in the room (by name, ADR 15).
     const system = view.find((m) => m.role === "system")!.text;
     expect(system).toContain("You are Nudge");
-    expect(system).toContain("⟦NAME1⟧");
+    expect(system).toContain("People who can read this conversation: Ann.");
     expect(system).toMatch(/\[tools added: .*schedule_nudge/);
-    expect(view.find((m) => m.role === "user")?.text).toBe(`⟦NAME1⟧: I live at ${placeholder}`);
+    expect(view.find((m) => m.role === "user")?.text).toMatch(
+      new RegExp(`^Ann \\(\\d\\d:\\d\\d\\): I live at ${placeholder}$`),
+    );
     expect(view.find((m) => m.role === "assistant")?.text).toBe(
       `Noted, I'll remember ${placeholder}.`,
     );

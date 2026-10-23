@@ -186,7 +186,7 @@ describe("telegram bridge", () => {
 
     telegram.message(annChat, ann, "What's for dinner?");
     await until(() => telegram.to(11).length === 3);
-    expect(telegram.to(11)[2]).toBe("Answer to Ann: What's for dinner?");
+    expect(telegram.to(11)[2]).toMatch(/^Answer to Ann \(\d\d:\d\d\): What's for dinner\?$/);
     const room = await nudge.conversation("personal-ann", context);
     const entries = (await room.entries({ order: "ascending" }, 50, undefined, context)).items;
     expect(entries.find((e) => e.kind === "nudge.message")?.data).toMatchObject({

@@ -17,6 +17,7 @@ import hello from "../../../extensions/hello/src/index.ts";
 import {
   ConfigError,
   createNudge,
+  type ExtensionHost,
   ExtensionNotFound,
   defineNudgeExtension,
   defineTool,
@@ -281,20 +282,25 @@ describe("extensions", () => {
   });
 
   it("lets an extension protect values once the assistant is open", async () => {
-    let protect: ((value: string, kind?: string) => Promise<string>) | undefined;
+    let host: ExtensionHost<unknown, unknown> | undefined;
     const contacts = defineNudgeExtension({
       name: "contacts",
       version: "1",
-      setup: (host) => {
-        protect = host.protect;
+      setup: (given) => {
+        host = given;
         return {};
       },
     });
     const { options, last } = setup({ extensions: [contacts] });
     const nudge = await createNudge(options, context);
-    expect(await protect!("Storgata 1", "ADDRESS")).toBe("⟦ADDRESS1⟧");
+    expect(await host!.protect("Storgata 1", "ADDRESS")).toBe("⟦ADDRESS1⟧");
     await say(nudge, "I live in Storgata 1.");
     expect(last()).toContain("I live in ⟦ADDRESS1⟧.");
+    // Released, it is readable again, also where the model read it before.
+    expect(await host!.release("Storgata 1")).toBe(true);
+    expect(await host!.release("Storgata 1")).toBe(false);
+    await say(nudge, "Still there.");
+    expect(last()).toContain("I live in Storgata 1.");
     await nudge.close(context);
   });
 
@@ -593,7 +599,7 @@ describe("memory", () => {
     await send(annsRoom.id, "My sister is Eli");
     expect(outputs).toEqual(["Remembered m1.", "Remembered m2."]);
     await send(annsRoom.id, "What do you know?");
-    expect(current(requests.at(-1)).prompt).toContain("- m1: ⟦NAME1⟧ is vegetarian");
+    expect(current(requests.at(-1)).prompt).toContain("- m1: Ann is vegetarian");
     await send(LOBBY, "What do you know?");
     expect(JSON.stringify(requests.at(-1))).not.toContain("vegetarian");
 

@@ -90,12 +90,12 @@ const ServerSchema = Type.Object({
   updates: Type.Optional(Type.Union([Type.Literal("auto"), Type.Literal("off")])),
 });
 
-/** What is kept from the models beyond the rules (ADR 14). */
+/** What is kept from the models beyond the rules (ADR 14, ADR 15). */
 const PrivacySchema = Type.Object({
   /**
-   * The local model that finds names, places and organisations the rules miss. "required"
-   * (default) refuses requests while it is missing, "preferred" sends them with the rules alone,
-   * "off" never downloads or runs it.
+   * The local model that hides names, places and organisations too, which are readable otherwise.
+   * "off" (default) never downloads or runs it, "required" refuses requests while it is missing,
+   * "preferred" sends them with the rules alone meanwhile.
    */
   deep: Type.Optional(
     Type.Union([Type.Literal("required"), Type.Literal("preferred"), Type.Literal("off")]),

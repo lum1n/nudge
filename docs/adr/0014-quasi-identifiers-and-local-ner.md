@@ -55,3 +55,5 @@ What this still doesn't do:
 - The model can infer from topics.
 - Rules and the model hide some public names, such as hosts below the top list and brands Wikidata doesn't know well ("Kiwi", "Vipps"). **Model view** shows what was hidden.
 - Tool declarations aren't read.
+
+Superseded in part by ADR 15: only what does harm on its own is hidden by default, and the local model and the quasi-identifier rules are opt-in.

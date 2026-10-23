@@ -6,10 +6,13 @@ import type { VaultEntry } from "./vault.ts";
  * Every change is stored whole, which drops the revisions before it, so a forgotten value leaves
  * no older copy behind.
  */
-export const VaultDoc = defineDoc<{ entries: VaultEntry[] }>({
+export const VaultDoc = defineDoc<{ entries: VaultEntry[]; readable?: number }>({
   kind: "nudge.vault",
   version: 1,
   scope: "session",
   initial: () => ({ entries: [] }),
   checkpointWhen: () => true,
 });
+
+/** Goes up when more kinds become readable, so the vault releases them once (ADR 15). */
+export const READABLE_VERSION = 1;

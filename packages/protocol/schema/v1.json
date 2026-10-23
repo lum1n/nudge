@@ -4012,6 +4012,65 @@
         }
       }
     },
+    "SignInResponse": {
+      "type": "object",
+      "required": [
+        "id",
+        "secret",
+        "link",
+        "expiresAt"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "secret": {
+          "type": "string"
+        },
+        "link": {
+          "type": "string"
+        },
+        "expiresAt": {
+          "type": "number"
+        }
+      }
+    },
+    "SignInStatusResponse": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "waiting"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "assistant",
+            "code"
+          ],
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "approved"
+            },
+            "assistant": {
+              "type": "string"
+            },
+            "code": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
     "MeResponse": {
       "type": "object",
       "required": [
@@ -7397,6 +7456,15 @@
         }
       }
     },
+    "WiredEnableRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
+        }
+      }
+    },
     "WiredJoinRequest": {
       "type": "object",
       "required": [
@@ -7410,6 +7478,10 @@
         "relayUrl": {
           "type": "string",
           "pattern": "^https://"
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
         }
       }
     },

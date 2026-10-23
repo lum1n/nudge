@@ -318,4 +318,40 @@ describe("the server API", () => {
     // They keep the server when every assistant here goes.
     expect(control.owners.wouldLeaveNoOwner("robin")).toBe(false);
   });
+
+  it("turns Wired on, or joins, under the name an owner picked", async () => {
+    const asked: unknown[] = [];
+    const state = { state: "starting" as const };
+    app = createApp({
+      assistants: assistants.running,
+      server: {
+        ...control,
+        wired: {
+          state: () => ({ state: "off", name: "robin" }),
+          enable: async (name) => (asked.push(["enable", name]), state),
+          join: async (invite, options) => (asked.push(["join", invite, options]), state),
+          addRelay: async () => "wired1abc",
+          remove: async () => state,
+          disable: async () => state,
+        },
+      },
+    });
+    const token = await signIn();
+    expect((await call("GET", "/server/wired", { token })).json).toEqual({ state: "off", name: "robin" });
+    // As before: no body, and the server's own name.
+    expect((await call("POST", "/server/wired", { token })).status).toBe(200);
+    expect((await call("POST", "/server/wired", { token, body: { name: "box" } })).status).toBe(200);
+    expect((await call("POST", "/server/wired", { token, body: { name: "Box!" } })).status).toBe(400);
+    expect((await call("POST", "/server/wired", { token, body: { name: "-box" } })).status).toBe(400);
+    const joined = await call("POST", "/server/wired/join", {
+      token,
+      body: { invite: "wired1abc", name: "box" },
+    });
+    expect(joined.status).toBe(200);
+    expect(asked).toEqual([
+      ["enable", undefined],
+      ["enable", "box"],
+      ["join", "wired1abc", { name: "box" }],
+    ]);
+  });
 });

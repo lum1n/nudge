@@ -12,6 +12,7 @@ import app.nudge.ui.NudgeApp
 import app.nudge.ui.NudgeTheme
 import nudge.client.JoinLink
 import nudge.client.PairingLink
+import nudge.client.SignInLink
 
 class MainActivity : ComponentActivity() {
     private val model get() = (application as NudgeApplication).model
@@ -35,12 +36,13 @@ class MainActivity : ComponentActivity() {
         handle(intent)
     }
 
-    /** A `nudge://pair` or `nudge://join` link, or a tapped notification. */
+    /** A `nudge://pair`, `nudge://join` or `nudge://sign-in` link, or a tapped notification. */
     private fun handle(intent: Intent?) {
         intent ?: return
         intent.data?.let { uri ->
             PairingLink.parse(uri.toString())?.let { model.pendingLink.value = it }
             JoinLink.parse(uri.toString())?.let { model.pendingJoin.value = it }
+            SignInLink.parse(uri.toString())?.let { model.pendingSignIn.value = it }
         }
         intent.getStringExtra(EXTRA_ROOM)?.let { room ->
             model.open(intent.getStringExtra(EXTRA_ACCOUNT), intent.getStringExtra(EXTRA_ASSISTANT), room)

@@ -207,7 +207,7 @@ describe("players and rooms", () => {
     await nudge.close(context);
   });
 
-  it("tells the model who is in the room, by placeholder", async () => {
+  it("tells the model who is in the room, by name", async () => {
     const { faux, options, answer, requests } = setup(":memory:");
     faux.setResponses([answer("Hello both."), answer("Hi Ann.")]);
     const nudge = await createNudge(options, context);
@@ -221,9 +221,10 @@ describe("players and rooms", () => {
     await nudge.close(context);
 
     const [shared, personal] = requests.map((request) => JSON.stringify(request));
-    expect(shared).toContain("People who can read this conversation: ⟦NAME1⟧, ⟦NAME2⟧.");
-    expect(personal).toContain("This is ⟦NAME1⟧'s personal conversation");
-    expect(shared).not.toMatch(/\bAnn\b|\bBo\b/);
+    // Display names are readable to the model (ADR 15).
+    expect(shared).toContain("People who can read this conversation: Ann, Bo.");
+    expect(personal).toContain("This is Ann's personal conversation");
+    expect(shared).not.toContain("⟦NAME");
   });
 
   it("keeps a profile per player, and tells the model their time zones and languages", async () => {
@@ -270,11 +271,10 @@ describe("players and rooms", () => {
     await nudge.close(context);
     const [request] = requests.map((request) => JSON.stringify(request));
     expect(request).toContain(
-      "⟦NAME3⟧: time zone Europe/Oslo, speaks Norwegian Bokmål (Norway).\\n" +
-        "⟦NAME2⟧: time zone America/New_York.\\n" +
+      "Anna: time zone Europe/Oslo, speaks Norwegian Bokmål (Norway).\\n" +
+        "Bo: time zone America/New_York.\\n" +
         "Answer each person in their language.",
     );
-    expect(request).not.toContain("Anna");
   });
 
   it("reads and writes addresses", () => {

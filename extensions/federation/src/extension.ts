@@ -100,6 +100,57 @@ const PLACEHOLDER = /⟦[A-Z]+\d+⟧/g;
 
 type CarriedFact = Static<typeof FactBody>;
 
+/**
+ * What other extensions of the same assistant send and check through federation: its keys, the
+ * keys other assistants publish, and its inbox. Their messages are sealed and signed the same way,
+ * and kinds federation doesn't know go to whoever registered for them with `onFederated`.
+ */
+export type Channel = {
+  /** This assistant, as others name it. */
+  readonly self: Place;
+  /** The keys `place` publishes, if it answers for itself. */
+  keysOf(place: Place): Promise<Keys | undefined>;
+  /** A time to sign a claim with: later than every one signed here before. */
+  issuedAt(): number;
+  /**
+   * Signs `claim` and sends it, encrypted, to `place`'s inbox. True when it took it, "gone" when
+   * it answered 404, false when it failed otherwise.
+   */
+  send(place: Place, keys: Keys, claim: unknown): Promise<boolean | "gone">;
+  /**
+   * What `signed` says, if `place` signed it with the pinned key, or with one that key signed for
+   * in a rotation; then `repin` is given the new keys to keep instead.
+   */
+  check(
+    place: Place,
+    pinned: Keys,
+    signed: Signed,
+    repin: (keys: Keys) => Promise<void>,
+  ): Promise<{ claim: unknown; keys: Keys } | undefined>;
+};
+
+/** Answers an opened message of a kind another extension registered for. */
+export type FederatedHandler = (signed: Signed, context: Context) => Promise<Response>;
+
+const channels = new WeakMap<object, Channel>();
+const handlers = new WeakMap<object, Map<string, FederatedHandler>>();
+
+/** Federation's channel of the assistant `assistant` (an extension's `host.assistant()`), when it has one. */
+export function channelOf(assistant: object): Channel | undefined {
+  return channels.get(assistant);
+}
+
+/**
+ * Hands messages to `assistant`'s inbox whose kind starts with `prefix` to `handler`, after they
+ * opened; checking who signed them is the handler's. Federation's own kinds never get there. A
+ * later call for the prefix replaces it.
+ */
+export function onFederated(assistant: object, prefix: string, handler: FederatedHandler): void {
+  let registered = handlers.get(assistant);
+  if (registered === undefined) handlers.set(assistant, (registered = new Map()));
+  registered.set(prefix, handler);
+}
+
 export type FederationOptions = {
   /** How this assistant reaches others; tests pass one that never leaves the process. */
   readonly fetch?: typeof fetch;
@@ -164,12 +215,28 @@ class Federation {
     void host.whenOpen().then((nudge) => {
       if (this.closed) return;
       this.unsubscribe = nudge.changes.subscribe((change) => this.changed(change));
+      // A reload sets up a new federation, which takes the old one's place.
+      channels.set(nudge, this.channel());
     });
   }
 
   close(): void {
     this.closed = true;
     this.unsubscribe?.();
+  }
+
+  private channel(): Channel {
+    return {
+      self: this.self,
+      keysOf: (place) => this.keysOf(place),
+      issuedAt: () => this.nextSignedAt(),
+      send: (place, keys, claim) => this.send(place, keys, claim),
+      check: async (place, pinned, signed, repin) => {
+        const checked = await this.checkSigner(place, pinned, signed);
+        if (checked !== undefined && checked.keys !== pinned) await repin(checked.keys);
+        return checked;
+      },
+    };
   }
 
   private ownKey(name: string, type: "ed25519" | "x25519"): string {
@@ -673,8 +740,12 @@ class Federation {
         return this.fromPlace(signed, context);
       case "nudge.closed":
         return this.placeClosed(signed, context);
-      default:
+      default: {
+        const kind = typeof claim?.kind === "string" ? claim.kind : "";
+        for (const [prefix, handler] of handlers.get(this.nudge()) ?? [])
+          if (kind.startsWith(prefix)) return handler(signed, context);
         return problem(400, "Unknown message");
+      }
     }
   }
 
@@ -1146,12 +1217,9 @@ class Federation {
     signed: Signed,
     context: Context,
   ): Promise<{ claim: unknown; keys: Keys } | undefined> {
-    const claim = checkSigned(pinned.signingKey, signed);
-    if (claim !== undefined) return { claim, keys: pinned };
-    const keys = await this.keysOf(placeOf(place), pinned.signingKey);
-    if (keys === undefined || keys.signingKey === pinned.signingKey) return undefined;
-    const rotated = checkSigned(keys.signingKey, signed);
-    if (rotated === undefined) return undefined;
+    const checked = await this.checkSigner(place, pinned, signed);
+    if (checked === undefined || checked.keys === pinned) return checked;
+    const { keys } = checked;
     await this.commit((state) => {
       const all = [...Object.values(state.guests), ...Object.values(state.memberships).flat()];
       for (const held of all)
@@ -1160,7 +1228,24 @@ class Federation {
           held.encryptionKey = keys.encryptionKey;
         }
     }, context);
-    return { claim: rotated, keys };
+    return checked;
+  }
+
+  /**
+   * What `signed` says, and the keys it was checked with: `pinned` itself, or new keys `place`
+   * signed for in a rotation from it, which the caller pins instead.
+   */
+  private async checkSigner(
+    place: Place,
+    pinned: Keys,
+    signed: Signed,
+  ): Promise<{ claim: unknown; keys: Keys } | undefined> {
+    const claim = checkSigned(pinned.signingKey, signed);
+    if (claim !== undefined) return { claim, keys: pinned };
+    const keys = await this.keysOf(placeOf(place), pinned.signingKey);
+    if (keys === undefined || keys.signingKey === pinned.signingKey) return undefined;
+    const rotated = checkSigned(keys.signingKey, signed);
+    return rotated === undefined ? undefined : { claim: rotated, keys };
   }
 
   /**

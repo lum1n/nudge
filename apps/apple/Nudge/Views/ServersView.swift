@@ -19,6 +19,10 @@ struct ServersView: View {
     /// The player's address at home, to join new assistants from there.
     let address: String?
     @State private var newServer: NewServer?
+    /// The joined server being signed in to as an owner.
+    @State private var managing: String?
+    /// Why signing in to a joined server as its owner didn't work, by server.
+    @State private var problems: [String: String] = [:]
 
     var body: some View {
         Form {
@@ -29,6 +33,25 @@ struct ServersView: View {
                             Label(host(server), systemImage: "server.rack")
                         }
                     }
+                }
+            }
+            if !model.joinedServers.isEmpty {
+                Section {
+                    ForEach(model.joinedServers, id: \.self) { server in
+                        Button { Task { await manage(server) } } label: {
+                            VStack(alignment: .leading) {
+                                Label(host(server), systemImage: "server.rack").foregroundStyle(.primary)
+                                Text(managing == server ? "Signing in…" : problems[server] ?? "Manage this server")
+                                    .font(.caption)
+                                    .foregroundStyle(problems[server] == nil ? Color.secondary : .red)
+                            }
+                        }
+                        .disabled(managing != nil)
+                    }
+                } header: {
+                    Text("Joined from home")
+                } footer: {
+                    Text("You have rooms on these. If one is yours, manage it here: your home vouches for you.")
                 }
             }
             Section {
@@ -42,6 +65,17 @@ struct ServersView: View {
         .formStyle(.grouped)
         .navigationTitle("Servers")
         .sheet(item: $newServer) { NewServerView(start: $0) }
+    }
+
+    private func manage(_ server: String) async {
+        managing = server
+        defer { managing = nil }
+        do {
+            try await model.manageServer(server)
+            problems[server] = nil
+        } catch {
+            problems[server] = explain(error)
+        }
     }
 }
 

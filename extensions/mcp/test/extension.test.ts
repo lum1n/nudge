@@ -265,7 +265,7 @@ describe("mcp", () => {
     expect(first.tools).not.toContain("mcp__fake__lookup");
     expect(first.prompt).toContain("- fake: lookup, save, env, pid, picture");
     expect(current(requests[1]).tools).toContain("mcp__fake__lookup");
-    expect(outputs.at(-1)).toMatch(/^fjord: a word\. Call ⟦NAME\d⟧ on ⟦PHONE1⟧\.$/);
+    expect(outputs.at(-1)).toBe("fjord: a word. Call Ann on ⟦PHONE1⟧.");
     // The model saw the phone number only as a placeholder.
     expect(JSON.stringify(requests.at(-1))).not.toContain("987 65 432");
 

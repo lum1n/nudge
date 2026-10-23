@@ -217,19 +217,6 @@ export function accExtension(options: AccOptions = {}) {
           rooms: entry.rooms ?? ["*"],
         })),
       );
-      // Machine names, logins and addresses say where someone works; keep them from the model.
-      void host
-        .whenOpen()
-        .then(async () => {
-          for (const entry of entries) {
-            if (entry.auth === "local") continue;
-            if (entry.user.length >= 2) await host.protect(entry.user, "USERNAME");
-            if (entry.host.length >= 2) await host.protect(entry.host, "DOMAIN");
-            if (entry.name.length >= 2 && entry.name !== entry.host)
-              await host.protect(entry.name, "HOST");
-          }
-        })
-        .catch(report);
       const problems = (): string[] => [
         ...(backend === undefined
           ? [

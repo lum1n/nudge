@@ -29,9 +29,15 @@ export function sharedLocalModel(configPath: string): DeepDetector {
   return localModel;
 }
 
+/** Whether the config turns the local model on: it is off unless asked for (ADR 15). */
+export function localModelWanted(config: NudgeConfig | undefined): boolean {
+  const deep = config?.privacy?.deep;
+  return deep !== undefined && deep !== "off";
+}
+
 /**
  * What every command that runs an assistant passes to it: new databases encrypted, errors to
- * stderr, the local model unless the config turns it off, and with NUDGE_DEBUG_REQUESTS=1 every
+ * stderr, the local model when the config turns it on, and with NUDGE_DEBUG_REQUESTS=1 every
  * request, exactly as the provider gets it, appended next to the database.
  */
 export function hostOptions(
@@ -51,7 +57,7 @@ export function hostOptions(
       ...(dump === undefined
         ? {}
         : { onRequest: (request) => appendFileSync(dump, `${JSON.stringify(request)}\n`) }),
-      ...(config.privacy?.deep === "off" ? {} : { deep: sharedLocalModel(configPath) }),
+      ...(localModelWanted(config) ? { deep: sharedLocalModel(configPath) } : {}),
     },
   };
 }

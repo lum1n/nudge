@@ -64,7 +64,7 @@ export async function doctor(options: DoctorOptions): Promise<boolean> {
     return false;
   }
 
-  const deep = config.privacy?.deep ?? "required";
+  const deep = config.privacy?.deep ?? "off";
   if (deep !== "off") await checkDeep(check, modelsDir(options.config), deep);
 
   const keys = new ServerKeys(serverKeysDir(options.config));
@@ -192,15 +192,6 @@ const PRIVACY_SAMPLES: readonly (readonly [string, string])[] = [
   ["card", "4111 1111 1111 1111"],
   ["fødselsnummer", "15059012387"],
   ["account", "8601.11.17947"],
-  ["name", "Kari Nordmann"],
-  ["address", "Storgata 5B, 0151 Oslo"],
-  ["place", "Sørumsand"],
-  ["station", "Oslo S"],
-  ["kindergarten", "Skogkanten Barnehage"],
-  ["host", "hass.kjeks.dev"],
-  ["IP address", "192.168.1.20"],
-  ["user name", "/home/kari"],
-  ["plate", "EL 12345"],
-  ["VIN", "5YJYGDEF8NF123456"],
-  ["birth date", "født 3. mai 1958"],
+  ["API key", "sk-ant-api03-abcdefghijklmnopqrstuvwxyz012345"],
+  ["password", "passord: Hemmelig123"],
 ];

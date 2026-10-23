@@ -26,6 +26,7 @@ import app.nudge.AppModel
 import app.nudge.RoomRef
 import app.nudge.Session
 import app.nudge.explain
+import app.nudge.hostOf
 import kotlinx.coroutines.launch
 import nudge.ffi.ConnectionStatus
 
@@ -98,6 +99,7 @@ private fun SignedIn(model: AppModel, session: Session) {
     val requested by model.requestedRoom.collectAsStateWithLifecycle()
     val link by model.pendingLink.collectAsStateWithLifecycle()
     val join by model.pendingJoin.collectAsStateWithLifecycle()
+    val signIn by model.pendingSignIn.collectAsStateWithLifecycle()
     val places by model.places.collectAsStateWithLifecycle()
     var settings by rememberSaveable { mutableStateOf(false) }
     val navigator = rememberListDetailPaneScaffoldNavigator<String>()
@@ -135,6 +137,7 @@ private fun SignedIn(model: AppModel, session: Session) {
     }
 
     join?.let { invite -> JoinDialog(model, session, invite) }
+    signIn?.let { browser -> SignInDialog(model, browser) }
 
     if (settings) {
         BackHandler { settings = false }
@@ -246,5 +249,53 @@ private fun JoinDialog(model: AppModel, session: Session, invite: nudge.client.J
             ) { Text(if (problem == null) "Join" else "Try again") }
         },
         dismissButton = { TextButton(enabled = !busy, onClick = close) { Text("Cancel") } },
+    )
+}
+
+/** The web UI's sign-in page showed a QR code: sign that browser in as the player. */
+@Composable
+private fun SignInDialog(model: AppModel, browser: nudge.client.SignInLink) {
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    var problem by remember { mutableStateOf<String?>(null) }
+    var signedIn by remember { mutableStateOf<String?>(null) }
+    val close = { model.pendingSignIn.value = null }
+    AlertDialog(
+        onDismissRequest = { if (!busy) close() },
+        title = { Text(if (signedIn == null) "Sign in on the web?" else "Signed in") },
+        text = {
+            Text(
+                signedIn?.let { "The browser is signed in to $it as you." }
+                    ?: problem
+                    ?: (
+                        "The browser that shows this code on ${hostOf(browser.server)} gets signed in as you. " +
+                            "Only go on if you opened that page yourself."
+                        ),
+            )
+        },
+        confirmButton = {
+            if (signedIn != null) {
+                TextButton(onClick = close) { Text("Done") }
+            } else {
+                TextButton(
+                    enabled = !busy,
+                    onClick = {
+                        busy = true
+                        scope.launch {
+                            try {
+                                signedIn = model.approveSignIn(browser)
+                            } catch (error: Exception) {
+                                problem = explain(error)
+                            } finally {
+                                busy = false
+                            }
+                        }
+                    },
+                ) { Text(if (problem == null) "Sign in" else "Try again") }
+            }
+        },
+        dismissButton = {
+            if (signedIn == null) TextButton(enabled = !busy, onClick = close) { Text("Cancel") }
+        },
     )
 }

@@ -103,7 +103,7 @@ describe("personal details", () => {
     }
     expect(shared).not.toContain("personal details");
     for (const request of requests) {
-      for (const value of [...Object.values(details), "Ann", "59.91", "Oslo S"])
+      for (const value of [...Object.values(details), "59.91", "Oslo S"])
         expect(request).not.toContain(value);
     }
   });
@@ -212,7 +212,7 @@ describe("personal details", () => {
     expect(before).not.toContain("Where people here are");
     expect(after).toContain("Where people here are now");
     expect(after).toMatch(
-      /- ⟦NAME\d+⟧: ⟦LOCATION\d+⟧ \(latitude ⟦LATITUDE\d+⟧, longitude ⟦LONGITUDE\d+⟧; as of/,
+      /- Ann: ⟦LOCATION\d+⟧ \(latitude ⟦LATITUDE\d+⟧, longitude ⟦LONGITUDE\d+⟧; as of/,
     );
     // Her location only: not her other details.
     expect(after).not.toContain("personal details");
@@ -232,6 +232,8 @@ describe("personal details", () => {
     );
     expect(nudge.privateValues(ann.id)).toEqual([]);
     expect(nudge.showTo(bo.id, "Ann Berg wrote")).toBe("Ann Berg wrote");
+    // Nor hidden from the model, as other names aren't (ADR 15).
+    expect(nudge.redact("Ann Berg wrote")).toBe("Ann Berg wrote");
     await nudge.close(context);
   });
 

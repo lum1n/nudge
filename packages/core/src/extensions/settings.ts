@@ -165,6 +165,7 @@ export const BUNDLED_EXTENSIONS: readonly string[] = [
   "@nudge/ext-calendar",
   "@nudge/ext-codemode",
   "@nudge/ext-connectors",
+  "@nudge/ext-contacts",
   "@nudge/ext-desktop",
   "@nudge/ext-documents",
   "@nudge/ext-federation",
@@ -173,12 +174,14 @@ export const BUNDLED_EXTENSIONS: readonly string[] = [
   "@nudge/ext-matrix",
   "@nudge/ext-mcp",
   "@nudge/ext-ner",
+  "@nudge/ext-peers",
   "@nudge/ext-push",
   "@nudge/ext-rss",
   "@nudge/ext-search",
   "@nudge/ext-signal",
   "@nudge/ext-telegram",
   "@nudge/ext-terminal",
+  "@nudge/ext-triggers",
   "@nudge/ext-watches",
 ];
 
