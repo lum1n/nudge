@@ -7,12 +7,18 @@ const DOC = readFileSync(new URL("../../../docs/protocol/v1.md", import.meta.url
 
 /**
  * Routes registered for every method, which are no endpoints of their own: the authentication
- * middleware of an assistant's and the server's routes, and the hand-off to extensions' routes.
+ * middleware of an assistant's and the server's routes, the rate limits (on everything, and the
+ * stricter ones on the routes that take a code), and the hand-off to extensions' routes.
  * Those are the extensions' own; the doc speaks of them in general, and of the bundled ones' in
  * their sections, but nothing here lists them. A new route for every method fails the test until
  * it is added here, with a reason.
  */
 const NOT_ENDPOINTS = [
+  "ALL /v1/*",
+  "ALL /v1/a/:assistant/pair",
+  "ALL /v1/setup",
+  "ALL /v1/setup/*",
+  "ALL /v1/sign-in",
   "ALL /v1/server/*",
   "ALL /v1/a/:assistant/*",
   "ALL /v1/a/:assistant/ext/:extension",
