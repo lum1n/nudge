@@ -206,7 +206,7 @@ export async function signIn(token: string, remember: boolean): Promise<string |
   });
 }
 
-/** Trades a pairing code from `nudge pair` for a token of whichever assistant made it. */
+/** Trades a pairing code an admin made for a token of whichever assistant made it. */
 export async function pair(code: string, remember: boolean): Promise<string | undefined> {
   return firstAssistant(async (assistant) => {
     await new Api({ server: "", assistant, tokens: tokenStore(assistant, remember) }).pair(code, {

@@ -1,11 +1,12 @@
 import type { ExtensionSetup, RoomKind, TokenInfo } from "@nudge/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { type ReactNode, useEffect, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { ApiError, clientFor, useRoomList } from "../../api.ts";
 import { type Appearance, lookOf } from "../../avatar/appearance.ts";
 import { Avatar } from "../../avatar/Avatar.tsx";
 import { LookPicker } from "../../avatar/LookPicker.tsx";
+import { invite, pairAnotherDevice, type Pairing, PairingCard } from "../../pairing.tsx";
 import { meQuery } from "../../queries.ts";
 import { ObjectFields, RoomsContext, type Schema, withoutDefaults } from "../../schema-form.tsx";
 
@@ -34,7 +35,10 @@ function draftOf(setup: ExtensionSetup): Draft {
   };
 }
 
-/** What an admin sets up for everyone: how the robot looks, the extensions, who is signed in. */
+/**
+ * What an admin sets up for everyone: how the robot looks, who uses it and is signed in, the
+ * extensions.
+ */
 function Settings() {
   const { assistant } = Route.useParams();
   const me = useQuery(meQuery(assistant));
@@ -43,6 +47,7 @@ function Settings() {
   return (
     <>
       <Robot />
+      <People />
       <Clients />
       <Extensions />
     </>
@@ -117,6 +122,87 @@ function Robot() {
           </div>
         </div>
       </div>
+    </section>
+  );
+}
+
+/**
+ * Pairing codes, each with its QR code for the apps: for someone new, made a player here first, or
+ * for another device of the admin's own.
+ */
+function People() {
+  const { assistant } = Route.useParams();
+  const me = useQuery(meQuery(assistant));
+  const queryClient = useQueryClient();
+  const [name, setName] = useState("");
+  const [pairing, setPairing] = useState<Pairing>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+
+  async function make(pair: () => Promise<Pairing>) {
+    setBusy(true);
+    setError(undefined);
+    try {
+      setPairing(await pair());
+    } catch (caught) {
+      setError((caught as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onInvite(event: FormEvent) {
+    event.preventDefault();
+    void make(async () => {
+      const made = await invite(clientFor(assistant).api, name);
+      setName("");
+      await queryClient.invalidateQueries({ queryKey: [assistant, "players"] });
+      return made;
+    });
+  }
+
+  function onAnotherDevice() {
+    const self = me.data?.player;
+    if (self !== undefined) void make(() => pairAnotherDevice(clientFor(assistant).api, self));
+  }
+
+  return (
+    <section className="mx-auto flex max-w-3xl flex-col gap-3 p-3 sm:p-4">
+      <div>
+        <h2 className="text-lg font-medium">People and devices</h2>
+        <p className="text-sm text-stone-600">
+          Invite someone, or sign in another device of yours: either gets a pairing code and a QR
+          code for the Nudge app.
+        </p>
+      </div>
+      <form onSubmit={onInvite} className="flex flex-wrap gap-2">
+        <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="Their name"
+          aria-label="Their name"
+          className="min-w-0 flex-1 rounded border border-stone-300 bg-white px-3 py-1.5"
+        />
+        <button
+          type="submit"
+          disabled={busy || name.trim() === ""}
+          className="rounded bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-40"
+        >
+          Invite someone
+        </button>
+        <button
+          type="button"
+          disabled={busy || me.data === undefined}
+          onClick={onAnotherDevice}
+          className="rounded border border-stone-300 px-3 py-1.5 text-sm disabled:opacity-40"
+        >
+          Sign in another device
+        </button>
+      </form>
+      {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
+      {pairing !== undefined && (
+        <PairingCard pairing={pairing} onDone={() => setPairing(undefined)} />
+      )}
     </section>
   );
 }

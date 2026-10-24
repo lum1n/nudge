@@ -944,8 +944,8 @@ fun hostOf(server: String): String = runCatching { java.net.URI(server).host }.g
 fun explain(error: Throwable): String = when (error) {
     is NudgeException.Status ->
         if (error.status.toInt() == 401) {
-            "That didn't work. A pairing code from nudge pair <your name> works once, for ten minutes; " +
-                "a token from nudge token <your name> until it is revoked."
+            "That didn't work. A pairing code works once, for ten minutes: ask an admin for a new one. " +
+                "A token works until it is revoked."
         } else {
             error.detail
         }

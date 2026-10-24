@@ -54,8 +54,8 @@ import nudge.ffi.Assistant
 import nudge.ffi.listAssistants
 
 /**
- * Pairing: the server's address, which assistant, and the one-time code an admin made with
- * `nudge pair <player>`. A `nudge://pair` link fills all three.
+ * Pairing: the server's address, which assistant, and the one-time code an admin made, under
+ * People and devices or with `nudge pair <player>`. A `nudge://pair` link fills all three.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -185,7 +185,7 @@ fun SignInScreen(model: AppModel, askForNotifications: () -> Unit, setUp: () -> 
                     ),
                     keyboardActions = KeyboardActions(onDone = { signIn() }),
                     supportingText = {
-                        Text("Ask whoever runs the server for one: nudge pair <your name>. It works once, for ten minutes. A token (nudge_…) works here too.")
+                        Text("Ask an admin of the assistant for one, or for its QR code: they make it under People and devices in their settings, in the app or on the web. It works once, for ten minutes. A token (nudge_…) works here too.")
                     },
                     shape = MaterialTheme.shapes.large,
                     modifier = Modifier.fillMaxWidth(),
