@@ -107,7 +107,8 @@ Options:
       --force              restore: overwrite files that are there
 `;
 
-async function main(argv: string[]): Promise<number> {
+/** Runs one command; resolves with its exit code. `run` is this, for the process. */
+export async function main(argv: string[]): Promise<number> {
   const { positionals, values } = parseArgs({
     args: argv,
     allowPositionals: true,
