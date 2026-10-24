@@ -1,6 +1,6 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { Context as ModelContext } from "@earendil-works/pi-ai";
 import { createModels } from "@earendil-works/pi-ai/models";
@@ -15,15 +15,19 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import mcp, {
   fillVariables,
   imageWarnings,
+  needsApproval,
   type PanelInput,
   type PanelOutput,
   passesImages,
+  sandboxWarnings,
   toolName,
 } from "../src/index.ts";
 import { fakeOAuthServer } from "./fake-oauth.ts";
 
 const context = BACKGROUND_CONTEXT;
 const FAKE = join(import.meta.dirname, "fake-server.mjs");
+/** What the sandbox has to show the fake server: node's installation and the server's file. */
+const READABLE = [dirname(dirname(process.execPath)), import.meta.dirname];
 const author = { playerId: "owner", displayName: "Vegard" };
 
 /** The tools and prompt in effect at the end of a request; changes come as later system messages. */
@@ -80,7 +84,7 @@ describe("mcp", () => {
         database: join(dir, "a.sqlite"),
         models,
         model: { provider: faux.provider.id, modelId: faux.getModel().id },
-        extensions: [{ extension: mcp, settings: { servers } }],
+        extensions: [{ extension: mcp, settings: { servers, readable: READABLE } }],
       },
       context,
     );
@@ -181,11 +185,28 @@ describe("mcp", () => {
       await send({ type: "setKey", server: "m1", key: "TOKEN", value: "s3cret-value" }),
     ).toEqual({ type: "ok", ref: "r1" });
     expect(servers()[0]?.keys[0]?.set).toBe(true);
+    // The server marks its reads read-only; only people say to believe it.
+    expect(servers()[0]?.trustReadOnlyHint).toBeUndefined();
+    faux.setResponses([call("mcp_tools", { server: "notes", search: "word" }), done]);
+    await say("Which tools look up words?");
+    expect(outputs.at(-1)).toContain("- lookup (approved before it runs): Look up a word");
+    expect(await send({ type: "setTrustReadOnlyHint", server: "m1", trust: true })).toEqual({
+      type: "ok",
+      ref: "r2",
+    });
+    expect(servers()[0]?.trustReadOnlyHint).toBe(true);
+    await writeFile(join(dir, "secret.txt"), "Nudge's own");
 
     faux.setResponses([
       call("mcp_tools", { server: "notes", search: "word" }),
       done,
       call("mcp_call", { server: "notes", tool: "env" }),
+      done,
+      call("mcp_call", {
+        server: "notes",
+        tool: "read",
+        arguments: { path: join(dir, "secret.txt") },
+      }),
       done,
       call("mcp_call", { server: "notes", tool: "picture" }),
       done,
@@ -203,6 +224,10 @@ describe("mcp", () => {
     expect(env.TOKEN).not.toBe("s3cret-value");
     expect(outputs.at(-1)).not.toContain("s3cret-value");
     expect(env.NUDGE_MCP_TEST_SECRET).toBeUndefined();
+    // Its home is its own directory, in the sandbox, which shows it none of Nudge's other files.
+    expect(env.HOME).toBe(join(dir, "a.sqlite.extensions", "mcp", "rooms", LOBBY, "m1"));
+    await say("Read Nudge's file");
+    expect(outputs.at(-1)).toBe(untrustedData("mcp_call", "ENOENT"));
     // A room's servers never pass images: nothing a room sets says they may skip redaction.
     await say("Show the picture");
     expect(outputs.at(-1)).toBe(untrustedData("mcp_call", "[an image, not shown]"));
@@ -258,6 +283,9 @@ describe("mcp", () => {
       expect(await page.text()).toContain("Signed in");
       await new Promise((resolve) => setTimeout(resolve, 20));
       expect(servers()[0]).toMatchObject({ signedIn: true });
+      expect(await send({ type: "setTrustReadOnlyHint", server: "m1", trust: true })).toMatchObject(
+        { type: "ok" },
+      );
 
       faux.setResponses([
         call("mcp_call", { server: "docs", tool: "search", arguments: { query: "fjords" } }),
@@ -276,12 +304,18 @@ describe("mcp", () => {
 
   it("passes a server's images to the model only when it opts in, and warns of it", async () => {
     const { faux, requests, call, done, say } = await open({
-      plain: { command: process.execPath, args: [FAKE] },
-      shown: { command: process.execPath, args: [FAKE], unredactedImages: true },
-      old: { command: process.execPath, args: [FAKE], images: true },
+      plain: { command: process.execPath, args: [FAKE], trustReadOnlyHint: true },
+      shown: {
+        command: process.execPath,
+        args: [FAKE],
+        unredactedImages: true,
+        trustReadOnlyHint: true,
+      },
+      old: { command: process.execPath, args: [FAKE], images: true, trustReadOnlyHint: true },
       overridden: {
         command: process.execPath,
         args: [FAKE],
+        trustReadOnlyHint: true,
         images: true,
         unredactedImages: false,
       },
@@ -331,7 +365,12 @@ describe("mcp", () => {
 
   it("offers a server's tools through tool_search, calls reads at once and asks for writes", async () => {
     const { faux, requests, outputs, call, done, say, nudge } = await open({
-      fake: { command: process.execPath, args: [FAKE], env: { TOKEN: "${NUDGE_MCP_TEST_TOKEN}" } },
+      fake: {
+        command: process.execPath,
+        args: [FAKE],
+        env: { TOKEN: "${NUDGE_MCP_TEST_TOKEN}" },
+        trustReadOnlyHint: true,
+      },
     });
     faux.setResponses([
       call("tool_search", { query: "look up a word" }),
@@ -342,7 +381,7 @@ describe("mcp", () => {
     const first = current(requests[0]);
     expect(first.tools).toContain("tool_search");
     expect(first.tools).not.toContain("mcp__fake__lookup");
-    expect(first.prompt).toContain("- fake: lookup, save, env, pid, picture");
+    expect(first.prompt).toContain("- fake: lookup, save, env, pid, picture, read");
     expect(current(requests[1]).tools).toContain("mcp__fake__lookup");
     expect(outputs.at(-1)).toBe(
       untrustedData("mcp__fake__lookup", "fjord: a word. Call Ann on ⟦PHONE1⟧."),
@@ -351,7 +390,7 @@ describe("mcp", () => {
     expect(JSON.stringify(requests.at(-1))).not.toContain("987 65 432");
 
     faux.setResponses([
-      call("tool_search", { query: "save note env pid picture", limit: 8 }),
+      call("tool_search", { query: "save note env pid picture read", limit: 8 }),
       call(toolName("fake", "save"), { note: "Buy milk" }),
       done,
       done,
@@ -368,8 +407,11 @@ describe("mcp", () => {
     // The room hears the outcome as a new turn.
     await nudge.harness.waitForIdle(context);
 
+    await writeFile(join(dir, "secret.txt"), "Nudge's own");
     faux.setResponses([
       call(toolName("fake", "env"), {}),
+      done,
+      call(toolName("fake", "read"), { path: join(dir, "secret.txt") }),
       done,
       call(toolName("fake", "picture"), {}),
       done,
@@ -379,13 +421,17 @@ describe("mcp", () => {
     expect(env.TOKEN).toBe("t0ken");
     expect(env.NUDGE_MCP_TEST_SECRET).toBeUndefined();
     expect(env.PATH).toContain("/usr/bin");
+    expect(env.HOME).toBe(join(dir, "a.sqlite.extensions", "mcp", "servers", "fake"));
+    // The sandbox shows it none of Nudge's files, such as the database beside this one.
+    await say("Read Nudge's file");
+    expect(outputs.at(-1)).toBe(untrustedData("mcp__fake__read", "ENOENT"));
     await say("Show the picture");
     expect(outputs.at(-1)).toBe(untrustedData("mcp__fake__picture", "[an image, not shown]"));
   });
 
   it("asks before a read-only call once the turn read what a server answered", async () => {
     const { faux, requests, outputs, call, done, say, nudge } = await open({
-      fake: { command: process.execPath, args: [FAKE] },
+      fake: { command: process.execPath, args: [FAKE], trustReadOnlyHint: true },
     });
     faux.setResponses([
       call("tool_search", { query: "look up a word" }),
@@ -419,7 +465,8 @@ describe("mcp", () => {
 
   it("leaves out a server it can't start, and stops the programs it started at close", async () => {
     const { faux, requests, outputs, call, done, say, nudge } = await open({
-      fake: { command: process.execPath, args: [FAKE] },
+      // Unsandboxed, so its pid is this machine's.
+      fake: { command: process.execPath, args: [FAKE], sandbox: false, trustReadOnlyHint: true },
       broken: { command: join(dir, "no-such-program") },
       unset: { command: process.execPath, args: [FAKE], env: { X: "${NUDGE_MCP_UNSET}" } },
     });
@@ -438,6 +485,35 @@ describe("mcp", () => {
     await nudge.close(context);
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect(() => process.kill(pid, 0)).toThrow();
+  });
+
+  it("asks before a call to a tool the server marks read-only unless its settings trust that", async () => {
+    const { faux, outputs, call, done, say } = await open({
+      fake: { command: process.execPath, args: [FAKE] },
+    });
+    faux.setResponses([
+      call("tool_search", { query: "look up a word" }),
+      call(toolName("fake", "lookup"), { word: "fjord" }),
+      done,
+    ]);
+    await say("What is a fjord?");
+    expect(outputs.at(-1)).toBe("Waiting for approval a1.");
+
+    const read = { annotations: { readOnlyHint: true } };
+    expect(needsApproval({ approval: "writes" }, read)).toBe(true);
+    expect(needsApproval({ approval: "writes", trustReadOnlyHint: true }, read)).toBe(false);
+    expect(needsApproval({ approval: "writes", trustReadOnlyHint: true }, {})).toBe(true);
+    expect(needsApproval({ approval: "always", trustReadOnlyHint: true }, read)).toBe(true);
+    expect(needsApproval({ approval: "never" }, {})).toBe(false);
+    expect(
+      sandboxWarnings({
+        boxed: { command: "x" },
+        open: { command: "x", sandbox: false },
+        remote: { sandbox: false },
+      }),
+    ).toEqual([
+      "server open runs its program without a sandbox, as Nudge's user, so it can read Nudge's database and keys",
+    ]);
   });
 
   it("tells the model when no servers are set up", async () => {

@@ -31,6 +31,8 @@ export class RoomServers {
     private readonly logins: OAuthLogins,
     private readonly timeoutMs: number,
     private readonly dataDir: string | undefined,
+    /** More directories the programs may read, from the extension's settings. */
+    private readonly readable: readonly string[] = [],
   ) {}
 
   static key(roomId: string, serverId: string): string {
@@ -57,16 +59,17 @@ export class RoomServers {
         timeoutMs: this.timeoutMs,
       };
     }
-    let cwd: string | undefined;
+    let home: string | undefined;
     if (this.dataDir !== undefined) {
-      cwd = join(this.dataDir, "rooms", roomId, server.id);
-      mkdirSync(cwd, { recursive: true, mode: 0o700 });
+      home = join(this.dataDir, "rooms", roomId, server.id);
+      mkdirSync(home, { recursive: true, mode: 0o700 });
     }
+    // Always sandboxed: a room's program sees its own directory as its home, not Nudge's data.
     return {
       command: server.command!,
       ...(server.args === undefined ? {} : { args: server.args }),
       env: { ...server.env, ...values("env") },
-      ...(cwd === undefined ? {} : { cwd }),
+      sandbox: { ...(home === undefined ? {} : { home }), readable: this.readable },
       timeoutMs: this.timeoutMs,
     };
   }
