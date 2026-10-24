@@ -1,15 +1,25 @@
 import { readFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import {
+  BackupError,
+  type BackupSettings,
   backupKey,
+  backupRemoteDir,
   createBackup,
   lastBackupAt,
   loadConfig,
   type NudgeConfig,
   openRecoveryKit,
+  parseConfig,
   pruneBackups,
+  readRawConfig,
+  type RemoteCredentials,
+  RemoteBackups,
   restoreBackup,
+  writeRawConfig,
 } from "@nudge/core";
+import type { BackupState } from "@nudge/protocol";
+import type { BackupControl } from "@nudge/server";
 import { UsageError } from "../errors.ts";
 import { promptHidden } from "./setup.ts";
 
@@ -40,6 +50,117 @@ export async function backup(options: {
   const keep = config.backup?.keep;
   if (keep !== undefined && options.to === undefined)
     for (const old of await pruneBackups(dir, keep)) console.log(`Deleted the old backup ${old}`);
+  if (options.to === undefined && config.backup?.remote !== undefined)
+    await uploadBackup(options.config, config.backup, file, (line) => console.log(line));
+}
+
+/**
+ * Copies a backup just made to the config's remote target, if it has one, and deletes the oldest
+ * there past `keep`, as in the folder. Throws when the upload fails; the local copy stays.
+ */
+export async function uploadBackup(
+  configPath: string,
+  settings: BackupSettings,
+  file: string,
+  log: (line: string) => void,
+  remotes = new RemoteBackups(backupRemoteDir(configPath)),
+): Promise<void> {
+  if (settings.remote === undefined) return;
+  const { label, deleted } = await remotes.upload(settings.remote, file, settings.keep ?? 14);
+  log(`Uploaded it to ${label}`);
+  for (const name of deleted) log(`Deleted the old backup ${name} from ${label}`);
+}
+
+/** What a server set up in the wizard backs up, and what the apps turn on with a remote target. */
+const DEFAULT_BACKUP = { dir: "backups", everyHours: 24, keep: 14 };
+
+/**
+ * The server API's backups (ADR 8) for `nudge serve`: their state, the remote target owners set
+ * in the apps, and a backup now. `changed` runs after the config is written, to reload it and
+ * reschedule.
+ */
+export function backupControl(
+  configPath: string,
+  changed: () => Promise<void>,
+  remotes = new RemoteBackups(backupRemoteDir(configPath)),
+): BackupControl {
+  const state = async (): Promise<BackupState> => {
+    const settings = (await loadConfig(configPath)).backup;
+    const last = settings === undefined ? undefined : await lastBackupAt(settings.dir);
+    const credentials = settings?.remote === undefined ? undefined : remotes.credentials();
+    const upload = settings?.remote === undefined ? {} : remotes.state();
+    return {
+      on: settings !== undefined,
+      ...(settings === undefined ? {} : { dir: settings.dir }),
+      everyHours: settings?.everyHours ?? DEFAULT_BACKUP.everyHours,
+      keep: settings?.keep ?? DEFAULT_BACKUP.keep,
+      ...(last === undefined ? {} : { lastBackupAt: last.getTime() }),
+      ...(settings?.remote === undefined ? {} : { remote: settings.remote }),
+      ...(credentials === undefined
+        ? {}
+        : { credentials: { user: credentials.user, from: credentials.from } }),
+      ...(upload.lastUploadAt === undefined ? {} : { lastUploadAt: upload.lastUploadAt }),
+      ...(upload.lastError === undefined || (upload.lastErrorAt ?? 0) < (upload.lastUploadAt ?? 0)
+        ? {}
+        : { lastError: upload.lastError, lastErrorAt: upload.lastErrorAt! }),
+    };
+  };
+  const writeBackup = async (change: (backup: Record<string, unknown>) => void) => {
+    const raw = await readRawConfig(configPath);
+    const backup = { ...((raw.backup as Record<string, unknown> | undefined) ?? DEFAULT_BACKUP) };
+    change(backup);
+    raw.backup = backup;
+    // Refused before it is written, so a bad target never stops the server from starting.
+    parseConfig(raw, dirname(resolve(configPath)));
+    await writeRawConfig(configPath, raw);
+    await changed();
+  };
+  return {
+    state,
+    setRemote: async ({ user, secret, test, ...target }) => {
+      const kept = remotes.credentials();
+      let credentials: RemoteCredentials | undefined;
+      if (secret !== undefined && secret !== "") {
+        if (!user)
+          throw new BackupError(
+            target.type === "s3"
+              ? "Give the access key id with its secret"
+              : "Give the user name with the password",
+          );
+        credentials = { user, secret };
+      } else if (kept !== undefined) credentials = { user: user || kept.user, secret: kept.secret };
+      if (target.type === "s3" && credentials === undefined)
+        throw new BackupError("An S3 bucket needs an access key id and its secret");
+      if (test !== false)
+        await remotes.check(target, credentials).catch((error: unknown) => {
+          throw new BackupError(`Nudge couldn't write there: ${(error as Error).message}`);
+        });
+      await writeBackup((backup) => (backup.remote = target));
+      if (credentials !== undefined && (secret || kept?.from === "server"))
+        remotes.setCredentials(credentials);
+      return state();
+    },
+    removeRemote: async () => {
+      await writeBackup((backup) => delete backup.remote);
+      remotes.deleteCredentials();
+      return state();
+    },
+    backUpNow: async () => {
+      const config = await loadConfig(configPath);
+      const settings = config.backup;
+      if (settings === undefined)
+        throw new BackupError('This server makes no backups: set "backup" in its nudge.json');
+      const key = await backupKey(keyPath(configPath, config), true);
+      const file = await createBackup({ configPath, config, dir: settings.dir, key });
+      await pruneBackups(settings.dir, settings.keep ?? DEFAULT_BACKUP.keep);
+      try {
+        await uploadBackup(configPath, settings, file, () => {}, remotes);
+        return { file: basename(file) };
+      } catch (error) {
+        return { file: basename(file), uploadError: (error as Error).message };
+      }
+    },
+  };
 }
 
 /** Unpacks a backup into a directory of its own; nothing running is touched. */
@@ -107,6 +228,10 @@ export function scheduleBackups(
       const file = await createBackup({ configPath, config, dir: settings.dir, key });
       await pruneBackups(settings.dir, keep);
       log(`Backed up to ${file}`);
+      // The local copy is made; a remote that is down is tried again with the next one.
+      await uploadBackup(configPath, settings, file, log).catch((error: unknown) =>
+        log((error as Error).message),
+      );
     } catch (error) {
       log(`Backup failed: ${(error as Error).message}`);
     }

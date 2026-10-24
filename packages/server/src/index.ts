@@ -7,6 +7,7 @@ export {
   type ServerControl,
   serverRoutes,
   type WiredControl,
+  type BackupControl,
   type UpdateControl,
 } from "./v1/server.ts";
 export { type SetupControl, setupRoutes } from "./v1/setup.ts";

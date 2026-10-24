@@ -300,6 +300,16 @@ export async function asOwner<T>(
 }
 
 /**
+ * Signs this device in to the server as its owner, with the player token it has on `assistant`;
+ * a 403 when that player owns no part of the server.
+ */
+export async function signInToServer(assistant: string): Promise<void> {
+  const token = tokenFor(assistant);
+  if (token === undefined) throw new Error(`Not signed in to ${assistant}`);
+  await serverApi().signIn(assistant, token, { name: CLIENT.name, platform: CLIENT.platform });
+}
+
+/**
  * Sets the server up from the wizard, and signs this device in: to the new assistant as its first
  * player, remembered, and to the server as its owner. Returns the assistant's name and player id.
  */

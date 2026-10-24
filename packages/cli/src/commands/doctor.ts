@@ -3,6 +3,8 @@ import { access, mkdir } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import type { Models } from "@earendil-works/pi-ai";
 import {
+  type BackupSettings,
+  backupRemoteDir,
   buildModels,
   builtinDetectors,
   checkExtensions,
@@ -12,10 +14,13 @@ import {
   databaseKey,
   DEFAULT_MODEL,
   keyFile,
+  lastBackupAt,
+  lastRemoteBackupAt,
   loadConfig,
   LOCAL_MODEL,
   localModelDir,
   openLocalModel,
+  RemoteBackups,
   ServerKeys,
   serverKeysDir,
   Vault,
@@ -156,7 +161,53 @@ export async function doctor(options: DoctorOptions): Promise<boolean> {
     check(auth !== undefined, `${label}: credentials ${auth?.source ?? "missing"}`);
     if (options.ping && auth !== undefined) await ping(models, label, ref.provider, ref.modelId);
   }
+  if (config.backup !== undefined) await checkBackups(check, warn, options.config, config.backup);
   return ok;
+}
+
+/**
+ * Backups (ADR 8): how old the newest in the folder is, and with a remote target, that it answers
+ * and how old the newest there is. One older than two periods is a warning: backups have stopped.
+ */
+export async function checkBackups(
+  check: (passed: boolean, text: string) => void,
+  warn: (text: string) => void,
+  configPath: string,
+  settings: BackupSettings,
+  remotes = new RemoteBackups(backupRemoteDir(configPath)),
+  now = Date.now(),
+): Promise<void> {
+  const every = (settings.everyHours ?? 24) * 3_600_000;
+  const report = (where: string, last: Date | undefined) => {
+    if (last === undefined) warn(`backups: none in ${where} yet`);
+    else if (now - last.getTime() > 2 * every)
+      warn(`backups: the newest in ${where} is ${age(now - last.getTime())} old`);
+    else check(true, `backups: the newest in ${where} is ${age(now - last.getTime())} old`);
+  };
+  report(settings.dir, await lastBackupAt(settings.dir));
+  if (settings.remote === undefined) return;
+  let label =
+    settings.remote.type === "s3" ? `s3://${settings.remote.bucket}` : settings.remote.url;
+  try {
+    const remote = remotes.open(settings.remote);
+    label = remote.label;
+    const last = await lastRemoteBackupAt(remote);
+    check(true, `backups: ${label} answers`);
+    report(label, last);
+  } catch (error) {
+    check(false, `backups: ${label}: ${(error as Error).message}`);
+  }
+  const { lastError, lastErrorAt, lastUploadAt } = remotes.state();
+  if (lastError !== undefined && lastErrorAt !== undefined && lastErrorAt > (lastUploadAt ?? 0))
+    warn(`backups: the last upload, ${age(now - lastErrorAt)} ago, failed: ${lastError}`);
+}
+
+/** A duration as "3 hours" or "2 days". */
+function age(ms: number): string {
+  const hours = Math.floor(ms / 3_600_000);
+  if (hours < 1) return `${Math.max(0, Math.floor(ms / 60_000))} minutes`;
+  if (hours < 48) return `${hours} hours`;
+  return `${Math.floor(hours / 24)} days`;
 }
 
 /** The local model (ADR 22): its files, their hashes, and that it finds a name the rules miss. */

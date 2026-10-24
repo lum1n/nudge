@@ -174,7 +174,7 @@ See [Privacy](docs/privacy.md) for what is hidden, the local model, private valu
 
 ## Data and backups
 
-Each assistant keeps its data in one SQLite file, which Nudge encrypts under a key of its own. `nudge backup --to <dir>` writes one encrypted file with everything a server needs, safe while `nudge serve` runs; `"backup"` in `nudge.json` makes one every day, and `nudge restore <file> --to <dir>` brings it back. Keep a copy of the keys away from the machine. See [Data and backups](docs/backups.md).
+Each assistant keeps its data in one SQLite file, which Nudge encrypts under a key of its own. `nudge backup --to <dir>` writes one encrypted file with everything a server needs, safe while `nudge serve` runs; `"backup"` in `nudge.json` makes one every day, and `nudge restore <file> --to <dir>` brings it back. Copies can also go to an S3-compatible bucket or a WebDAV folder. Keep a copy of the keys away from the machine. See [Data and backups](docs/backups.md).
 
 ## Extensions
 

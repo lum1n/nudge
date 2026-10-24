@@ -1,6 +1,8 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -8,7 +10,8 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { databaseEncryption, LOBBY, loadConfig, openAssistant } from "@nudge/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { main } from "../src/cli.ts";
-import { backup, restore } from "../src/commands/backup.ts";
+import { backup, backupControl, restore } from "../src/commands/backup.ts";
+import { checkBackups } from "../src/commands/doctor.ts";
 
 const context = BACKGROUND_CONTEXT;
 const MAIN = join(import.meta.dirname, "../dist/main.js");
@@ -238,4 +241,178 @@ describe("nudge backup, then nudge restore --kit on a new machine", () => {
     },
     30_000,
   );
+});
+
+/** A WebDAV folder at /dav/ over memory, behind basic auth as ann:hunter2. */
+async function webDav(): Promise<{ url: string; files: Map<string, Buffer>; close(): void }> {
+  const files = new Map<string, Buffer>();
+  const auth = `Basic ${Buffer.from("ann:hunter2").toString("base64")}`;
+  const server = createServer(async (request, response) => {
+    const chunks: Buffer[] = [];
+    for await (const chunk of request) chunks.push(chunk as Buffer);
+    if (request.headers.authorization !== auth) {
+      response.statusCode = 401;
+      response.end("Unauthorized");
+      return;
+    }
+    const name = decodeURIComponent(request.url!.slice("/dav/".length));
+    if (request.method === "PUT") {
+      files.set(name, Buffer.concat(chunks));
+      response.statusCode = 201;
+    } else if (request.method === "DELETE") {
+      response.statusCode = files.delete(name) ? 204 : 404;
+    } else if (request.method === "PROPFIND") {
+      response.statusCode = 207;
+      response.write('<?xml version="1.0"?><D:multistatus xmlns:D="DAV:">');
+      for (const href of ["", ...files.keys()])
+        response.write(`<D:response><D:href>/dav/${href}</D:href></D:response>`);
+      response.write("</D:multistatus>");
+    } else response.statusCode = 405;
+    response.end();
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address() as AddressInfo;
+  return { url: `http://127.0.0.1:${port}/dav/`, files, close: () => server.close() };
+}
+
+describe("nudge backup to a remote target", () => {
+  it("uploads each backup, keeps the config's number there, and only ciphertext leaves", async () => {
+    const dav = await webDav();
+    try {
+      await setUp({
+        backup: { dir: "backups", keep: 2, remote: { type: "webdav", url: dav.url } },
+      });
+      vi.stubEnv("NUDGE_BACKUP_REMOTE_USER", "ann");
+      vi.stubEnv("NUDGE_BACKUP_REMOTE_SECRET", "hunter2");
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const lines: string[] = [];
+      for (const at of ["2026-10-01T10:00:00Z", "2026-10-02T10:00:00Z", "2026-10-03T10:00:00Z"]) {
+        vi.setSystemTime(new Date(at));
+        lines.push(...(await printed(() => backup({ config }))));
+      }
+      vi.useRealTimers();
+      expect(lines).toContain(`Uploaded it to ${dav.url}`);
+      expect(lines).toContain(
+        `Deleted the old backup nudge-20261001T100000Z.nudgebackup from ${dav.url}`,
+      );
+      expect([...dav.files.keys()].sort()).toEqual([
+        "nudge-20261002T100000Z.nudgebackup",
+        "nudge-20261003T100000Z.nudgebackup",
+      ]);
+      const uploaded = dav.files.get("nudge-20261003T100000Z.nudgebackup")!;
+      expect(uploaded.includes("flowerpot")).toBe(false);
+      expect(uploaded.includes("Ingrid")).toBe(false);
+
+      // The copy there restores like the one here.
+      const copy = join(dir, "downloaded.nudgebackup");
+      await writeFile(copy, uploaded);
+      const restored = join(dir, "restored");
+      await printed(() => restore({ config, file: copy, to: restored, force: false }));
+      expect(await contents(restored)).toEqual(KNOWN);
+
+      // The doctor sees it answer, and how old the newest there is.
+      const checks: string[] = [];
+      await checkBackups(
+        (passed, text) => checks.push(`${passed ? "ok" : "FAIL"} ${text}`),
+        (text) => checks.push(`warn ${text}`),
+        config,
+        (await loadConfig(config)).backup!,
+        undefined,
+        Date.parse("2026-10-03T13:00:00Z"),
+      );
+      expect(checks).toEqual([
+        `ok backups: the newest in ${join(home, "backups")} is 3 hours old`,
+        `ok backups: ${dav.url} answers`,
+        `ok backups: the newest in ${dav.url} is 3 hours old`,
+      ]);
+    } finally {
+      dav.close();
+    }
+  });
+
+  it("is set from the apps: checked first, kept in the config and the server's secrets", async () => {
+    const dav = await webDav();
+    try {
+      await setUp();
+      let changes = 0;
+      const control = backupControl(config, async () => void changes++);
+      expect(await control.state()).toEqual({ on: false, everyHours: 24, keep: 14 });
+      await expect(control.backUpNow()).rejects.toThrow(/makes no backups/);
+
+      await expect(
+        control.setRemote({ type: "webdav", url: dav.url, user: "ann", secret: "wrong" }),
+      ).rejects.toThrow("Nudge couldn't write there: PUT /dav/nudge-check.txt: 401 Unauthorized");
+      await expect(
+        control.setRemote({ type: "s3", endpoint: "https://s3.example", bucket: "b" }),
+      ).rejects.toThrow("An S3 bucket needs an access key id and its secret");
+      expect(changes).toBe(0);
+
+      const state = await control.setRemote({
+        type: "webdav",
+        url: dav.url,
+        user: "ann",
+        secret: "hunter2",
+      });
+      expect(changes).toBe(1);
+      expect(state).toEqual({
+        on: true,
+        dir: join(home, "backups"),
+        everyHours: 24,
+        keep: 14,
+        remote: { type: "webdav", url: dav.url },
+        credentials: { user: "ann", from: "server" },
+      });
+      const raw = JSON.parse(await readFile(config, "utf8"));
+      expect(raw.backup).toEqual({
+        dir: "backups",
+        everyHours: 24,
+        keep: 14,
+        remote: { type: "webdav", url: dav.url },
+      });
+      expect(JSON.stringify(raw)).not.toContain("hunter2");
+      expect(dav.files.size).toBe(0);
+
+      // Changed later without the password: the kept one is used.
+      await control.setRemote({ type: "webdav", url: dav.url });
+      const made = await control.backUpNow();
+      expect(made).toEqual({ file: expect.stringMatching(/^nudge-\d{8}T\d{6}Z\.nudgebackup$/) });
+      expect([...dav.files.keys()]).toEqual([made.file]);
+      expect((await control.state()).lastUploadAt).toBeGreaterThan(0);
+
+      const removed = await control.removeRemote();
+      expect(removed.remote).toBeUndefined();
+      expect(removed.credentials).toBeUndefined();
+      expect(JSON.parse(await readFile(config, "utf8")).backup.remote).toBeUndefined();
+    } finally {
+      dav.close();
+    }
+  });
+
+  it("keeps the local backup when the upload fails, and the doctor says so", async () => {
+    const dav = await webDav();
+    try {
+      await setUp({
+        backup: { dir: "backups", keep: 2, remote: { type: "webdav", url: dav.url } },
+      });
+      vi.stubEnv("NUDGE_BACKUP_REMOTE_USER", "ann");
+      vi.stubEnv("NUDGE_BACKUP_REMOTE_SECRET", "wrong");
+      await expect(printed(() => backup({ config }))).rejects.toThrow(
+        /^Upload to .* failed: PUT \/dav\/nudge-\d{8}T\d{6}Z\.nudgebackup: 401 Unauthorized$/,
+      );
+      expect(await readdir(join(home, "backups"))).toHaveLength(1);
+      expect(dav.files.size).toBe(0);
+
+      const checks: string[] = [];
+      await checkBackups(
+        (passed, text) => checks.push(`${passed ? "ok" : "FAIL"} ${text}`),
+        (text) => checks.push(`warn ${text}`),
+        config,
+        (await loadConfig(config)).backup!,
+      );
+      expect(checks[1]).toBe(`FAIL backups: ${dav.url}: PROPFIND /dav/: 401 Unauthorized`);
+      expect(checks[2]).toMatch(/^warn backups: the last upload, \d+ minutes ago, failed: PUT /);
+    } finally {
+      dav.close();
+    }
+  });
 });
