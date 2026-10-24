@@ -15,7 +15,7 @@ import {
   MAX_SITE_NOTES,
   runBrowserAgent,
 } from "../src/agent.ts";
-import { fakeBrowser } from "./fake-browser.ts";
+import { fakeBrowser, target } from "./fake-browser.ts";
 
 function setup(steps: ReturnType<typeof fauxAssistantMessage>[]) {
   const faux = fauxProvider();
@@ -173,6 +173,54 @@ describe("runBrowserAgent", () => {
     expect(resumed).toMatchObject({ outcome: "answered", answer: "Booked: table for 2 at 19:00." });
     expect(calls).toEqual(["click e2", "click e9"]);
     expect(text(requests[1])).toContain(`they approved it: ${JSON.stringify(action).slice(1, -1)}`);
+  });
+
+  it("holds a consequential click the model didn't ask about, and lets it through once approved", async () => {
+    const action = 'Click "Betal 349 kr" to pay for 2 cinema tickets';
+    const { models, model } = setup([
+      // A page told it the user had agreed already.
+      fauxAssistantMessage([fauxToolCall("browser_click", { ref: "e9" })], {
+        stopReason: "toolUse",
+      }),
+      fauxAssistantMessage([fauxToolCall("browser_confirm", { action })], {
+        stopReason: "toolUse",
+      }),
+      fauxAssistantMessage(
+        [
+          fauxToolCall("browser_click", { ref: "e9" }, { id: "a" }),
+          fauxToolCall("browser_click", { ref: "e10" }, { id: "b" }),
+        ],
+        { stopReason: "toolUse" },
+      ),
+      fauxAssistantMessage([fauxText("Paid; a second payment was refused.")]),
+    ]);
+    const pay = target({ name: "Betal 349 kr" });
+    const { browser, calls } = fakeBrowser(undefined, { e9: pay, e10: pay });
+    const steps: BrowserStep[] = [];
+    const stopped = await runBrowserAgent({
+      models,
+      model,
+      browser,
+      task: "Buy tickets",
+      onStep: (step) => steps.push(step),
+    });
+    expect(stopped).toMatchObject({ outcome: "needs-confirmation", action });
+    expect(calls).toEqual([]);
+    expect(steps).toContainEqual(
+      expect.objectContaining({ type: "action", tool: "browser_click", ok: false }),
+    );
+
+    const resumed = await runBrowserAgent({
+      models,
+      model,
+      browser,
+      task: "Buy tickets",
+      approved: action,
+      onStep: (step) => steps.push(step),
+    });
+    expect(resumed.outcome).toBe("answered");
+    // The approval covers one payment, not two.
+    expect(calls).toEqual(["click e9"]);
   });
 
   it("gives up after maxSteps", async () => {

@@ -57,6 +57,7 @@ export {
   MAX_PENDING,
   requestApproval,
 } from "./approvals/approvals.ts";
+export { consequentialLabel } from "./approvals/consequential.ts";
 export { type Change, type ChangeListener, Changes } from "./changes.ts";
 export { type RawConfig, readRawConfig, writeRawConfig } from "./config-file.ts";
 export {

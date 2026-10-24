@@ -7,6 +7,7 @@ import { createRequire } from "node:module";
 import { basename, delimiter, dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { chromium, type BrowserContext, type Locator, type Page, type Request } from "patchright";
+import { type ActionTarget, inspectTarget } from "./gate.ts";
 import type { SavedLogin } from "./logins.ts";
 import { compactSnapshot, findLines } from "./snapshot.ts";
 
@@ -310,6 +311,35 @@ export class BrowserSession {
   describe(ref: string): string {
     const line = this.lastLines.find((l) => l.includes(`[${ref}]`));
     return line ? line.trim().replace(/^- /, "").slice(0, 120) : ref;
+  }
+
+  /**
+   * What an action is about to touch, for `needsApproval`: the element by ref, or without one the
+   * element that has the keyboard, in whichever frame; undefined when nothing does.
+   */
+  async inspect(ref?: string): Promise<ActionTarget | undefined> {
+    const read = async (locator: Locator) =>
+      (await locator.evaluate(inspectTarget, undefined, { timeout: 4_000 })) ?? undefined;
+    if (ref !== undefined) {
+      const locator = await this.locate(ref);
+      try {
+        return await read(locator);
+      } catch (error) {
+        // Not knowing what it is must not let it through.
+        throw new ActionError(
+          `Could not check ${this.describe(ref)} before acting (${String(error).split("\n")[0]}). Observe again and retry.`,
+        );
+      }
+    }
+    // The innermost frame with a focused element: a focused iframe hands it to its own page.
+    let found: ActionTarget | undefined;
+    for (const frame of this.current.frames()) {
+      const focused = frame.locator(":focus").first();
+      if ((await focused.count().catch(() => 0)) === 0) continue;
+      const target = await read(focused).catch(() => undefined);
+      if (target && target.tag !== "iframe" && target.tag !== "frame") found = target;
+    }
+    return found;
   }
 
   private async locate(given: string): Promise<Locator> {

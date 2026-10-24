@@ -142,7 +142,7 @@ You see pages as text: open dialogs first, then the page with controls marked by
 - You may send several tool calls in one turn; they run in order and stop at the first failure. After your last call you see the page again.
 - If the page is long, use browser_find or read the next page instead of scrolling repeatedly.
 - Check that the results really match every part of the request before answering. If something cannot be found, say so.
-- Never buy, book, send messages or forms, sign up, post, or enter the user's personal data on your own. When the task needs one of these, get to the point just before it and call browser_confirm with the exact action; the user decides. To log in, use browser_login (the user's saved login for the site; you never see it). If there is none, or the site asks for a code or BankID, call browser_request_login.
+- Never buy, book, send messages or forms, sign up, post, or enter the user's personal data on your own. When the task needs one of these, get to the point just before it and call browser_confirm with the exact action; the user decides. The browser refuses such steps until then. To log in, use browser_login (the user's saved login for the site; you never see it). If there is none, or the site asks for a code or BankID, call browser_request_login.
 - State only what you saw on the pages in this session, not what you believe from elsewhere.
 - Your last message is the answer to the task: brief, with links, and without notes about your process.`;
 }
@@ -178,6 +178,8 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<Bro
       ? options.task
       : `${options.task}\n\nYou stopped earlier to ask the user to approve this action, and they approved it: ${options.approved}\nThe browser is where you left it. Do exactly that action, once, then finish the task. Anything else that needs approval still needs browser_confirm.`;
   const messages: Message[] = [{ role: "user", content: task, timestamp: now() }];
+  // Lets the approved action through the harness's own checks, once.
+  const approval = { granted: options.approved !== undefined };
   const usage: Usage = {
     input: 0,
     output: 0,
@@ -246,6 +248,7 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<Bro
           tool: call.name,
           text: progressLine(options.browser, call),
         }),
+      approval,
     );
     for (const output of outputs) {
       const host = observedHost(output.text);
