@@ -18,8 +18,11 @@ const EMAIL = "kari.nordmann@example.no";
 
 const fake = fakeDesktop(
   (n) =>
-    `- frame "Mail ${n}" (mail) [active] [e1]:\n  - text "From: ${EMAIL}"\n  - button "Reply" [e9]`,
+    `- frame "Mail ${n}" (mail) [active] [e1]:\n  - text "From: ${EMAIL}"\n  - button "Send" [e9]`,
 );
+// The reply's Send button, which needs the room's approval.
+fake.desktop.describe = (ref) =>
+  ref === "e9" ? 'button "Send" [e9]' : `button "Button ${ref}" [${ref}]`;
 const opened: { homeDir: string; apps: Readonly<Record<string, readonly string[]>> }[] = [];
 vi.mock("../src/pool.ts", () => ({
   withDesktop: (
@@ -138,9 +141,10 @@ describe("desktop extension", () => {
         ),
       ),
       reply(
-        fauxAssistantMessage([fauxToolCall("desktop_confirm", { action })], {
-          stopReason: "toolUse",
-        }),
+        fauxAssistantMessage(
+          [fauxToolCall("desktop_confirm", { action, tool: "desktop_click", ref: "e9" })],
+          { stopReason: "toolUse" },
+        ),
       ),
       reply(fauxAssistantMessage([fauxText("It waits for your approval.")])),
       reply(
@@ -155,7 +159,13 @@ describe("desktop extension", () => {
     await say(nudge, "Reply yes to the last mail");
 
     const [pending] = await nudge.approvals.list(LOBBY, context);
-    expect(pending).toMatchObject({ extension: "desktop", kind: "confirm", status: "pending" });
+    expect(pending).toMatchObject({
+      extension: "desktop",
+      kind: "confirm",
+      status: "pending",
+      // Approving it lets through that click on that button, and nothing else.
+      payload: { step: { tool: "desktop_click", element: 'button "Send"' } },
+    });
     expect(pending!.summary).toMatch(/^On the desktop: Click "Send"/);
     expect(json(requests[2])).toContain(`approval ${pending!.id}`);
     const clicks = fake.calls.filter((c) => c === "click e9").length;

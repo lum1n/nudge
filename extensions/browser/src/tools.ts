@@ -1,6 +1,12 @@
 import { Type, type Static, type TSchema } from "typebox";
 import { ActionError, type BrowserSession } from "./browser.ts";
-import { type Approval, type GatedAction, needsApproval } from "./gate.ts";
+import {
+  type Approval,
+  type GatedAction,
+  needsApproval,
+  pinAction,
+  samePinnedAction,
+} from "./gate.ts";
 
 /** The part of a browser session the tools use; tests pass a fake. */
 export type Browser = Pick<
@@ -30,7 +36,7 @@ export interface BrowserTool<T extends TSchema = TSchema> {
   observes?: boolean;
   /** Ends the browsing task: the user has to do something first, log in or approve an action. */
   ends?: Stop;
-  /** `approval` is the user's, when this run was started again after browser_confirm. */
+  /** The run's approvals: the action the user approved, if any, and what browser_confirm pinned. */
   run(session: Browser, args: Static<T>, approval: Approval): Promise<string>;
 }
 
@@ -74,7 +80,7 @@ export const browserTools: BrowserTool[] = [
     description: "Click an element by ref.",
     parameters: Type.Object({ ref: Ref, double: Type.Optional(Type.Boolean()) }),
     run: async (s, a, approval) => {
-      await gate(s, approval, { kind: "click" }, a.ref);
+      await gate(s, approval, "browser_click", { kind: "click" }, a.ref);
       return s.click(a.ref, { double: a.double });
     },
   }),
@@ -87,7 +93,7 @@ export const browserTools: BrowserTool[] = [
       submit: Type.Optional(Type.Boolean()),
     }),
     run: async (s, a, approval) => {
-      await gate(s, approval, { kind: "type", submit: a.submit === true }, a.ref);
+      await gate(s, approval, "browser_type", { kind: "type", submit: a.submit === true }, a.ref);
       return s.type(a.ref, a.text, { submit: a.submit });
     },
   }),
@@ -110,7 +116,7 @@ export const browserTools: BrowserTool[] = [
       'Press a key or chord, like "Enter", "Escape", "ArrowDown" or "Control+A", optionally in an element.',
     parameters: Type.Object({ key: Type.String(), ref: Type.Optional(Ref) }),
     run: async (s, a, approval) => {
-      await gate(s, approval, { kind: "press", key: a.key }, a.ref);
+      await gate(s, approval, "browser_press", { kind: "press", key: a.key }, a.ref);
       return s.press(a.key, a.ref);
     },
   }),
@@ -146,17 +152,41 @@ export const browserTools: BrowserTool[] = [
   tool({
     name: "browser_confirm",
     description:
-      "Stop and ask the user to approve one consequential action before you do it: buying, booking, sending a message or a form, signing up, posting, or entering their personal data. Get everything ready first, so the action is one click away. Ends the task; once the user approves, you are started again on the same page, allowed to do exactly that action.",
+      "Stop and ask the user to approve one consequential action before you do it: buying, booking, sending a message or a form, signing up, posting, or entering their personal data. Get everything ready first, so the action is one click away. Say which tool you will use on which element: the approval covers that step only. Ends the task; once the user approves, you are started again on the same page, allowed to do exactly that action.",
     parameters: Type.Object({
       action: Type.String({
         minLength: 1,
         description:
           'Exactly what you will do and what it commits the user to, like: Click "Pay 1 290 kr" on sas.no to book OSL–BGO on 3 May, 07:05, for 1 adult.',
       }),
+      tool: Type.Union(
+        [
+          Type.Literal("browser_click"),
+          Type.Literal("browser_type"),
+          Type.Literal("browser_press"),
+        ],
+        { description: "The tool you will do it with." },
+      ),
+      ref: Type.Optional(
+        Type.String({
+          description:
+            "The ref of the element you will do it on, from the latest observation; for a key pressed into the focused element, leave it out.",
+        }),
+      ),
+      key: Type.Optional(Type.String({ description: "With browser_press: the key, like Enter." })),
     }),
     observes: true,
     ends: "needs-confirmation",
-    run: async (_s, a) => `Waiting for the user to approve: ${a.action}`,
+    run: async (s, a, approval) => {
+      // What the user approves is pinned now, while the element is in front of us.
+      if (a.tool !== undefined)
+        approval.asked = pinAction(
+          a.tool,
+          await s.inspect(a.ref),
+          a.tool === "browser_press" ? (a.key ?? "") : undefined,
+        );
+      return `Waiting for the user to approve: ${a.action}`;
+    },
   }),
   tool({
     name: "browser_tabs",
@@ -170,24 +200,29 @@ export const browserTools: BrowserTool[] = [
 ];
 
 /**
- * Holds an action that commits the user (`needsApproval`) until they approve it: without their
- * approval it fails, telling the model to call browser_confirm; with it, it goes ahead and uses
- * the approval up.
+ * Holds an action that commits the user (`needsApproval`) until they approve it: unless it is the
+ * very action they approved (same tool, element and site), it fails, telling the model to call
+ * browser_confirm; if it is, it goes ahead and uses the approval up.
  */
 async function gate(
   session: Browser,
   approval: Approval,
+  tool: string,
   action: GatedAction,
   ref: string | undefined,
 ): Promise<void> {
   const target = await session.inspect(ref);
   const reason = target && needsApproval(action, target);
   if (!reason) return;
-  if (!approval.granted)
-    throw new ActionError(
-      `Not done: ${reason}, so the user has to approve it. Get everything ready, then call browser_confirm with exactly this action and what it commits them to.`,
-    );
-  approval.granted = false;
+  const pinned = pinAction(tool, target, action.kind === "press" ? action.key : undefined);
+  if (approval.approved && samePinnedAction(approval.approved, pinned)) {
+    approval.approved = undefined;
+    return;
+  }
+  const other = approval.approved ? " The user approved a different action, not this one." : "";
+  throw new ActionError(
+    `Not done: ${reason}, so the user has to approve it.${other} Get everything ready, then call browser_confirm with exactly this action, the tool and the element's ref, and what it commits them to.`,
+  );
 }
 
 export interface ToolCallInput {
@@ -280,7 +315,7 @@ export async function runBatch(
   /** Hears each call just before it runs. */
   onCall?: (call: ToolCallInput) => void,
   /** The user's approval this run carries, if any; see `Approval`. */
-  approval: Approval = { granted: false },
+  approval: Approval = {},
 ): Promise<ToolCallOutput[]> {
   const out: ToolCallOutput[] = [];
   let failed = false;

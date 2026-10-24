@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ActionError, BrowserSession } from "../src/browser.ts";
-import { needsApproval } from "../src/gate.ts";
+import { type Approval, needsApproval } from "../src/gate.ts";
 import { runBatch } from "../src/tools.ts";
 
 const page = (title: string, body: string, head = "") =>
@@ -91,11 +91,48 @@ const PAGES: Record<string, string> = {
     </form>
     <div role=textbox contenteditable=true aria-label="Melding til butikken"></div>`,
   ),
+  // A shop whose basket leads to a Pay button, with no way to log out in sight.
+  "/butikk": page(
+    "Butikk",
+    `<h1>Kinobilletter</h1><p>2 billetter, 498 kr</p><a href="/kurv">Gå til handlekurven</a>`,
+  ),
+  "/kurv": page(
+    "Handlekurv",
+    `<h1>Handlekurv</h1><p>2 billetter, 498 kr</p>
+    <form method=post action=/betalt>
+      <button>Betal 498 kr</button>
+      <button formaction=/slettet>Slett kortet mitt</button>
+    </form>`,
+  ),
+  // A login form, and a profile form that commits nothing by its words.
+  "/logg-inn": page(
+    "Logg inn",
+    `<form method=post action=/innlogget>
+      <label>E-post <input name=user autocomplete=username></label>
+      <label>Passord <input type=password name=password></label>
+      <button>Logg inn</button>
+    </form>`,
+  ),
+  "/profil": page(
+    "Profil",
+    `<h1>Profil</h1><form method=post action=/lagret>
+      <label>Visningsnavn <input name=name></label><button>Lagre</button>
+    </form>`,
+  ),
 };
+
+/** Paths the fixture server got a POST for, like `/betalt`. */
+const posted: string[] = [];
 
 function fixture(): Server {
   return createServer((req, res) => {
     const path = new URL(req.url ?? "/", "http://x").pathname;
+    if (req.method === "POST") {
+      posted.push(path);
+      req.resume();
+      res.writeHead(303, { location: path === "/innlogget" ? "/profil" : `/done${path}` });
+      return res.end();
+    }
     const known = PAGES[path];
     const title = decodeURIComponent(path.split("/").at(-1) ?? "");
     res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
@@ -249,5 +286,113 @@ run("fixture pages in a real browser", () => {
       { id: "b", name: "browser_press", arguments: { key: "Enter" } },
     ]);
     expect(enter!.text).toMatch(/^Not done: Enter here may send/);
+  }, 30_000);
+
+  it("can't press Pay at the end of a shop without approval, and an approval is for that button only", async () => {
+    posted.length = 0;
+    const shop = await open("/butikk");
+    // Following the shop to its basket is plain browsing.
+    const [toBasket] = await runBatch(session, [
+      { id: "a", name: "browser_click", arguments: { ref: refOf(shop, "Gå til handlekurven") } },
+    ]);
+    expect(toBasket!.isError).toBe(false);
+    expect(session.page.url()).toBe(`${base}/kurv`);
+    const basket = await session.observe();
+    const pay = refOf(basket, "Betal 498 kr");
+    const [refused] = await runBatch(session, [
+      { id: "b", name: "browser_click", arguments: { ref: pay } },
+    ]);
+    expect(refused!.text).toMatch(/^Not done: "Betal 498 kr" commits the user.*browser_confirm/);
+    expect(posted).toEqual([]);
+
+    // The model asks; what it asks for is pinned to that button on this site.
+    const approval: Approval = {};
+    const [asked] = await runBatch(
+      session,
+      [
+        {
+          id: "c",
+          name: "browser_confirm",
+          arguments: { action: "Pay 498 kr for 2 tickets", tool: "browser_click", ref: pay },
+        },
+      ],
+      undefined,
+      approval,
+    );
+    expect(asked).toMatchObject({ ends: "needs-confirmation" });
+    expect(approval.asked).toEqual({
+      tool: "browser_click",
+      host: "127.0.0.1",
+      element: 'button[submit] "Betal 498 kr"',
+    });
+
+    // Approved and started again: another button that commits the user still needs its own.
+    const approved: Approval = { approved: approval.asked! };
+    const again = await session.observe();
+    const [other] = await runBatch(
+      session,
+      [{ id: "d", name: "browser_click", arguments: { ref: refOf(again, "Slett kortet mitt") } }],
+      undefined,
+      approved,
+    );
+    expect(other!.text).toMatch(/^Not done: .*approved a different action/);
+    expect(posted).toEqual([]);
+    const [paid] = await runBatch(
+      session,
+      [{ id: "e", name: "browser_click", arguments: { ref: refOf(again, "Betal 498 kr") } }],
+      undefined,
+      approved,
+    );
+    expect(paid!.isError).toBe(false);
+    expect(posted).toEqual(["/betalt"]);
+    expect(approved.approved).toBeUndefined();
+  }, 30_000);
+
+  it("counts a site as logged in after browser_login, with no log-out control on the page", async () => {
+    const profile = await open("/profil");
+    const save = async (seen: string) => (await session.inspect(refOf(seen, "Lagre")))!;
+    expect(await save(profile)).toMatchObject({ loggedIn: false, host: "127.0.0.1" });
+    expect(needsApproval({ kind: "click" }, await save(profile))).toBeUndefined();
+
+    session.useLogins(
+      (host) =>
+        host === "127.0.0.1"
+          ? { host, username: "kari@example.no", password: "hemmelig", savedAt: 0 }
+          : undefined,
+      [],
+    );
+    await open("/logg-inn");
+    const [login] = await runBatch(session, [{ id: "a", name: "browser_login", arguments: {} }]);
+    expect(login!.text).toMatch(/^Filled in the saved login for 127\.0\.0\.1/);
+    expect(session.page.url()).toBe(`${base}/profil`);
+    const after = await session.observe();
+    expect(await save(after)).toMatchObject({ loggedIn: true });
+    expect(needsApproval({ kind: "click" }, await save(after))).toMatch(/logged in/);
+    session.useLogins(() => undefined, []);
+  }, 30_000);
+
+  it("counts a site as logged in after a login in the live view", async () => {
+    const fresh = await BrowserSession.open({
+      profileDir: mkdtempSync(join(tmpdir(), "nudge-fixtures-")),
+      headless: true,
+    });
+    try {
+      await fresh.navigate(`${base}/logg-inn`);
+      // As the person in the live view does it: typing, then Enter, which reads the fields.
+      await fresh.page.fill("input[name=user]", "kari@example.no");
+      await fresh.page.fill("input[type=password]", "hemmelig");
+      await fresh.captureLogin();
+      await fresh.page.press("input[type=password]", "Enter");
+      await fresh.settle();
+      // Not saved; logged in all the same.
+      expect(fresh.takeCaptured().map((l) => l.host)).toEqual(["127.0.0.1"]);
+      expect(fresh.page.url()).toBe(`${base}/profil`);
+      const seen = await fresh.observe();
+      const save = (await fresh.inspect(refOf(seen, "Lagre")))!;
+      expect(save).toMatchObject({ loggedIn: true });
+      expect(fresh.loggedInOn("www.example.no")).toBe(false);
+    } finally {
+      await fresh.close();
+    }
   }, 30_000);
 });

@@ -182,9 +182,10 @@ describe("runBrowserAgent", () => {
       fauxAssistantMessage([fauxToolCall("browser_click", { ref: "e9" })], {
         stopReason: "toolUse",
       }),
-      fauxAssistantMessage([fauxToolCall("browser_confirm", { action })], {
-        stopReason: "toolUse",
-      }),
+      fauxAssistantMessage(
+        [fauxToolCall("browser_confirm", { action, tool: "browser_click", ref: "e9" })],
+        { stopReason: "toolUse" },
+      ),
       fauxAssistantMessage(
         [
           fauxToolCall("browser_click", { ref: "e9" }, { id: "a" }),
@@ -204,7 +205,11 @@ describe("runBrowserAgent", () => {
       task: "Buy tickets",
       onStep: (step) => steps.push(step),
     });
-    expect(stopped).toMatchObject({ outcome: "needs-confirmation", action });
+    expect(stopped).toMatchObject({
+      outcome: "needs-confirmation",
+      action,
+      step: { tool: "browser_click", host: "example.no", element: 'button[button] "Betal 349 kr"' },
+    });
     expect(calls).toEqual([]);
     expect(steps).toContainEqual(
       expect.objectContaining({ type: "action", tool: "browser_click", ok: false }),
@@ -216,11 +221,42 @@ describe("runBrowserAgent", () => {
       browser,
       task: "Buy tickets",
       approved: action,
+      approvedStep: stopped.step!,
       onStep: (step) => steps.push(step),
     });
     expect(resumed.outcome).toBe("answered");
     // The approval covers one payment, not two.
     expect(calls).toEqual(["click e9"]);
+  });
+
+  it("lets an approval through only for the step it was pinned to", async () => {
+    const action = 'Click "Betal 349 kr" to pay for 2 cinema tickets';
+    const { models, model } = setup([
+      fauxAssistantMessage(
+        [fauxToolCall("browser_confirm", { action, tool: "browser_click", ref: "e9" })],
+        { stopReason: "toolUse" },
+      ),
+      // Approved, a page steers it to another button that commits the user.
+      fauxAssistantMessage([fauxToolCall("browser_click", { ref: "e11" })], {
+        stopReason: "toolUse",
+      }),
+      fauxAssistantMessage([fauxText("Could not do that.")]),
+    ]);
+    const { browser, calls } = fakeBrowser(undefined, {
+      e9: target({ name: "Betal 349 kr" }),
+      e11: target({ name: "Slett konto" }),
+    });
+    const stopped = await runBrowserAgent({ models, model, browser, task: "Buy tickets" });
+    const resumed = await runBrowserAgent({
+      models,
+      model,
+      browser,
+      task: "Buy tickets",
+      approved: action,
+      approvedStep: stopped.step!,
+    });
+    expect(resumed).toMatchObject({ outcome: "answered", actionErrors: 1 });
+    expect(calls).toEqual([]);
   });
 
   it("gives up after maxSteps", async () => {

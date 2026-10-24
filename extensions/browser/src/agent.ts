@@ -9,6 +9,7 @@ import type {
   ToolResultMessage,
   Usage,
 } from "@earendil-works/pi-ai";
+import type { Approval, PinnedAction } from "./gate.ts";
 import { browserTools, type Browser, progressLine, runBatch } from "./tools.ts";
 
 /** What the browser agent runs on unless configured otherwise. */
@@ -31,6 +32,11 @@ export interface BrowserAgentOptions {
    * run may do exactly that, once.
    */
   approved?: string;
+  /**
+   * That action as browser_confirm pinned it (`BrowserAgentResult.step`): the one step the
+   * approval lets through. Without it, no step that needs approval is let through.
+   */
+  approvedStep?: PinnedAction;
   /**
    * Notes kept per site from earlier runs: shown the first time a run reaches the site, and asked
    * for again after a run that answered with at least `minActions` actions. Pages can steer what
@@ -117,6 +123,8 @@ export interface BrowserAgentResult {
   answer: string;
   /** With `needs-confirmation`: the action the user is asked to approve. */
   action?: string;
+  /** With `needs-confirmation`: that action pinned to its tool, element and site, for `approvedStep`. */
+  step?: PinnedAction;
   error?: string;
   steps: number;
   actions: number;
@@ -142,7 +150,7 @@ You see pages as text: open dialogs first, then the page with controls marked by
 - You may send several tool calls in one turn; they run in order and stop at the first failure. After your last call you see the page again.
 - If the page is long, use browser_find or read the next page instead of scrolling repeatedly.
 - Check that the results really match every part of the request before answering. If something cannot be found, say so.
-- Never buy, book, send messages or forms, sign up, post, or enter the user's personal data on your own. When the task needs one of these, get to the point just before it and call browser_confirm with the exact action; the user decides. The browser refuses such steps until then. To log in, use browser_login (the user's saved login for the site; you never see it). If there is none, or the site asks for a code or BankID, call browser_request_login.
+- Never buy, book, send messages or forms, sign up, post, or enter the user's personal data on your own. When the task needs one of these, get to the point just before it and call browser_confirm with the exact action, the tool and the element's ref; the user decides. The browser refuses such steps until then. To log in, use browser_login (the user's saved login for the site; you never see it). If there is none, or the site asks for a code or BankID, call browser_request_login.
 - State only what you saw on the pages in this session, not what you believe from elsewhere.
 - Your last message is the answer to the task: brief, with links, and without notes about your process.`;
 }
@@ -179,7 +187,7 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<Bro
       : `${options.task}\n\nYou stopped earlier to ask the user to approve this action, and they approved it: ${options.approved}\nThe browser is where you left it. Do exactly that action, once, then finish the task. Anything else that needs approval still needs browser_confirm.`;
   const messages: Message[] = [{ role: "user", content: task, timestamp: now() }];
   // Lets the approved action through the harness's own checks, once.
-  const approval = { granted: options.approved !== undefined };
+  const approval: Approval = options.approvedStep ? { approved: options.approvedStep } : {};
   const usage: Usage = {
     input: 0,
     output: 0,
@@ -283,7 +291,10 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<Bro
     if (ended?.ends) {
       result.outcome = ended.ends;
       result.answer = ended.text;
-      if (ended.ends === "needs-confirmation") result.action = String(ended.args?.action ?? "");
+      if (ended.ends === "needs-confirmation") {
+        result.action = String(ended.args?.action ?? "");
+        if (approval.asked) result.step = approval.asked;
+      }
       break;
     }
   }

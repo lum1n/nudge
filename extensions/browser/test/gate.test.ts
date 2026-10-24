@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { type ActionTarget, type GatedAction, needsApproval } from "../src/gate.ts";
+import {
+  type ActionTarget,
+  type Approval,
+  type GatedAction,
+  needsApproval,
+  pinAction,
+  siteOf,
+} from "../src/gate.ts";
 import { runBatch } from "../src/tools.ts";
 import { fakeBrowser, target } from "./fake-browser.ts";
 
@@ -119,6 +126,19 @@ describe("needsApproval", () => {
   });
 });
 
+describe("siteOf", () => {
+  it.each([
+    ["www.example.no", "example.no"],
+    ["login.example.no", "example.no"],
+    ["example.no", "example.no"],
+    ["shop.example.co.uk", "example.co.uk"],
+    ["127.0.0.1", "127.0.0.1"],
+    ["Example.NO.", "example.no"],
+  ])("puts %s on %s", (host, site) => {
+    expect(siteOf(host)).toBe(site);
+  });
+});
+
 describe("the gate in the browser tools", () => {
   const pay = target({ name: "Betal 349 kr" });
 
@@ -132,9 +152,9 @@ describe("the gate in the browser tools", () => {
     expect(calls).toEqual([]);
   });
 
-  it("lets one through with the approval, and uses it up", async () => {
+  it("lets the approved action through once, and uses the approval up", async () => {
     const { browser, calls } = fakeBrowser(undefined, { e7: pay, e8: pay });
-    const approval = { granted: true };
+    const approval: Approval = { approved: pinAction("browser_click", pay) };
     const out = await runBatch(
       browser,
       [
@@ -146,8 +166,116 @@ describe("the gate in the browser tools", () => {
       approval,
     );
     expect(out.map((o) => o.isError)).toEqual([false, false, true]);
-    expect(approval.granted).toBe(false);
+    expect(approval.approved).toBeUndefined();
     expect(calls).toEqual(["click e2", "click e7"]);
+  });
+
+  it("holds any other action under an approval: another element, tool, key or site", async () => {
+    const approved = pinAction("browser_click", pay);
+    const others: [string, ActionTarget, string][] = [
+      ["another button", target({ name: "Slett konto" }), "browser_click"],
+      [
+        "the same button on another site",
+        target({ name: "Betal 349 kr", host: "evil.no" }),
+        "browser_click",
+      ],
+      ["the same button by Enter", pay, "browser_press"],
+    ];
+    for (const [what, other, tool] of others) {
+      const { browser, calls } = fakeBrowser(undefined, { e7: other });
+      const approval: Approval = { approved };
+      const args = tool === "browser_press" ? { ref: "e7", key: "Enter" } : { ref: "e7" };
+      const [out] = await runBatch(
+        browser,
+        [{ id: "a", name: tool, arguments: args }],
+        undefined,
+        approval,
+      );
+      expect(out!.text, what).toMatch(/^Not done: .*approved a different action/);
+      expect(calls, what).toEqual([]);
+      // Still there for the action it is for.
+      expect(approval.approved, what).toBe(approved);
+    }
+  });
+
+  it("pins what browser_confirm asks for, and lets exactly that through on the next run", async () => {
+    const { browser, calls } = fakeBrowser(undefined, {
+      e7: pay,
+      e9: target({ name: "Send melding" }),
+      focus: field({ form: post, loggedIn: true }),
+    });
+    const asked: Approval = {};
+    await runBatch(
+      browser,
+      [
+        {
+          id: "a",
+          name: "browser_confirm",
+          arguments: { action: "Pay 349 kr", tool: "browser_click", ref: "e7" },
+        },
+      ],
+      undefined,
+      asked,
+    );
+    expect(asked.asked).toEqual({
+      tool: "browser_click",
+      host: "example.no",
+      element: 'button[button] "Betal 349 kr"',
+    });
+    const next: Approval = { approved: asked.asked! };
+    const out = await runBatch(
+      browser,
+      [
+        { id: "a", name: "browser_click", arguments: { ref: "e9" } },
+        { id: "b", name: "browser_click", arguments: { ref: "e7" } },
+      ],
+      undefined,
+      next,
+    );
+    expect(out[0]!.text).toMatch(/^Not done: "Send melding"/);
+    expect(calls).toEqual([]);
+    await runBatch(
+      browser,
+      [{ id: "c", name: "browser_click", arguments: { ref: "e7" } }],
+      undefined,
+      next,
+    );
+    expect(calls).toEqual(["click e7"]);
+
+    // A key into the focused field: pinned by its key, without a ref.
+    const enter: Approval = {};
+    await runBatch(
+      browser,
+      [
+        {
+          id: "d",
+          name: "browser_confirm",
+          arguments: { action: "Send the form", tool: "browser_press", key: "Enter" },
+        },
+      ],
+      undefined,
+      enter,
+    );
+    expect(enter.asked).toMatchObject({ tool: "browser_press", key: "enter" });
+    const pressed = await runBatch(
+      browser,
+      [{ id: "e", name: "browser_press", arguments: { key: "Enter" } }],
+      undefined,
+      { approved: enter.asked! },
+    );
+    expect(pressed[0]!.isError).toBe(false);
+  });
+
+  it("lets nothing that needs approval through on an approval without a pinned action", async () => {
+    const { browser, calls } = fakeBrowser(undefined, { e7: pay });
+    const [out] = await runBatch(
+      browser,
+      [{ id: "a", name: "browser_click", arguments: { ref: "e7" } }],
+      undefined,
+      {},
+    );
+    expect(out!.isError).toBe(true);
+    expect(calls).toEqual([]);
   });
 
   it("checks typing and keys too, on the focused element without a ref", async () => {

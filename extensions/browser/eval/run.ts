@@ -4,6 +4,8 @@
 // Keys come from the environment only (ANTHROPIC_API_KEY, OPENAI_API_KEY, …). Needs `pnpm build`
 // first: plain Node runs @nudge/core from its build.
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import type { Api, Model, ThinkingLevel } from "@earendil-works/pi-ai";
@@ -11,7 +13,7 @@ import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 // Not ../src/index.ts: that pulls in @nudge/core's source, which plain Node cannot strip.
 import { DEFAULT_BROWSER_MODEL, runBrowserAgent } from "../src/agent.ts";
 import { BrowserSession } from "../src/browser.ts";
-import { findLeaks, type RunRecord, summaryTable } from "./report.ts";
+import { expectationMet, findLeaks, type RunRecord, summaryTable } from "./report.ts";
 import { tasks } from "./tasks.ts";
 
 const fail = (message: string): never => {
@@ -83,6 +85,9 @@ for (const { spec, providerId, model } of runs) {
       });
       models.bind(new core.Vault(), async () => {});
       for (const name of task.names ?? []) models.vault.protect(name, "NAME");
+      // A task's own site, served for the run; the forms sent to it are noted.
+      const posted: string[] = [];
+      const site = task.site ? await serveSite(task.site, posted) : undefined;
       const browser = await BrowserSession.open({
         profileDir: join(values.out!, "profiles", runId, providerId, task.id, String(n)),
       });
@@ -93,7 +98,7 @@ for (const { spec, providerId, model } of runs) {
         models: models.withValues(),
         model,
         browser,
-        task: task.prompt,
+        task: site ? task.prompt.replaceAll("{site}", site.url) : task.prompt,
         reasoning: values.reasoning as ThinkingLevel,
         maxSteps: Number(values.steps),
         timeZone: "Europe/Oslo",
@@ -115,6 +120,7 @@ for (const { spec, providerId, model } of runs) {
       }));
       const finalUrl = browser.page.url();
       await browser.close();
+      await site?.close();
       for (const request of sent)
         appendFileSync(
           requestsFile,
@@ -130,7 +136,7 @@ for (const { spec, providerId, model } of runs) {
         model: spec,
         reasoning: values.reasoning,
         outcome,
-        expectMatched: task.expect ? task.expect.test(result.answer) : undefined,
+        expectMatched: expectationMet(task, { outcome, answer: result.answer, posted }),
         steps: result.steps,
         actions: result.actions,
         actionErrors: result.actionErrors,
@@ -144,6 +150,7 @@ for (const { spec, providerId, model } of runs) {
           cost: result.usage.cost.total,
         },
         finalUrl,
+        ...(site ? { posted } : {}),
         answer: result.answer,
       };
       appendFileSync(resultsFile, `${JSON.stringify(record)}\n`);
@@ -170,4 +177,28 @@ log(`\n${table}\n\nRequests: ${requestsFile}\nSummary: ${summaryFile}`);
 if (records.some((record) => record.leaks > 0)) {
   console.error("Personal values from a task reached a provider; see the leaks column.");
   process.exitCode = 1;
+}
+
+/** Serves a task's pages on 127.0.0.1, noting the path of every form sent to it in `posted`. */
+async function serveSite(
+  pages: Readonly<Record<string, string>>,
+  posted: string[],
+): Promise<{ url: string; close: () => Promise<void> }> {
+  const server = createServer((req, res) => {
+    const path = new URL(req.url ?? "/", "http://site").pathname;
+    if (req.method === "POST") {
+      posted.push(path);
+      req.resume();
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      return res.end("<!doctype html><title>Done</title><h1>Done</h1>");
+    }
+    const page = pages[path];
+    res.writeHead(page === undefined ? 404 : 200, { "content-type": "text/html; charset=utf-8" });
+    res.end(page ?? "<!doctype html><title>Not found</title><h1>Not found</h1>");
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  return {
+    url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+  };
 }

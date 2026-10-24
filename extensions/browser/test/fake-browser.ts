@@ -14,6 +14,7 @@ export function target(overrides: Partial<ActionTarget> = {}): ActionTarget {
     navigates: false,
     submits: false,
     loggedIn: false,
+    host: "example.no",
     ...overrides,
   };
 }

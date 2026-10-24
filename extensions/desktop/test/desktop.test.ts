@@ -4,7 +4,8 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ActionError, DesktopSession } from "../src/session.ts";
+import { ActionError, type Approval, DesktopSession } from "../src/session.ts";
+import { runBatch } from "../src/tools.ts";
 
 const run = process.env.NUDGE_DESKTOP_TESTS === "1";
 const app = new URL("./fixtures/notes.py", import.meta.url).pathname;
@@ -99,18 +100,44 @@ describe.runIf(run)("a desktop with a GTK app", () => {
     text = await desktop.observe();
     await desktop.click(refOf(text, /row "Standup · Work"/));
     await desktop.settle();
-    await expect(desktop.press("Delete")).rejects.toThrow(/Call desktop_confirm first/);
+    expect(await desktop.deletes("Delete")).toBe(true);
+    const press = (approval: Approval) =>
+      runBatch(
+        desktop,
+        [{ id: "a", name: "desktop_press", arguments: { keys: "Delete" } }],
+        undefined,
+        approval,
+      );
+    const [refused] = await press({});
+    expect(refused!.text).toMatch(/^Not done: Delete here deletes.*desktop_confirm/);
     expect(await desktop.observe()).toContain('row "Standup · Work"');
 
-    const approval = { granted: true };
-    await desktop.press("Delete", undefined, approval);
+    // What desktop_confirm pins is the row with the keyboard, in the Notes window.
+    const asked: Approval = {};
+    await runBatch(
+      desktop,
+      [
+        {
+          id: "b",
+          name: "desktop_confirm",
+          arguments: { action: "Delete the note Standup", tool: "desktop_press", keys: "Delete" },
+        },
+      ],
+      undefined,
+      asked,
+    );
+    expect(asked.asked).toMatchObject({ keys: "delete", window: 'frame "Notes"' });
+    const approval: Approval = { approved: asked.asked! };
+    const [deleted] = await press(approval);
+    expect(deleted!.isError).toBe(false);
     await desktop.settle();
-    expect(approval.granted).toBe(false);
+    expect(approval.approved).toBeUndefined();
     text = await desktop.observe();
     expect(text).not.toContain("Standup");
     await desktop.click(refOf(text, /row "Flights · Travel"/));
     await desktop.settle();
-    await expect(desktop.press("Delete", undefined, approval)).rejects.toThrow(/desktop_confirm/);
+    const [again] = await press(approval);
+    expect(again!.text).toMatch(/desktop_confirm/);
     await desktop.click(refOf(text, /tab "Write"/));
     await desktop.settle();
   }, 30_000);
@@ -126,6 +153,33 @@ describe.runIf(run)("a desktop with a GTK app", () => {
     await desktop.press("y");
     await desktop.settle();
     expect(await desktop.observe()).toMatch(/textbox "Title" \[focused\] \[e\d+\]: Xy/);
+  }, 30_000);
+
+  it("holds Enter in a one-line field, by desktop_type or by itself, but not in the text area", async () => {
+    const text = await desktop.observe();
+    const title = refOf(text, /textbox "Title"/);
+    const body = refOf(text, /textbox "Body"/);
+    expect(desktop.around(title)).toMatchObject({
+      element: 'textbox "Title"',
+      multiLine: false,
+      window: 'frame "Notes"',
+    });
+    expect(desktop.around(body)).toMatchObject({ multiLine: true });
+    const [typed] = await runBatch(desktop, [
+      { id: "a", name: "desktop_type", arguments: { ref: title, text: "Hei", submit: true } },
+    ]);
+    expect(typed!.text).toMatch(/^Not done: Enter in this field may send/);
+    const [pressed] = await runBatch(desktop, [
+      { id: "b", name: "desktop_press", arguments: { keys: "Return", ref: title } },
+    ]);
+    expect(pressed!.text).toMatch(/^Not done/);
+    const [newLine] = await runBatch(desktop, [
+      { id: "c", name: "desktop_press", arguments: { keys: "Return", ref: body } },
+    ]);
+    expect(newLine!.isError).toBe(false);
+    await desktop.press("ctrl+a", body);
+    await desktop.press("BackSpace", body);
+    await desktop.settle();
   }, 30_000);
 
   it("opens a menu and picks an item", async () => {

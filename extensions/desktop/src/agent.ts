@@ -9,6 +9,7 @@ import type {
   ToolResultMessage,
   Usage,
 } from "@earendil-works/pi-ai";
+import type { Approval, PinnedAction } from "./session.ts";
 import { type Desktop, desktopTools, progressLine, runBatch } from "./tools.ts";
 
 /** What the desktop agent runs on unless configured otherwise. */
@@ -33,6 +34,11 @@ export interface DesktopAgentOptions {
    * run may do exactly that, once.
    */
   approved?: string;
+  /**
+   * That action as desktop_confirm pinned it (`DesktopAgentResult.step`): the one step the
+   * approval lets through. Without it, no step that needs approval is let through.
+   */
+  approvedStep?: PinnedAction;
 }
 
 export type DesktopStep =
@@ -46,6 +52,8 @@ export interface DesktopAgentResult {
   answer: string;
   /** With `needs-confirmation`: the action the user is asked to approve. */
   action?: string;
+  /** With `needs-confirmation`: that action pinned to its tool, element and window, for `approvedStep`. */
+  step?: PinnedAction;
   error?: string;
   steps: number;
   actions: number;
@@ -71,7 +79,7 @@ You see the open windows as text read from their accessibility tree: open menus 
 - Prefer the app's own controls; keyboard shortcuts (like ctrl+s) are fine when you know them.
 - You may send several tool calls in one turn; they run in order and stop at the first failure. After your last call you see the windows again.
 - If a window is long, use desktop_find or read the next page instead of guessing.
-- Never send, delete, pay, publish, or save over an existing file on your own. When the task needs one of these, get to the point just before it and call desktop_confirm with the exact action; the user decides. The desktop refuses such steps until then.
+- Never send, delete, pay, publish, or save over an existing file on your own. When the task needs one of these, get to the point just before it and call desktop_confirm with the exact action, the tool and the element's ref; the user decides. The desktop refuses such steps until then.
 - State only what you saw in the windows in this session.
 - Your last message is the answer to the task: brief, and without notes about your process.`;
 }
@@ -109,7 +117,7 @@ export async function runDesktopAgent(options: DesktopAgentOptions): Promise<Des
       : `${options.task}\n\nYou stopped earlier to ask the user to approve this action, and they approved it: ${options.approved}\nThe desktop is where you left it. Do exactly that action, once, then finish the task. Anything else that needs approval still needs desktop_confirm.`;
   const messages: Message[] = [{ role: "user", content: task, timestamp: now() }];
   // Lets the approved action through the harness's own checks, once.
-  const approval = { granted: options.approved !== undefined };
+  const approval: Approval = options.approvedStep ? { approved: options.approvedStep } : {};
   const usage: Usage = {
     input: 0,
     output: 0,
@@ -206,6 +214,7 @@ export async function runDesktopAgent(options: DesktopAgentOptions): Promise<Des
       result.outcome = ended.ends;
       result.answer = ended.text;
       result.action = String(ended.args?.action ?? "");
+      if (approval.asked) result.step = approval.asked;
       break;
     }
   }

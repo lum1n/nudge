@@ -86,18 +86,39 @@ describe("runDesktopAgent", () => {
     const first = setup([
       fauxAssistantMessage(
         [
-          fauxToolCall("desktop_confirm", { action }, { id: "a" }),
+          fauxToolCall(
+            "desktop_confirm",
+            { action, tool: "desktop_click", ref: "e9" },
+            { id: "a" },
+          ),
           fauxToolCall("desktop_click", { ref: "e9" }, { id: "b" }),
         ],
         { stopReason: "toolUse" },
       ),
     ]);
-    const { desktop, calls } = fakeDesktop();
+    const fake = fakeDesktop();
+    const labels: Record<string, string> = {
+      e9: 'button "Delete" [e9]',
+      e10: 'button "Send" [e10]',
+    };
+    const desktop = {
+      ...fake.desktop,
+      describe: (ref: string) => labels[ref] ?? `button "Button ${ref}" [${ref}]`,
+    };
+    const calls = fake.calls;
     const stopped = await runDesktopAgent({ ...first, desktop, task: "Delete Trip", apps: [] });
-    expect(stopped).toMatchObject({ outcome: "needs-confirmation", action });
+    expect(stopped).toMatchObject({
+      outcome: "needs-confirmation",
+      action,
+      step: { tool: "desktop_click", window: 'frame "Notes"', element: 'button "Delete"' },
+    });
     expect(calls).toEqual([]);
 
     const again = setup([
+      // Another button that commits the user is not what was approved.
+      fauxAssistantMessage([fauxToolCall("desktop_click", { ref: "e10" })], {
+        stopReason: "toolUse",
+      }),
       fauxAssistantMessage([fauxToolCall("desktop_click", { ref: "e9" })], {
         stopReason: "toolUse",
       }),
@@ -109,9 +130,11 @@ describe("runDesktopAgent", () => {
       task: "Delete Trip",
       apps: [],
       approved: action,
+      approvedStep: stopped.step!,
     });
-    expect(done).toMatchObject({ outcome: "answered", answer: "Deleted." });
+    expect(done).toMatchObject({ outcome: "answered", answer: "Deleted.", actionErrors: 1 });
     expect(text(again.requests[0])).toContain(`they approved it: ${action.replaceAll('"', '\\"')}`);
+    expect(text(again.requests[1])).toContain("approved a different action");
     expect(calls).toEqual(["click e9"]);
   });
 
