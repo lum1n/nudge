@@ -13,6 +13,11 @@ export type Turn = {
   /** Set when only this player may see what the turn shows and makes. */
   readonly privateTo?: Owner;
   /**
+   * Who scheduled the fired nudge the turn answers, when it stored that. A public nudge has no
+   * sender, so its tools get this player's values, as in the turn that scheduled it.
+   */
+  readonly scheduledBy?: Owner;
+  /**
    * Personal values in `text` as placeholders, for what a tool stores, such as an approval's
    * summary. Absent outside tools.
    */
@@ -39,6 +44,16 @@ export type Turn = {
 export type SetsTurn = { readonly turn: { readonly privateTo?: Owner } };
 
 const turns = new AsyncLocalStorage<Turn>();
+
+/**
+ * The player whose values a turn's tools get, and whom what it asks for counts as requested by:
+ * who sent the message, whose private turn it is, or who scheduled the nudge it answers. Undefined
+ * when none is known, as for a nudge stored before nudges kept who scheduled them; then only
+ * values nobody owns are put back.
+ */
+export function actingFor(turn: Turn): Owner | undefined {
+  return turn.by ?? turn.privateTo ?? turn.scheduledBy;
+}
 
 /** The turn of the tool call running now; empty outside tools. */
 export function currentTurn(): Turn {
@@ -96,8 +111,11 @@ export async function turnOf(
       return taken(entry, data.private === true ? { by, privateTo: by, named } : { by, named });
     }
     if (entry.kind === FIRE_ENTRY || entry.kind === APPROVAL_ENTRY) {
-      const { privateTo } = entry.data as { privateTo?: Owner };
-      return taken(entry, privateTo === undefined ? {} : { privateTo });
+      const { privateTo, scheduledBy } = entry.data as { privateTo?: Owner; scheduledBy?: Owner };
+      return taken(entry, {
+        ...(privateTo === undefined ? {} : { privateTo }),
+        ...(entry.kind === FIRE_ENTRY && scheduledBy !== undefined ? { scheduledBy } : {}),
+      });
     }
     if (entry.kind === TOOL_ENTRY) read.push(...untrustedSources(modelText(entry)));
   }

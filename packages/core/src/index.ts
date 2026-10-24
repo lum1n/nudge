@@ -353,6 +353,7 @@ export {
 export { canRead, onlyReads, readsOnly } from "./extensions/reads.ts";
 export type { RedactedHistory };
 export {
+  actingFor,
   currentTurn,
   inTurn,
   type Owner,
