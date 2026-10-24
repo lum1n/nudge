@@ -1,8 +1,62 @@
 import { consequentialLabel } from "@nudge/core";
 
-/** The user's approval of one consequential action, from browser_confirm; used up when taken. */
+/**
+ * One action, pinned down so that an approval covers it and nothing else: the tool, the element
+ * and the site. Refs change between runs; what the element is and says doesn't. A type, not an
+ * interface, so that it is JSON for an approval's payload.
+ */
+export type PinnedAction = {
+  /** browser_click, browser_type or browser_press. */
+  tool: string;
+  /** For browser_press: the key, lowercase. */
+  key?: string;
+  /** The host of the element's page or frame. */
+  host: string;
+  /** The element, like `button "Pay 1 290 kr"`; empty when there was none. */
+  element: string;
+};
+
+/**
+ * The approvals of one run. `approved` is the action the user approved after an earlier run
+ * stopped for it, used up when taken; any other action that needs approval still does.
+ * `asked` is what browser_confirm in this run pinned for the user to approve.
+ */
 export interface Approval {
-  granted: boolean;
+  approved?: PinnedAction;
+  asked?: PinnedAction;
+}
+
+/** Pins what `tool` is about to do to `target`, for an `Approval`. */
+export function pinAction(
+  tool: string,
+  target: ActionTarget | undefined,
+  key?: string,
+): PinnedAction {
+  const element = target
+    ? `${target.role || target.tag}${target.type ? `[${target.type}]` : ""} "${target.name}"`
+    : "";
+  return {
+    tool,
+    ...(key === undefined ? {} : { key: key.trim().toLowerCase() }),
+    host: target?.host ?? "",
+    element,
+  };
+}
+
+export function samePinnedAction(a: PinnedAction, b: PinnedAction): boolean {
+  return a.tool === b.tool && a.key === b.key && a.host === b.host && a.element === b.element;
+}
+
+/**
+ * The site a host belongs to, so that a login on `login.example.no` counts on `www.example.no`:
+ * its last two labels, or three under second-level domains like `co.uk`. Addresses stay whole.
+ */
+export function siteOf(host: string): string {
+  const clean = host.toLowerCase().replace(/\.$/, "");
+  if (/^[\d.]+$/.test(clean) || clean.includes(":")) return clean;
+  const labels = clean.split(".");
+  const keep = labels.length > 2 && /^(?:co|com|net|org|gov|ac|edu)$/.test(labels.at(-2)!) ? 3 : 2;
+  return labels.slice(-keep).join(".");
 }
 
 /** What an action is about to touch, read from the page just before it (`BrowserSession.inspect`). */
@@ -24,8 +78,13 @@ export interface ActionTarget {
   submits: boolean;
   /** The form the element is in or submits: its method (`get`, `post`, `dialog`), and whether it asks for a password. */
   form?: { method: string; hasPassword: boolean };
-  /** The page has a way to log out, so the user is logged in on it. */
+  /**
+   * The user is logged in on the site: the page has a way to log out, or (the session adds this)
+   * the browser logged in there with browser_login, or someone did in the live view.
+   */
   loggedIn: boolean;
+  /** The host of the element's page or frame. */
+  host: string;
 }
 
 export type GatedAction =
@@ -127,6 +186,7 @@ export interface PageElement {
   textContent: string | null;
   form?: PageElement | null;
   ownerDocument: {
+    location?: { hostname: string } | null;
     getElementById(id: string): PageElement | null;
     querySelectorAll(selector: string): ArrayLike<PageElement>;
   };
@@ -201,5 +261,6 @@ export function inspectTarget(given: PageElement | null): ActionTarget | null {
       ? { form: { method, hasPassword: form.querySelector("input[type=password]") !== null } }
       : {}),
     loggedIn,
+    host: doc.location?.hostname ?? "",
   };
 }
