@@ -71,7 +71,7 @@ You see the open windows as text read from their accessibility tree: open menus 
 - Prefer the app's own controls; keyboard shortcuts (like ctrl+s) are fine when you know them.
 - You may send several tool calls in one turn; they run in order and stop at the first failure. After your last call you see the windows again.
 - If a window is long, use desktop_find or read the next page instead of guessing.
-- Never send, delete, pay, publish, or save over an existing file on your own. When the task needs one of these, get to the point just before it and call desktop_confirm with the exact action; the user decides.
+- Never send, delete, pay, publish, or save over an existing file on your own. When the task needs one of these, get to the point just before it and call desktop_confirm with the exact action; the user decides. The desktop refuses such steps until then.
 - State only what you saw in the windows in this session.
 - Your last message is the answer to the task: brief, and without notes about your process.`;
 }

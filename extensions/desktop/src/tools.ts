@@ -1,3 +1,4 @@
+import { consequentialLabel } from "@nudge/core";
 import { Type, type Static, type TSchema } from "typebox";
 import { ActionError, type Approval, type DesktopSession } from "./session.ts";
 
@@ -65,7 +66,10 @@ export const desktopTools: DesktopTool[] = [
     description:
       "Click an element by ref: buttons, menus and menu items, tabs, list rows, checkboxes.",
     parameters: Type.Object({ ref: Ref, double: Type.Optional(Type.Boolean()) }),
-    run: (d, a) => d.click(a.ref, { double: a.double }),
+    run: (d, a, approval) => {
+      gate(approval, consequentialControl(d.describe(a.ref)));
+      return d.click(a.ref, { double: a.double });
+    },
   }),
   tool({
     name: "desktop_type",
@@ -89,7 +93,10 @@ export const desktopTools: DesktopTool[] = [
     description:
       'Press a key or combo, like "Enter", "Escape", "Down", "ctrl+s" or "ctrl+shift+z", into an element when given, else into the window under the pointer.',
     parameters: Type.Object({ keys: Type.String({ minLength: 1 }), ref: Type.Optional(Ref) }),
-    run: (d, a, approval) => d.press(a.keys, a.ref, approval),
+    run: (d, a, approval) => {
+      gate(approval, consequentialKeys(d, a.keys, a.ref));
+      return d.press(a.keys, a.ref, approval);
+    },
   }),
   tool({
     name: "desktop_focus_window",
@@ -114,6 +121,47 @@ export const desktopTools: DesktopTool[] = [
     run: async (_d, a) => `Waiting for the user to approve: ${a.action}`,
   }),
 ];
+
+/** Roles whose label says what using them does. */
+const CONTROLS = new Set(["button", "toggle button", "menuitem", "link"]);
+/** Keys that press the button they are given. */
+const ACTIVATE_KEYS = /^(?:enter|return|kp_enter|space)$/i;
+/** Control+Enter sends in mail and chat apps (Thunderbird, Evolution, Element…). */
+const SEND_KEYS = /^(?:ctrl|control)\s*\+\s*(?:enter|return|kp_enter)$/i;
+
+/**
+ * Why using an element commits the user, or undefined: a button, menu item or link whose label
+ * says it pays, sends, deletes, publishes… (`consequentialLabel`). `line` is how the latest view
+ * showed it, like `button "Send" [e12]`.
+ */
+export function consequentialControl(line: string): string | undefined {
+  const [, role = "", name = ""] = /^(.+?)(?: "(.*)")? \[[^\]]+\]$/.exec(line) ?? [];
+  const word = CONTROLS.has(role) ? consequentialLabel(name) : undefined;
+  return word === undefined ? undefined : `"${name}" commits the user to something ("${word}")`;
+}
+
+/** Why pressing `keys`, into `ref` when given, commits the user, or undefined. */
+function consequentialKeys(desktop: Pick<Desktop, "describe">, keys: string, ref?: string) {
+  if (SEND_KEYS.test(keys.trim()))
+    return `${keys} sends what is being written in mail and chat apps`;
+  if (ref !== undefined && ACTIVATE_KEYS.test(keys.trim()))
+    return consequentialControl(desktop.describe(ref));
+  return undefined;
+}
+
+/**
+ * Holds an action that commits the user until they approve it, as `press` does for Delete.
+ * Without their approval it fails, telling the model to call desktop_confirm; with it, it goes
+ * ahead and uses the approval up.
+ */
+function gate(approval: Approval, reason: string | undefined): void {
+  if (reason === undefined) return;
+  if (!approval.granted)
+    throw new ActionError(
+      `Not done: ${reason}, so the user has to approve it. Get everything ready, then call desktop_confirm with exactly this action and what it commits them to.`,
+    );
+  approval.granted = false;
+}
 
 export interface ToolCallInput {
   id: string;
