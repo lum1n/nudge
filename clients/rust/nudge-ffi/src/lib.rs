@@ -72,6 +72,14 @@ impl From<ApiError> for NudgeError {
                 status,
                 detail: message,
             },
+            // Both are 429s whose detail says which; the core sends a rate-limited message again
+            // by itself, and a budget-refused one waits for the person.
+            ApiError::RateLimited { message, .. } | ApiError::BudgetSpent(message) => {
+                NudgeError::Status {
+                    status: 429,
+                    detail: message,
+                }
+            }
             ApiError::Network(detail) => NudgeError::Network { detail },
             ApiError::Decode(detail) => NudgeError::Decode { detail },
             ApiError::Address(_) => NudgeError::Config {
@@ -347,6 +355,8 @@ pub struct TokenInfo {
     pub created_at: f64,
     pub client_name: Option<String>,
     pub client_platform: Option<String>,
+    pub last_used_at: Option<f64>,
+    pub expires_at: Option<f64>,
 }
 
 /// A new key pair for this device's pushes through a relay; make one per install and keep it.
@@ -1167,6 +1177,8 @@ impl NudgeClient {
                 client_id: token.client_id,
                 player_id: token.player_id,
                 created_at: token.created_at,
+                last_used_at: token.last_used_at,
+                expires_at: token.expires_at,
                 client_name: token.client.as_ref().map(|c| c.name.clone()),
                 client_platform: token.client.map(|c| c.platform),
             })

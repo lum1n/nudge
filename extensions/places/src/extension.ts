@@ -15,7 +15,7 @@ import {
   GeoUnavailable,
   keepsPlaceholders,
   type LocationUpdate,
-  type Nudge,
+  type ExtensionAssistant,
   type Owner,
   PersonalDoc,
   providedGeo,
@@ -122,6 +122,7 @@ export function createPlacesExtension(options: PlacesExtensionOptions = {}) {
   return defineNudgeExtension({
     name: NAME,
     version: VERSION,
+    apiVersion: "1.0",
     description:
       "Places: reminders when you get somewhere, and addresses and routes from the server's own map service. The model sees places as ⟦PLACE:home⟧, never addresses or coordinates.",
     settings: Settings,
@@ -150,7 +151,7 @@ export function createPlacesExtension(options: PlacesExtensionOptions = {}) {
             ? " The server's map doesn't cover that area, and won't fetch it (an owner can add it under the server's Maps settings)."
             : "";
       };
-      const nudge = (): Nudge => host.assistant();
+      const nudge = (): ExtensionAssistant => host.assistant();
       const read = async (playerId: string, context: Context): Promise<PlayerPlaces> =>
         (await host.documents().snapshot(PlacesDoc, playerId, context)) ?? emptyPlaces();
       const change = <T>(

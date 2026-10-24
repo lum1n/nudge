@@ -34,12 +34,16 @@ pub struct ModelChoice {
     pub model_id: String,
 }
 
-/// Monthly limits on model spend, in US dollars; `warn_at` is a share between 0 and 1.
+/// Monthly limits on model spend, in US dollars; `warn_at` is a share between 0 and 1, and
+/// `warn_usd`, without `monthly_usd`, the spend at which admins hear there is no limit. Saving
+/// settings sends the budget whole, so it keeps every field as the server gave it.
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
 pub struct AssistantBudget {
     pub monthly_usd: Option<f64>,
     pub per_player_usd: Option<f64>,
     pub warn_at: Option<f64>,
+    #[uniffi(default = None)]
+    pub warn_usd: Option<f64>,
 }
 
 /// An assistant's settings, as the owner edits them; saved whole.
@@ -344,6 +348,7 @@ impl From<p::AssistantBudget> for AssistantBudget {
             monthly_usd: b.monthly_usd,
             per_player_usd: b.per_player_usd,
             warn_at: b.warn_at,
+            warn_usd: b.warn_usd,
         }
     }
 }
@@ -354,6 +359,7 @@ impl From<AssistantBudget> for p::AssistantBudget {
             monthly_usd: b.monthly_usd,
             per_player_usd: b.per_player_usd,
             warn_at: b.warn_at,
+            warn_usd: b.warn_usd,
         }
     }
 }
@@ -1127,5 +1133,42 @@ impl ExeLogin {
     /// Ends the session; named so, as Kotlin's objects have a `close()` of their own.
     pub fn end(&self) {
         self.login.lock().unwrap().take();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn keeps_every_budget_field_through_the_apps_settings() {
+        // The apps save settings whole: a budget the server gave must go back as it came.
+        let given: p::AssistantBudget =
+            serde_json::from_str(r#"{"perPlayerUsd":5,"warnAt":0.5,"warnUsd":40,"later":true}"#)
+                .unwrap();
+        let edited: AssistantBudget = given.clone().into();
+        assert_eq!(edited.warn_usd, Some(40.0));
+        let saved: p::AssistantBudget = edited.into();
+        assert_eq!(saved, given);
+        assert_eq!(
+            serde_json::to_value(&saved).unwrap(),
+            serde_json::json!({ "perPlayerUsd": 5.0, "warnAt": 0.5, "warnUsd": 40.0 })
+        );
+    }
+
+    #[test]
+    fn tells_a_spent_budget_and_a_rate_limit_as_429s() {
+        let spent: NudgeError =
+            nudge_client::ApiError::BudgetSpent("You have used your budget.".into()).into();
+        assert_eq!(spent.to_string(), "You have used your budget. (429)");
+        let limited: NudgeError = nudge_client::ApiError::RateLimited {
+            message: "Too many requests; try again in 3 s".into(),
+            retry_after: Some(3),
+        }
+        .into();
+        assert_eq!(
+            limited.to_string(),
+            "Too many requests; try again in 3 s (429)"
+        );
     }
 }

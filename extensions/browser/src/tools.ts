@@ -1,5 +1,6 @@
 import { Type, type Static, type TSchema } from "typebox";
 import { ActionError, type BrowserSession } from "./browser.ts";
+import { type Approval, type GatedAction, needsApproval } from "./gate.ts";
 
 /** The part of a browser session the tools use; tests pass a fake. */
 export type Browser = Pick<
@@ -18,6 +19,7 @@ export type Browser = Pick<
   | "takeNotes"
   | "login"
   | "describe"
+  | "inspect"
 >;
 
 export interface BrowserTool<T extends TSchema = TSchema> {
@@ -28,7 +30,8 @@ export interface BrowserTool<T extends TSchema = TSchema> {
   observes?: boolean;
   /** Ends the browsing task: the user has to do something first, log in or approve an action. */
   ends?: Stop;
-  run(session: Browser, args: Static<T>): Promise<string>;
+  /** `approval` is the user's, when this run was started again after browser_confirm. */
+  run(session: Browser, args: Static<T>, approval: Approval): Promise<string>;
 }
 
 /** Why a task stopped before its answer. */
@@ -70,7 +73,10 @@ export const browserTools: BrowserTool[] = [
     name: "browser_click",
     description: "Click an element by ref.",
     parameters: Type.Object({ ref: Ref, double: Type.Optional(Type.Boolean()) }),
-    run: (s, a) => s.click(a.ref, { double: a.double }),
+    run: async (s, a, approval) => {
+      await gate(s, approval, { kind: "click" }, a.ref);
+      return s.click(a.ref, { double: a.double });
+    },
   }),
   tool({
     name: "browser_type",
@@ -80,7 +86,10 @@ export const browserTools: BrowserTool[] = [
       text: Type.String(),
       submit: Type.Optional(Type.Boolean()),
     }),
-    run: (s, a) => s.type(a.ref, a.text, { submit: a.submit }),
+    run: async (s, a, approval) => {
+      await gate(s, approval, { kind: "type", submit: a.submit === true }, a.ref);
+      return s.type(a.ref, a.text, { submit: a.submit });
+    },
   }),
   tool({
     name: "browser_check",
@@ -100,7 +109,10 @@ export const browserTools: BrowserTool[] = [
     description:
       'Press a key or chord, like "Enter", "Escape", "ArrowDown" or "Control+A", optionally in an element.',
     parameters: Type.Object({ key: Type.String(), ref: Type.Optional(Ref) }),
-    run: (s, a) => s.press(a.key, a.ref),
+    run: async (s, a, approval) => {
+      await gate(s, approval, { kind: "press", key: a.key }, a.ref);
+      return s.press(a.key, a.ref);
+    },
   }),
   tool({
     name: "browser_scroll",
@@ -156,6 +168,27 @@ export const browserTools: BrowserTool[] = [
     run: (s, a) => s.tabs(a.action, a.index),
   }),
 ];
+
+/**
+ * Holds an action that commits the user (`needsApproval`) until they approve it: without their
+ * approval it fails, telling the model to call browser_confirm; with it, it goes ahead and uses
+ * the approval up.
+ */
+async function gate(
+  session: Browser,
+  approval: Approval,
+  action: GatedAction,
+  ref: string | undefined,
+): Promise<void> {
+  const target = await session.inspect(ref);
+  const reason = target && needsApproval(action, target);
+  if (!reason) return;
+  if (!approval.granted)
+    throw new ActionError(
+      `Not done: ${reason}, so the user has to approve it. Get everything ready, then call browser_confirm with exactly this action and what it commits them to.`,
+    );
+  approval.granted = false;
+}
 
 export interface ToolCallInput {
   id: string;
@@ -246,6 +279,8 @@ export async function runBatch(
   calls: readonly ToolCallInput[],
   /** Hears each call just before it runs. */
   onCall?: (call: ToolCallInput) => void,
+  /** The user's approval this run carries, if any; see `Approval`. */
+  approval: Approval = { granted: false },
 ): Promise<ToolCallOutput[]> {
   const out: ToolCallOutput[] = [];
   let failed = false;
@@ -272,7 +307,7 @@ export async function runBatch(
     }
     try {
       onCall?.(call);
-      const text = await definition.run(session, call.arguments as never);
+      const text = await definition.run(session, call.arguments as never, approval);
       if (!definition.observes) await session.settle();
       out.push({
         id: call.id,

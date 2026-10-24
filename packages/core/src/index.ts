@@ -57,6 +57,7 @@ export {
   MAX_PENDING,
   requestApproval,
 } from "./approvals/approvals.ts";
+export { consequentialLabel } from "./approvals/consequential.ts";
 export { type Change, type ChangeListener, Changes } from "./changes.ts";
 export { type RawConfig, readRawConfig, writeRawConfig } from "./config-file.ts";
 export {
@@ -92,6 +93,13 @@ export {
 export { defaultExtensions } from "./server/defaults.ts";
 export { defaultConfigPath, serverHome } from "./server/home.ts";
 export {
+  DATA_FORMAT,
+  DataFormatError,
+  dataFormatFile,
+  recordedDataFormat,
+  upgradeDataFormat,
+} from "./server/data-format.ts";
+export {
   type KeySource,
   readableError,
   ServerKeys,
@@ -118,6 +126,8 @@ export { openRecoveryKit, RecoveryKitError, sealRecoveryKit } from "./server/rec
 export {
   canonicalJson,
   checkManifest,
+  confirmWhenHealthy,
+  type ConfirmWhenHealthyOptions,
   newer,
   RELEASE_KEYS,
   RELEASE_MANIFEST_URL,
@@ -181,8 +191,10 @@ export { Presence } from "./presence.ts";
 export { describeRoom, formatToday } from "./extensions/builtin.ts";
 export {
   defineNudgeExtension,
+  EXTENSION_API_VERSION,
   ROOMS_SETTING,
   roomsSetting,
+  type ExtensionAssistant,
   type ExtensionDocuments,
   type ExtensionHost,
   type ExtensionInput,
@@ -220,6 +232,7 @@ export {
   type ClientInfo,
   DirectoryDoc,
   type DirectoryState,
+  LAST_USED_EVERY_MS,
   LOBBY,
   type PairingRecord,
   type SideConversation,
@@ -392,7 +405,7 @@ export {
   keyFile,
   snapshotDatabase,
 } from "./encrypted-storage.ts";
-export { DatabaseInUse, lockDatabase } from "./storage-lock.ts";
+export { DatabaseInUse, databaseHolder, lockDatabase } from "./storage-lock.ts";
 export {
   type BrokenExtension,
   ExtensionBroken,

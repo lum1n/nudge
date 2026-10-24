@@ -1,6 +1,6 @@
 import { createHash, createPublicKey, verify } from "node:crypto";
 import { execFile } from "node:child_process";
-import { createWriteStream, existsSync, readFileSync } from "node:fs";
+import { createWriteStream, existsSync, readFileSync, readlinkSync } from "node:fs";
 import {
   mkdir,
   readdir,
@@ -230,6 +230,17 @@ export class Updates {
     await rename(link, join(releasesDir, "current"));
   }
 
+  /** Whether this release is an update `nudge-server` would still roll back: not yet confirmed. */
+  unconfirmed(): boolean {
+    const { releasesDir, current } = this.options;
+    if (!existsSync(join(releasesDir, "pending"))) return false;
+    try {
+      return readlinkSync(join(releasesDir, "current")) === current;
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Called once this release runs well: it stays, `pending` goes, and releases older than the
    * one before it are removed.
@@ -253,4 +264,59 @@ export class Updates {
     const text = await readFile(join(this.options.releasesDir, "failed"), "utf8").catch(() => "");
     return text.split("\n").filter((line) => line !== "");
   }
+}
+
+export type ConfirmWhenHealthyOptions = {
+  /** Whether the server answers well: its `GET /v1/health` says `ok`. */
+  readonly probe: () => Promise<boolean>;
+  /** `Updates.confirm`. */
+  readonly confirm: () => Promise<void>;
+  /** `Updates.unconfirmed`: whether giving up should roll this release back. */
+  readonly unconfirmed: () => boolean;
+  /** Stops the server with an error, so `nudge-server` rolls the release back. */
+  readonly giveUp: () => void;
+  readonly say: (line: string) => void;
+  /** How long it runs before the first probe. */
+  readonly afterMs?: number;
+  /** Between probes. */
+  readonly everyMs?: number;
+  /** How long after starting it may take to answer well. */
+  readonly withinMs?: number;
+};
+
+/**
+ * Confirms this release once it has run `afterMs` and its health check answers well, so an update
+ * that starts but doesn't serve is rolled back too, not only one that stops. An update still
+ * unhealthy after `withinMs` gives up: the server stops with an error and `nudge-server` goes back
+ * to the release before. Returns a function that stops waiting.
+ */
+export function confirmWhenHealthy(options: ConfirmWhenHealthyOptions): () => void {
+  const afterMs = options.afterMs ?? 30_000;
+  const everyMs = options.everyMs ?? 10_000;
+  const withinMs = options.withinMs ?? 5 * 60_000;
+  let waited = afterMs;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let stopped = false;
+  const attempt = async () => {
+    if (stopped) return;
+    if (await options.probe().catch(() => false)) {
+      if (!stopped) await options.confirm().catch((error: Error) => options.say(error.message));
+      return;
+    }
+    if (stopped) return;
+    if (waited >= withinMs) {
+      if (options.unconfirmed()) {
+        options.say(`Not healthy ${Math.round(waited / 1000)} s after starting: rolling back`);
+        options.giveUp();
+      }
+      return;
+    }
+    waited += everyMs;
+    timer = setTimeout(() => void attempt(), everyMs);
+  };
+  timer = setTimeout(() => void attempt(), afterMs);
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+  };
 }

@@ -6,7 +6,7 @@ import {
   ApprovalNotFound,
   canUse,
   type ExtensionHost,
-  type Nudge,
+  type ExtensionAssistant,
   type Player,
   type Room,
   type RoomEvent,
@@ -107,7 +107,7 @@ export class ChatBridge {
     });
   }
 
-  private get nudge(): Nudge {
+  private get nudge(): ExtensionAssistant {
     return this.host.assistant();
   }
 

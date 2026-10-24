@@ -1,7 +1,7 @@
-import { readFile } from "node:fs/promises";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
   DatabaseInUse,
+  databaseHolder,
   findAssistant,
   loadConfig,
   type Nudge,
@@ -185,15 +185,21 @@ export async function admin(
   );
 }
 
-/** Prints a new token for an existing player, once; their other tokens keep working. */
+/**
+ * Prints a new token for an existing player, once; their other tokens keep working. One with
+ * `expiresAt`, such as a script's, stops working then.
+ */
 export async function token(
-  options: AdminOptions & ServerAccess & { readonly player: string },
+  options: AdminOptions & ServerAccess & { readonly player: string; readonly expiresAt?: number },
 ): Promise<void> {
+  const { expiresAt } = options;
   const print = (issued: PairResponse) => {
     console.log(
       `New token for ${issued.player.displayName} (client ${issued.clientId}), shown only now:\n`,
     );
     console.log(`  ${issued.token}\n`);
+    if (expiresAt !== undefined)
+      console.log(`It stops working at ${new Date(expiresAt).toISOString()}.`);
     console.log(`In a browser: ${new URL("/login", options.server).href}#token=${issued.token}`);
     console.log(`Revoke it with: nudge revoke ${issued.clientId}`);
   };
@@ -201,15 +207,23 @@ export async function token(
     options,
     async (nudge) => {
       await knownPlayer(nudge, options.player);
-      const issued = await nudge.players.issueToken(options.player, context);
+      const issued = await nudge.players.issueToken(options.player, context, expiresAt);
       print({ token: issued.token, clientId: issued.clientId, player: issued.player });
     },
     async (server) =>
-      print(await server.call<PairResponse>("POST", "/admin/tokens", { playerId: options.player })),
+      print(
+        await server.call<PairResponse>("POST", "/admin/tokens", {
+          playerId: options.player,
+          ...(expiresAt === undefined ? {} : { expiresAt }),
+        }),
+      ),
   );
 }
 
-/** Lists the tokens of one player, or of everyone, by client id and when they were issued. */
+/**
+ * Lists the tokens of one player, or of everyone, by client id, when they were issued and last
+ * used, and when they expire if they do.
+ */
 export async function tokens(
   options: AdminOptions & ServerAccess & { readonly player?: string },
 ): Promise<void> {
@@ -219,7 +233,7 @@ export async function tokens(
       const client =
         record.client === undefined ? "" : `\t${record.client.name} (${record.client.platform})`;
       console.log(
-        `${record.playerId}\t${record.clientId}\t${new Date(record.createdAt).toISOString()}${client}`,
+        `${record.playerId}\t${record.clientId}\t${new Date(record.createdAt).toISOString()}\t${tokenUse(record)}${client}`,
       );
     }
   };
@@ -255,6 +269,20 @@ export async function revoke(
       console.log(`Revoked the token for client ${options.clientId}.`);
     },
   );
+}
+
+/** When a token was last used and when it expires, for a listing. */
+export function tokenUse(record: {
+  readonly lastUsedAt?: number;
+  readonly expiresAt?: number;
+}): string {
+  const used =
+    record.lastUsedAt === undefined
+      ? "never used"
+      : `last used ${new Date(record.lastUsedAt).toISOString()}`;
+  if (record.expiresAt === undefined) return used;
+  const verb = record.expiresAt <= Date.now() ? "expired" : "expires";
+  return `${used}, ${verb} ${new Date(record.expiresAt).toISOString()}`;
 }
 
 async function knownPlayer(nudge: Nudge, id: string): Promise<void> {
@@ -400,9 +428,9 @@ export async function reload(options: AdminOptions): Promise<boolean> {
       : [findAssistant(config, options.assistant)];
   const signalled = new Set<number>();
   for (const assistant of assistants) {
-    const lock = `${assistant.database}.lock`;
-    const pid = Number((await readFile(lock, "utf8").catch(() => "")).trim());
-    if (!Number.isInteger(pid) || pid <= 0) {
+    const pid =
+      assistant.database === undefined ? undefined : await databaseHolder(assistant.database);
+    if (pid === undefined || pid <= 0) {
       console.log(`${assistant.name}: not running`);
       continue;
     }

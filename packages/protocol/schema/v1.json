@@ -3834,6 +3834,9 @@
       "properties": {
         "error": {
           "type": "string"
+        },
+        "code": {
+          "type": "string"
         }
       }
     },
@@ -6402,6 +6405,12 @@
               "type": "string"
             }
           }
+        },
+        "lastUsedAt": {
+          "type": "number"
+        },
+        "expiresAt": {
+          "type": "number"
         }
       }
     },
@@ -6444,6 +6453,12 @@
                     "type": "string"
                   }
                 }
+              },
+              "lastUsedAt": {
+                "type": "number"
+              },
+              "expiresAt": {
+                "type": "number"
               }
             }
           }
@@ -6684,6 +6699,9 @@
       "properties": {
         "playerId": {
           "type": "string"
+        },
+        "expiresAt": {
+          "type": "number"
         }
       }
     },
@@ -6855,6 +6873,10 @@
           "type": "number",
           "exclusiveMinimum": 0,
           "maximum": 1
+        },
+        "warnUsd": {
+          "type": "number",
+          "exclusiveMinimum": 0
         }
       }
     },
@@ -6909,6 +6931,10 @@
               "type": "number",
               "exclusiveMinimum": 0,
               "maximum": 1
+            },
+            "warnUsd": {
+              "type": "number",
+              "exclusiveMinimum": 0
             }
           }
         },
@@ -6976,6 +7002,10 @@
                     "type": "number",
                     "exclusiveMinimum": 0,
                     "maximum": 1
+                  },
+                  "warnUsd": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
                   }
                 }
               },
@@ -7038,6 +7068,10 @@
               "type": "number",
               "exclusiveMinimum": 0,
               "maximum": 1
+            },
+            "warnUsd": {
+              "type": "number",
+              "exclusiveMinimum": 0
             }
           }
         },
@@ -7115,6 +7149,10 @@
                   "type": "number",
                   "exclusiveMinimum": 0,
                   "maximum": 1
+                },
+                "warnUsd": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
                 }
               }
             },
@@ -7257,6 +7295,10 @@
                   "type": "number",
                   "exclusiveMinimum": 0,
                   "maximum": 1
+                },
+                "warnUsd": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
                 }
               }
             },
@@ -8074,6 +8116,10 @@
                     "type": "number",
                     "exclusiveMinimum": 0,
                     "maximum": 1
+                  },
+                  "warnUsd": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
                   }
                 }
               },

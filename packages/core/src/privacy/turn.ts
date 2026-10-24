@@ -66,7 +66,7 @@ const LOOK_BACK = 200;
  * The untrusted data it read is what that input and the tool results since hold (ADR 20).
  */
 export async function turnOf(
-  harness: Harness,
+  harness: Pick<Harness, "conversation">,
   conversationId: ConversationId,
   context: Context,
 ): Promise<Turn> {

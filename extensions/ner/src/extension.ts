@@ -16,6 +16,7 @@ const Settings = Type.Object({
 export const nerExtension = defineNudgeExtension({
   name: "ner",
   version: VERSION,
+  apiVersion: "1.0",
   description: "Find more people's names, such as relatives', than the built-in name lists know.",
   settings: Settings,
   setup: ({ settings }) => ({

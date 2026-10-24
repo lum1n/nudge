@@ -145,6 +145,7 @@ class Panels {
 export const listsExtension = defineNudgeExtension({
   name: "lists",
   version: VERSION,
+  apiVersion: "1.0",
   description:
     "Shared lists per room, such as shopping and to-dos, for the model and in the web UI.",
   setup: (host) => {

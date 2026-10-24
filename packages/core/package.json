@@ -15,6 +15,7 @@
   },
   "scripts": {
     "build": "tsc -b",
+    "bench:redaction": "node scripts/redaction-bench.ts",
     "eval:privacy": "node eval/privacy/run.ts"
   },
   "dependencies": {

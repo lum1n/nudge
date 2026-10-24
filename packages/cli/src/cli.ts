@@ -36,8 +36,10 @@ Commands:
   invite <name>      Add a player and print their token; with an address such as
                      ann@nudge.example.com/robin, let someone from another assistant join
   pair <player>      Print a one-time code, link and QR code that signs an app in
-  token <player>     Print a new token for a player, such as for a lost one
-  tokens [player]    List the tokens of a player, or of everyone, by client id
+  token <player>     Print a new token for a player, such as for a lost one or a script;
+                     --expires 30d makes it stop working then
+  tokens [player]    List the tokens of a player, or of everyone, by client id, with
+                     when each was last used
   revoke <client>    Stop the token of a client id from signing in
   admin [player]     Let a player use the admin API (--remove: no longer), or list
                      the admins; the first player always may
@@ -60,11 +62,11 @@ Commands:
   restore <file>     Unpack a backup into --to <dir> (--force overwrites files there);
                      --kit <file> takes the key from a recovery kit, as on a new machine
   kit [file]         Write a recovery kit: the backup key, sealed with a passphrase
-  owner [list|add <player or address>|remove <id>|token <player>]
+  owner [list|add <player or address>|remove <id>|token <player>|tokens]
                      The server's owners, who create, change and delete assistants and
                      set model keys over /v1/server: a player here, or someone's address
                      (vegard@home.example/robin) whose home vouches for them; token
-                     prints one for an owner
+                     prints one for an owner (--expires 30d: until then), tokens lists them
   wired [status|on|add <url>|join <invite>]
                      The server's Wired, a network between Nudge servers with no open port at
                      home: on (at home), add a server's https address there for its invite,
@@ -99,11 +101,14 @@ Options:
       --trust-proxy        serve: behind a proxy that ends TLS, such as exe.dev's, take
                            the address from its X-Forwarded-* headers (NUDGE_TRUST_PROXY=1)
       --remove             admin: take the flag away
+      --expires <time>     token, owner token: stop working after this long, such as 90m,
+                           12h or 30d (default: never)
       --to <dir>           backup, restore: where to
       --force              restore: overwrite files that are there
 `;
 
-async function main(argv: string[]): Promise<number> {
+/** Runs one command; resolves with its exit code. `run` is this, for the process. */
+export async function main(argv: string[]): Promise<number> {
   const { positionals, values } = parseArgs({
     args: argv,
     allowPositionals: true,
@@ -123,6 +128,7 @@ async function main(argv: string[]): Promise<number> {
       ping: { type: "boolean", default: false },
       privacy: { type: "boolean", default: false },
       remove: { type: "boolean", default: false },
+      expires: { type: "string" },
       to: { type: "string" },
       kit: { type: "string" },
       force: { type: "boolean", default: false },
@@ -138,6 +144,7 @@ async function main(argv: string[]): Promise<number> {
   const admin = { config, assistant: values.assistant };
   const server = values.url ?? `http://${values.host}:${values.port}`;
   const access = { ...admin, server, token: values.token };
+  const expiresAt = values.expires === undefined ? undefined : expiry(values.expires);
   switch (command) {
     case "init":
     case "setup":
@@ -171,7 +178,11 @@ async function main(argv: string[]): Promise<number> {
     case "token":
       if (argument === undefined)
         throw new UsageError("token needs a player id: nudge token <player>");
-      await token({ ...access, player: argument });
+      await token({
+        ...access,
+        player: argument,
+        ...(expiresAt === undefined ? {} : { expiresAt }),
+      });
       return 0;
     case "tokens":
       await tokens({ ...access, player: argument });
@@ -244,7 +255,12 @@ async function main(argv: string[]): Promise<number> {
       await kit(config, argument);
       return 0;
     case "owner":
-      await owner({ ...admin, verb: argument, id: rest[0] });
+      await owner({
+        ...admin,
+        verb: argument,
+        id: rest[0],
+        ...(expiresAt === undefined ? {} : { expiresAt }),
+      });
       return 0;
     case "wired":
       await wired({
@@ -263,6 +279,16 @@ async function main(argv: string[]): Promise<number> {
       process.stderr.write(`Unknown command "${command}".\n\n${USAGE}`);
       return 1;
   }
+}
+
+const UNITS: Record<string, number> = { m: 60 * 1000, h: 60 * 60 * 1000, d: 24 * 60 * 60 * 1000 };
+
+/** `--expires 30d` as the time it ends: minutes, hours or days from now. */
+function expiry(text: string): number {
+  const match = /^(\d+)\s*([mhd])$/.exec(text.trim());
+  if (match === null || Number(match[1]) === 0)
+    throw new UsageError(`--expires takes a time such as 90m, 12h or 30d, not "${text}"`);
+  return Date.now() + Number(match[1]) * UNITS[match[2]!]!;
 }
 
 const QUIET_ERRORS = new Set([

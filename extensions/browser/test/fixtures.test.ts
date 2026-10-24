@@ -7,6 +7,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ActionError, BrowserSession } from "../src/browser.ts";
+import { needsApproval } from "../src/gate.ts";
+import { runBatch } from "../src/tools.ts";
 
 const page = (title: string, body: string, head = "") =>
   `<!doctype html><html lang=nb><head><title>${title}</title><style>${head}</style></head><body>${body}</body></html>`;
@@ -75,6 +77,19 @@ const PAGES: Record<string, string> = {
           `<li><button class=card onclick="location.href='/cabin/${place}'"><h3>Hytte i ${place}</h3><p>4 soverom</p><p>2 500 kr natt</p></button><button aria-label="Lagre ${place}">♥</button></li>`,
       )
       .join("")}</ul>`,
+  ),
+  // A checkout on a site the user is logged in to: what commits them, next to what doesn't.
+  "/checkout": page(
+    "Kasse",
+    `<h1>Kasse</h1><nav><a href="/konto/logg-ut">Logg ut</a></nav>
+    <form method=get action=/sok><input name=q aria-label="Søk i butikken"><button>Søk</button></form>
+    <a href="/kort/1">Kjøp billetter</a> <a href="/vilkar">Kjøpsvilkår</a>
+    <form method=post action=/betal>
+      <label>Kortnummer <input name=kort autocomplete=cc-number></label>
+      <label>Navn på kortet <input name=navn autocomplete=cc-name></label>
+      <button><span>Betal 349 kr</span></button>
+    </form>
+    <div role=textbox contenteditable=true aria-label="Melding til butikken"></div>`,
   ),
 };
 
@@ -195,5 +210,44 @@ run("fixture pages in a real browser", () => {
     await session.click(refOf(seen, "Hytte i Geilo"));
     await session.settle();
     expect(session.page.url()).toBe(`${base}/cabin/Geilo`);
+  }, 30_000);
+
+  it("reads what an action touches, and holds the ones that commit the user", async () => {
+    const seen = await open("/checkout");
+    const read = async (text: string) => (await session.inspect(refOf(seen, text)))!;
+    const pay = await read("Betal 349 kr");
+    expect(pay).toMatchObject({
+      tag: "button",
+      name: "Betal 349 kr",
+      submits: true,
+      form: { method: "post", hasPassword: false },
+      loggedIn: true,
+    });
+    expect(needsApproval({ kind: "click" }, pay)).toMatch(/"Betal 349 kr" commits the user/);
+    expect(needsApproval({ kind: "type", submit: false }, await read("Kortnummer"))).toMatch(
+      /card number/,
+    );
+    // Its name field is in the same form: Enter in it would pay too.
+    expect(needsApproval({ kind: "press", key: "Enter" }, await read("Navn på kortet"))).toMatch(
+      /logged in/,
+    );
+    expect(needsApproval({ kind: "type", submit: true }, await read("Søk i butikken"))).toBe(
+      undefined,
+    );
+    expect(await read("Kjøp billetter")).toMatchObject({ tag: "a", navigates: true });
+    expect(needsApproval({ kind: "click" }, await read("Kjøp billetter"))).toBe(undefined);
+
+    // Through the tools: refused, and the page stays where it was.
+    const [refused] = await runBatch(session, [
+      { id: "a", name: "browser_click", arguments: { ref: refOf(seen, "Betal 349 kr") } },
+    ]);
+    expect(refused!.text).toMatch(/^Not done: .*browser_confirm/);
+    expect(session.page.url()).toBe(`${base}/checkout`);
+    // Enter in the focused message box, with no ref, would send it.
+    await session.click(refOf(seen, "Melding til butikken"));
+    const [enter] = await runBatch(session, [
+      { id: "b", name: "browser_press", arguments: { key: "Enter" } },
+    ]);
+    expect(enter!.text).toMatch(/^Not done: Enter here may send/);
   }, 30_000);
 });

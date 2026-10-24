@@ -21,7 +21,7 @@ import {
   isWiredHost,
   keepsPlaceholders,
   LOBBY,
-  type Nudge,
+  type ExtensionAssistant,
   parseAssistantAddress,
   peek,
   requestApproval,
@@ -39,6 +39,8 @@ import {
   type Link,
   linkWith,
   MAX_MESSAGES,
+  type Outgoing,
+  outgoingId,
   type Owner,
   PeersDoc,
   type PeersState,
@@ -143,15 +145,26 @@ function toolText(value: string, isError = false) {
   return { output: [{ type: "text" as const, text: value }], ...(isError ? { isError } : {}) };
 }
 
-export function peersExtension(options: { report?: (error: unknown) => void } = {}) {
+export function peersExtension(
+  options: {
+    report?: (error: unknown) => void;
+    /** First wait before a reply the other side didn't take is sent again; it doubles each time. */
+    retryMs?: number;
+  } = {},
+) {
   return defineNudgeExtension({
     name: "peers",
     version: VERSION,
+    apiVersion: "1.0",
     description:
       "Linked assistants on other servers talk to each other: this one asks, plans or hands over requests in a thread of a few rounds, and each side's people approve what changes things.",
     settings: Settings,
     setup: (host) => {
-      const peers = new Peers(host, options.report ?? ((error) => console.error("peers:", error)));
+      const peers = new Peers(
+        host,
+        options.report ?? ((error) => console.error("peers:", error)),
+        options.retryMs ?? 30_000,
+      );
       return peers.parts();
     },
   });
@@ -160,18 +173,31 @@ export function peersExtension(options: { report?: (error: unknown) => void } = 
 class Peers {
   private readonly timer;
   private closed = false;
+  /** The outbox is being sent; `flushAgain` has it looked at once more after. */
+  private flushing = false;
+  private flushAgain = false;
+  private wake: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     private readonly host: Host,
     private readonly report: (error: unknown) => void,
+    private readonly retryMs: number,
   ) {
     this.timer = this.createTimer();
     void host.whenOpen().then((nudge) => {
       if (this.closed) return;
       // A reload sets up new peers, which take the old ones' place.
       onFederated(nudge, "nudge.peer.", (signed, context) => this.receive(signed, context));
+      // What was on its way when the server stopped goes now, and what it was answering is.
+      this.flush();
+      void this.resume(BACKGROUND_CONTEXT).catch(this.reportUnlessStopping);
     });
   }
+
+  /** Reports what went wrong in the background, but not the server stopping under it. */
+  private readonly reportUnlessStopping = (error: unknown): void => {
+    if (!this.closed && !stopping(error)) this.report(error);
+  };
 
   parts() {
     const { host } = this;
@@ -253,6 +279,7 @@ class Peers {
           : [],
       close: () => {
         this.closed = true;
+        clearTimeout(this.wake);
       },
     };
   }
@@ -394,6 +421,7 @@ class Peers {
       delete state.links[linkId];
       for (const thread of Object.values(state.threads))
         if (thread.linkId === linkId) thread.status = "done";
+      dropOutgoing(state, linkId);
       return plain(link);
     }, context);
     if (link !== undefined) await this.sendUnlink(link);
@@ -454,6 +482,7 @@ class Peers {
       delete state.links[link.id];
       for (const thread of Object.values(state.threads))
         if (thread.linkId === link.id) thread.status = "done";
+      dropOutgoing(state, link.id);
     }, context);
     if (link.status === "asked" && link.askedIn !== undefined)
       await this.tell(
@@ -619,7 +648,7 @@ class Peers {
         return new Response(null, { status: 204 });
       case "answer":
         // Not waited for: the other side may be waiting for this one to answer it.
-        void this.answer(link, claim.threadId, claim.seq, text).catch(this.report);
+        void this.answer(link, claim.threadId, claim.seq, text).catch(this.reportUnlessStopping);
         return new Response(null, { status: 202 });
       case "late": {
         const thread = (await this.state(context)).threads[claim.threadId]!;
@@ -702,46 +731,168 @@ class Peers {
             )
           : `(No answer: ${settled.reason})`;
     } catch (error) {
+      // Stopped while answering: it is answered again once the server is back.
+      if (this.closed || stopping(error)) return;
       reply = `(No answer: ${(error as Error).message})`;
     }
-    await this.reply(link, threadId, nudge.showTo(link.playerId, reply), false, context);
+    if (this.closed) return;
+    await this.reply(link, threadId, nudge.showTo(link.playerId, reply), seq, context);
   }
 
-  /** Sends this side's next message in a thread the other side started. */
+  /**
+   * Answers again what the other side sent that wasn't answered when the server stopped. The
+   * message is found in the link's room again by its request id rather than posted twice, and a
+   * reply to it that went out after all is not sent again.
+   */
+  private async resume(context: Context): Promise<void> {
+    const state = await this.state(context);
+    for (const thread of Object.values(state.threads)) {
+      if (thread.direction !== "in" || thread.status !== "open" || !thread.awaiting) continue;
+      if (thread.received <= (thread.answered ?? 0)) continue;
+      const link = state.links[thread.linkId];
+      const said = thread.messages.findLast((message) => message.from === "them");
+      if (link?.status !== "linked" || said === undefined) continue;
+      void this.answer(link, thread.id, thread.received, said.text).catch(
+        this.reportUnlessStopping,
+      );
+    }
+  }
+
+  /**
+   * Sends this side's next message in a thread the other side started, through the outbox: it is
+   * stored before it goes, so neither a restart nor the other side being away loses it. `answers`
+   * is the number of their message it answers; a follow-up answers none.
+   */
   private async reply(
     link: Link,
     threadId: string,
     text: string,
-    late: boolean,
+    answers: number | undefined,
     context: Context,
   ): Promise<void> {
+    const nudge = this.nudge();
     const shown = cut(text.trim() === "" ? "(No answer.)" : text, this.host.settings.maxChars);
+    // Kept with placeholders, and shown as the other assistant's player may see it when it goes.
+    const kept = nudge.redact(shown);
+    await nudge.saveVault();
+    const now = this.host.now();
+    const late = answers === undefined;
     // Numbered before it goes, so two replies on their way never share a number.
-    const seq = await this.commit((state) => {
+    await this.commit((state) => {
       const thread = state.threads[threadId];
-      if (thread === undefined) return undefined;
+      if (thread === undefined) return;
+      // Answered already, as when it was answered again after a restart.
+      if (answers !== undefined && answers <= (thread.answered ?? 0)) return;
+      if (answers !== undefined) thread.answered = answers;
       thread.sent += 1;
       thread.awaiting = false;
       thread.messages = [
         ...thread.messages.map((message) => ({ ...message })),
-        { from: "us" as const, text: this.nudge().redact(shown), at: this.host.now() },
+        { from: "us" as const, text: kept, at: now },
       ].slice(-MAX_MESSAGES);
-      return thread.sent;
+      state.outbox[outgoingId(threadId, thread.sent)] = {
+        linkId: link.id,
+        threadId,
+        seq: thread.sent,
+        text: kept,
+        late,
+        tries: 0,
+        nextAt: now,
+        // About as long as the asking side waits for a reply.
+        deadline: now + this.host.settings.replyHours * HOUR,
+      };
     }, context);
-    if (seq === undefined) return;
+    this.flush();
+  }
+
+  /** Sends what waits in the outbox, unless that is under way; then it looks once more after. */
+  private flush(): void {
+    if (this.closed) return;
+    if (this.flushing) {
+      this.flushAgain = true;
+      return;
+    }
+    this.flushing = true;
+    this.flushAgain = false;
+    void this.sendOutbox(BACKGROUND_CONTEXT)
+      .catch(this.reportUnlessStopping)
+      .finally(() => {
+        this.flushing = false;
+        if (this.flushAgain) this.flush();
+      });
+  }
+
+  /**
+   * Sends each reply that is due, each thread's in order. One the other side didn't take waits,
+   * twice as long each time up to an hour, and holds back those after it: a later one taken first
+   * would have the earlier one ignored as seen. One past its deadline, or to a link that ended, is
+   * dropped.
+   */
+  private async sendOutbox(context: Context): Promise<void> {
+    const state = await this.state(context);
+    const queued = Object.entries(state.outbox).sort(([, a], [, b]) => a.seq - b.seq);
+    const held = new Set<string>();
+    let wakeAt = Infinity;
+    for (const [id, outgoing] of queued) {
+      if (this.closed) return;
+      const now = this.host.now();
+      const link = state.links[outgoing.linkId];
+      const expired = now >= outgoing.deadline;
+      if (link === undefined || link.status !== "linked" || expired) {
+        await this.commit((state) => {
+          delete state.outbox[id];
+        }, context);
+        if (link !== undefined && expired)
+          this.report(
+            new Error(`${link.place.server} took no reply in thread ${outgoing.threadId} in time`),
+          );
+        continue;
+      }
+      if (held.has(outgoing.threadId)) continue;
+      if (outgoing.nextAt > now) {
+        held.add(outgoing.threadId);
+        wakeAt = Math.min(wakeAt, outgoing.nextAt);
+        continue;
+      }
+      const sent = await this.sendOutgoing(link, outgoing);
+      if (sent !== false) {
+        // Taken, or "gone": it doesn't know this link any more, so it never will take it.
+        await this.commit((state) => {
+          delete state.outbox[id];
+        }, context);
+        continue;
+      }
+      held.add(outgoing.threadId);
+      const nextAt = this.host.now() + Math.min(this.retryMs * 2 ** outgoing.tries, HOUR);
+      await this.commit((state) => {
+        const current = state.outbox[id];
+        if (current === undefined) return;
+        current.tries += 1;
+        current.nextAt = nextAt;
+      }, context);
+      wakeAt = Math.min(wakeAt, nextAt);
+    }
+    clearTimeout(this.wake);
+    this.wake = undefined;
+    if (wakeAt === Infinity || this.closed) return;
+    this.wake = setTimeout(() => this.flush(), Math.max(0, wakeAt - this.host.now()));
+    // Waiting to try again doesn't keep the process up.
+    this.wake.unref?.();
+  }
+
+  /** Signs a reply from the outbox anew and sends it; the other side ignores one it took before. */
+  private sendOutgoing(link: Link, outgoing: Outgoing): Promise<boolean | "gone"> {
     const channel = this.channel();
-    const sent = await channel.send(link.place, link.keys, {
+    return channel.send(link.place, link.keys, {
       kind: "nudge.peer.say",
       from: channel.self,
       audience: link.place,
-      threadId,
-      seq,
-      text: shown,
-      ...(late ? { late } : {}),
+      threadId: outgoing.threadId,
+      seq: outgoing.seq,
+      text: this.nudge().showTo(link.playerId, outgoing.text),
+      ...(outgoing.late ? { late: true } : {}),
       issuedAt: channel.issuedAt(),
     } satisfies Static<typeof SayClaim>);
-    if (sent !== true)
-      this.report(new Error(`${link.place.server} didn't take the reply in thread ${threadId}`));
   }
 
   /**
@@ -765,7 +916,7 @@ class Peers {
       event.entryId,
     );
     if (text.trim() === "") return;
-    await this.reply(link, latest.id, nudge.showTo(link.playerId, text), true, context);
+    await this.reply(link, latest.id, nudge.showTo(link.playerId, text), undefined, context);
   }
 
   // Threads started here.
@@ -1031,6 +1182,7 @@ class Peers {
         const state = (await api.snapshot(PeersDoc, context)) ?? {
           links: {},
           threads: {},
+          outbox: {},
           next: 1,
         };
         if ((await isSide(api, api.conversationId, context)) || isLinkRoom(state, room.id))
@@ -1304,7 +1456,7 @@ class Peers {
     return channel;
   }
 
-  private nudge(): Nudge {
+  private nudge(): ExtensionAssistant {
     return this.host.assistant();
   }
 
@@ -1313,6 +1465,7 @@ class Peers {
       (await this.host.documents().snapshot(PeersDoc, context)) ?? {
         links: {},
         threads: {},
+        outbox: {},
         next: 1,
       }
     );
@@ -1321,7 +1474,7 @@ class Peers {
   private commit<T>(
     change: (
       state: PeersState,
-      tx: Parameters<Parameters<Nudge["harness"]["commit"]>[0]>[0],
+      tx: Parameters<Parameters<ExtensionAssistant["harness"]["commit"]>[0]>[0],
     ) => T | Promise<T>,
     context: Context,
   ): Promise<T> {
@@ -1345,6 +1498,11 @@ function reachable(server: string, self: string): boolean {
     }
   };
   return secure(server) || !secure(self);
+}
+
+/** Whether `error` is the assistant's storage closing as the server stops. */
+function stopping(error: unknown): boolean {
+  return error instanceof Error && error.message === "Session is closed";
 }
 
 /** A copy of something read in a commit, which outlives it. */
@@ -1380,6 +1538,12 @@ function findLink(state: PeersState, named: string): Link | undefined {
       link.displayName.toLowerCase() === wanted ||
       assistantAddressOf(link.place).toLowerCase() === wanted,
   );
+}
+
+/** Drops the replies on their way to a link that ended. */
+function dropOutgoing(state: PeersState, linkId: string): void {
+  for (const [id, outgoing] of Object.entries(state.outbox))
+    if (outgoing.linkId === linkId) delete state.outbox[id];
 }
 
 function isLinkRoom(state: PeersState | undefined, roomId: string): boolean {

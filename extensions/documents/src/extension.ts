@@ -344,6 +344,7 @@ export function searchTexts(
 export const documentsExtension = defineNudgeExtension({
   name: "documents",
   version: VERSION,
+  apiVersion: "1.0",
   description:
     "Documents and receipts per room: uploaded, their text extracted and searched on the host.",
   settings: Settings,

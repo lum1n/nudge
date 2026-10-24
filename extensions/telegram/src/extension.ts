@@ -46,6 +46,7 @@ export function telegramExtension(options: TelegramOptions = {}) {
   return defineNudgeExtension({
     name: "telegram",
     version: VERSION,
+    apiVersion: "1.0",
     description:
       "Talk to the assistant from Telegram. What goes through the bot is readable by Telegram.",
     settings: Settings,

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { PiiDetector, Span } from "./detectors.ts";
+import { KeyMatcher } from "./key-matcher.ts";
 
 /** One protected value and the placeholder the model sees instead. */
 export type VaultEntry = {
@@ -42,6 +43,8 @@ export const PLACEHOLDER_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MAX_NAME_LENGTH = 20;
 
 const WORD = /[\p{L}\p{N}_]/u;
+/** How much text `Vault.redact` keeps the redaction of, in characters, between changes. */
+const MAX_CACHED_CHARS = 4_000_000;
 /** Kinds whose values may take a Norwegian possessive `s`, as in "Anns bil". */
 const POSSESSIVE_KINDS = new Set(["NAME", "PLACE", "ORG", "ADDRESS"]);
 
@@ -68,10 +71,22 @@ export class Vault {
   private readonly spellings = new Map<string, Map<string, VaultEntry>>();
   private readonly counters = new Map<string, number>();
   private unsaved: VaultEntry[] = [];
-  private matcher: RegExp | undefined;
+  private matcher: KeyMatcher | undefined;
   /** Per viewer: what matches the values others own, null when there are none. */
-  private readonly hiddenFrom = new Map<string | undefined, RegExp | null>();
+  private readonly hiddenFrom = new Map<string | undefined, KeyMatcher | null>();
   private changes = 0;
+  /**
+   * Texts redacted since the vault last changed, with the detectors they were redacted with: each
+   * request redacts the whole history again, and until the vault changes the result is the same.
+   * `pnpm -C packages/core bench:redaction`, 200 messages (117k characters) and 10k values: 2.3 s
+   * a request with one alternation regex, 18 ms with the trie, under 0.1 ms from here.
+   */
+  private redacted = {
+    version: -1,
+    detectors: [] as readonly PiiDetector[],
+    size: 0,
+    texts: new Map<string, string>(),
+  };
 
   constructor(entries: readonly VaultEntry[] = []) {
     for (const entry of entries) this.insert(entry);
@@ -271,7 +286,11 @@ export class Vault {
    */
   redact(text: string, detectors: readonly PiiDetector[], owner?: string): string {
     if (text === "") return text;
-    return mapOutsidePlaceholders(this.withReleased(text), (outer) =>
+    const cache = this.cacheFor(detectors);
+    const cached = cache.texts.get(text);
+    if (cached !== undefined) return cached;
+    const before = this.changes;
+    const redacted = mapOutsidePlaceholders(this.withReleased(text), (outer) =>
       mapOutsidePlaceholders(this.hideForgotten(outer, detectors), (segment) => {
         for (const span of pickSpans(segment, detectors)) {
           const value = segment.slice(span.start, span.end);
@@ -282,6 +301,19 @@ export class Vault {
         return this.replaceKnown(segment);
       }),
     );
+    // Values found here change the vault, and with it what other texts redact to.
+    if (this.changes === before && cache.size + text.length <= MAX_CACHED_CHARS) {
+      cache.texts.set(text, redacted);
+      cache.size += text.length;
+    }
+    return redacted;
+  }
+
+  /** The redacted texts for `detectors` at this version of the vault, emptied when either changed. */
+  private cacheFor(detectors: readonly PiiDetector[]): Vault["redacted"] {
+    if (this.redacted.version !== this.changes || this.redacted.detectors !== detectors)
+      this.redacted = { version: this.changes, detectors, size: 0, texts: new Map() };
+    return this.redacted;
   }
 
   /** Puts the values back. Placeholders this vault does not know, or forgot, stay as they are. */
@@ -410,7 +442,7 @@ export class Vault {
       this.hiddenFrom.set(viewer, matcher);
     }
     if (matcher === null) return text;
-    return text.replace(matcher, (match) => {
+    return matcher.replace(text, (match) => {
       const entry = this.byKey.get(vaultKey(match));
       return entry === undefined ? match : this.placeholderAsWritten(entry, match, false);
     });
@@ -419,7 +451,7 @@ export class Vault {
   private replaceKnown(text: string): string {
     if (this.byKey.size === 0) return text;
     this.matcher ??= matcherOf([...this.byKey.entries()]);
-    return text.replace(this.matcher, (match) => {
+    return this.matcher.replace(text, (match) => {
       const entry = this.byKey.get(vaultKey(match));
       return entry === undefined ? match : this.placeholderAsWritten(entry, match, true);
     });
@@ -504,12 +536,14 @@ function hashOf(value: string): string {
 }
 
 /**
- * One alternation of the keys, longest first, so "Ann Berg" wins over "Ann". Each key carries its
- * own word boundaries, so where "Ann Berg" fails ("Ann Bergen") the regex falls back to "Ann".
- * Whitespace in a key matches any run of whitespace; names and places may take a possessive `s`.
+ * What matches the keys, as one alternation of them would, longest first, so "Ann Berg" wins over
+ * "Ann". Each key carries its own word boundaries, so where "Ann Berg" fails ("Ann Bergen") the
+ * matcher falls back to "Ann". Whitespace in a key matches any run of whitespace; names and places
+ * may take a possessive `s`. A trie of the keys finds them, not the alternation itself, which at
+ * 10k values took seconds per request (see `KeyMatcher`).
  */
-function matcherOf(entries: readonly (readonly [string, VaultEntry])[]): RegExp {
-  return new RegExp(
+function matcherOf(entries: readonly (readonly [string, VaultEntry])[]): KeyMatcher {
+  return new KeyMatcher(
     [...entries]
       .sort(([a], [b]) => b.length - a.length)
       .map(([key, entry]) => {
@@ -523,10 +557,8 @@ function matcherOf(entries: readonly (readonly [string, VaultEntry])[]): RegExp 
           : POSSESSIVE_KINDS.has(entry.kind)
             ? "(?=s?(?![\\p{L}\\p{N}_]))"
             : "(?![\\p{L}\\p{N}_])";
-        return before + body + after;
-      })
-      .join("|"),
-    "giu",
+        return { key, source: before + body + after };
+      }),
   );
 }
 

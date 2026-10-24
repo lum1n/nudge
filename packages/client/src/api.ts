@@ -1,4 +1,5 @@
 import type {
+  AdminPlayer,
   Appearance,
   AppearanceResponse,
   Approval,
@@ -26,6 +27,7 @@ import type {
   Player,
   PlayerMemoryResponse,
   PlayerResponse,
+  PlayersResponse,
   PrivateValue,
   PrivateValuesResponse,
   PlayerSettingsResponse,
@@ -54,6 +56,7 @@ import type {
   OwnedServer,
   OwnedServersResponse,
 } from "@nudge/protocol";
+import { ERROR_CODE } from "@nudge/protocol";
 
 /**
  * Where a client keeps its token: in memory, `localStorage`, a keychain. `Api.pair` stores the
@@ -74,14 +77,36 @@ export function memoryTokens(token?: string): TokenStore {
   };
 }
 
-/** A non-2xx answer: 400 bad body, 401 no or unknown token, 403 not an admin, 404, 409. */
+/**
+ * A non-2xx answer: 400 bad body, 401 no or unknown token, 403 not an admin, 404, 409, 429. A
+ * 429's `code` tells a rate limit (`rate_limited`, wait `retryAfter` seconds) from a spent budget
+ * (`budget_spent`, which waiting won't fix).
+ */
 export class ApiError extends Error {
+  /** The server's `ERROR_CODE`, when it gave one. */
+  readonly code?: string;
+  /** `Retry-After`, in seconds, when the server gave one. */
+  readonly retryAfter?: number;
+
   constructor(
     readonly status: number,
     message: string,
+    details: { code?: string; retryAfter?: number } = {},
   ) {
     super(message);
     this.name = "ApiError";
+    if (details.code !== undefined) this.code = details.code;
+    if (details.retryAfter !== undefined) this.retryAfter = details.retryAfter;
+  }
+
+  /** A 429 for asking too often: the same request works after a while. */
+  get rateLimited(): boolean {
+    return this.status === 429 && this.code === ERROR_CODE.rateLimited;
+  }
+
+  /** A message refused because the caller's or the assistant's monthly budget is spent. */
+  get budgetSpent(): boolean {
+    return this.code === ERROR_CODE.budgetSpent;
   }
 }
 
@@ -411,6 +436,11 @@ export class Api {
       .appearance;
   }
 
+  /** Every player, with whether they are an admin. */
+  async players(): Promise<AdminPlayer[]> {
+    return (await this.request<PlayersResponse>("GET", "/admin/players")).players;
+  }
+
   async createPlayer(displayName: string): Promise<Player> {
     return (await this.request<PlayerResponse>("POST", "/admin/players", { displayName })).player;
   }
@@ -484,7 +514,11 @@ export class Api {
 export async function read<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const body = (await response.json().catch(() => undefined)) as ErrorResponse | undefined;
-    throw new ApiError(response.status, body?.error ?? response.statusText);
+    const retryAfter = Number(response.headers.get("retry-after") ?? Number.NaN);
+    throw new ApiError(response.status, body?.error ?? response.statusText, {
+      ...(typeof body?.code === "string" && { code: body.code }),
+      ...(Number.isFinite(retryAfter) && retryAfter >= 0 && { retryAfter }),
+    });
   }
   return (response.status === 204 ? undefined : await response.json()) as T;
 }

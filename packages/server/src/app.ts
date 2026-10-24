@@ -54,7 +54,7 @@ export function createApp(options: AppOptions): Hono {
       }));
 
   app.onError((error, c) => {
-    if (error instanceof HttpError) return c.json({ error: error.message }, error.status);
+    if (error instanceof HttpError) return error.respond(c);
     // The route's pattern, not its path, and only the ids that say whose it was: no tokens.
     const params = c.req.param() as Record<string, string | undefined>;
     report(error, {

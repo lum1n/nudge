@@ -31,6 +31,7 @@ export function signalExtension(options: SignalOptions = {}) {
   return defineNudgeExtension({
     name: "signal",
     version: VERSION,
+    apiVersion: "1.0",
     description: "Talk to the assistant from Signal, through a signal-cli daemon on the host.",
     settings: Settings,
     setup: (host) => {

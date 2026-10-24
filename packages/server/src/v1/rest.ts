@@ -35,6 +35,9 @@ import {
   type ExtensionSetup,
   type ExtensionSetupsResponse,
   encodeCursor,
+  ERROR_CODE,
+  type ErrorCode,
+  type ErrorResponse,
   IssueTokenRequest,
   type MeResponse,
   MessageRequest,
@@ -127,8 +130,19 @@ export class HttpError extends Error {
   constructor(
     readonly status: 400 | 401 | 403 | 404 | 409 | 410 | 413 | 429 | 502,
     message: string,
+    /** For clients that act on what the error is, such as a 429's `ERROR_CODE`. */
+    readonly code?: ErrorCode,
   ) {
     super(message);
+  }
+
+  /** `{ error, code? }` with its status. */
+  respond(c: HonoContext): Response {
+    const body: ErrorResponse = {
+      error: this.message,
+      ...(this.code === undefined ? {} : { code: this.code }),
+    };
+    return c.json(body, this.status);
   }
 }
 
@@ -168,7 +182,7 @@ export function restRoutes(options: RestOptions): Hono {
   app.post("/sign-in", (c) => {
     const started = signIns.start();
     if (started === undefined)
-      throw new HttpError(429, "Too many sign-ins waiting; try again soon");
+      throw new HttpError(429, "Too many sign-ins waiting; try again soon", ERROR_CODE.rateLimited);
     const server = options.publicUrl() ?? requestOrigin(c.req.raw, options.trustProxy());
     return c.json(
       { ...started, link: signInLink(server, started.id) } satisfies SignInResponse,
@@ -487,7 +501,8 @@ export function restRoutes(options: RestOptions): Hono {
         context,
       );
     } catch (error) {
-      if (error instanceof BudgetReached) throw new HttpError(429, error.message);
+      if (error instanceof BudgetReached)
+        throw new HttpError(429, error.message, ERROR_CODE.budgetSpent);
       throw error;
     }
     return c.json({ submissionId: submission.id } satisfies MessageResponse, 202);
@@ -738,7 +753,9 @@ export function restRoutes(options: RestOptions): Hono {
     const body = await readJson(c, IssueTokenRequest);
     if ((await c.var.nudge.players.get(body.playerId, context)) === undefined)
       throw new HttpError(404, `No player "${body.playerId}"`);
-    const issued = await c.var.nudge.players.issueToken(body.playerId, context);
+    if (body.expiresAt !== undefined && body.expiresAt <= Date.now())
+      throw new HttpError(400, "expiresAt is in the past");
+    const issued = await c.var.nudge.players.issueToken(body.playerId, context, body.expiresAt);
     return c.json(
       {
         token: issued.token,
@@ -883,6 +900,8 @@ function toTokenInfo(record: TokenRecord): TokenInfo {
     playerId: record.playerId,
     createdAt: record.createdAt,
     ...(record.client === undefined ? {} : { client: record.client }),
+    ...(record.lastUsedAt === undefined ? {} : { lastUsedAt: record.lastUsedAt }),
+    ...(record.expiresAt === undefined ? {} : { expiresAt: record.expiresAt }),
   };
 }
 

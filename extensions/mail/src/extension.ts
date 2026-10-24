@@ -115,6 +115,7 @@ export function mailExtension(options: MailOptions = {}) {
   return defineNudgeExtension({
     name: "mail",
     version: VERSION,
+    apiVersion: "1.0",
     description:
       "Search and read mail over IMAP; send it over SMTP once someone in the room approves.",
     settings: Settings,

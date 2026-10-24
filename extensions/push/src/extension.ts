@@ -88,6 +88,7 @@ export function pushExtension(options: PushExtensionOptions = {}) {
   return defineNudgeExtension({
     name: "push",
     version: VERSION,
+    apiVersion: "1.0",
     description:
       "Tells people of answers and approvals in their rooms on their browsers, phones and Macs while they're away.",
     settings: Settings,

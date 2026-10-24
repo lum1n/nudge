@@ -166,6 +166,37 @@ describe("scripts", () => {
     expect(await scripts()).toEqual([]);
   });
 
+  it("won't replace a public script with a private one of its name", async () => {
+    const code = "return 'ours';";
+    await ask("save_script", { name: "ours", description: "Everyone's", code });
+    expect(
+      await ask(
+        "save_script",
+        { name: "ours", description: "Ann's", code: "return 'mine';" },
+        { private: true },
+      ),
+    ).toContain("everyone here uses");
+    expect(await scripts()).toMatchObject([{ name: "ours", code }]);
+    expect((await scripts())?.[0]).not.toHaveProperty("privateTo");
+
+    // In public it is replaced as before; a private script may be replaced in its owner's turns.
+    expect(
+      await ask("save_script", { name: "ours", description: "Everyone's", code: "return 2;" }),
+    ).toContain("Replaced script ours");
+    await ask("save_script", { name: "mine", description: "Ann's", code }, { private: true });
+    expect(
+      await ask(
+        "save_script",
+        { name: "mine", description: "Ann's", code: "return 3;" },
+        { private: true },
+      ),
+    ).toContain("Replaced script mine");
+    expect(await scripts()).toMatchObject([
+      { name: "ours", code: "return 2;" },
+      { name: "mine", code: "return 3;", privateTo: ann },
+    ]);
+  });
+
   it("puts args after an options line", () => {
     expect(withArgs("return args.a;", { a: 1 })).toBe('const args = {"a":1};\nreturn args.a;');
     expect(withArgs('// @options: {"timeout_ms":5}\nreturn 1;', undefined)).toBe(
