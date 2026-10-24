@@ -10,7 +10,7 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { databaseEncryption, LOBBY, loadConfig, openAssistant } from "@nudge/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { main } from "../src/cli.ts";
-import { backup, restore } from "../src/commands/backup.ts";
+import { backup, backupControl, restore } from "../src/commands/backup.ts";
 import { checkBackups } from "../src/commands/doctor.ts";
 
 const context = BACKGROUND_CONTEXT;
@@ -325,6 +325,64 @@ describe("nudge backup to a remote target", () => {
         `ok backups: ${dav.url} answers`,
         `ok backups: the newest in ${dav.url} is 3 hours old`,
       ]);
+    } finally {
+      dav.close();
+    }
+  });
+
+  it("is set from the apps: checked first, kept in the config and the server's secrets", async () => {
+    const dav = await webDav();
+    try {
+      await setUp();
+      let changes = 0;
+      const control = backupControl(config, async () => void changes++);
+      expect(await control.state()).toEqual({ on: false, everyHours: 24, keep: 14 });
+      await expect(control.backUpNow()).rejects.toThrow(/makes no backups/);
+
+      await expect(
+        control.setRemote({ type: "webdav", url: dav.url, user: "ann", secret: "wrong" }),
+      ).rejects.toThrow("Nudge couldn't write there: PUT /dav/nudge-check.txt: 401 Unauthorized");
+      await expect(
+        control.setRemote({ type: "s3", endpoint: "https://s3.example", bucket: "b" }),
+      ).rejects.toThrow("An S3 bucket needs an access key id and its secret");
+      expect(changes).toBe(0);
+
+      const state = await control.setRemote({
+        type: "webdav",
+        url: dav.url,
+        user: "ann",
+        secret: "hunter2",
+      });
+      expect(changes).toBe(1);
+      expect(state).toEqual({
+        on: true,
+        dir: join(home, "backups"),
+        everyHours: 24,
+        keep: 14,
+        remote: { type: "webdav", url: dav.url },
+        credentials: { user: "ann", from: "server" },
+      });
+      const raw = JSON.parse(await readFile(config, "utf8"));
+      expect(raw.backup).toEqual({
+        dir: "backups",
+        everyHours: 24,
+        keep: 14,
+        remote: { type: "webdav", url: dav.url },
+      });
+      expect(JSON.stringify(raw)).not.toContain("hunter2");
+      expect(dav.files.size).toBe(0);
+
+      // Changed later without the password: the kept one is used.
+      await control.setRemote({ type: "webdav", url: dav.url });
+      const made = await control.backUpNow();
+      expect(made).toEqual({ file: expect.stringMatching(/^nudge-\d{8}T\d{6}Z\.nudgebackup$/) });
+      expect([...dav.files.keys()]).toEqual([made.file]);
+      expect((await control.state()).lastUploadAt).toBeGreaterThan(0);
+
+      const removed = await control.removeRemote();
+      expect(removed.remote).toBeUndefined();
+      expect(removed.credentials).toBeUndefined();
+      expect(JSON.parse(await readFile(config, "utf8")).backup.remote).toBeUndefined();
     } finally {
       dav.close();
     }

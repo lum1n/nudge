@@ -43,7 +43,7 @@ import {
 } from "@nudge/server";
 import { renderUnicodeCompact } from "uqr";
 import { UsageError } from "../errors.ts";
-import { keyPath, scheduleBackups } from "./backup.ts";
+import { backupControl, keyPath, scheduleBackups } from "./backup.ts";
 import { offeredProviders } from "./setup-offer.ts";
 import {
   hostLog,
@@ -256,6 +256,11 @@ export async function serve(options: ServeOptions): Promise<number> {
       testKey,
       backupKey: theBackupKey,
       ...(updates === undefined ? {} : { updates: updates.control }),
+      backups: backupControl(configPath, async () => {
+        config = await loadConfig(configPath);
+        stopBackups();
+        stopBackups = scheduleBackups(configPath, config, say);
+      }),
       geo: {
         status: () => geo.status(),
         available: () => geo.available(),

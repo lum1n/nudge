@@ -5,6 +5,7 @@ import {
   AssistantExists,
   AssistantNotFound,
   type Assistants,
+  BackupError,
   ConfigError,
   DEFAULT_MODEL,
   defaultExtensions,
@@ -26,6 +27,8 @@ import {
 } from "@nudge/core";
 import {
   AddOwnerRequest,
+  type BackupNowResponse,
+  type BackupState,
   type CreateAssistantResponse,
   CreateAssistantRequest,
   type DeleteAssistantResponse,
@@ -43,6 +46,7 @@ import {
   type ServerOwnersResponse,
   ServerSessionRequest,
   type ServerSessionResponse,
+  SetBackupRemoteRequest,
   SetProviderKeyRequest,
   SetGeoRequest,
   SetUpdatesRequest,
@@ -85,6 +89,19 @@ export type ServerControl = {
   readonly geo?: GeoControl;
   /** The server's Wired; absent where the server wasn't given one. */
   readonly wired?: WiredControl;
+  /** The server's own backups and where they are copied; absent where it doesn't make them. */
+  readonly backups?: BackupControl;
+};
+
+/** What owners see of and do with the server's backups (ADR 8). */
+export type BackupControl = {
+  state(): Promise<BackupState>;
+  /** Checks the target can be written (unless `test` is false), then keeps it; turns backups on. */
+  setRemote(change: SetBackupRemoteRequest): Promise<BackupState>;
+  /** Stops copying backups off the server, and forgets its credentials. */
+  removeRemote(): Promise<BackupState>;
+  /** Makes a backup now, and uploads it where backups are copied. */
+  backUpNow(): Promise<BackupNowResponse>;
 };
 
 /** What owners see of and do with the server's Wired. */
@@ -396,6 +413,27 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
     return c.json({ kit } satisfies RecoveryKitResponse);
   });
 
+  const backups = () => {
+    if (control.backups === undefined)
+      throw new HttpError(404, "This server doesn't make backups of its own");
+    return control.backups;
+  };
+
+  app.get("/backups", async (c) => c.json((await backups().state()) satisfies BackupState));
+
+  app.post("/backups", async (c) =>
+    c.json((await guard(() => backups().backUpNow())) satisfies BackupNowResponse),
+  );
+
+  app.put("/backups/remote", async (c) => {
+    const change = await readJson(c, SetBackupRemoteRequest);
+    return c.json((await guard(() => backups().setRemote(change))) satisfies BackupState);
+  });
+
+  app.delete("/backups/remote", async (c) =>
+    c.json((await guard(() => backups().removeRemote())) satisfies BackupState),
+  );
+
   app.get("/owners", async (c) =>
     c.json({
       owners: control.owners.list().map(shownOwner),
@@ -505,6 +543,7 @@ async function guard<T>(work: () => Promise<T>): Promise<T> {
     if (error instanceof ConfigError) throw new HttpError(400, error.message);
     if (error instanceof WiredError) throw new HttpError(409, error.message);
     if (error instanceof GeoUnavailable) throw new HttpError(400, error.message);
+    if (error instanceof BackupError) throw new HttpError(400, error.message);
     throw error;
   }
 }
