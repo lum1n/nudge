@@ -363,7 +363,23 @@ export type ServerFrame = Static<typeof ServerFrame>;
 
 // HTTP: request and response bodies under `/v1/a/<assistant>`.
 
-export const ErrorResponse = Type.Object({ error: Type.String() });
+/**
+ * What an error is, where a client acts on it rather than only showing `error`. A client reads a
+ * code it doesn't know as no code.
+ */
+export const ERROR_CODE = {
+  /** A 429 for asking too often: try again after `Retry-After` seconds, when given. */
+  rateLimited: "rate_limited",
+  /** A 429 for a message once the caller's or the assistant's monthly budget is spent. */
+  budgetSpent: "budget_spent",
+} as const;
+export type ErrorCode = (typeof ERROR_CODE)[keyof typeof ERROR_CODE];
+
+export const ErrorResponse = Type.Object({
+  error: Type.String(),
+  /** One of `ERROR_CODE`, or one a later server adds. */
+  code: Type.Optional(Type.String()),
+});
 export type ErrorResponse = Static<typeof ErrorResponse>;
 
 export const AssistantsResponse = Type.Object({
@@ -997,6 +1013,8 @@ export const AssistantBudget = Type.Object({
   monthlyUsd: Type.Optional(Type.Number({ exclusiveMinimum: 0 })),
   perPlayerUsd: Type.Optional(Type.Number({ exclusiveMinimum: 0 })),
   warnAt: Type.Optional(Type.Number({ exclusiveMinimum: 0, maximum: 1 })),
+  /** Without `monthlyUsd`, admins hear once a month when spend reaches it; default 25. */
+  warnUsd: Type.Optional(Type.Number({ exclusiveMinimum: 0 })),
 });
 export type AssistantBudget = Static<typeof AssistantBudget>;
 

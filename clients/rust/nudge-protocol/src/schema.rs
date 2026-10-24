@@ -575,9 +575,20 @@ pub mod close {
 
 // HTTP: request and response bodies under `/v1/a/<assistant>`.
 
+/// What an error is, where a client acts on it rather than only showing `error`.
+pub mod error_code {
+    /// A 429 for asking too often: try again after `Retry-After` seconds, when given.
+    pub const RATE_LIMITED: &str = "rate_limited";
+    /// A 429 for a message once the caller's or the assistant's monthly budget is spent.
+    pub const BUDGET_SPENT: &str = "budget_spent";
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ErrorResponse {
     pub error: String,
+    /// One of `error_code`, or one a later server adds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -1377,6 +1388,9 @@ pub struct AssistantBudget {
     /// The share of a limit at which people hear about it, between 0 and 1.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub warn_at: Option<f64>,
+    /// Without `monthly_usd`, the spend at which admins hear there is no limit; default 25.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub warn_usd: Option<f64>,
 }
 
 /// One of the server's assistants, with its settings.

@@ -35,6 +35,9 @@ import {
   type ExtensionSetup,
   type ExtensionSetupsResponse,
   encodeCursor,
+  ERROR_CODE,
+  type ErrorCode,
+  type ErrorResponse,
   IssueTokenRequest,
   type MeResponse,
   MessageRequest,
@@ -127,8 +130,19 @@ export class HttpError extends Error {
   constructor(
     readonly status: 400 | 401 | 403 | 404 | 409 | 410 | 413 | 429 | 502,
     message: string,
+    /** For clients that act on what the error is, such as a 429's `ERROR_CODE`. */
+    readonly code?: ErrorCode,
   ) {
     super(message);
+  }
+
+  /** `{ error, code? }` with its status. */
+  respond(c: HonoContext): Response {
+    const body: ErrorResponse = {
+      error: this.message,
+      ...(this.code === undefined ? {} : { code: this.code }),
+    };
+    return c.json(body, this.status);
   }
 }
 
@@ -168,7 +182,7 @@ export function restRoutes(options: RestOptions): Hono {
   app.post("/sign-in", (c) => {
     const started = signIns.start();
     if (started === undefined)
-      throw new HttpError(429, "Too many sign-ins waiting; try again soon");
+      throw new HttpError(429, "Too many sign-ins waiting; try again soon", ERROR_CODE.rateLimited);
     const server = options.publicUrl() ?? requestOrigin(c.req.raw, options.trustProxy());
     return c.json(
       { ...started, link: signInLink(server, started.id) } satisfies SignInResponse,
@@ -487,7 +501,8 @@ export function restRoutes(options: RestOptions): Hono {
         context,
       );
     } catch (error) {
-      if (error instanceof BudgetReached) throw new HttpError(429, error.message);
+      if (error instanceof BudgetReached)
+        throw new HttpError(429, error.message, ERROR_CODE.budgetSpent);
       throw error;
     }
     return c.json({ submissionId: submission.id } satisfies MessageResponse, 202);

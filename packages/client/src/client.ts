@@ -19,6 +19,9 @@ export type NudgeClientOptions = {
   readonly storage?: KeyValueStorage;
 } & Pick<ConnectionOptions, "socket" | "backoff" | "heartbeatMs" | "onError">;
 
+/** How long to wait after a rate limit that gave no `Retry-After`. */
+const RATE_LIMIT_WAIT_S = 10;
+
 /** A store held open: call `release` when done with it. */
 export type Lease<S> = { readonly store: S; release(): void };
 
@@ -28,8 +31,9 @@ export type Lease<S> = { readonly store: S; release(): void };
  * at least one lease on it is held. `send` puts a message in the outbox and shows it in its room's
  * store until the view has it; one that doesn't get through (no network, or a 5xx) is sent again
  * with the same `requestId` whenever the socket opens and on `retryNow`, also after a reload when
- * the outbox is in a `storage`. The server answers a `requestId` it has seen with the same
- * submission, so a message sent twice still shows once.
+ * the outbox is in a `storage`, and one the server rate limited once its `Retry-After` is up. The
+ * server answers a `requestId` it has seen with the same submission, so a message sent twice still
+ * shows once.
  */
 export class NudgeClient {
   readonly api: Api;
@@ -42,6 +46,8 @@ export class NudgeClient {
   /** Messages on their way to the server, by `requestId`, so none is posted twice at once. */
   private readonly posting = new Map<string, Promise<MessageResponse>>();
   private delivering: Promise<void> | undefined;
+  /** Sends the outbox again once a rate limit's `Retry-After` is up. */
+  private rateLimitTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(options: NudgeClientOptions) {
     const { server, assistant, tokens } = options;
@@ -148,20 +154,20 @@ export class NudgeClient {
    * through again. Done whenever the socket opens.
    */
   deliverWaiting(): Promise<void> {
+    // Cleared in a `.finally` rather than inside: with nothing to send, the body ends before
+    // `delivering` is set, which would leave it set for good and every later call a no-op.
     this.delivering ??= (async () => {
-      try {
-        for (const message of this.outbox.list()) {
-          if (message.error !== undefined) continue;
-          try {
-            await this.post(message);
-          } catch (error) {
-            if (retryable(error)) return;
-          }
+      for (const message of this.outbox.list()) {
+        if (message.error !== undefined) continue;
+        try {
+          await this.post(message);
+        } catch (error) {
+          if (retryable(error)) return;
         }
-      } finally {
-        this.delivering = undefined;
       }
-    })();
+    })().finally(() => {
+      this.delivering = undefined;
+    });
     return this.delivering;
   }
 
@@ -172,7 +178,23 @@ export class NudgeClient {
 
   /** Closes the socket; leases stay, and are subscribed again by `open()`. */
   close(): void {
+    clearTimeout(this.rateLimitTimer);
+    this.rateLimitTimer = undefined;
     this.connection.close();
+  }
+
+  /**
+   * Sends the outbox again when the rate limit lets it, while the socket is open; returns in how
+   * many seconds.
+   */
+  private retryAfter(error: ApiError): number {
+    const seconds = error.retryAfter ?? RATE_LIMIT_WAIT_S;
+    if (this.rateLimitTimer !== undefined) return seconds;
+    this.rateLimitTimer = setTimeout(() => {
+      this.rateLimitTimer = undefined;
+      if (this.connection.getStatus().kind === "open") void this.deliverWaiting();
+    }, seconds * 1000);
+    return seconds;
   }
 
   private post(message: Outgoing): Promise<MessageResponse> {
@@ -192,8 +214,10 @@ export class NudgeClient {
           return response;
         },
         (error: unknown) => {
-          const reason = (error as Error).message;
+          let reason = (error as Error).message;
           if (!retryable(error)) this.outbox.refused(requestId, reason);
+          else if (error instanceof ApiError && error.rateLimited)
+            reason = `Too many requests; sending again in ${this.retryAfter(error)} s`;
           this.storeOf(room)?.failed(requestId, reason);
           throw error;
         },
@@ -245,9 +269,12 @@ export function outboxKey(server: string, assistant: string): string {
   return `nudge.outbox:${origin === "" ? "" : `${origin}:`}${assistant}`;
 }
 
-/** Whether sending again may work: the request didn't get through, or the server failed. */
+/**
+ * Whether sending again may work: the request didn't get through, the server failed, or it asked
+ * the client to slow down. A spent budget is no reason to send again.
+ */
 function retryable(error: unknown): boolean {
-  return !(error instanceof ApiError) || error.status >= 500;
+  return !(error instanceof ApiError) || error.status >= 500 || error.rateLimited;
 }
 
 function pending(message: Outgoing): PendingMessage {

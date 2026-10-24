@@ -72,6 +72,14 @@ impl From<ApiError> for NudgeError {
                 status,
                 detail: message,
             },
+            // Both are 429s whose detail says which; the core sends a rate-limited message again
+            // by itself, and a budget-refused one waits for the person.
+            ApiError::RateLimited { message, .. } | ApiError::BudgetSpent(message) => {
+                NudgeError::Status {
+                    status: 429,
+                    detail: message,
+                }
+            }
             ApiError::Network(detail) => NudgeError::Network { detail },
             ApiError::Decode(detail) => NudgeError::Decode { detail },
             ApiError::Address(_) => NudgeError::Config {

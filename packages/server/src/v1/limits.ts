@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { ERROR_CODE, type ErrorResponse } from "@nudge/protocol";
 import type { Context as HonoContext, MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 
@@ -93,7 +94,13 @@ export function rateLimits(options: LimitOptions): {
 
   const tooMany = (c: HonoContext, seconds: number) => {
     c.header("Retry-After", String(seconds));
-    return c.json({ error: `Too many requests; try again in ${seconds} s` }, 429);
+    return c.json(
+      {
+        error: `Too many requests; try again in ${seconds} s`,
+        code: ERROR_CODE.rateLimited,
+      } satisfies ErrorResponse,
+      429,
+    );
   };
 
   return {

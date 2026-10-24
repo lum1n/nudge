@@ -38,6 +38,17 @@ pub enum ApiError {
     /// A non-2xx answer: 400 bad body, 401 no or unknown token, 403 not an admin, 404, 409.
     #[error("{message} ({status})")]
     Status { status: u16, message: String },
+    /// A 429 for asking too often: the same request works again after `retry_after` seconds,
+    /// when the server said.
+    #[error("{message}")]
+    RateLimited {
+        message: String,
+        retry_after: Option<u64>,
+    },
+    /// A 429 for a message once the caller's or the assistant's monthly budget is spent; sending
+    /// it again won't help until the month ends or the budget changes.
+    #[error("{0}")]
+    BudgetSpent(String),
     /// No answer: the server is down or the network is gone.
     #[error("{0}")]
     Network(String),
@@ -49,12 +60,12 @@ pub enum ApiError {
 }
 
 impl ApiError {
-    /// Whether the same request may work later: no answer, or the server failed (5xx). Messages
-    /// are safe to send again, since the server answers a repeated `requestId` with the same
-    /// submission.
+    /// Whether the same request may work later: no answer, the server failed (5xx), or it was
+    /// rate limited. Messages are safe to send again, since the server answers a repeated
+    /// `requestId` with the same submission.
     pub fn is_retryable(&self) -> bool {
         match self {
-            ApiError::Network(_) => true,
+            ApiError::Network(_) | ApiError::RateLimited { .. } => true,
             ApiError::Status { status, .. } => *status >= 500,
             _ => false,
         }
@@ -63,6 +74,7 @@ impl ApiError {
     pub fn status(&self) -> Option<u16> {
         match self {
             ApiError::Status { status, .. } => Some(*status),
+            ApiError::RateLimited { .. } | ApiError::BudgetSpent(_) => Some(429),
             _ => None,
         }
     }
@@ -831,17 +843,45 @@ pub(crate) async fn checked(
     if status.is_success() {
         return Ok(response);
     }
-    let message = match response.json::<ErrorResponse>().await {
-        Ok(body) => body.error,
-        Err(_) => status
-            .canonical_reason()
-            .unwrap_or("Request failed")
-            .to_owned(),
+    let retry_after = response
+        .headers()
+        .get(reqwest::header::RETRY_AFTER)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.trim().parse::<u64>().ok());
+    let (message, code) = match response.json::<ErrorResponse>().await {
+        Ok(body) => (body.error, body.code),
+        Err(_) => (
+            status
+                .canonical_reason()
+                .unwrap_or("Request failed")
+                .to_owned(),
+            None,
+        ),
     };
-    Err(ApiError::Status {
-        status: status.as_u16(),
+    Err(error_for(
+        status.as_u16(),
         message,
-    })
+        code.as_deref(),
+        retry_after,
+    ))
+}
+
+/// The error a non-2xx answer is, by its status and the server's `code`; a code this client
+/// doesn't know is no code.
+pub(crate) fn error_for(
+    status: u16,
+    message: String,
+    code: Option<&str>,
+    retry_after: Option<u64>,
+) -> ApiError {
+    match (status, code) {
+        (429, Some(error_code::RATE_LIMITED)) => ApiError::RateLimited {
+            message,
+            retry_after,
+        },
+        (429, Some(error_code::BUDGET_SPENT)) => ApiError::BudgetSpent(message),
+        _ => ApiError::Status { status, message },
+    }
 }
 
 pub(crate) async fn read<T: DeserializeOwned>(
@@ -879,5 +919,66 @@ mod tests {
             ),
             Err(ApiError::Address(_))
         ));
+    }
+
+    /// What `checked` makes of one raw HTTP answer from a server that answers once.
+    async fn answer(headers: &str, body: &str) -> ApiError {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let raw = format!(
+            "HTTP/1.1 429 Too Many Requests\r\n{headers}content-type: application/json\r\nconnection: close\r\ncontent-length: {}\r\n\r\n{body}",
+            body.len()
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = [0u8; 4096];
+            let _ = socket.read(&mut request).await;
+            socket.write_all(raw.as_bytes()).await.unwrap();
+        });
+        checked(reqwest::get(format!("http://{address}/")).await)
+            .await
+            .unwrap_err()
+    }
+
+    #[tokio::test]
+    async fn tells_a_rate_limit_from_a_spent_budget() {
+        let limited = answer(
+            "retry-after: 7\r\n",
+            r#"{"error":"Too many requests; try again in 7 s","code":"rate_limited"}"#,
+        )
+        .await;
+        assert_eq!(
+            limited,
+            ApiError::RateLimited {
+                message: "Too many requests; try again in 7 s".into(),
+                retry_after: Some(7),
+            }
+        );
+        assert!(limited.is_retryable());
+        assert_eq!(limited.status(), Some(429));
+
+        let spent = answer(
+            "",
+            r#"{"error":"You have used your budget for the month.","code":"budget_spent"}"#,
+        )
+        .await;
+        assert_eq!(
+            spent,
+            ApiError::BudgetSpent("You have used your budget for the month.".into())
+        );
+        assert!(!spent.is_retryable());
+        assert_eq!(spent.status(), Some(429));
+
+        // A code this client doesn't know, or none, is a plain status.
+        let other = answer("", r#"{"error":"Slow down","code":"new"}"#).await;
+        assert_eq!(
+            other,
+            ApiError::Status {
+                status: 429,
+                message: "Slow down".into(),
+            }
+        );
+        assert!(!other.is_retryable());
     }
 }

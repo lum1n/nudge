@@ -9,8 +9,14 @@ import "./styles.css";
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    // A 401 or 404 won't get better by asking again.
-    queries: { retry: (count, error) => !(error instanceof ApiError) && count < 2 },
+    // A 401 or 404 won't get better by asking again; a rate limit will, after its `Retry-After`.
+    queries: {
+      retry: (count, error) => (!(error instanceof ApiError) || error.rateLimited) && count < 2,
+      retryDelay: (count, error) =>
+        error instanceof ApiError && error.retryAfter !== undefined
+          ? error.retryAfter * 1000
+          : Math.min(1000 * 2 ** count, 30_000),
+    },
   },
 });
 
