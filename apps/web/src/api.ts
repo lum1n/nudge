@@ -277,6 +277,29 @@ export function serverApi(): ServerApi {
 }
 
 /**
+ * Calls the server's own API as an owner, for what only owners change, such as an assistant's
+ * budget: with this device's server token, else, or when the server no longer takes it, with one
+ * traded for the player token on `assistant`. Someone who isn't an owner gets the server's 403.
+ */
+export async function asOwner<T>(
+  assistant: string,
+  call: (api: ServerApi) => Promise<T>,
+): Promise<T> {
+  const api = serverApi();
+  if (localStorage.getItem(SERVER_TOKEN) !== null) {
+    try {
+      return await call(api);
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 401) throw error;
+    }
+  }
+  const token = tokenFor(assistant);
+  if (token === undefined) throw new ApiError(401, "Not signed in");
+  await api.signIn(assistant, token, { name: CLIENT.name, platform: CLIENT.platform });
+  return call(api);
+}
+
+/**
  * Sets the server up from the wizard, and signs this device in: to the new assistant as its first
  * player, remembered, and to the server as its owner. Returns the assistant's name and player id.
  */
