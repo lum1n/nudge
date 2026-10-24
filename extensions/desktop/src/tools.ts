@@ -1,6 +1,12 @@
 import { consequentialLabel } from "@nudge/core";
 import { Type, type Static, type TSchema } from "typebox";
-import { ActionError, type Approval, type DesktopSession } from "./session.ts";
+import {
+  ActionError,
+  type Approval,
+  type DesktopSession,
+  type PinnedAction,
+  type Surroundings,
+} from "./session.ts";
 
 /** The part of a desktop session the tools use; tests pass a fake. */
 export type Desktop = Pick<
@@ -15,6 +21,8 @@ export type Desktop = Pick<
   | "focusWindow"
   | "settle"
   | "describe"
+  | "around"
+  | "deletes"
 >;
 
 export interface DesktopTool<T extends TSchema = TSchema> {
@@ -25,7 +33,7 @@ export interface DesktopTool<T extends TSchema = TSchema> {
   observes?: boolean;
   /** Ends the task: the user has to approve an action first. */
   ends?: Stop;
-  /** `approval` is the user's, when this run was started again after desktop_confirm. */
+  /** The run's approvals: the action the user approved, if any, and what desktop_confirm pinned. */
   run(desktop: Desktop, args: Static<T>, approval: Approval): Promise<string>;
 }
 
@@ -67,7 +75,7 @@ export const desktopTools: DesktopTool[] = [
       "Click an element by ref: buttons, menus and menu items, tabs, list rows, checkboxes.",
     parameters: Type.Object({ ref: Ref, double: Type.Optional(Type.Boolean()) }),
     run: (d, a, approval) => {
-      gate(approval, consequentialControl(d.describe(a.ref)));
+      gate(d, approval, "desktop_click", a.ref, undefined, clickReason(d, a.ref));
       return d.click(a.ref, { double: a.double });
     },
   }),
@@ -80,7 +88,11 @@ export const desktopTools: DesktopTool[] = [
       text: Type.String(),
       submit: Type.Optional(Type.Boolean()),
     }),
-    run: (d, a) => d.type(a.ref, a.text, { submit: a.submit }),
+    run: (d, a, approval) => {
+      if (a.submit)
+        gate(d, approval, "desktop_type", a.ref, undefined, submitReason(d.around(a.ref)));
+      return d.type(a.ref, a.text, { submit: a.submit });
+    },
   }),
   tool({
     name: "desktop_select",
@@ -93,9 +105,9 @@ export const desktopTools: DesktopTool[] = [
     description:
       'Press a key or combo, like "Enter", "Escape", "Down", "ctrl+s" or "ctrl+shift+z", into an element when given, else into the window under the pointer.',
     parameters: Type.Object({ keys: Type.String({ minLength: 1 }), ref: Type.Optional(Ref) }),
-    run: (d, a, approval) => {
-      gate(approval, consequentialKeys(d, a.keys, a.ref));
-      return d.press(a.keys, a.ref, approval);
+    run: async (d, a, approval) => {
+      gate(d, approval, "desktop_press", a.ref, a.keys, await keysReason(d, a.keys, a.ref));
+      return d.press(a.keys, a.ref);
     },
   }),
   tool({
@@ -108,26 +120,75 @@ export const desktopTools: DesktopTool[] = [
   tool({
     name: "desktop_confirm",
     description:
-      "Stop and ask the user to approve one consequential action before you do it: sending, deleting, paying, publishing, or saving over an existing file. Get everything ready first, so the action is one click away. Ends the task; once the user approves, you are started again where you left off, allowed to do exactly that action.",
+      "Stop and ask the user to approve one consequential action before you do it: sending, deleting, paying, publishing, or saving over an existing file. Get everything ready first, so the action is one click away. Say which tool you will use on which element: the approval covers that step only. Ends the task; once the user approves, you are started again where you left off, allowed to do exactly that action.",
     parameters: Type.Object({
       action: Type.String({
         minLength: 1,
         description:
           'Exactly what you will do and what it commits the user to, like: Click "Send" in Thunderbird to send the reply to Kari about Friday\'s meeting.',
       }),
+      tool: Type.Union(
+        [
+          Type.Literal("desktop_click"),
+          Type.Literal("desktop_type"),
+          Type.Literal("desktop_press"),
+        ],
+        { description: "The tool you will do it with." },
+      ),
+      ref: Type.Optional(
+        Type.String({
+          description:
+            "The ref of the element you will do it on, from the latest observation; for keys pressed into whatever has the keyboard, leave it out.",
+        }),
+      ),
+      keys: Type.Optional(
+        Type.String({ description: "With desktop_press: the keys, like ctrl+Return." }),
+      ),
     }),
     observes: true,
     ends: "needs-confirmation",
-    run: async (_d, a) => `Waiting for the user to approve: ${a.action}`,
+    run: async (d, a, approval) => {
+      // What the user approves is pinned now, while the element is in front of us.
+      if (a.tool !== undefined)
+        approval.asked = pin(
+          d,
+          a.tool,
+          a.ref,
+          a.tool === "desktop_press" ? (a.keys ?? "") : undefined,
+        );
+      return `Waiting for the user to approve: ${a.action}`;
+    },
   }),
 ];
 
 /** Roles whose label says what using them does. */
-const CONTROLS = new Set(["button", "toggle button", "menuitem", "link"]);
+const CONTROLS = new Set(["button", "toggle button", "switch", "menuitem", "link"]);
 /** Keys that press the button they are given. */
 const ACTIVATE_KEYS = /^(?:enter|return|kp_enter|space)$/i;
+const ENTER = /^(?:enter|return|kp_enter)$/i;
 /** Control+Enter sends in mail and chat apps (Thunderbird, Evolution, Element…). */
 const SEND_KEYS = /^(?:ctrl|control)\s*\+\s*(?:enter|return|kp_enter)$/i;
+const SAVE_KEYS = /^(?:ctrl|control)\s*\+\s*s$/i;
+/** Save itself, not Save As, which asks where. */
+const SAVE = /^(?:save|lagre)(?:\s*\(.*\))?$/i;
+/** What an app asks before it writes over a file. */
+const OVERWRITE =
+  /already exists|replace (?:it|the existing)|overwrite|finnes (?:allerede|fra før)|erstatte (?:den|eksisterende)|overskriv/i;
+/** Buttons that say no to it. */
+const DECLINE = /^(?:cancel|no|don't replace|do not replace|avbryt|nei|ikke erstatt|close|lukk)$/i;
+/** Text fields where Enter only finds or goes somewhere. */
+const SEARCHY =
+  /search|find|filter|søk|finn|filtrer|location|url|go to|gå til|path|file ?name|filnavn|^name$|^navn$/i;
+const TEXT_FIELDS = new Set(["textbox", "password", "combobox", "spinbutton"]);
+/** A file name in a window title, like `notes.txt - gedit` or `*Rapport.odt`. */
+const FILE_IN_TITLE = /(?:^|[\s*•(])([^\s@/\\*()]+\.[a-z][a-z0-9]{0,4})(?=$|[\s)\]—–-])/i;
+const UNTITLED = /untitled|uten navn|navnløs|ikke lagret|unsaved/i;
+
+/** The role and name in a line of the view, like `button "Send" [e12]` or `button "Send"`. */
+function parse(line: string): { role: string; name: string } {
+  const [, role = "", name = ""] = /^(.+?)(?: "(.*)")?(?: \[[^\]]+\])?$/.exec(line) ?? [];
+  return { role, name };
+}
 
 /**
  * Why using an element commits the user, or undefined: a button, menu item or link whose label
@@ -135,32 +196,116 @@ const SEND_KEYS = /^(?:ctrl|control)\s*\+\s*(?:enter|return|kp_enter)$/i;
  * showed it, like `button "Send" [e12]`.
  */
 export function consequentialControl(line: string): string | undefined {
-  const [, role = "", name = ""] = /^(.+?)(?: "(.*)")? \[[^\]]+\]$/.exec(line) ?? [];
+  if (!/ \[[^\]]+\]$/.test(line)) return undefined;
+  const { role, name } = parse(line);
   const word = CONTROLS.has(role) ? consequentialLabel(name) : undefined;
   return word === undefined ? undefined : `"${name}" commits the user to something ("${word}")`;
 }
 
-/** Why pressing `keys`, into `ref` when given, commits the user, or undefined. */
-function consequentialKeys(desktop: Pick<Desktop, "describe">, keys: string, ref?: string) {
-  if (SEND_KEYS.test(keys.trim()))
-    return `${keys} sends what is being written in mail and chat apps`;
-  if (ref !== undefined && ACTIVATE_KEYS.test(keys.trim()))
-    return consequentialControl(desktop.describe(ref));
+/**
+ * Why activating `element` (clicking it, or Enter or Space on it) in its window writes over a
+ * file, or undefined: any but a No or Cancel button in a window asking whether to replace a file
+ * that exists, and Save in a window whose title names the file it has open.
+ */
+export function overwriteReason(around: Surroundings | undefined): string | undefined {
+  if (around === undefined) return undefined;
+  const { role, name } = parse(around.element);
+  if (!CONTROLS.has(role)) return undefined;
+  if (OVERWRITE.test(around.text) && !DECLINE.test(name.trim()))
+    return "it replaces a file that already exists";
+  if (SAVE.test(name.trim())) return savesOver(around);
   return undefined;
 }
 
+/** Why saving the window's document writes over a file, or undefined: its title names one. */
+function savesOver(around: Surroundings): string | undefined {
+  const title = parse(around.window).name;
+  const file = FILE_IN_TITLE.exec(title)?.[1];
+  if (file === undefined || UNTITLED.test(title)) return undefined;
+  return `saving writes over "${file}", which already exists`;
+}
+
 /**
- * Holds an action that commits the user until they approve it, as `press` does for Delete.
- * Without their approval it fails, telling the model to call desktop_confirm; with it, it goes
- * ahead and uses the approval up.
+ * Why Enter in a text field may commit the user, or undefined: it sends what was typed, like a
+ * chat message or a form, unless the field is for searching, finding or going somewhere.
  */
-function gate(approval: Approval, reason: string | undefined): void {
+export function submitReason(around: Surroundings | undefined): string | undefined {
+  const name = around === undefined ? "" : parse(around.element).name.trim();
+  if (name !== "" && SEARCHY.test(name)) return undefined;
+  return "Enter in this field may send what was typed, like a message or a form";
+}
+
+function clickReason(desktop: Desktop, ref: string): string | undefined {
+  return consequentialControl(desktop.describe(ref)) ?? overwriteReason(desktop.around(ref));
+}
+
+/** Why pressing `keys`, into `ref` when given, else into what has the keyboard, commits the user. */
+async function keysReason(
+  desktop: Desktop,
+  keys: string,
+  ref?: string,
+): Promise<string | undefined> {
+  const pressed = keys.trim();
+  if (SEND_KEYS.test(pressed)) return `${keys} sends what is being written in mail and chat apps`;
+  if (await desktop.deletes(pressed, ref)) return `${keys} here deletes what is selected`;
+  const around = desktop.around(ref);
+  if (SAVE_KEYS.test(pressed))
+    return around === undefined
+      ? `${keys} may save over a file, and it isn't known which window gets it; pass the ref of something in that window`
+      : savesOver(around);
+  if (!ACTIVATE_KEYS.test(pressed)) return undefined;
+  const role = around === undefined ? "" : parse(around.element).role;
+  if (ENTER.test(pressed) && TEXT_FIELDS.has(role) && !around!.multiLine)
+    return submitReason(around);
+  return (
+    (ref === undefined ? undefined : consequentialControl(desktop.describe(ref))) ??
+    overwriteReason(around)
+  );
+}
+
+/** Pins what `tool` is about to do, for an `Approval`. */
+function pin(desktop: Desktop, tool: string, ref?: string, keys?: string): PinnedAction {
+  const around = desktop.around(ref);
+  const element =
+    around?.element ?? (ref === undefined ? "" : desktop.describe(ref).replace(/ \[[^\]]+\]$/, ""));
+  return {
+    tool,
+    ...(keys === undefined ? {} : { keys: keys.toLowerCase().replace(/\s+/g, "") }),
+    window: around?.window ?? "",
+    element,
+  };
+}
+
+/**
+ * Holds an action that commits the user until they approve it: unless it is the very action they
+ * approved (same tool, keys, element and window), it fails, telling the model to call
+ * desktop_confirm; if it is, it goes ahead and uses the approval up.
+ */
+function gate(
+  desktop: Desktop,
+  approval: Approval,
+  tool: string,
+  ref: string | undefined,
+  keys: string | undefined,
+  reason: string | undefined,
+): void {
   if (reason === undefined) return;
-  if (!approval.granted)
-    throw new ActionError(
-      `Not done: ${reason}, so the user has to approve it. Get everything ready, then call desktop_confirm with exactly this action and what it commits them to.`,
-    );
-  approval.granted = false;
+  const pinned = pin(desktop, tool, ref, keys);
+  const approved = approval.approved;
+  if (
+    approved &&
+    approved.tool === pinned.tool &&
+    approved.keys === pinned.keys &&
+    approved.window === pinned.window &&
+    approved.element === pinned.element
+  ) {
+    approval.approved = undefined;
+    return;
+  }
+  const other = approved ? " The user approved a different action, not this one." : "";
+  throw new ActionError(
+    `Not done: ${reason}, so the user has to approve it.${other} Get everything ready, then call desktop_confirm with exactly this action, the tool and the element's ref, and what it commits them to.`,
+  );
 }
 
 export interface ToolCallInput {
@@ -232,7 +377,7 @@ export async function runBatch(
   /** Hears each call just before it runs. */
   onCall?: (call: ToolCallInput) => void,
   /** The user's approval this run carries, if any; see `Approval`. */
-  approval: Approval = { granted: false },
+  approval: Approval = {},
 ): Promise<ToolCallOutput[]> {
   const out: ToolCallOutput[] = [];
   let failed = false;

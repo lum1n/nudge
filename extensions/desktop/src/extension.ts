@@ -21,11 +21,14 @@ import {
 import { foundApps } from "./apps.ts";
 import { type LiveInput, startLiveView } from "./live.ts";
 import { closeAllDesktops, holdDesktop, withDesktop } from "./pool.ts";
-import { type DesktopOptions, desktopProblem } from "./session.ts";
+import { type DesktopOptions, desktopProblem, type PinnedAction } from "./session.ts";
 import { type Viewer, viewersOf } from "./viewers.ts";
 
-/** What a `confirm` approval holds: the task a run stopped in, and the action to approve. */
-type ConfirmPayload = { task: string; action: string };
+/**
+ * What a `confirm` approval holds: the task a run stopped in, the action to approve, and that
+ * action pinned to its tool, element and window, the one step approving it lets through.
+ */
+type ConfirmPayload = { task: string; action: string; step?: PinnedAction };
 
 /**
  * Lets the assistant use desktop apps on Linux. The room's model delegates a task to
@@ -113,7 +116,7 @@ export default defineNudgeExtension({
     const useIn = async (
       run: { readonly models: Models; readonly conversationId: number; readonly context: Context },
       task: string,
-      extra: Pick<DesktopAgentOptions, "approved" | "onStep">,
+      extra: Pick<DesktopAgentOptions, "approved" | "approvedStep" | "onStep">,
     ): Promise<DesktopAgentResult | string> => {
       const model = run.models.getModel(provider!, id.join("/")) as Model<Api> | undefined;
       if (!model) return unavailable;
@@ -154,7 +157,7 @@ export default defineNudgeExtension({
       commit: <T>(apply: (tx: Tx) => Promise<T> | T) => Promise<T>,
       roomId: string,
       task: string,
-      action: string,
+      result: DesktopAgentResult,
     ): Promise<Approval> =>
       commit((tx) =>
         requestApproval(
@@ -163,8 +166,12 @@ export default defineNudgeExtension({
           {
             extension: "desktop",
             kind: "confirm",
-            summary: `On the desktop: ${action}`,
-            payload: { task, action } satisfies ConfirmPayload,
+            summary: `On the desktop: ${result.action ?? ""}`,
+            payload: {
+              task,
+              action: result.action ?? "",
+              ...(result.step ? { step: result.step } : {}),
+            } satisfies ConfirmPayload,
           },
           now(),
         ),
@@ -214,7 +221,7 @@ export default defineNudgeExtension({
                 (apply) => api.commit(apply, context),
                 room.id,
                 task,
-                result.action ?? "",
+                result,
               );
               return {
                 output: [
@@ -242,16 +249,16 @@ export default defineNudgeExtension({
         // The action a `use_desktop` run stopped at, approved: the same task again, on the room's
         // desktop where the run left it, allowed to do exactly that.
         confirm: async (payload, run) => {
-          const { task, action } = payload as ConfirmPayload;
+          const { task, action, step } = payload as ConfirmPayload;
           const result = await useIn(
             { models: run.models, conversationId: run.room.conversationId, context: run.context },
             task,
-            { approved: action },
+            { approved: action, ...(step ? { approvedStep: step } : {}) },
           );
           if (typeof result === "string") return { text: result, isError: true };
           if (result.outcome === "answered") return { text: result.answer, usage: result.usage };
           if (result.outcome === "needs-confirmation") {
-            const next = await askToConfirm(run.commit, run.room.id, task, result.action ?? "");
+            const next = await askToConfirm(run.commit, run.room.id, task, result);
             return {
               text: `${result.answer ? `${result.answer}\n` : ""}It stopped again before another step, which waits for approval ${next.id}: ${result.action}`,
               usage: result.usage,

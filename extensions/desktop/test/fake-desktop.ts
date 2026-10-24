@@ -27,10 +27,20 @@ export function fakeDesktop(
       return `Typed into ${ref}.`;
     },
     select: async (ref, option) => `Selected "${option}" in ${ref}.`,
-    press: async (keys) => `Pressed ${keys}.`,
+    press: async (keys, ref) => {
+      calls.push(`press ${keys}${ref ? ` ${ref}` : ""}`);
+      return `Pressed ${keys}.`;
+    },
     focusWindow: async (ref) => `Brought ${ref} to the front.`,
     settle: async () => {},
     describe: (ref) => `button "Button ${ref}" [${ref}]`,
+    // The element in the Notes window; without a ref, the focused title field.
+    around(ref) {
+      const element =
+        ref === undefined ? 'textbox "Title"' : this.describe(ref).replace(/ \[.*$/, "");
+      return { element, multiLine: false, window: 'frame "Notes"', text: element };
+    },
+    deletes: async () => false,
   };
   return { desktop, calls };
 }
