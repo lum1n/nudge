@@ -8,6 +8,7 @@ export default defineConfig({
       "packages/*/test/**/*.test.ts",
       "extensions/*/test/**/*.test.ts",
       "apps/*/test/**/*.test.ts",
+      "apps/*/test/**/*.test.tsx",
     ],
     // Runs on workerd, from its own config.
     exclude: ["packages/cloudflare/**", "**/node_modules/**"],
