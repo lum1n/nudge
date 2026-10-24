@@ -1,4 +1,6 @@
 import type {
+  BackupNowResponse,
+  BackupState,
   ClientInfo,
   CreateAssistantRequest,
   CreateAssistantResponse,
@@ -13,6 +15,7 @@ import type {
   ServerOwner,
   ServerOwnersResponse,
   ServerSessionResponse,
+  SetBackupRemoteRequest,
   SetProviderKeyRequest,
   SetupInfoResponse,
   SetupRequest,
@@ -175,6 +178,29 @@ export class ServerApi {
   /** The backup key, sealed with `passphrase`, as a file to keep away from the server. */
   recoveryKit(passphrase: string): Promise<RecoveryKitResponse> {
     return this.request("POST", "/recovery-kit", { passphrase });
+  }
+
+  /** The server's backups (ADR 8): where, how often, and how the last upload went. */
+  backups(): Promise<BackupState> {
+    return this.request("GET", "/backups");
+  }
+
+  /** Makes a backup now, and uploads it where backups are copied. */
+  backUpNow(): Promise<BackupNowResponse> {
+    return this.request("POST", "/backups");
+  }
+
+  /**
+   * Copies every backup to an S3 bucket or a WebDAV folder too, once the server could write there
+   * (unless `test: false`); a 400 says what went wrong. Without `secret` the kept one stays.
+   */
+  setBackupRemote(target: SetBackupRemoteRequest): Promise<BackupState> {
+    return this.request("PUT", "/backups/remote", target);
+  }
+
+  /** Keeps backups on the server only, and forgets the remote's credentials. */
+  removeBackupRemote(): Promise<BackupState> {
+    return this.request("DELETE", "/backups/remote");
   }
 
   async owners(): Promise<ServerOwner[]> {

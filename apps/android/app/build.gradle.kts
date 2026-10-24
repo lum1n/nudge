@@ -71,5 +71,7 @@ dependencies {
     // Geofences for reminders when the player gets somewhere.
     implementation(libs.play.services.location)
     implementation(libs.coroutines.play.services)
+    // QR codes of pairing links, for another phone to scan.
+    implementation(libs.zxing.core)
     testImplementation(libs.junit)
 }

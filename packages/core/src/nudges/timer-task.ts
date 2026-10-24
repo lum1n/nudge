@@ -11,6 +11,8 @@ export type NudgeInput = {
   every?: number;
   /** See `ScheduledNudge.privateTo`. */
   privateTo?: Owner;
+  /** See `ScheduledNudge.scheduledBy`. */
+  scheduledBy?: Owner;
 };
 
 /** `count` is how many times the nudge has fired. */
@@ -34,6 +36,8 @@ export type FireEntryData = {
   source?: "watch" | "arrival";
   /** See `ScheduledNudge.privateTo`; the answer is private too. */
   privateTo?: Owner;
+  /** See `ScheduledNudge.scheduledBy`: the answer's tools get this player's values. */
+  scheduledBy?: Owner;
   /** The message is all there is to say, written without a model: nothing answers it. */
   said?: true;
 };
@@ -58,7 +62,7 @@ export const NudgeTimer = defineTask<NudgeInput, NudgeCheckpoint, NudgeResult>({
     },
     fire: async (task, runtime, context) => {
       const { fireAt, count } = task.state.checkpoint;
-      const { message, every, privateTo } = task.input;
+      const { message, every, privateTo, scheduledBy } = task.input;
       const nudgeId = String(runtime.taskId);
       const room = await runtime.conversation(runtime.conversationId, context);
       if (room === undefined) throw new Error(`Nudge ${nudgeId} has no room`);
@@ -80,6 +84,7 @@ export const NudgeTimer = defineTask<NudgeInput, NudgeCheckpoint, NudgeResult>({
               message,
               fireAt,
               ...(privateTo === undefined ? {} : { privateTo }),
+              ...(scheduledBy === undefined ? {} : { scheduledBy }),
             } satisfies FireEntryData,
           },
         },

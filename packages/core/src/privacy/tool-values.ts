@@ -12,7 +12,7 @@ import {
   ToolTask,
 } from "@earendil-works/pi-durable";
 import { mapStrings } from "./redact.ts";
-import { inTurn, type Owner, type SetsTurn, type Turn } from "./turn.ts";
+import { actingFor, inTurn, type Owner, type SetsTurn, type Turn } from "./turn.ts";
 import { isUntrusted, untrustedData } from "./untrusted.ts";
 
 const PLACEHOLDERS = Symbol("nudge.placeholders");
@@ -80,7 +80,7 @@ function wrap(tool: ToolRegistration, values: ToolValues): ToolRegistration {
       const before = current?.calls ?? 0;
       // Only what the player the turn acts for may see: others' private values stay placeholders,
       // in the arguments and in what its models answer.
-      const viewer = (turn.by ?? turn.privateTo)?.playerId;
+      const viewer = actingFor(turn)?.playerId;
       const shown: ToolExecutionApi = {
         ...api,
         ...(placeholders ? {} : { models: values.models(viewer) }),

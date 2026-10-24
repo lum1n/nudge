@@ -6,6 +6,7 @@ package app.nudge
 import android.content.Context
 import com.google.firebase.messaging.FirebaseMessaging
 import java.io.File
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -247,7 +248,7 @@ class AppModel(private val context: Context) {
             val setupTokens = PreferencesTokens(preferences, "setup:${setupAccount.key}")
             setupTokens.set(done.token)
             val setup = NudgeClient(config(setupAccount).copy(cachePath = null), setupTokens)
-            runCatching { setup.signOut() }
+            attempt { setup.signOut() }
             setupTokens.set(null)
             setup.close()
             joinFromHome(server, done.assistant)
@@ -370,7 +371,7 @@ class AppModel(private val context: Context) {
             val oldTokens = PreferencesTokens(preferences, "setup:${place.account.key}")
             oldTokens.set(old)
             val client = NudgeClient(config(place.account).copy(cachePath = null), oldTokens)
-            runCatching { client.signOut() }
+            attempt { client.signOut() }
             oldTokens.set(null)
             client.close()
         }
@@ -402,7 +403,7 @@ class AppModel(private val context: Context) {
             Reach.WIRED -> {
                 val name = homeWiredName() ?: return
                 val owner = servers.client(server)
-                val state = runCatching { owner.wired() }.getOrNull()
+                val state = attempt { owner.wired() }.getOrNull()
                 if (state != null && (state.state == WiredStatus.ROOT || state.state == WiredStatus.MEMBER)) {
                     if (state.members.any { it.name == name }) return
                     throw ServerProblem(ServerProblem.Kind.WIRED_ELSEWHERE)
@@ -448,10 +449,10 @@ class AppModel(private val context: Context) {
         val guest = place.client.me().player.id
         owner.addOwner(assistant, guest, true)
         // An admin now: Settings shows its extensions and invites.
-        place.me.value = runCatching { place.client.me() }.getOrNull() ?: place.me.value
+        place.me.value = attempt { place.client.me() }.getOrNull() ?: place.me.value
         // On the list at home, for the person's other devices; the next sync puts it there otherwise.
         mutableSession.value?.let { home ->
-            runCatching { home.client.addOwnedServer(server.trimEnd('/')) }
+            attempt { home.client.addOwnedServer(server.trimEnd('/')) }
                 .onSuccess { listed -> servers.setAtHome(listed.map { it.server }.toSet()) }
         }
     }
@@ -472,13 +473,21 @@ class AppModel(private val context: Context) {
 
     /**
      * Removes a server made on exe.dev, with everything on it: leaves its assistants joined from
-     * home, deletes the VM, and forgets it here.
+     * home, takes it out of home's Wired network, deletes the VM, and forgets it here.
      */
     suspend fun removeExeServer(server: String) {
         val exe = servers.exe() ?: throw ServerProblem(ServerProblem.Kind.NOT_ON_EXE)
         val vm = exeVmName(server) ?: throw ServerProblem(ServerProblem.Kind.NOT_ON_EXE)
         for (membership in mutableMemberships.value?.memberships.orEmpty()) {
-            if (membership.server.trimEnd('/') == server.trimEnd('/')) runCatching { leave(membership) }
+            if (membership.server.trimEnd('/') == server.trimEnd('/')) attempt { leave(membership) }
+        }
+        // Out of home's Wired network first, so a new server at this address can take its name.
+        val wired = attempt { servers.client(server).wired() }.getOrNull()
+        val name = wired?.name
+        if (wired?.state == WiredStatus.MEMBER && name != null) {
+            servers.wiredRoot(except = server, holding = name)?.let { root ->
+                attempt { servers.client(root).removeWiredMember(name) }
+            }
         }
         exe.delete(vm)
         removeServer(server)
@@ -523,13 +532,13 @@ class AppModel(private val context: Context) {
                 continue
             }
             val client = servers.client(server)
-            val owner = runCatching { client.info().owner }.getOrNull() ?: continue
+            val owner = attempt { client.info().owner }.getOrNull() ?: continue
             // Set up before owners had addresses, this device may be signed in as the setup's
             // player, beside the owner its home vouches for.
             if (owner.address != address &&
-                runCatching { client.owners() }.getOrNull()?.none { it.address == address } != false
+                attempt { client.owners() }.getOrNull()?.none { it.address == address } != false
             ) continue
-            runCatching { home.client.addOwnedServer(key) }.onSuccess { atHome += key }
+            attempt { home.client.addOwnedServer(key) }.onSuccess { atHome += key }
         }
         for (owned in listed) {
             val local = servers.owned.value.firstOrNull { it.trimEnd('/') == owned.server }
@@ -653,7 +662,7 @@ class AppModel(private val context: Context) {
                 savePlaces()
             }
         }
-        mutableMemberships.value = runCatching { home.client.memberships() }.getOrNull()
+        mutableMemberships.value = attempt { home.client.memberships() }.getOrNull()
     }
 
     /**
@@ -705,7 +714,7 @@ class AppModel(private val context: Context) {
             savePlaces()
             gone.forEach { forget(it) }
         }
-        mutableMemberships.value = runCatching { home.client.memberships() }.getOrNull()
+        mutableMemberships.value = attempt { home.client.memberships() }.getOrNull()
     }
 
     private fun start(account: Account, made: NudgeClient? = null) {
@@ -732,8 +741,8 @@ class AppModel(private val context: Context) {
         client.connect()
         val session = Session(account, client, client.observeConnectionState(), client.observeRoomListState())
         scope.launch {
-            session.me.value = runCatching { client.me() }.getOrNull()
-            session.pushPlatforms.value = runCatching { client.pushPlatforms() }.getOrNull()
+            session.me.value = attempt { client.me() }.getOrNull()
+            session.pushPlatforms.value = attempt { client.pushPlatforms() }.getOrNull()
             registerDevice(session)
         }
         return session
@@ -769,7 +778,7 @@ class AppModel(private val context: Context) {
             }
             val added = memberships.memberships
                 .filter { membership -> kept.none { it.account.isAt(membership.server, membership.assistant) } }
-                .mapNotNull { runCatching { joined(home, it.server, it.assistant) }.getOrNull() }
+                .mapNotNull { attempt { joined(home, it.server, it.assistant) }.getOrNull() }
             mutablePlaces.value = kept + added
             savePlaces()
             gone.forEach { forget(it) }
@@ -787,7 +796,7 @@ class AppModel(private val context: Context) {
         val home = mutableSession.value ?: return
         syncing.withLock {
             for (place in mutablePlaces.value.filter { it.signedOut && !it.account.standalone }) {
-                val fresh = runCatching { joined(home, place.account.server, place.account.assistant) }.getOrNull() ?: continue
+                val fresh = attempt { joined(home, place.account.server, place.account.assistant) }.getOrNull() ?: continue
                 if (mutableSession.value !== home || mutablePlaces.value.none { it === place }) {
                     fresh.close()
                     continue
@@ -801,7 +810,7 @@ class AppModel(private val context: Context) {
 
     /** Signs in to an assistant with the home's assertion. */
     private suspend fun joined(home: Session, server: String, assistant: String): Session {
-        val name = runCatching { listAssistants(server).firstOrNull { it.name == assistant }?.displayName }.getOrNull()
+        val name = attempt { listAssistants(server).firstOrNull { it.name == assistant }?.displayName }.getOrNull()
         val account = Account(server, assistant, name ?: assistant)
         val tokens = tokens(account)
         val client = NudgeClient(config(account), tokens)
@@ -825,8 +834,8 @@ class AppModel(private val context: Context) {
 
     /** Signs a session out on its server, as far as it can be reached, and drops what is kept of it. */
     private suspend fun forget(session: Session) {
-        session.registeredDevice?.let { device -> runCatching { session.client.unregisterDevice(device) } }
-        runCatching { session.client.signOut() }
+        session.registeredDevice?.let { device -> attempt { session.client.unregisterDevice(device) } }
+        attempt { session.client.signOut() }
         session.close()
         tokens(session.account).set(null)
         cacheFile(session.account).delete()
@@ -937,15 +946,27 @@ fun exeVmName(server: String): String? {
     return if (name.isEmpty() || '.' in name) null else name
 }
 
-/** What to tell the user. */
 /** The host of a server's address, for people to read. */
 fun hostOf(server: String): String = runCatching { java.net.URI(server).host }.getOrNull() ?: server
 
+/**
+ * [runCatching] for work that suspends: a failure becomes the result, but cancellation still
+ * cancels the coroutine rather than passing for the call failing.
+ */
+inline fun <T> attempt(block: () -> T): Result<T> = try {
+    Result.success(block())
+} catch (error: CancellationException) {
+    throw error
+} catch (error: Throwable) {
+    Result.failure(error)
+}
+
+/** What to tell the user. */
 fun explain(error: Throwable): String = when (error) {
     is NudgeException.Status ->
         if (error.status.toInt() == 401) {
-            "That didn't work. A pairing code from nudge pair <your name> works once, for ten minutes; " +
-                "a token from nudge token <your name> until it is revoked."
+            "That didn't work. A pairing code works once, for ten minutes: ask an admin for a new one. " +
+                "A token works until it is revoked."
         } else {
             error.detail
         }

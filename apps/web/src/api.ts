@@ -206,7 +206,7 @@ export async function signIn(token: string, remember: boolean): Promise<string |
   });
 }
 
-/** Trades a pairing code from `nudge pair` for a token of whichever assistant made it. */
+/** Trades a pairing code an admin made for a token of whichever assistant made it. */
 export async function pair(code: string, remember: boolean): Promise<string | undefined> {
   return firstAssistant(async (assistant) => {
     await new Api({ server: "", assistant, tokens: tokenStore(assistant, remember) }).pair(code, {
@@ -274,6 +274,39 @@ export function serverApi(): ServerApi {
           : localStorage.setItem(SERVER_TOKEN, token),
     },
   });
+}
+
+/**
+ * Calls the server's own API as an owner, for what only owners change, such as an assistant's
+ * budget: with this device's server token, else, or when the server no longer takes it, with one
+ * traded for the player token on `assistant`. Someone who isn't an owner gets the server's 403.
+ */
+export async function asOwner<T>(
+  assistant: string,
+  call: (api: ServerApi) => Promise<T>,
+): Promise<T> {
+  const api = serverApi();
+  if (localStorage.getItem(SERVER_TOKEN) !== null) {
+    try {
+      return await call(api);
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 401) throw error;
+    }
+  }
+  const token = tokenFor(assistant);
+  if (token === undefined) throw new ApiError(401, "Not signed in");
+  await api.signIn(assistant, token, { name: CLIENT.name, platform: CLIENT.platform });
+  return call(api);
+}
+
+/**
+ * Signs this device in to the server as its owner, with the player token it has on `assistant`;
+ * a 403 when that player owns no part of the server.
+ */
+export async function signInToServer(assistant: string): Promise<void> {
+  const token = tokenFor(assistant);
+  if (token === undefined) throw new Error(`Not signed in to ${assistant}`);
+  await serverApi().signIn(assistant, token, { name: CLIENT.name, platform: CLIENT.platform });
 }
 
 /**

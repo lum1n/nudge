@@ -1440,6 +1440,77 @@ export type RecoveryKitRequest = Static<typeof RecoveryKitRequest>;
 export const RecoveryKitResponse = Type.Object({ kit: Type.String() });
 export type RecoveryKitResponse = Static<typeof RecoveryKitResponse>;
 
+const S3Target = {
+  type: Type.Literal("s3"),
+  /** Such as https://s3.eu-north-1.amazonaws.com or https://<account>.r2.cloudflarestorage.com. */
+  endpoint: Type.String({ pattern: "^https?://" }),
+  bucket: Type.String({ minLength: 1 }),
+  /** Default the one in an AWS endpoint, else us-east-1. */
+  region: Type.Optional(Type.String({ minLength: 1 })),
+  /** A folder in the bucket, such as `nudge/`. */
+  prefix: Type.Optional(Type.String()),
+  /** Bucket in the path rather than the host name; default on, except for AWS. */
+  pathStyle: Type.Optional(Type.Boolean()),
+};
+const WebDavTarget = {
+  type: Type.Literal("webdav"),
+  /** The folder, such as https://cloud.example/remote.php/dav/files/me/nudge/. */
+  url: Type.String({ pattern: "^https?://" }),
+};
+
+/** Where backups are copied off the server (ADR 8): an S3-compatible bucket or a WebDAV folder. */
+export const BackupRemoteTarget = Type.Union([Type.Object(S3Target), Type.Object(WebDavTarget)]);
+export type BackupRemoteTarget = Static<typeof BackupRemoteTarget>;
+
+/** The server's backups: where, how often, how many, and how the last upload went. */
+export const BackupState = Type.Object({
+  /** Whether the server makes backups on its own; the rest is its defaults when it doesn't. */
+  on: Type.Boolean(),
+  /** The folder on the server they go to. */
+  dir: Type.Optional(Type.String()),
+  everyHours: Type.Number(),
+  /** Backups kept, in the folder and on the remote alike. */
+  keep: Type.Number(),
+  /** When the newest in the folder was made. */
+  lastBackupAt: Type.Optional(Type.Number()),
+  remote: Type.Optional(BackupRemoteTarget),
+  /** The access key id or user name the remote is reached with, and where it is set. */
+  credentials: Type.Optional(
+    Type.Object({
+      user: Type.String(),
+      from: Type.Union([Type.Literal("env"), Type.Literal("server")]),
+    }),
+  ),
+  lastUploadAt: Type.Optional(Type.Number()),
+  /** Why the last upload failed, when it did, and when. */
+  lastError: Type.Optional(Type.String()),
+  lastErrorAt: Type.Optional(Type.Number()),
+});
+export type BackupState = Static<typeof BackupState>;
+
+/**
+ * A remote target for backups, with what to sign in with: an access key id and secret for S3, a
+ * user name and password for WebDAV. Without them the kept ones stay. The server first writes,
+ * lists and deletes a small file there, unless `test` is false.
+ */
+const RemoteCredentialFields = {
+  user: Type.Optional(Type.String()),
+  secret: Type.Optional(Type.String()),
+  test: Type.Optional(Type.Boolean()),
+};
+export const SetBackupRemoteRequest = Type.Union([
+  Type.Object({ ...S3Target, ...RemoteCredentialFields }),
+  Type.Object({ ...WebDavTarget, ...RemoteCredentialFields }),
+]);
+export type SetBackupRemoteRequest = Static<typeof SetBackupRemoteRequest>;
+
+/** A backup made now: its file name, and why the upload failed if it did. */
+export const BackupNowResponse = Type.Object({
+  file: Type.String(),
+  uploadError: Type.Optional(Type.String()),
+});
+export type BackupNowResponse = Static<typeof BackupNowResponse>;
+
 /** Every named schema, for `schema/v1.json`. */
 export const SCHEMAS = {
   Player,
@@ -1585,4 +1656,8 @@ export const SCHEMAS = {
   SetupResponse,
   RecoveryKitRequest,
   RecoveryKitResponse,
+  BackupRemoteTarget,
+  BackupState,
+  SetBackupRemoteRequest,
+  BackupNowResponse,
 };

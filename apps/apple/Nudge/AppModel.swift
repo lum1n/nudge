@@ -875,7 +875,7 @@ extension NudgeError {
         switch self {
         case .Status(let status, let detail):
             status == 401
-                ? "That didn't work. A pairing code from `nudge pair <your name>` works once, for ten minutes; a token from `nudge token <your name>` until it is revoked."
+                ? "That didn't work. A pairing code works once, for ten minutes: ask an admin for a new one. A token works until it is revoked."
                 : detail
         case .Network(let detail): "Can't reach the server: \(detail)"
         case .Decode(let detail): "The server's answer made no sense: \(detail)"

@@ -21,6 +21,7 @@ import {
   runBrowserAgent,
 } from "./agent.ts";
 import type { BrowserSession } from "./browser.ts";
+import type { PinnedAction } from "./gate.ts";
 import { type LiveInput, type LiveOutput, startLiveView } from "./live.ts";
 import { LoginStore } from "./logins.ts";
 import { holdBrowser, withBrowser } from "./pool.ts";
@@ -47,8 +48,11 @@ export const SiteNotesDoc = defineDoc<SiteNotesState>({
 /** Sites whose notes a room keeps; the ones used longest ago go first. */
 const MAX_SITES = 100;
 
-/** What a `confirm` approval holds: the task a run stopped in, and the action to approve. */
-type ConfirmPayload = { task: string; action: string };
+/**
+ * What a `confirm` approval holds: the task a run stopped in, the action to approve, and that
+ * action pinned to its tool, element and site, the one step approving it lets through.
+ */
+type ConfirmPayload = { task: string; action: string; step?: PinnedAction };
 
 /**
  * Lets the assistant use the web. The room's model delegates a task to `browse`; a browser agent on
@@ -141,7 +145,7 @@ export default defineNudgeExtension({
         readonly context: Context;
       },
       task: string,
-      extra: Pick<BrowserAgentOptions, "approved" | "onStep">,
+      extra: Pick<BrowserAgentOptions, "approved" | "approvedStep" | "onStep">,
     ): Promise<BrowserAgentResult | undefined> => {
       const model = run.models.getModel(provider!, id.join("/")) as Model<Api> | undefined;
       if (!model) return undefined;
@@ -191,7 +195,7 @@ export default defineNudgeExtension({
       commit: <T>(apply: (tx: Tx) => Promise<T> | T) => Promise<T>,
       roomId: string,
       task: string,
-      action: string,
+      result: BrowserAgentResult,
     ): Promise<Approval> =>
       commit((tx) =>
         requestApproval(
@@ -200,8 +204,12 @@ export default defineNudgeExtension({
           {
             extension: "browser",
             kind: "confirm",
-            summary: `In the browser: ${action}`,
-            payload: { task, action } satisfies ConfirmPayload,
+            summary: `In the browser: ${result.action ?? ""}`,
+            payload: {
+              task,
+              action: result.action ?? "",
+              ...(result.step ? { step: result.step } : {}),
+            } satisfies ConfirmPayload,
           },
           now(),
         ),
@@ -261,7 +269,7 @@ export default defineNudgeExtension({
                 (apply) => api.commit(apply, context),
                 room.id,
                 task,
-                result.action ?? "",
+                result,
               );
               return {
                 output: [
@@ -289,7 +297,7 @@ export default defineNudgeExtension({
         // The action a `browse` run stopped at, approved: the same task again, in the room's
         // browser where the run left it, allowed to do exactly that.
         confirm: async (payload, run) => {
-          const { task, action } = payload as ConfirmPayload;
+          const { task, action, step } = payload as ConfirmPayload;
           const result = await browseIn(
             {
               models: run.models,
@@ -299,14 +307,14 @@ export default defineNudgeExtension({
               context: run.context,
             },
             task,
-            { approved: action },
+            { approved: action, ...(step ? { approvedStep: step } : {}) },
           );
           if (result === undefined) return { text: unavailable, isError: true };
           // The outcome reaches the model as input, so what the web said is marked there too.
           if (result.outcome === "answered")
             return { text: result.answer, usage: result.usage, untrusted: "browse" };
           if (result.outcome === "needs-confirmation") {
-            const next = await askToConfirm(run.commit, run.room.id, task, result.action ?? "");
+            const next = await askToConfirm(run.commit, run.room.id, task, result);
             return {
               text: `${result.answer ? `${result.answer}\n` : ""}It stopped again before another step, which waits for approval ${next.id}: ${result.action}`,
               usage: result.usage,

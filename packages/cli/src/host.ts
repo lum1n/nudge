@@ -33,7 +33,7 @@ export function modelsDir(configPath: string): string {
 }
 
 /**
- * The local model every assistant in this process shares (ADR 14), downloaded the first time and
+ * The local model every assistant in this process shares (ADR 22), downloaded the first time and
  * started once.
  */
 export function sharedLocalModel(configPath: string): DeepDetector {

@@ -1,4 +1,4 @@
-# 14. An assistant per Durable Object on Cloudflare
+# 21. An assistant per Durable Object on Cloudflare
 
 An assistant should be able to run without a machine to look after: on Cloudflare, as `packages/cloudflare`. Pi Durable already has storage on a SQLite-backed Durable Object (`openDurableObjectSqliteStorage`), so the assistant itself is unchanged; what changes is what the host does around it.
 

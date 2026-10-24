@@ -1,4 +1,4 @@
-# 16. Assistants talk to each other through links, as guests, in threads
+# 23. Assistants talk to each other through links, as guests, in threads
 
 People want their assistants to settle things with other people's assistants: find a time with Ann's household, ask a team's assistant whether the report is in, hand a request to a friend's assistant for its people to approve. ADR 10 left this for an extension on top of federation, acting "as a player of the other assistant with the approvals that brings". The other assistant may be anyone's, on any server, with no person who is in both.
 

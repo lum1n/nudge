@@ -5,7 +5,7 @@ export type DeepFinding = Span & { readonly kind: string; readonly score: number
 
 /**
  * A local model that finds names, places and organisations the rules miss, such as "hos Vethjem"
- * (ADR 14). Asynchronous, unlike `PiiDetector`: what it finds goes into the vault, and exact
+ * (ADR 22). Asynchronous, unlike `PiiDetector`: what it finds goes into the vault, and exact
  * matching hides it from then on.
  */
 export type DeepDetector = {

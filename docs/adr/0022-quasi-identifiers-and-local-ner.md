@@ -1,4 +1,4 @@
-# 14. Hide what points to a person, not only what names them
+# 22. Hide what points to a person, not only what names them
 
 ADR 2 hid values with a fixed shape (e-mail addresses, phone and account numbers) and the names of the people chatting. That left most of what identifies someone in clear. When asked what it knew, the model listed a home town and its station, a child's kindergarten and its departments, the vet, a Home Assistant domain and a car, all from earlier messages and its own thinking. Each says little on its own; together they point to one family.
 

@@ -8,6 +8,7 @@ import {
   ExtensionNotFound,
   findAssistant,
   loadConfig,
+  NotAllowed,
   type Nudge,
   openAssistant,
   type Room as CoreRoom,
@@ -194,11 +195,19 @@ class LocalSession implements ChatSession {
     return this.nudge.privateValues(this.author.playerId);
   }
 
+  // As DELETE /vault/:placeholder has it: its owner may forget a value, an admin any value.
   async forgetValue(placeholder: string): Promise<void> {
-    const owner = this.nudge.privateValues(this.author.playerId);
-    if (!owner.some((value) => value.placeholder === placeholder))
-      throw new UsageError(`No private value ${placeholder} of yours`);
-    await this.nudge.forgetValue(placeholder, { playerId: this.author.playerId });
+    const { playerId } = this.author;
+    try {
+      const forgotten = await this.nudge.forgetValue(placeholder, {
+        playerId,
+        admin: await this.nudge.players.isAdmin(playerId, context),
+      });
+      if (!forgotten) throw new UsageError(`No value ${placeholder}`);
+    } catch (error) {
+      if (error instanceof NotAllowed) throw new UsageError(error.message);
+      throw error;
+    }
   }
 
   async cancelNudge(id: string): Promise<void> {
@@ -398,10 +407,7 @@ class RemoteSession implements ChatSession {
   }
 
   async forgetValue(placeholder: string): Promise<void> {
-    await this.notFound(
-      this.client.api.forgetValue(placeholder),
-      `No private value ${placeholder} of yours`,
-    );
+    await this.notFound(this.client.api.forgetValue(placeholder), `No value ${placeholder}`);
   }
 
   async cancelNudge(id: string): Promise<void> {

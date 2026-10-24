@@ -8591,6 +8591,255 @@
           "type": "string"
         }
       }
+    },
+    "BackupRemoteTarget": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "endpoint",
+            "bucket"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "s3"
+            },
+            "endpoint": {
+              "type": "string",
+              "pattern": "^https?://"
+            },
+            "bucket": {
+              "type": "string",
+              "minLength": 1
+            },
+            "region": {
+              "type": "string",
+              "minLength": 1
+            },
+            "prefix": {
+              "type": "string"
+            },
+            "pathStyle": {
+              "type": "boolean"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "url"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "webdav"
+            },
+            "url": {
+              "type": "string",
+              "pattern": "^https?://"
+            }
+          }
+        }
+      ]
+    },
+    "BackupState": {
+      "type": "object",
+      "required": [
+        "on",
+        "everyHours",
+        "keep"
+      ],
+      "properties": {
+        "on": {
+          "type": "boolean"
+        },
+        "dir": {
+          "type": "string"
+        },
+        "everyHours": {
+          "type": "number"
+        },
+        "keep": {
+          "type": "number"
+        },
+        "lastBackupAt": {
+          "type": "number"
+        },
+        "remote": {
+          "anyOf": [
+            {
+              "type": "object",
+              "required": [
+                "type",
+                "endpoint",
+                "bucket"
+              ],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "s3"
+                },
+                "endpoint": {
+                  "type": "string",
+                  "pattern": "^https?://"
+                },
+                "bucket": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "region": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "prefix": {
+                  "type": "string"
+                },
+                "pathStyle": {
+                  "type": "boolean"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "type",
+                "url"
+              ],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "webdav"
+                },
+                "url": {
+                  "type": "string",
+                  "pattern": "^https?://"
+                }
+              }
+            }
+          ]
+        },
+        "credentials": {
+          "type": "object",
+          "required": [
+            "user",
+            "from"
+          ],
+          "properties": {
+            "user": {
+              "type": "string"
+            },
+            "from": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "env"
+                },
+                {
+                  "type": "string",
+                  "const": "server"
+                }
+              ]
+            }
+          }
+        },
+        "lastUploadAt": {
+          "type": "number"
+        },
+        "lastError": {
+          "type": "string"
+        },
+        "lastErrorAt": {
+          "type": "number"
+        }
+      }
+    },
+    "SetBackupRemoteRequest": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "endpoint",
+            "bucket"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "s3"
+            },
+            "endpoint": {
+              "type": "string",
+              "pattern": "^https?://"
+            },
+            "bucket": {
+              "type": "string",
+              "minLength": 1
+            },
+            "region": {
+              "type": "string",
+              "minLength": 1
+            },
+            "prefix": {
+              "type": "string"
+            },
+            "pathStyle": {
+              "type": "boolean"
+            },
+            "user": {
+              "type": "string"
+            },
+            "secret": {
+              "type": "string"
+            },
+            "test": {
+              "type": "boolean"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "url"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "webdav"
+            },
+            "url": {
+              "type": "string",
+              "pattern": "^https?://"
+            },
+            "user": {
+              "type": "string"
+            },
+            "secret": {
+              "type": "string"
+            },
+            "test": {
+              "type": "boolean"
+            }
+          }
+        }
+      ]
+    },
+    "BackupNowResponse": {
+      "type": "object",
+      "required": [
+        "file"
+      ],
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "uploadError": {
+          "type": "string"
+        }
+      }
     }
   }
 }

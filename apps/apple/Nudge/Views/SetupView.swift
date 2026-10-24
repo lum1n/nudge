@@ -354,9 +354,18 @@ private enum SetupProblem: LocalizedError {
     var errorDescription: String? { "That server is set up already: sign in to it instead." }
 }
 
-/// An assistant's name as its address has it: lower case, dashes for the rest.
+/// Letters folding leaves whole (or folds differently on each platform), spelled the way they are
+/// in plain ASCII.
+private let spelled: [Character: String] = [
+    "æ": "ae", "Æ": "ae", "ø": "o", "Ø": "o", "ß": "ss", "ẞ": "ss",
+    "đ": "d", "Đ": "d", "ł": "l", "Ł": "l", "þ": "th", "Þ": "th",
+]
+
+/// An assistant's name as its address has it: lower case, dashes for the rest. A copy of the CLI's
+/// (packages/cli/src/commands/setup-offer.ts); keep them giving the same slug.
 func slugOf(_ name: String) -> String {
-    let plain = name.folding(options: [.diacriticInsensitive, .caseInsensitive, .widthInsensitive], locale: nil).lowercased()
+    let spelledOut = name.map { spelled[$0] ?? String($0) }.joined()
+    let plain = spelledOut.folding(options: [.diacriticInsensitive, .caseInsensitive, .widthInsensitive], locale: nil).lowercased()
     let dashed = plain.replacing(/[^a-z0-9]+/, with: "-")
     return String(dashed.trimmingCharacters(in: ["-"]).prefix(40))
 }

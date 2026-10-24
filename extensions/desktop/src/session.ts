@@ -43,9 +43,41 @@ export interface DesktopOptions {
 /** An action that could not be done, said so the agent can try something else. */
 export class ActionError extends Error {}
 
-/** The user's approval of one consequential action, from desktop_confirm; used up when taken. */
+/**
+ * One action, pinned down so that an approval covers it and nothing else: the tool, the keys,
+ * the element and its window. A type, not an interface, so that it is JSON for an approval.
+ */
+export type PinnedAction = {
+  /** desktop_click, desktop_type or desktop_press. */
+  tool: string;
+  /** For desktop_press: the keys, lowercase and without spaces. */
+  keys?: string;
+  /** The window, like `frame "notes.txt - gedit"`; empty when not known. */
+  window: string;
+  /** The element, like `button "Send"`; for keys without a ref, the one with the keyboard. */
+  element: string;
+};
+
+/**
+ * The approvals of one run. `approved` is the action the user approved after an earlier run
+ * stopped for it, used up when taken; any other action that needs approval still does.
+ * `asked` is what desktop_confirm in this run pinned for the user to approve.
+ */
 export interface Approval {
-  granted: boolean;
+  approved?: PinnedAction;
+  asked?: PinnedAction;
+}
+
+/** Where an element is, as of the last read (`DesktopSession.around`). */
+export interface Surroundings {
+  /** The element, like `textbox "Title"`; empty when not known. */
+  element: string;
+  /** A text field that takes more than one line. */
+  multiLine: boolean;
+  /** Its window, like `frame "notes.txt - gedit"`; empty when not known. */
+  window: string;
+  /** What the window's elements say, one per line, like `text "A file named … already exists"`. */
+  text: string;
 }
 
 const WINDOWS = new Set(["frame", "window", "dialog", "alert", "file chooser"]);
@@ -159,6 +191,8 @@ export class DesktopSession {
   private readonly labels = new Map<string, string>();
   /** The window each ref is in, and the windows on the screen, as of the last read. */
   private readonly windowOf = new Map<string, Address>();
+  /** Refs of text fields that take more than one line, as of the last read. */
+  private readonly multiLine = new Set<string>();
   private windows: Address[] = [];
   private readonly launched = new Map<number, { name: string; child: ChildProcess }>();
   /** The open modal dialogs, as of the last read. */
@@ -528,25 +562,47 @@ export class DesktopSession {
   }
 
   /**
-   * Presses a key combo, into an element when given, else into whatever has the focus. Delete on
+   * Whether pressing `keys`, into `ref` or else whatever has the focus, deletes items: Delete on
    * an item of a list or tree deletes what is selected, like files in a file manager or mail in
-   * a mailbox: that takes the user's approval, which it uses up. (In a document it only changes
-   * the document, and saving over a file asks.)
+   * a mailbox. (In a document it only changes the document; saving it is checked on its own.)
    */
-  async press(keys: string, ref?: string, approval?: Approval): Promise<string> {
+  async deletes(keys: string, ref?: string): Promise<boolean> {
+    if (!/^(shift\s*\+\s*)?delete$/i.test(keys.trim())) return false;
+    const at = ref
+      ? (await this.resolve(ref)).info
+      : this.focused && (await this.atspi.info(this.focused).catch(() => undefined));
+    return at !== undefined && (await this.holdsItems(at));
+  }
+
+  /**
+   * Where an element is, as of the last read: what it is, its window, and what the window says.
+   * Without a ref, the element that last said it got the keyboard. Undefined when not known.
+   */
+  around(ref?: string): Surroundings | undefined {
+    const key = (address: Address) => `${address.bus}${address.path}`;
+    const own =
+      ref === undefined ? this.focused && this.refs.get(key(this.focused)) : cleanRef(ref);
+    if (own === undefined || !this.addresses.has(own)) return undefined;
+    const window = this.windowOf.get(own);
+    const inWindow =
+      window === undefined
+        ? []
+        : [...this.windowOf]
+            .filter(
+              ([r, w]) => key(w) === key(window) && this.seen.has(key(this.addresses.get(r)!)),
+            )
+            .map(([r]) => this.labels.get(r) ?? "");
+    return {
+      element: this.labels.get(own) ?? "",
+      multiLine: this.multiLine.has(own),
+      window: window === undefined ? "" : (this.labels.get(this.refFor(window)) ?? ""),
+      text: inWindow.filter(Boolean).join("\n"),
+    };
+  }
+
+  /** Presses a key combo, into an element when given, else into whatever has the focus. */
+  async press(keys: string, ref?: string): Promise<string> {
     const target = ref ? await this.resolve(ref) : undefined;
-    if (/^(shift\s*\+\s*)?delete$/i.test(keys.trim())) {
-      const at =
-        target?.info ??
-        (this.focused && (await this.atspi.info(this.focused).catch(() => undefined)));
-      if (at && (await this.holdsItems(at))) {
-        if (!approval?.granted)
-          throw new ActionError(
-            `${keys} here deletes what is selected. Call desktop_confirm first, with what it deletes.`,
-          );
-        approval.granted = false;
-      }
-    }
     if (target) await this.focus(target.address);
     try {
       await this.atspi.key(keys);
@@ -690,6 +746,8 @@ export class DesktopSession {
     if (info.columns) node.columns = info.columns;
     this.labels.set(node.ref!, `${roleOf(node)}${node.name ? ` "${node.name}"` : ""}`);
     this.windowOf.set(node.ref!, window);
+    if (info.states.has("multi-line")) this.multiLine.add(node.ref!);
+    else this.multiLine.delete(node.ref!);
     if (shallow) return node;
     // A spreadsheet has more cells than can be read: the ones on the screen with something in them.
     if (info.columns && info.childCount > CHILD_LIMIT && info.states.has("manages-descendants"))
@@ -896,11 +954,7 @@ export class DesktopSession {
   }
 
   private async resolve(ref: string): Promise<{ address: Address; info: Info }> {
-    const clean = ref
-      .trim()
-      .replace(/^\[|\]$/g, "")
-      .replace(/^ref=/, "");
-    const address = this.addresses.get(clean);
+    const address = this.addresses.get(cleanRef(ref));
     if (!address)
       throw new ActionError(
         `There is no element ${ref}. Observe the desktop again for fresh refs.`,
@@ -968,6 +1022,14 @@ export class DesktopSession {
     }
     return undefined;
   }
+}
+
+/** A ref as the model may write it, like `[e12]` or `ref=e12`, as `e12`. */
+function cleanRef(ref: string): string {
+  return ref
+    .trim()
+    .replace(/^\[|\]$/g, "")
+    .replace(/^ref=/, "");
 }
 
 function describe(info: Info, ref: string): string {

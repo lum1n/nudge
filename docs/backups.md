@@ -1,0 +1,13 @@
+# Data and backups
+
+Each assistant keeps its data in one SQLite file, by default `data/<name>.sqlite` next to the config.
+
+A database Nudge makes is encrypted from the start, under a key of its own in `<database>.key`, readable only by you. One from before that is not; to encrypt it, stop `nudge serve` and run `nudge db encrypt`. It encrypts the file in place (SQLite3 Multiple Ciphers) and writes its key file, or uses `NUDGE_DB_KEY` (32 random bytes, base64: `openssl rand -base64 32`) when that is set. With `NUDGE_DB_KEY` set, a new database is created encrypted. `nudge db` shows each database's state and `nudge db decrypt` undoes it. Like the other keys, this protects copies of the database and backups, not a host where someone can also read the key. Losing the key loses the data, so keep a copy of the key somewhere other than the database's backups.
+
+## Backups
+
+`nudge backup --to <dir>` writes one encrypted file with every assistant's database, its key file, the extensions' data (their secrets included), the push keys and `nudge.json`. It is safe while `nudge serve` runs: each database is copied as of one moment, and an encrypted one stays encrypted. With `"backup": { "dir": "/mnt/usb/nudge", "everyHours": 24, "keep": 14 }` in `nudge.json`, `nudge serve` makes one on its own every day and keeps the last 14. `nudge backup` alone then writes there too.
+
+The backup key is `NUDGE_BACKUP_KEY` (32 random bytes, base64) or the file `nudge-backup.key` beside the config (`backup.keyFile` moves it). The first `nudge backup` makes the file if neither exists. That one key opens every backup, so keep a copy away from the machine and the backups.
+
+To restore, unpack into an empty directory and start Nudge there: `nudge restore <file> --to <dir>`, then `nudge serve -c <dir>/nudge.json`. Every file is checked against its hash, and a wrong key or a damaged file is refused. For copies off the machine, set one under Settings → Backups in the web app, or add `"remote": { "type": "s3", "endpoint": "https://s3.eu-north-1.amazonaws.com", "bucket": "…", "prefix": "nudge/" }` (any S3-compatible service; `region` when the endpoint doesn't say it) or `"remote": { "type": "webdav", "url": "https://cloud.example/remote.php/dav/files/me/nudge/" }` to `backup`, with the access key or user name and password in `NUDGE_BACKUP_REMOTE_USER` and `NUDGE_BACKUP_REMOTE_SECRET`. Each backup is uploaded once made, and the last `keep` are kept there too. Only the encrypted file leaves, and a failed upload leaves the local copy; `nudge doctor` says how old the newest is in each place.

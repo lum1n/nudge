@@ -1,11 +1,20 @@
-import type { ExtensionSetup, RoomKind, TokenInfo } from "@nudge/client";
+import type {
+  BackupState,
+  ExtensionSetup,
+  RoomKind,
+  ServerAssistant,
+  SetBackupRemoteRequest,
+  TokenInfo,
+} from "@nudge/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { type ReactNode, useEffect, useState } from "react";
-import { ApiError, clientFor, useRoomList } from "../../api.ts";
+import { type FormEvent, type ReactNode, useEffect, useState } from "react";
+import { ApiError, asOwner, clientFor, serverApi, signInToServer, useRoomList } from "../../api.ts";
 import { type Appearance, lookOf } from "../../avatar/appearance.ts";
 import { Avatar } from "../../avatar/Avatar.tsx";
 import { LookPicker } from "../../avatar/LookPicker.tsx";
+import { invite, pairAnotherDevice, type Pairing, PairingCard } from "../../pairing.tsx";
+import { BUDGET_DEFAULTS, type BudgetDraft, budgetDraftOf, budgetOf } from "../../budget.ts";
 import { meQuery } from "../../queries.ts";
 import { ObjectFields, RoomsContext, type Schema, withoutDefaults } from "../../schema-form.tsx";
 
@@ -34,7 +43,10 @@ function draftOf(setup: ExtensionSetup): Draft {
   };
 }
 
-/** What an admin sets up for everyone: how the robot looks, the extensions, who is signed in. */
+/**
+ * What an admin sets up for everyone: how the robot looks, who uses it and is signed in, what it
+ * may spend, the extensions.
+ */
 function Settings() {
   const { assistant } = Route.useParams();
   const me = useQuery(meQuery(assistant));
@@ -43,9 +55,294 @@ function Settings() {
   return (
     <>
       <Robot />
+      <People />
+      <Budget />
       <Clients />
+      <Backups />
       <Extensions />
     </>
+  );
+}
+
+/** A remote target as the form edits it, credentials included. */
+type RemoteDraft = {
+  type: "s3" | "webdav";
+  endpoint: string;
+  bucket: string;
+  region: string;
+  prefix: string;
+  url: string;
+  user: string;
+  secret: string;
+};
+
+function remoteDraft(state: BackupState | undefined): RemoteDraft {
+  const remote = state?.remote;
+  return {
+    type: remote?.type ?? "s3",
+    endpoint: remote?.type === "s3" ? remote.endpoint : "",
+    bucket: remote?.type === "s3" ? remote.bucket : "",
+    region: remote?.type === "s3" ? (remote.region ?? "") : "",
+    prefix: remote?.type === "s3" ? (remote.prefix ?? "") : "",
+    url: remote?.type === "webdav" ? remote.url : "",
+    user: state?.credentials?.user ?? "",
+    secret: "",
+  };
+}
+
+/** What the server is sent for a draft: empty fields left out, so their defaults apply. */
+function remoteRequest(draft: RemoteDraft): SetBackupRemoteRequest {
+  const credentials = {
+    ...(draft.user.trim() === "" ? {} : { user: draft.user.trim() }),
+    ...(draft.secret === "" ? {} : { secret: draft.secret }),
+  };
+  if (draft.type === "webdav") return { type: "webdav", url: draft.url.trim(), ...credentials };
+  return {
+    type: "s3",
+    endpoint: draft.endpoint.trim(),
+    bucket: draft.bucket.trim(),
+    ...(draft.region.trim() === "" ? {} : { region: draft.region.trim() }),
+    ...(draft.prefix.trim() === "" ? {} : { prefix: draft.prefix.trim() }),
+    ...credentials,
+  };
+}
+
+/**
+ * The server's backups (ADR 8), for its owners: how they go, and where they are copied off the
+ * server. They are encrypted before they leave, so the bucket or folder only holds ciphertext.
+ */
+function Backups() {
+  const { assistant } = Route.useParams();
+  const queryClient = useQueryClient();
+  const key = ["server", "backups"];
+  const state = useQuery({ queryKey: key, queryFn: () => serverApi().backups(), retry: false });
+  const [draft, setDraft] = useState<RemoteDraft>();
+  const [busy, setBusy] = useState<string>();
+  const [error, setError] = useState<string>();
+  const [note, setNote] = useState<string>();
+
+  useEffect(() => {
+    if (state.data !== undefined) setDraft(remoteDraft(state.data));
+  }, [state.data]);
+
+  async function run(what: string, work: () => Promise<string | undefined>) {
+    setBusy(what);
+    setError(undefined);
+    setNote(undefined);
+    try {
+      setNote(await work());
+    } catch (caught) {
+      setError((caught as Error).message);
+    } finally {
+      setBusy(undefined);
+    }
+  }
+
+  const status = state.error instanceof ApiError ? state.error.status : undefined;
+  // Not the server's own backups to show: nudge-server's API without them, or another host.
+  if (status === 404) return null;
+  const intro = (
+    <div>
+      <h2 className="text-lg font-medium">Backups</h2>
+      <p className="text-sm text-stone-600">
+        The whole server, encrypted with its backup key. A copy on another machine survives the
+        server's disk: an S3-compatible bucket (AWS, Backblaze B2, Cloudflare R2, MinIO) or a WebDAV
+        folder (Nextcloud, a NAS). Only encrypted files leave the server.
+      </p>
+    </div>
+  );
+  if (status === 401 || status === 403)
+    return (
+      <section className="mx-auto flex max-w-3xl flex-col gap-3 p-3 sm:p-4">
+        {intro}
+        <p className="text-sm text-stone-600">
+          Only the server's owners can see them. If you own it, sign in to the server from here.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={busy !== undefined}
+            onClick={() =>
+              void run("sign-in", async () => {
+                await signInToServer(assistant);
+                await queryClient.invalidateQueries({ queryKey: key });
+                return undefined;
+              })
+            }
+            className="rounded bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+          >
+            {busy === "sign-in" ? "Signing in…" : "Sign in as an owner"}
+          </button>
+          {error !== undefined && <span className="text-sm text-red-700">{error}</span>}
+        </div>
+      </section>
+    );
+  if (state.error) return <Page>{state.error.message}</Page>;
+  if (state.data === undefined || draft === undefined) return <Page>Loading…</Page>;
+
+  const backups = state.data;
+  const saved = (next: BackupState) => {
+    queryClient.setQueryData(key, next);
+    setDraft(remoteDraft(next));
+  };
+  const field = (
+    name: keyof RemoteDraft,
+    label: string,
+    options: { placeholder?: string; type?: string; hint?: string } = {},
+  ) => (
+    <label className="flex flex-col gap-1 text-sm">
+      <span className="font-medium">{label}</span>
+      <input
+        type={options.type ?? "text"}
+        value={draft[name]}
+        placeholder={options.placeholder}
+        autoComplete={options.type === "password" ? "new-password" : "off"}
+        onChange={(event) => setDraft({ ...draft, [name]: event.target.value })}
+        className="rounded border border-stone-300 bg-white px-3 py-2"
+      />
+      {options.hint !== undefined && <span className="text-stone-500">{options.hint}</span>}
+    </label>
+  );
+  const keptSecret = backups.credentials !== undefined && draft.type === backups.remote?.type;
+
+  return (
+    <section className="mx-auto flex max-w-3xl flex-col gap-3 p-3 sm:p-4">
+      {intro}
+      <div className="flex flex-col gap-1 rounded border border-stone-200 bg-white p-3 text-sm">
+        <p>
+          {backups.on
+            ? `Every ${backups.everyHours === 24 ? "day" : `${backups.everyHours} hours`}, the last ${backups.keep} kept, in ${backups.dir}.`
+            : "Off: this server makes no backups of its own. Setting a copy below turns them on, daily."}
+        </p>
+        {backups.on && (
+          <p className="text-stone-600">
+            {backups.lastBackupAt === undefined
+              ? "None made yet."
+              : `The newest was made ${ago(backups.lastBackupAt)}.`}
+            {backups.remote !== undefined &&
+              (backups.lastUploadAt === undefined
+                ? " None uploaded yet."
+                : ` Last uploaded ${ago(backups.lastUploadAt)}.`)}
+          </p>
+        )}
+        {backups.lastError !== undefined && (
+          <p className="text-red-700">
+            The last upload failed{backups.lastErrorAt ? ` ${ago(backups.lastErrorAt)}` : ""}:{" "}
+            {backups.lastError}
+          </p>
+        )}
+      </div>
+      <form
+        className="flex flex-col gap-3 rounded border border-stone-200 bg-white p-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void run("save", async () => {
+            saved(await serverApi().setBackupRemote(remoteRequest(draft)));
+            return "Saved: the server wrote a test file there and deleted it again.";
+          });
+        }}
+      >
+        <fieldset className="flex flex-wrap gap-4 text-sm">
+          <legend className="mb-1 font-medium">Copy each backup to</legend>
+          {(
+            [
+              ["s3", "An S3-compatible bucket"],
+              ["webdav", "A WebDAV folder"],
+            ] as const
+          ).map(([type, label]) => (
+            <label key={type} className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="remote-type"
+                checked={draft.type === type}
+                onChange={() => setDraft({ ...draft, type })}
+              />
+              {label}
+            </label>
+          ))}
+        </fieldset>
+        {draft.type === "s3" ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {field("endpoint", "Endpoint", {
+              placeholder: "https://s3.eu-north-1.amazonaws.com",
+            })}
+            {field("bucket", "Bucket")}
+            {field("region", "Region", { hint: "Optional: us-east-1 unless the endpoint says" })}
+            {field("prefix", "Folder in the bucket", { placeholder: "nudge/" })}
+            {field("user", "Access key id")}
+            {field("secret", "Secret access key", {
+              type: "password",
+              ...(keptSecret ? { placeholder: "Kept; type to change it" } : {}),
+            })}
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              {field("url", "Folder address", {
+                placeholder: "https://cloud.example/remote.php/dav/files/me/nudge/",
+              })}
+            </div>
+            {field("user", "User name")}
+            {field("secret", "Password", {
+              type: "password",
+              hint: "An app password, if the service has them",
+              ...(keptSecret ? { placeholder: "Kept; type to change it" } : {}),
+            })}
+          </div>
+        )}
+        {backups.credentials?.from === "env" && (
+          <p className="text-sm text-stone-600">
+            The server takes its credentials from NUDGE_BACKUP_REMOTE_USER and
+            NUDGE_BACKUP_REMOTE_SECRET, which win over what is set here.
+          </p>
+        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="submit"
+            disabled={busy !== undefined}
+            className="rounded bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+          >
+            {busy === "save" ? "Checking…" : "Check and save"}
+          </button>
+          {backups.remote !== undefined && (
+            <button
+              type="button"
+              disabled={busy !== undefined}
+              onClick={() =>
+                void run("remove", async () => {
+                  saved(await serverApi().removeBackupRemote());
+                  return "Backups stay on the server only. What was copied there is left there.";
+                })
+              }
+              className="rounded border border-stone-300 px-3 py-1.5 text-sm disabled:opacity-50"
+            >
+              Stop copying
+            </button>
+          )}
+          {backups.on && (
+            <button
+              type="button"
+              disabled={busy !== undefined}
+              onClick={() =>
+                void run("now", async () => {
+                  const made = await serverApi().backUpNow();
+                  await queryClient.invalidateQueries({ queryKey: key });
+                  if (made.uploadError !== undefined) throw new Error(made.uploadError);
+                  return backups.remote === undefined
+                    ? `Made ${made.file}.`
+                    : `Made ${made.file} and uploaded it.`;
+                })
+              }
+              className="rounded border border-stone-300 px-3 py-1.5 text-sm disabled:opacity-50"
+            >
+              {busy === "now" ? "Backing up…" : "Back up now"}
+            </button>
+          )}
+        </div>
+        {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
+        {note !== undefined && <p className="text-sm text-emerald-700">{note}</p>}
+      </form>
+    </section>
   );
 }
 
@@ -117,6 +414,246 @@ function Robot() {
           </div>
         </div>
       </div>
+    </section>
+  );
+}
+
+/**
+ * Pairing codes, each with its QR code for the apps: for someone new, made a player here first, or
+ * for another device of the admin's own.
+ */
+function People() {
+  const { assistant } = Route.useParams();
+  const me = useQuery(meQuery(assistant));
+  const queryClient = useQueryClient();
+  const [name, setName] = useState("");
+  const [pairing, setPairing] = useState<Pairing>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+
+  async function make(pair: () => Promise<Pairing>) {
+    setBusy(true);
+    setError(undefined);
+    try {
+      setPairing(await pair());
+    } catch (caught) {
+      setError((caught as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onInvite(event: FormEvent) {
+    event.preventDefault();
+    void make(async () => {
+      const made = await invite(clientFor(assistant).api, name);
+      setName("");
+      await queryClient.invalidateQueries({ queryKey: [assistant, "players"] });
+      return made;
+    });
+  }
+
+  function onAnotherDevice() {
+    const self = me.data?.player;
+    if (self !== undefined) void make(() => pairAnotherDevice(clientFor(assistant).api, self));
+  }
+
+  return (
+    <section className="mx-auto flex max-w-3xl flex-col gap-3 p-3 sm:p-4">
+      <div>
+        <h2 className="text-lg font-medium">People and devices</h2>
+        <p className="text-sm text-stone-600">
+          Invite someone, or sign in another device of yours: either gets a pairing code and a QR
+          code for the Nudge app.
+        </p>
+      </div>
+      <form onSubmit={onInvite} className="flex flex-wrap gap-2">
+        <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="Their name"
+          aria-label="Their name"
+          className="min-w-0 flex-1 rounded border border-stone-300 bg-white px-3 py-1.5"
+        />
+        <button
+          type="submit"
+          disabled={busy || name.trim() === ""}
+          className="rounded bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-40"
+        >
+          Invite someone
+        </button>
+        <button
+          type="button"
+          disabled={busy || me.data === undefined}
+          onClick={onAnotherDevice}
+          className="rounded border border-stone-300 px-3 py-1.5 text-sm disabled:opacity-40"
+        >
+          Sign in another device
+        </button>
+      </form>
+      {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
+      {pairing !== undefined && (
+        <PairingCard pairing={pairing} onDone={() => setPairing(undefined)} />
+      )}
+    </section>
+  );
+}
+
+const BUDGET_FIELDS: { key: keyof BudgetDraft; label: string; hint: string; unit: string }[] = [
+  {
+    key: "monthlyUsd",
+    label: "Monthly limit",
+    hint: "For everyone together. Empty: no limit.",
+    unit: "$",
+  },
+  {
+    key: "perPlayerUsd",
+    label: "Limit per person",
+    hint: "A month, for each person. Empty: no limit.",
+    unit: "$",
+  },
+  {
+    key: "warnAtPercent",
+    label: "Warn at",
+    hint: `Of a limit, when admins hear of it. Empty: ${BUDGET_DEFAULTS.warnAtPercent}.`,
+    unit: "%",
+  },
+  {
+    key: "warnUsd",
+    label: "Without a monthly limit, warn at",
+    hint: `What spend a month admins hear of. Empty: $${BUDGET_DEFAULTS.warnUsd}.`,
+    unit: "$",
+  },
+];
+
+/**
+ * What the assistant may spend on models a month. It is the server's setting, so only its owners
+ * change it: through the server's own API, signed in with this device's server token or the
+ * player's own.
+ */
+function Budget() {
+  const { assistant } = Route.useParams();
+  const me = useQuery(meQuery(assistant));
+  const queryClient = useQueryClient();
+  const key = [assistant, "server-assistant"];
+  const settings = useQuery({
+    queryKey: key,
+    queryFn: () =>
+      asOwner(assistant, async (api) => {
+        const found = (await api.assistants()).find((item) => item.name === assistant);
+        if (found === undefined) throw new Error(`The server has no assistant "${assistant}"`);
+        return found;
+      }),
+    enabled: me.data?.admin === true,
+    retry: false,
+  });
+  const [draft, setDraft] = useState<BudgetDraft>();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string>();
+  const [saved, setSaved] = useState(false);
+
+  const savedDraft = budgetDraftOf(settings.data?.budget);
+  const shown = draft ?? savedDraft;
+  const dirty = draft !== undefined && stable(draft) !== stable(savedDraft);
+
+  async function save() {
+    const parsed = budgetOf(shown);
+    if ("error" in parsed) {
+      setError(parsed.error);
+      return;
+    }
+    setSaving(true);
+    setError(undefined);
+    try {
+      const next = await asOwner(assistant, (api) =>
+        api.updateAssistant(assistant, { budget: parsed.budget }),
+      );
+      queryClient.setQueryData<ServerAssistant>(key, next);
+      setDraft(undefined);
+      setSaved(true);
+    } catch (caught) {
+      setError((caught as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="mx-auto flex max-w-3xl flex-col gap-3 p-3 sm:p-4">
+      <div>
+        <h2 className="text-lg font-medium">Budget</h2>
+        <p className="text-sm text-stone-600">
+          What the assistant may spend on models a month, in US dollars. Past a limit it stops
+          answering until the month is over. Saving reopens the assistant, so apps connect again.
+        </p>
+      </div>
+      {settings.error ? (
+        <p className="text-sm text-stone-600">
+          {settings.error instanceof ApiError && settings.error.status === 403
+            ? "Only an owner of this server can change the budget."
+            : settings.error instanceof ApiError && settings.error.status === 404
+              ? "This server can't change the budget from the web. Run it with nudge serve."
+              : settings.error.message}
+        </p>
+      ) : settings.data === undefined ? (
+        <p className="text-sm text-stone-600">Loading…</p>
+      ) : (
+        <div className="flex flex-col gap-3 rounded border border-stone-200 bg-white p-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {BUDGET_FIELDS.map((field) => (
+              <label key={field.key} className="flex flex-col gap-1 text-sm">
+                <span className="font-medium">{field.label}</span>
+                <span className="flex items-center gap-1">
+                  {field.unit === "$" && <span className="text-stone-500">$</span>}
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    step="any"
+                    max={field.unit === "%" ? 100 : undefined}
+                    value={shown[field.key]}
+                    onChange={(event) => {
+                      setSaved(false);
+                      setError(undefined);
+                      setDraft({ ...shown, [field.key]: event.target.value });
+                    }}
+                    className="w-32 rounded border border-stone-300 px-2 py-1"
+                  />
+                  {field.unit === "%" && <span className="text-stone-500">%</span>}
+                </span>
+                <span className="text-xs text-stone-500">{field.hint}</span>
+              </label>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={!dirty || saving}
+              onClick={() => void save()}
+              className="rounded bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-40"
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+            {dirty && (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => {
+                  setDraft(undefined);
+                  setError(undefined);
+                }}
+                className="rounded border border-stone-300 px-3 py-1.5 text-sm"
+              >
+                Discard
+              </button>
+            )}
+            {error !== undefined && <span className="text-sm text-red-700">{error}</span>}
+            {saved && !dirty && error === undefined && (
+              <span className="text-sm text-emerald-700">Saved.</span>
+            )}
+          </div>
+        </div>
+      )}
     </section>
   );
 }

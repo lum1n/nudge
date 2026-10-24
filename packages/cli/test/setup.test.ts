@@ -180,6 +180,14 @@ describe("what setup offers", () => {
     expect(slugOf("x".repeat(60))).toHaveLength(40);
   });
 
+  it("spells out the letters NFKD leaves whole", () => {
+    expect(slugOf("Bjørn")).toBe("bjorn");
+    expect(slugOf("Æsa")).toBe("aesa");
+    expect(slugOf("ØRJAN BLÅBÆR")).toBe("orjan-blabaer");
+    expect(slugOf("Straße STRAẞE")).toBe("strasse-strasse");
+    expect(slugOf("Đorđe Łukasz Þóra")).toBe("dorde-lukasz-thora");
+  });
+
   it("offers Anthropic first, recommending the default model", () => {
     const [first, ...rest] = offeredProviders();
     expect(first).toMatchObject({ id: "anthropic", recommended: DEFAULT_MODEL.modelId });

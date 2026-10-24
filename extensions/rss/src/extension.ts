@@ -242,7 +242,7 @@ export function rssExtension(options: RssOptions = {}) {
 
       return {
         tools: [add, readsOnly(list), remove, returnsUntrusted(readsOnly(read))],
-        // The news: places and names in stories stay readable, as in a web search (ADR 14).
+        // The news: places and names in stories stay readable, as in a web search (ADR 22).
         publicTools: [read.name],
         sections: [
           section("rss", async (input, context) => {

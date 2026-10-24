@@ -6,8 +6,15 @@ import { fileURLToPath } from "node:url";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { fauxProvider } from "@earendil-works/pi-ai/providers/faux";
-import { Assistants, openAssistant, ServerIdentity, ServerKeys, ServerOwners } from "@nudge/core";
-import { ServerAssistant } from "@nudge/protocol";
+import {
+  Assistants,
+  BackupError,
+  openAssistant,
+  ServerIdentity,
+  ServerKeys,
+  ServerOwners,
+} from "@nudge/core";
+import { type BackupState, ServerAssistant } from "@nudge/protocol";
 import type { Hono } from "hono";
 import { Value } from "typebox/value";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -337,6 +344,64 @@ describe("the server API", () => {
     ).toEqual({ signingKey: "sign", encryptionKey: "seal" });
     // They keep the server when every assistant here goes.
     expect(control.owners.wouldLeaveNoOwner("robin")).toBe(false);
+  });
+
+  it("shows the backups and sets where they are copied, for owners", async () => {
+    const token = await signIn();
+    expect((await call("GET", "/server/backups", { token })).status).toBe(404);
+    const asked: unknown[] = [];
+    let state: BackupState = { on: true, dir: "/data/backups", everyHours: 24, keep: 14 };
+    app = createApp({
+      assistants: assistants.running,
+      server: {
+        ...control,
+        backups: {
+          state: async () => state,
+          setRemote: async (change) => {
+            asked.push(change);
+            if (change.type === "webdav" && change.secret === "wrong")
+              throw new BackupError("Nudge couldn't write there: PUT /dav/: 401");
+            const { user, secret: _, test: __, ...remote } = change;
+            state = { ...state, remote, credentials: { user: user!, from: "server" } };
+            return state;
+          },
+          removeRemote: async () => {
+            const { remote: _, credentials: __, ...rest } = state;
+            return (state = rest);
+          },
+          backUpNow: async () => ({ file: "nudge-20261024T100000Z.nudgebackup" }),
+        },
+      },
+    });
+    expect((await call("GET", "/server/backups")).status).toBe(401);
+    expect((await call("GET", "/server/backups", { token })).json).toEqual(state);
+    const target = { type: "s3", endpoint: "https://s3.example", bucket: "vault" };
+    const set = await call("PUT", "/server/backups/remote", {
+      token,
+      body: { ...target, user: "AKID", secret: "shh" },
+    });
+    expect(set.status).toBe(200);
+    expect(set.json).toMatchObject({ remote: target, credentials: { user: "AKID" } });
+    // The secret never comes back.
+    expect(JSON.stringify(set.json)).not.toContain("shh");
+    expect(
+      (await call("PUT", "/server/backups/remote", { token, body: { type: "ftp", url: "x" } }))
+        .status,
+    ).toBe(400);
+    const refused = await call("PUT", "/server/backups/remote", {
+      token,
+      body: { type: "webdav", url: "https://dav.example/", user: "ann", secret: "wrong" },
+    });
+    expect(refused).toEqual({
+      status: 400,
+      json: { error: "Nudge couldn't write there: PUT /dav/: 401" },
+    });
+    expect((await call("POST", "/server/backups", { token })).json).toEqual({
+      file: "nudge-20261024T100000Z.nudgebackup",
+    });
+    const removed = await call("DELETE", "/server/backups/remote", { token });
+    expect(removed.json.remote).toBeUndefined();
+    expect(asked).toHaveLength(2);
   });
 
   it("turns Wired on, or joins, under the name an owner picked", async () => {

@@ -27,7 +27,7 @@ import type { PiiDetector } from "../privacy/detectors.ts";
 import { DeepUnavailable } from "../privacy/deep/detector.ts";
 import { mapStrings, redactContext, rehydrateMessage } from "../privacy/redact.ts";
 import { withoutPlaceholders } from "../privacy/tool-values.ts";
-import type { Vault, VaultEntry } from "../privacy/vault.ts";
+import { SpellingsSeen, type Vault, type VaultEntry } from "../privacy/vault.ts";
 import type { ModelFailure } from "./model-errors.ts";
 
 export type RedactionOptions = {
@@ -98,7 +98,7 @@ export class RedactingModels implements Models {
 
   /**
    * Has the local model read a request first, so what it finds is in the vault before redaction
-   * (ADR 14). Throws `DeepUnavailable` when the request must not go out without it.
+   * (ADR 22). Throws `DeepUnavailable` when the request must not go out without it.
    */
   get scan(): Scan {
     return this.root?.scan ?? this.ownScan;
@@ -169,14 +169,14 @@ export class RedactingModels implements Models {
     context: Context,
     options?: ModelsApiStreamOptions<TApi>,
   ) {
-    return this.relay(model, async () =>
-      this.inner.stream(model, await this.prepare(model, context), options),
+    return this.relay(model, async (seen) =>
+      this.inner.stream(model, await this.prepare(model, context, seen), options),
     );
   }
 
   streamSimple(model: Model<Api>, context: Context, options?: ModelsSimpleStreamOptions) {
-    return this.relay(model, async () =>
-      this.inner.streamSimple(model, await this.prepare(model, context), options),
+    return this.relay(model, async (seen) =>
+      this.inner.streamSimple(model, await this.prepare(model, context, seen), options),
     );
   }
 
@@ -209,7 +209,7 @@ export class RedactingModels implements Models {
       mapStrings(question.criteria, collect);
     }
     await this.scanFirst(texts);
-    const redact = (text: string) => this.vault.redact(text, this.detectors);
+    const redact = (text: string) => this.vault.redactForModel(text, this.detectors);
     const redacted: ClassifierContext = {
       ...context,
       state: mapStrings(context.state, redact),
@@ -243,7 +243,7 @@ export class RedactingModels implements Models {
     const redacted: ImagesContext = {
       input: context.input.map((block) =>
         block.type === "text"
-          ? { ...block, text: this.vault.redact(block.text, this.detectors) }
+          ? { ...block, text: this.vault.redactForModel(block.text, this.detectors) }
           : block,
       ),
     };
@@ -307,12 +307,16 @@ export class RedactingModels implements Models {
   cancelDeferred: Models["cancelDeferred"] = (model, handle, options) =>
     this.inner.cancelDeferred(model, handle, options);
 
-  private async prepare(model: Model<Api>, context: Context): Promise<Context> {
+  private async prepare(
+    model: Model<Api>,
+    context: Context,
+    seen: SpellingsSeen,
+  ): Promise<Context> {
     this.checkAllowed();
     let redacted: Context;
     try {
       await this.scanFirst(context);
-      redacted = redactContext(withDeclaredTools(context), this.vault, this.detectors);
+      redacted = redactContext(withDeclaredTools(context), this.vault, this.detectors, seen);
       await this.flush();
     } catch (error) {
       throw error instanceof RequestRefused ? error : new RedactionFailed(error);
@@ -322,22 +326,24 @@ export class RedactingModels implements Models {
   }
 
   /**
-   * Runs `start` and relays its stream with values put back; a failure to start becomes an error
-   * event, with the provider's message, or saying redaction failed when that is what stopped it.
+   * Runs `start` and relays its stream with values put back, and the spellings the request had
+   * (`SpellingsSeen`); a failure to start becomes an error event, with the provider's message, or
+   * saying redaction failed when that is what stopped it.
    */
   private relay(
     model: Model<Api>,
-    start: () => Promise<AssistantMessageEventStream>,
+    start: (seen: SpellingsSeen) => Promise<AssistantMessageEventStream>,
   ): AssistantMessageEventStream {
     const out = createAssistantMessageEventStream();
+    const seen = new SpellingsSeen({ mainPlaceholder: (p) => this.vault.mainPlaceholder(p) });
     void (async () => {
       try {
-        const inner = await start();
+        const inner = await start(seen);
         const shown = new Map<number, string>();
         for await (const event of inner) {
           if (event.type === "error" && event.reason === "error")
             this.failed(model, event.error.errorMessage ?? "The provider gave no reason");
-          out.push(this.rehydrateEvent(event, shown));
+          out.push(this.rehydrateEvent(event, shown, seen));
         }
       } catch (error) {
         if (!(error instanceof RequestRefused)) this.failed(model, messageOf(error));
@@ -359,9 +365,12 @@ export class RedactingModels implements Models {
   private rehydrateEvent(
     event: AssistantMessageEvent,
     shown: Map<number, string>,
+    seen: SpellingsSeen,
   ): AssistantMessageEvent {
-    // Placeholders stay; only one cut off at the end of the text so far is held back.
-    const vault = this.values;
+    // Placeholders stay, as the spellings the request had; only one cut off at the end of the
+    // text so far is held back.
+    const values = this.values;
+    const vault: Rehydrator = { rehydrate: (text) => values.rehydrate(seen.restore(text)) };
     switch (event.type) {
       case "done":
         return { ...event, message: rehydrateMessage(event.message, vault) };

@@ -11,7 +11,7 @@ import { LiveDoc, UsageDoc } from "@earendil-works/pi-durable";
 import { createNudge, LOBBY, type Nudge } from "@nudge/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import browser, { SiteNotesDoc } from "../src/extension.ts";
-import { fakeBrowser } from "./fake-browser.ts";
+import { fakeBrowser, target } from "./fake-browser.ts";
 
 const context = BACKGROUND_CONTEXT;
 const EMAIL = "ola.nordmann@example.no";
@@ -19,6 +19,8 @@ const EMAIL = "ola.nordmann@example.no";
 const fake = fakeBrowser(
   (n) =>
     `URL: https://example.no/${n}\n\n- heading "Kontakt" [level=1]\n- text: Skriv til ${EMAIL}`,
+  // The contact form's button, which needs the room's approval.
+  { e9: target({ name: "Send" }) },
 );
 const profiles: string[] = [];
 vi.mock("../src/pool.ts", () => ({
@@ -129,9 +131,10 @@ describe("browser extension", () => {
         }),
       ),
       reply(
-        fauxAssistantMessage([fauxToolCall("browser_confirm", { action })], {
-          stopReason: "toolUse",
-        }),
+        fauxAssistantMessage(
+          [fauxToolCall("browser_confirm", { action, tool: "browser_click", ref: "e9" })],
+          { stopReason: "toolUse" },
+        ),
       ),
       reply(fauxAssistantMessage([fauxText("It waits for your approval.")])),
       // Approved: the worker again, told it may send, then the room hears how it went.
@@ -152,6 +155,10 @@ describe("browser extension", () => {
       kind: "confirm",
       status: "pending",
       summary: `In the browser: ${action}`,
+      // Approving it lets through that click on that button, and nothing else.
+      payload: {
+        step: { tool: "browser_click", host: "example.no", element: 'button[button] "Send"' },
+      },
     });
     // The room's model learns it waits; the chat shows Approve and Deny through `approval`.
     expect(json(requests[2])).toContain(`approval ${pending!.id}`);

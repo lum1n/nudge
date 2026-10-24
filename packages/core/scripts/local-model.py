@@ -3,7 +3,7 @@
 # dependencies = ["onnx==1.23.2", "onnxruntime==1.31.0", "onnx-ir==1.1.0", "numpy==2.5.4"]
 # ///
 """
-Makes the local name finder's files (ADR 14) from urchade/gliner_multi-v2.1 as onnx-community
+Makes the local name finder's files (ADR 22) from urchade/gliner_multi-v2.1 as onnx-community
 exports it, so a server holds about 650 MB in memory instead of 1.7 GB:
 
 - The vocabulary keeps only pieces in Latin script (135k of 250k), with the embedding rows and the

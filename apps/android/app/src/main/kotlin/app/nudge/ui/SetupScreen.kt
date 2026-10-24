@@ -375,9 +375,18 @@ private fun Choice(selected: Boolean, label: String, detail: String?, choose: ()
     }
 }
 
-/** An assistant's name as its address has it: lower case, dashes for the rest. */
+/** Letters NFKD leaves whole, spelled the way they are in plain ASCII. */
+private val SPELLED = mapOf(
+    'æ' to "ae", 'Æ' to "ae", 'ø' to "o", 'Ø' to "o", 'ß' to "ss", 'ẞ' to "ss",
+    'đ' to "d", 'Đ' to "d", 'ł' to "l", 'Ł' to "l", 'þ' to "th", 'Þ' to "th",
+)
+
+/**
+ * An assistant's name as its address has it: lower case, dashes for the rest. A copy of the CLI's
+ * (packages/cli/src/commands/setup-offer.ts); keep them giving the same slug.
+ */
 fun slugOf(name: String): String =
-    Normalizer.normalize(name, Normalizer.Form.NFKD)
+    Normalizer.normalize(name.map { SPELLED[it] ?: it.toString() }.joinToString(""), Normalizer.Form.NFKD)
         .replace(Regex("\\p{M}"), "")
         .lowercase()
         .replace(Regex("[^a-z0-9]+"), "-")

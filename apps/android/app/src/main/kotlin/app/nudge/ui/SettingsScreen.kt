@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.PersonAdd
+import androidx.compose.material.icons.outlined.QrCode2
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material3.AlertDialog
@@ -109,6 +110,7 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
     var extensionsOf by remember { mutableStateOf<Session?>(null) }
     var invitesOf by remember { mutableStateOf<Session?>(null) }
     var robotOf by remember { mutableStateOf<Session?>(null) }
+    var peopleOf by remember { mutableStateOf<Session?>(null) }
     val places by model.places.collectAsStateWithLifecycle()
     val administered = places.filter { place ->
         key(place.account.key) { place.me.collectAsStateWithLifecycle().value?.admin == true }
@@ -143,6 +145,11 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
     robotOf?.let { at ->
         BackHandler { robotOf = null }
         RobotScreen(at, close = { robotOf = null })
+        return
+    }
+    peopleOf?.let { at ->
+        BackHandler { peopleOf = null }
+        PeopleScreen(at, close = { peopleOf = null })
         return
     }
     invitesOf?.let { at ->
@@ -338,6 +345,15 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                                 supportingContent = { Text("Turn them on or off and change their settings, for every room") },
                                 trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) },
                             ) { Text("Extensions") }
+                        }
+                        add { shapes ->
+                            SegmentedListItem(
+                                onClick = { peopleOf = at },
+                                shapes = shapes,
+                                leadingContent = { Icon(Icons.Outlined.QrCode2, null) },
+                                supportingContent = { Text("Invite someone, or sign in another device, with a pairing code and QR code") },
+                                trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) },
+                            ) { Text("People and devices") }
                         }
                         // Without federation at home there are no memberships; joined ones have it.
                         if (if (at === session) memberships != null else !at.account.standalone) {

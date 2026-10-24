@@ -12,7 +12,7 @@ import {
 
 export const Route = createFileRoute("/login")({ component: Login });
 
-/** What `nudge pair` prints: two groups of four, dash optional, any case. */
+/** A pairing code, from the apps or `nudge pair`: two groups of four, dash optional, any case. */
 const PAIRING_CODE = /^[0-9a-z]{4}-?[0-9a-z]{4}$/i;
 /** How often the page asks whether the app approved its QR code. */
 const POLL_MS = 2000;
@@ -157,8 +157,8 @@ function Login() {
         {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
       </form>
       <p className="text-sm text-stone-500">
-        Ask the owner for an invite: <code>nudge invite &lt;name&gt;</code> prints a token and a
-        sign-in link, <code>nudge pair &lt;player&gt;</code> a pairing code.
+        New here? Ask an admin to invite you: Invite someone, in the assistant's settings, gives
+        them a pairing code for you. An admin signs in another device of theirs there too.
       </p>
     </main>
   );

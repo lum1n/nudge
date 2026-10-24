@@ -7,7 +7,7 @@ import { createRequire } from "node:module";
 import { basename, delimiter, dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { chromium, type BrowserContext, type Locator, type Page, type Request } from "patchright";
-import { type ActionTarget, inspectTarget } from "./gate.ts";
+import { type ActionTarget, inspectTarget, siteOf } from "./gate.ts";
 import type { SavedLogin } from "./logins.ts";
 import { compactSnapshot, findLines } from "./snapshot.ts";
 
@@ -56,6 +56,8 @@ export class BrowserSession {
   private scrubbed = new Set<string>();
   /** What the user typed into login forms in the live view, by host, not yet saved. */
   private captured = new Map<string, { username?: string; password?: string }>();
+  /** Sites logged in on in this session, with browser_login or in the live view (`siteOf`). */
+  private loggedInSites = new Set<string>();
   private pageListeners = new Set<(page: Page) => void>();
   /** Query parameter names seen per host, in visited URLs and in links on observed pages. */
   private seenParams = new Map<string, Set<string>>();
@@ -233,6 +235,8 @@ export class BrowserSession {
     });
     this.captured.clear();
     for (const login of logins) {
+      // Saved or not, someone logged in there.
+      this.loggedInSites.add(siteOf(login.host));
       this.scrubbed.add(login.password);
       if (login.username) this.scrubbed.add(login.username);
     }
@@ -264,6 +268,7 @@ export class BrowserSession {
           await username.fill(saved.username, { timeout: 4_000 });
         await password.fill(saved.password, { timeout: 4_000 });
         await password.press("Enter");
+        this.loggedInSites.add(siteOf(host));
         return `Filled in the saved login for ${host} and submitted it.`;
       }
       if (saved.username && hasUsername) {
@@ -318,8 +323,12 @@ export class BrowserSession {
    * element that has the keyboard, in whichever frame; undefined when nothing does.
    */
   async inspect(ref?: string): Promise<ActionTarget | undefined> {
-    const read = async (locator: Locator) =>
-      (await locator.evaluate(inspectTarget, undefined, { timeout: 4_000 })) ?? undefined;
+    const read = async (locator: Locator) => {
+      const target =
+        (await locator.evaluate(inspectTarget, undefined, { timeout: 4_000 })) ?? undefined;
+      if (target && !target.loggedIn) target.loggedIn = this.loggedInOn(target.host);
+      return target;
+    };
     if (ref !== undefined) {
       const locator = await this.locate(ref);
       try {
@@ -340,6 +349,16 @@ export class BrowserSession {
       if (target && target.tag !== "iframe" && target.tag !== "frame") found = target;
     }
     return found;
+  }
+
+  /**
+   * Whether the user is logged in on a host's site as far as this session knows: browser_login
+   * or someone in the live view logged in there, or a login is saved for the host. A page without
+   * a log-out control in sight can still be logged in.
+   */
+  loggedInOn(host: string): boolean {
+    if (!host) return false;
+    return this.loggedInSites.has(siteOf(host)) || this.findLogin(host) !== undefined;
   }
 
   private async locate(given: string): Promise<Locator> {

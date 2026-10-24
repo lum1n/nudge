@@ -223,25 +223,39 @@ export async function restoreBackup(options: {
   }
 }
 
+/** A backup's file name, as `createBackup` makes it, here and on a remote target. */
+const BACKUP_NAME = /^nudge-(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z\.nudgebackup$/;
+
+/** The backups among `names`, oldest first. */
+export function backupNames(names: readonly string[]): string[] {
+  return names.filter((name) => BACKUP_NAME.test(name)).sort();
+}
+
+/** When a backup was made, from its name; undefined for a name that isn't one. */
+export function backupTime(name: string): Date | undefined {
+  const match = BACKUP_NAME.exec(name);
+  if (match === null) return undefined;
+  const [, y, mo, d, h, mi, s] = match;
+  return new Date(Date.UTC(+y!, +mo! - 1, +d!, +h!, +mi!, +s!));
+}
+
+/** The names among `names` to delete so only the newest `keep` backups are left. */
+export function backupsBeyond(names: readonly string[], keep: number): string[] {
+  const sorted = backupNames(names);
+  return sorted.slice(0, Math.max(0, sorted.length - keep));
+}
+
 /** Deletes all but the newest `keep` backups in `dir`; returns the ones deleted. */
 export async function pruneBackups(dir: string, keep: number): Promise<string[]> {
-  const names = (await readdir(dir).catch(() => [] as string[]))
-    .filter((name) => /^nudge-\d{8}T\d{6}Z\.nudgebackup$/.test(name))
-    .sort();
-  const old = names.slice(0, Math.max(0, names.length - keep));
+  const old = backupsBeyond(await readdir(dir).catch(() => [] as string[]), keep);
   for (const name of old) await unlink(join(dir, name));
   return old.map((name) => join(dir, name));
 }
 
 /** When the newest backup in `dir` was made, from its name; undefined when there is none. */
 export async function lastBackupAt(dir: string): Promise<Date | undefined> {
-  const names = (await readdir(dir).catch(() => [] as string[]))
-    .filter((name) => /^nudge-\d{8}T\d{6}Z\.nudgebackup$/.test(name))
-    .sort();
-  const last = names.at(-1);
-  if (last === undefined) return undefined;
-  const [, y, mo, d, h, mi, s] = /^nudge-(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z/.exec(last)!;
-  return new Date(Date.UTC(+y!, +mo! - 1, +d!, +h!, +mi!, +s!));
+  const last = backupNames(await readdir(dir).catch(() => [] as string[])).at(-1);
+  return last === undefined ? undefined : backupTime(last);
 }
 
 /**

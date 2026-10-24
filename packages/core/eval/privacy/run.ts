@@ -91,7 +91,7 @@ const LABEL_SETS: Record<string, { labels: string[]; kinds: Record<string, strin
   },
 };
 const MIN_SCORE = 0.25;
-/** Norwegian places are hidden on purpose (ADR 14); keep values that are one are counted apart. */
+/** Norwegian places are hidden on purpose (ADR 22); keep values that are one are counted apart. */
 const PLACES = new Set(NORWEGIAN_PLACES.map((place: string) => place.toLowerCase()));
 const isPlace = (value: string) =>
   PLACES.has(value.toLowerCase().replace(/ (?:stasjon|s)$/, "")) || PLACES.has(value.toLowerCase());
