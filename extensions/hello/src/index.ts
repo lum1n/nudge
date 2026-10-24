@@ -14,6 +14,7 @@ import {
 export default defineNudgeExtension({
   name: "hello",
   version: "0.1.0",
+  apiVersion: "1.0",
   description: "Greets in your words, rolls dice, and keeps licence plates private",
   settings: Type.Object({
     greeting: Type.String({

@@ -15,7 +15,7 @@ import {
   isWiredHost,
   MAX_FACTS,
   newKey,
-  type Nudge,
+  type ExtensionAssistant,
   open,
   parseAddress,
   peek,
@@ -168,6 +168,7 @@ export function federationExtension(options: FederationOptions = {}) {
   return defineNudgeExtension({
     name: "federation",
     version: VERSION,
+    apiVersion: "1.0",
     description:
       "People from other assistants can join this one, and people here can join others. Their profile, and their own memory if they allow it, come from their home.",
     settings: Settings,
@@ -1268,7 +1269,7 @@ class Federation {
     return this.signedAt;
   }
 
-  private nudge(): Nudge {
+  private nudge(): ExtensionAssistant {
     return this.host.assistant();
   }
 

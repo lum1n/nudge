@@ -248,6 +248,7 @@ async function callNested(
 export const scriptsExtension = defineNudgeExtension({
   name: "scripts",
   version: VERSION,
+  apiVersion: "1.0",
   description:
     "Scripts: the assistant saves small programs for checks it repeats, and runs them again without spending a model turn.",
   settings: Settings,

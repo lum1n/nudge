@@ -36,6 +36,7 @@ type ConfirmPayload = { task: string; action: string };
 export default defineNudgeExtension({
   name: "desktop",
   version: "0.1.0",
+  apiVersion: "1.0",
   description: "Use desktop apps on a virtual Linux desktop, read as text by its own model",
   settings: Type.Object({
     /** The apps the agent may start, by name: the program and its arguments. Nothing else runs. */

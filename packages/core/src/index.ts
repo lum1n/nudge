@@ -181,8 +181,10 @@ export { Presence } from "./presence.ts";
 export { describeRoom, formatToday } from "./extensions/builtin.ts";
 export {
   defineNudgeExtension,
+  EXTENSION_API_VERSION,
   ROOMS_SETTING,
   roomsSetting,
+  type ExtensionAssistant,
   type ExtensionDocuments,
   type ExtensionHost,
   type ExtensionInput,

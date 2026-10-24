@@ -79,6 +79,7 @@ export function calendarExtension(options: CalendarOptions = {}) {
   return defineNudgeExtension({
     name: "calendar",
     version: VERSION,
+    apiVersion: "1.0",
     description: "Read CalDAV calendars; add and remove events once someone in the room approves.",
     settings: Settings,
     setup: (host) => {

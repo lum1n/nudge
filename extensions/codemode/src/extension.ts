@@ -98,6 +98,7 @@ export function waitingAware(tool: ToolRegistration): ToolRegistration {
 export default defineNudgeExtension({
   name: "codemode",
   version: VERSION,
+  apiVersion: "1.0",
   description: "Run short scripts that call the room's tools, in a sandbox",
   settings: Type.Object({
     /** Longest a script may run, including the time its tool calls take. */

@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { defineDocFamily } from "@earendil-works/pi-durable";
-import { DirectoryDoc, type Nudge, type RoomEvent } from "@nudge/core";
+import { DirectoryDoc, type ExtensionAssistant, type RoomEvent } from "@nudge/core";
 import type { Apns, ApnsEnvironment } from "./apns.ts";
 import { isDeviceKey, sealForDevice } from "./device-seal.ts";
 import type { Fcm } from "./fcm.ts";
@@ -101,7 +101,7 @@ export class BadSubscription extends Error {
  */
 export class Pushes {
   constructor(
-    private readonly nudge: () => Nudge,
+    private readonly nudge: () => ExtensionAssistant,
     /** The assistant's URL name, for links. */
     private readonly name: string,
     private readonly options: PushesOptions,

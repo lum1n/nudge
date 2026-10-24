@@ -58,6 +58,7 @@ type ConfirmPayload = { task: string; action: string };
 export default defineNudgeExtension({
   name: "browser",
   version: "0.1.0",
+  apiVersion: "1.0",
   description: "Browse the web with a headed browser driven by its own model",
   settings: Type.Object({
     /** `provider/model` from the providers Nudge knows, such as `openai/gpt-5-mini`. */

@@ -35,6 +35,7 @@ export function matrixExtension(options: MatrixOptions = {}) {
   return defineNudgeExtension({
     name: "matrix",
     version: VERSION,
+    apiVersion: "1.0",
     description:
       "Talk to the assistant from Matrix rooms without end-to-end encryption, as a bot account.",
     settings: Settings,

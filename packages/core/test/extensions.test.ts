@@ -23,6 +23,7 @@ import {
   ExtensionNotFound,
   defineNudgeExtension,
   defineTool,
+  EXTENSION_API_VERSION,
   LOBBY,
   loadExtensions,
   type Nudge,
@@ -468,6 +469,44 @@ describe("extensions", () => {
     expect(nudge.extensionRoute("routed", "POST", "/")).toBeUndefined();
     expect(nudge.extensionRoute("other", "GET", "/")).toBeUndefined();
     await nudge.close(context);
+  });
+
+  it("sets up only extensions written against this extension API", async () => {
+    expect(EXTENSION_API_VERSION).toMatch(/^\d+\.\d+$/);
+    const [major, minor] = EXTENSION_API_VERSION.split(".").map(Number) as [number, number];
+    let setUp = 0;
+    const written = (apiVersion: string | undefined) =>
+      defineNudgeExtension({
+        name: "versioned",
+        version: "1",
+        ...(apiVersion === undefined ? {} : { apiVersion }),
+        setup: () => {
+          setUp++;
+          return {};
+        },
+      });
+    const { options } = setup();
+    for (const apiVersion of [
+      `${major + 1}.0`,
+      `${major - 1}.${minor}`,
+      `${major}.${minor + 1}`,
+      "1",
+    ]) {
+      const refused = await createNudge({ ...options, extensions: [written(apiVersion)] }, context);
+      expect(refused.brokenExtensions()).toEqual([
+        { name: "versioned", version: "1", error: expect.stringContaining(apiVersion) },
+      ]);
+      await refused.close(context);
+    }
+    expect(setUp).toBe(0);
+    // Missing is taken as compatible, as is an older minor of the same major.
+    for (const apiVersion of [undefined, EXTENSION_API_VERSION, `${major}.0`]) {
+      const nudge = await createNudge({ ...options, extensions: [written(apiVersion)] }, context);
+      expect(nudge.brokenExtensions()).toEqual([]);
+      expect(nudge.extensions()).toEqual([{ name: "versioned", version: "1" }]);
+      await nudge.close(context);
+    }
+    expect(setUp).toBe(3);
   });
 
   it("rolls the dice the asker chose in their profile", async () => {

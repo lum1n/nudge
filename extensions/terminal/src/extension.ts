@@ -94,6 +94,7 @@ const MIME_TYPES: Record<string, string> = {
 export default defineNudgeExtension({
   name: "terminal",
   version: "0.1.0",
+  apiVersion: "1.0",
   description: "Run shell commands in a sandboxed workspace of the room's own",
   settings: Type.Object({
     network: Type.Boolean({

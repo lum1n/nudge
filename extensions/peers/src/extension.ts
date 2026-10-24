@@ -21,7 +21,7 @@ import {
   isWiredHost,
   keepsPlaceholders,
   LOBBY,
-  type Nudge,
+  type ExtensionAssistant,
   parseAssistantAddress,
   peek,
   requestApproval,
@@ -147,6 +147,7 @@ export function peersExtension(options: { report?: (error: unknown) => void } = 
   return defineNudgeExtension({
     name: "peers",
     version: VERSION,
+    apiVersion: "1.0",
     description:
       "Linked assistants on other servers talk to each other: this one asks, plans or hands over requests in a thread of a few rounds, and each side's people approve what changes things.",
     settings: Settings,
@@ -1304,7 +1305,7 @@ class Peers {
     return channel;
   }
 
-  private nudge(): Nudge {
+  private nudge(): ExtensionAssistant {
     return this.host.assistant();
   }
 
@@ -1321,7 +1322,7 @@ class Peers {
   private commit<T>(
     change: (
       state: PeersState,
-      tx: Parameters<Parameters<Nudge["harness"]["commit"]>[0]>[0],
+      tx: Parameters<Parameters<ExtensionAssistant["harness"]["commit"]>[0]>[0],
     ) => T | Promise<T>,
     context: Context,
   ): Promise<T> {

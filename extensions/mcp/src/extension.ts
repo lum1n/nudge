@@ -168,6 +168,7 @@ type Server = {
 export default defineNudgeExtension({
   name: "mcp",
   version: VERSION,
+  apiVersion: "1.0",
   description:
     "Tools from MCP servers, found with tool_search; calls that change things are approved",
   settings: Type.Object({

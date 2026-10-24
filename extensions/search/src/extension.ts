@@ -200,6 +200,7 @@ export function searchExtension(options: SearchOptions = {}) {
   return defineNudgeExtension({
     name: "search",
     version: VERSION,
+    apiVersion: "1.0",
     description: "Web search through a SearXNG of your own, and reading a page as text.",
     settings: Settings,
     setup: (host) => {
