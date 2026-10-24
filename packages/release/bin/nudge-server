@@ -5,8 +5,16 @@
 # A release lives in $NUDGE_HOME/releases/<version>, and `current` points at the one to run. The
 # server updates itself: it unpacks a newer release, points `current` at it, writes `pending`
 # with the version it came from, and exits with 75; this starts the new one. A release that
-# stops with an error before it confirmed itself healthy (by removing `pending`) is rolled
-# back: `current` goes back, and the release is named in `failed` so it isn't tried again.
+# stops before it confirmed itself (by removing `pending`) is rolled back: `current` goes back,
+# and the release is named in `failed` so it isn't tried again.
+#
+# The server does the deciding, so that this script stays small (and an older copy of it, as in
+# an image not pulled again, still does right): a release confirms itself once its
+# GET /v1/health answers ok, and stops with an error when it hasn't within 5 minutes. One that
+# moves the data to a newer format (DATA_FORMAT in packages/core/src/server/data-format.ts)
+# takes a backup and confirms itself before it does, so no rollback lands on a release that
+# can't read the data; a release refuses data newer than it reads.
+# packages/release/test/nudge-server.test.ts runs this with stand-in releases.
 set -u
 
 home=${NUDGE_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/nudge}

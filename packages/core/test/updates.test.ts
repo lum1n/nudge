@@ -4,8 +4,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { mkdir, mkdtemp, readlink, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { canonicalJson, checkManifest, newer, Updates } from "../src/index.ts";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { canonicalJson, checkManifest, confirmWhenHealthy, newer, Updates } from "../src/index.ts";
 
 const { publicKey, privateKey } = generateKeyPairSync("ed25519");
 const KEY = publicKey.export({ format: "der", type: "spki" }).toString("base64");
@@ -113,9 +113,13 @@ describe("Updates", () => {
     expect(readFileSync(join(releases, "0.2.0", "VERSION"), "utf8").trim()).toBe("0.2.0");
     expect(readFileSync(join(releases, "pending"), "utf8")).toBe("0.1.0");
 
+    expect(running.unconfirmed()).toBe(false);
+    expect(updates("0.2.0").unconfirmed()).toBe(true);
+
     // The new one confirms itself, and keeps the one before it to go back to.
     await mkdir(join(releases, "0.0.9"));
     await updates("0.2.0").confirm();
+    expect(updates("0.2.0").unconfirmed()).toBe(false);
     expect(existsSync(join(releases, "pending"))).toBe(false);
     expect(existsSync(join(releases, "0.1.0"))).toBe(true);
     expect(existsSync(join(releases, "0.0.9"))).toBe(false);
@@ -139,5 +143,59 @@ describe("Updates", () => {
     const running = updates("0.1.0");
     expect(await running.check()).toBeUndefined();
     expect(running.state(true).error).toMatch(/signed/);
+  });
+});
+
+describe("confirmWhenHealthy", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const watch = (answers: boolean[], unconfirmed = true) => {
+    const seen = { probes: 0, confirmed: 0, gaveUp: 0, said: [] as string[] };
+    const stop = confirmWhenHealthy({
+      probe: async () => answers[seen.probes++] ?? false,
+      confirm: async () => void seen.confirmed++,
+      unconfirmed: () => unconfirmed,
+      giveUp: () => void seen.gaveUp++,
+      say: (line) => seen.said.push(line),
+      afterMs: 30_000,
+      everyMs: 10_000,
+      withinMs: 60_000,
+    });
+    return { seen, stop };
+  };
+
+  it("confirms once the health check answers well, not before", async () => {
+    const { seen } = watch([false, false, true]);
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(seen.probes).toBe(0);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(seen).toMatchObject({ probes: 1, confirmed: 0 });
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(seen).toMatchObject({ probes: 3, confirmed: 1, gaveUp: 0 });
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(seen.probes).toBe(3);
+  });
+
+  it("gives up on an update that isn't healthy in time, so it is rolled back", async () => {
+    const { seen } = watch([]);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(seen).toMatchObject({ probes: 4, confirmed: 0, gaveUp: 1 });
+    expect(seen.said[0]).toMatch(/Not healthy 60 s after starting/);
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(seen.probes).toBe(4);
+  });
+
+  it("leaves a release that was already kept running, healthy or not", async () => {
+    const { seen } = watch([], false);
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(seen).toMatchObject({ confirmed: 0, gaveUp: 0 });
+  });
+
+  it("does nothing once stopped", async () => {
+    const { seen, stop } = watch([true]);
+    stop();
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(seen.probes).toBe(0);
   });
 });
