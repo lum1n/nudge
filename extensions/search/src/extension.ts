@@ -1,4 +1,14 @@
-import { defineNudgeExtension, defineTool, readsOnly, section, Type } from "@nudge/core";
+import {
+  currentTurn,
+  defineNudgeExtension,
+  defineTool,
+  readsOnly,
+  requestApproval,
+  returnsUntrusted,
+  roomOf,
+  section,
+  Type,
+} from "@nudge/core";
 import { assertReachable } from "@nudge/ext-connectors";
 
 const VERSION = "0.1.0";
@@ -6,6 +16,8 @@ const VERSION = "0.1.0";
 const CHUNK = 8_000;
 const MAX_PAGE_BYTES = 3_000_000;
 const MAX_REDIRECTS = 5;
+/** Addresses of a turn's search results kept per conversation, newest last. */
+const KEEP_FOUND = 200;
 
 const Settings = Type.Object({
   /** The SearXNG instance, with JSON output turned on (`search.formats: [html, json]`). */
@@ -171,6 +183,17 @@ async function fetchPage(
 
 export type SearchOptions = { readonly fetch?: typeof fetch };
 
+/** An address as `read_page` compares it: no fragment. */
+function comparable(address: string): string | undefined {
+  try {
+    const url = new URL(address);
+    url.hash = "";
+    return url.href;
+  } catch {
+    return undefined;
+  }
+}
+
 /** The search extension with its HTTP client chosen; the default export uses the global `fetch`. */
 export function searchExtension(options: SearchOptions = {}) {
   const fetcher = options.fetch ?? ((input, init) => fetch(input, init));
@@ -185,6 +208,44 @@ export function searchExtension(options: SearchOptions = {}) {
         output: [{ type: "text" as const, text: value }],
         ...(isError ? { isError } : {}),
       });
+      // The addresses each conversation's current turn got from web_search: a page there was
+      // chosen by the search engine, not by what the turn read (ADR 20). Kept in memory only.
+      const found = new Map<number, { start: unknown; urls: string[] }>();
+      const foundNow = (conversationId: number) => {
+        const { start } = currentTurn();
+        const kept = found.get(conversationId);
+        if (kept !== undefined && kept.start === start) return kept;
+        const fresh = { start, urls: [] as string[] };
+        found.set(conversationId, fresh);
+        return fresh;
+      };
+      /** Whether reading `address` now needs a person: the turn read untrusted data, and no
+       * person named its host nor did a search of this turn find it. */
+      const needsApproval = (conversationId: number, address: string): boolean => {
+        const { untrusted, named = [] } = currentTurn();
+        if (untrusted === undefined) return false;
+        let host: string;
+        try {
+          host = new URL(address).hostname.toLowerCase().replace(/^www\./, "");
+        } catch {
+          return false;
+        }
+        if (named.includes(host)) return false;
+        const url = comparable(address);
+        return url === undefined || !foundNow(conversationId).urls.includes(url);
+      };
+      const readPage = async (args: { url: string; offset?: number }) => {
+        const page = await fetchPage(args.url, readLocalPages, fetcher);
+        const { title, text: content } = /html|xml/.test(page.type)
+          ? pageText(page.body)
+          : { title: "", text: page.body };
+        const offset = Math.max(0, Math.floor(args.offset ?? 0));
+        const part = content.slice(offset, offset + CHUNK);
+        return (
+          `${title === "" ? page.url : `${title} (${page.url})`}, characters ${offset}–${offset + part.length} of ${content.length}:\n\n${part}` +
+          (offset + CHUNK < content.length ? `\n\n…more from offset ${offset + CHUNK}.` : "")
+        );
+      };
 
       const search = defineTool({
         name: "web_search",
@@ -204,7 +265,7 @@ export function searchExtension(options: SearchOptions = {}) {
           max_results: Type.Optional(Type.Number({ description: `Default ${maxResults}.` })),
         }),
         replay: "safe",
-        execute: async (args) => {
+        execute: async (args, api) => {
           const query = new URLSearchParams({ q: args.query, format: "json", language });
           if (args.time_range !== undefined) query.set("time_range", args.time_range);
           let response: Response;
@@ -226,6 +287,12 @@ export function searchExtension(options: SearchOptions = {}) {
           const limit = Math.min(Math.max(1, args.max_results ?? maxResults), 30);
           const results = (body.results ?? []).filter((r) => r.url !== undefined).slice(0, limit);
           if (results.length === 0) return text("Nothing found.");
+          const kept = foundNow(api.conversationId);
+          for (const result of results) {
+            const address = comparable(result.url!);
+            if (address !== undefined) kept.urls.push(address);
+          }
+          kept.urls.splice(0, Math.max(0, kept.urls.length - KEEP_FOUND));
           return text(
             results
               .map((r, i) =>
@@ -249,18 +316,40 @@ export function searchExtension(options: SearchOptions = {}) {
           offset: Type.Optional(Type.Number()),
         }),
         replay: "safe",
-        execute: async (args) => {
-          try {
-            const page = await fetchPage(args.url, readLocalPages, fetcher);
-            const { title, text: content } = /html|xml/.test(page.type)
-              ? pageText(page.body)
-              : { title: "", text: page.body };
-            const offset = Math.max(0, Math.floor(args.offset ?? 0));
-            const part = content.slice(offset, offset + CHUNK);
-            return text(
-              `${title === "" ? page.url : `${title} (${page.url})`}, characters ${offset}–${offset + part.length} of ${content.length}:\n\n${part}` +
-                (offset + CHUNK < content.length ? `\n\n…more from offset ${offset + CHUNK}.` : ""),
+        execute: async (args, api, context) => {
+          if (needsApproval(api.conversationId, args.url)) {
+            const room = await roomOf(api, api.conversationId, context);
+            const { untrusted = [] } = currentTurn();
+            const approval = await api.commit(
+              (tx) =>
+                requestApproval(
+                  tx,
+                  room.id,
+                  {
+                    extension: "search",
+                    kind: "read",
+                    summary:
+                      `Read ${args.url}, which nobody here named, after reading ` +
+                      `${untrusted.join(", ")}: the address could carry what the conversation holds.`,
+                    payload: {
+                      url: args.url,
+                      ...(args.offset === undefined ? {} : { offset: args.offset }),
+                    },
+                  },
+                  host.now(),
+                ),
+              context,
             );
+            return {
+              ...text(
+                `Waiting for approval ${approval.id}: this turn read untrusted data, and nobody here ` +
+                  `named ${args.url} or found it with web_search. Once someone approves, the page arrives as a new message.`,
+              ),
+              details: { approval: approval.id },
+            };
+          }
+          try {
+            return text(await readPage(args));
           } catch (error) {
             return text((error as Error).message, true);
           }
@@ -268,7 +357,8 @@ export function searchExtension(options: SearchOptions = {}) {
       });
 
       return {
-        tools: [readsOnly(search), readsOnly(read)],
+        // Pages and snippets are written by strangers: the model reads them as data (ADR 20).
+        tools: [readsOnly(search), readsOnly(read)].map(returnsUntrusted),
         // The public web: shops and places in results stay readable (ADR 14).
         publicTools: [search.name, read.name],
         sections: [
@@ -280,6 +370,18 @@ export function searchExtension(options: SearchOptions = {}) {
               "room added for the task comes first.",
           ),
         ],
+        approvals: {
+          read: async (payload) => {
+            try {
+              return {
+                text: await readPage(payload as { url: string; offset?: number }),
+                untrusted: "read_page",
+              };
+            } catch (error) {
+              return { text: (error as Error).message, isError: true };
+            }
+          },
+        },
       };
     },
   });

@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { Context } from "@earendil-works/chord";
-import type { ConversationId, Harness } from "@earendil-works/pi-durable";
+import type { ConversationId, EntryId, EntryRecord, Harness } from "@earendil-works/pi-durable";
+import { untrustedSources } from "./untrusted.ts";
 
 /** The player something private belongs to, with the name others are told it went to. */
 export type Owner = { readonly playerId: string; readonly displayName: string };
@@ -16,6 +17,18 @@ export type Turn = {
    * summary. Absent outside tools.
    */
   readonly redact?: (text: string) => string;
+  /** The entry the turn began with, to tell one turn from the next. */
+  readonly start?: EntryId;
+  /**
+   * The sources of the untrusted data the turn has read so far, such as `mail_read`, or absent
+   * when it read none. Calls that could send something out ask first while it is set (ADR 20).
+   */
+  readonly untrusted?: readonly string[];
+  /**
+   * The hosts the message the turn answers names, such as `nrk.no`: a page there wasn't chosen by
+   * what the turn read. Absent for turns no person's message began.
+   */
+  readonly named?: readonly string[];
 };
 
 /**
@@ -41,6 +54,8 @@ export function inTurn<T>(turn: Turn, run: () => T): T {
 const MESSAGE_ENTRY = "nudge.message";
 const FIRE_ENTRY = "nudge.fire";
 const APPROVAL_ENTRY = "nudge.approval";
+/** Pi Durable's `ToolResultEntry`: what a tool call gave the model. */
+const TOOL_ENTRY = "pi.tool-result";
 
 /** How far back a tool call looks for what it answers: an answer's own entries come between. */
 const LOOK_BACK = 200;
@@ -48,6 +63,7 @@ const LOOK_BACK = 200;
 /**
  * The turn a conversation is in now: what the newest message, fired nudge or approval outcome
  * says. A message someone sends while the answer runs starts a new turn, as it does in the timeline.
+ * The untrusted data it read is what that input and the tool results since hold (ADR 20).
  */
 export async function turnOf(
   harness: Harness,
@@ -57,8 +73,18 @@ export async function turnOf(
   const conversation = await harness.conversation(conversationId, context);
   if (conversation === undefined) return {};
   const page = await conversation.entries({}, LOOK_BACK, undefined, context);
+  const read: string[] = [];
+  const taken = (entry: EntryRecord, turn: Turn): Turn => {
+    read.push(...untrustedSources(modelText(entry)));
+    const untrusted = [...new Set(read.reverse())];
+    return {
+      ...turn,
+      start: entry.id,
+      ...(untrusted.length === 0 ? {} : { untrusted }),
+    };
+  };
   for (const entry of page.items) {
-    if (entry.kind === "pi.user") return {};
+    if (entry.kind === "pi.user") return taken(entry, { named: hostsIn(modelText(entry)) });
     if (entry.kind === MESSAGE_ENTRY) {
       const data = entry.data as {
         playerId: string;
@@ -66,12 +92,37 @@ export async function turnOf(
         private?: true;
       };
       const by = { playerId: data.playerId, displayName: data.displayName };
-      return data.private === true ? { by, privateTo: by } : { by };
+      const named = hostsIn(modelText(entry));
+      return taken(entry, data.private === true ? { by, privateTo: by, named } : { by, named });
     }
     if (entry.kind === FIRE_ENTRY || entry.kind === APPROVAL_ENTRY) {
       const { privateTo } = entry.data as { privateTo?: Owner };
-      return privateTo === undefined ? {} : { privateTo };
+      return taken(entry, privateTo === undefined ? {} : { privateTo });
     }
+    if (entry.kind === TOOL_ENTRY) read.push(...untrustedSources(modelText(entry)));
   }
-  return {};
+  // A turn longer than the look-back still counts what it read in it.
+  return read.length === 0 ? {} : { untrusted: [...new Set(read.reverse())] };
 }
+
+/** The text an entry gives the model. */
+function modelText(entry: EntryRecord): string {
+  return (entry.model ?? [])
+    .map((message) => {
+      const content = (message as { content?: unknown }).content;
+      if (typeof content === "string") return content;
+      if (!Array.isArray(content)) return "";
+      return content
+        .map((part: { type?: string; text?: string }) => (part.type === "text" ? part.text : ""))
+        .join("\n");
+    })
+    .join("\n");
+}
+
+/** The hosts of the addresses in `text`, with or without a scheme, lower case. */
+export function hostsIn(text: string): string[] {
+  const hosts = [...text.matchAll(HOST)].map((match) => match[1]!.toLowerCase());
+  return [...new Set(hosts.map((host) => host.replace(/^www\./, "")))];
+}
+
+const HOST = /(?:https?:\/\/)?((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,})(?![\w-])/gi;

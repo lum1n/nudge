@@ -4,6 +4,7 @@ import {
   defineTool,
   formatTime,
   readsOnly,
+  returnsUntrusted,
   requestApproval,
   roomOf,
   roomsSetting,
@@ -299,7 +300,8 @@ export function mailExtension(options: MailOptions = {}) {
       });
 
       return {
-        tools: [readsOnly(search), readsOnly(read), send],
+        // Mail is written by strangers: the model reads it as data (ADR 20).
+        tools: [returnsUntrusted(readsOnly(search)), returnsUntrusted(readsOnly(read)), send],
         sections: [
           section("mail", async (input, context) => {
             const room = await roomOf(input.read, input.conversationId, context).catch(

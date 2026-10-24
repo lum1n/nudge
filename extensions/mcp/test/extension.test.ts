@@ -10,7 +10,7 @@ import {
   fauxText,
   fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
-import { createNudge, LOBBY, type Nudge } from "@nudge/core";
+import { createNudge, LOBBY, type Nudge, untrustedData } from "@nudge/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import mcp, {
   fillVariables,
@@ -44,6 +44,15 @@ function current(request: ModelContext | undefined): { tools: string[]; prompt: 
 function lastToolResult(request: ModelContext): string {
   const message = request.messages.findLast((m) => m.role === "toolResult");
   return (message?.content ?? []).map((part) => (part.type === "text" ? part.text : "")).join("");
+}
+
+/** The text inside a result marked as untrusted data from `source`. */
+function inside(text: string | undefined, source: string): string {
+  const open = `<untrusted-data source="${source}">\n`;
+  const close = "\n</untrusted-data>";
+  if (text === undefined || !text.startsWith(open) || !text.endsWith(close))
+    throw new Error(`not marked as from ${source}: ${text}`);
+  return text.slice(open.length, -close.length);
 }
 
 describe("mcp", () => {
@@ -185,17 +194,18 @@ describe("mcp", () => {
       done,
     ]);
     await say("Which tools look up words?");
-    expect(outputs.at(-1)).toContain("- lookup: Look up a word");
+    // What a server says about its tools is data too.
+    expect(inside(outputs.at(-1), "mcp_tools")).toContain("- lookup: Look up a word");
     expect(outputs.at(-1)).not.toContain("save");
     await say("Show your environment");
-    const env = JSON.parse(outputs.at(-1)!) as Record<string, string>;
+    const env = JSON.parse(inside(outputs.at(-1), "mcp_call")) as Record<string, string>;
     // The program got the key; the model only a stand-in for it.
     expect(env.TOKEN).not.toBe("s3cret-value");
     expect(outputs.at(-1)).not.toContain("s3cret-value");
     expect(env.NUDGE_MCP_TEST_SECRET).toBeUndefined();
     // A room's servers never pass images: nothing a room sets says they may skip redaction.
     await say("Show the picture");
-    expect(outputs.at(-1)).toBe("[an image, not shown]");
+    expect(outputs.at(-1)).toBe(untrustedData("mcp_call", "[an image, not shown]"));
     await say("Save a note: buy milk");
     expect(outputs.at(-1)).toBe("Waiting for approval a2.");
     // Anyone in the room decides a call.
@@ -254,7 +264,7 @@ describe("mcp", () => {
         done,
       ]);
       await say("Search the docs for fjords");
-      expect(outputs.at(-1)).toBe("Found fjords.");
+      expect(outputs.at(-1)).toBe(untrustedData("mcp_call", "Found fjords."));
 
       expect(await send({ type: "signOut", server: "m1" })).toMatchObject({ type: "ok" });
       expect(servers()[0]).toMatchObject({ signedIn: false });
@@ -291,7 +301,9 @@ describe("mcp", () => {
       faux.setResponses([call(toolName(server, "picture"), {}), done]);
       await say(`Show ${server}'s picture`);
       expect(images(requests.at(-1)!), server).toHaveLength(shown ? 1 : 0);
-      expect(lastToolResult(requests.at(-1)!), server).toBe(shown ? "" : "[an image, not shown]");
+      expect(lastToolResult(requests.at(-1)!), server).toBe(
+        shown ? "" : untrustedData(toolName(server, "picture"), "[an image, not shown]"),
+      );
     }
 
     expect(passesImages({})).toBe(false);
@@ -332,7 +344,9 @@ describe("mcp", () => {
     expect(first.tools).not.toContain("mcp__fake__lookup");
     expect(first.prompt).toContain("- fake: lookup, save, env, pid, picture");
     expect(current(requests[1]).tools).toContain("mcp__fake__lookup");
-    expect(outputs.at(-1)).toBe("fjord: a word. Call Ann on ⟦PHONE1⟧.");
+    expect(outputs.at(-1)).toBe(
+      untrustedData("mcp__fake__lookup", "fjord: a word. Call Ann on ⟦PHONE1⟧."),
+    );
     // The model saw the phone number only as a placeholder.
     expect(JSON.stringify(requests.at(-1))).not.toContain("987 65 432");
 
@@ -361,12 +375,46 @@ describe("mcp", () => {
       done,
     ]);
     await say("Show your environment");
-    const env = JSON.parse(outputs.at(-1)!) as Record<string, string>;
+    const env = JSON.parse(inside(outputs.at(-1), "mcp__fake__env")) as Record<string, string>;
     expect(env.TOKEN).toBe("t0ken");
     expect(env.NUDGE_MCP_TEST_SECRET).toBeUndefined();
     expect(env.PATH).toContain("/usr/bin");
     await say("Show the picture");
-    expect(outputs.at(-1)).toBe("[an image, not shown]");
+    expect(outputs.at(-1)).toBe(untrustedData("mcp__fake__picture", "[an image, not shown]"));
+  });
+
+  it("asks before a read-only call once the turn read what a server answered", async () => {
+    const { faux, requests, outputs, call, done, say, nudge } = await open({
+      fake: { command: process.execPath, args: [FAKE] },
+    });
+    faux.setResponses([
+      call("tool_search", { query: "look up a word" }),
+      call(toolName("fake", "lookup"), { word: "fjord" }),
+      call(toolName("fake", "lookup"), { word: "everything we said" }),
+      done,
+      done, // the approval's own follow-up
+    ]);
+    await say("What is a fjord?");
+    expect(outputs.at(-1)).toBe("Waiting for approval a1.");
+    const [pending] = await nudge.approvals.list(LOBBY, context);
+    expect(pending?.summary).toMatch(
+      /^fake: .+ \{"word":"everything we said"\} \(after reading mcp__fake__lookup: it could carry what the conversation holds\)$/,
+    );
+    const decided = await nudge.approvals.decide(
+      LOBBY,
+      "a1",
+      { approve: true, by: author },
+      context,
+    );
+    expect(decided).toMatchObject({
+      status: "done",
+      result: "everything we said: a word. Call Ann on ⟦PHONE1⟧.",
+    });
+    await nudge.harness.waitForIdle(context);
+    const input = requests.at(-1)!.messages.findLast((m) => m.role === "user");
+    expect(JSON.stringify(input?.content)).toContain(
+      '<untrusted-data source=\\"mcp__fake__lookup\\">',
+    );
   });
 
   it("leaves out a server it can't start, and stops the programs it started at close", async () => {
@@ -384,7 +432,7 @@ describe("mcp", () => {
     const prompt = current(requests[0]).prompt;
     expect(prompt).toContain("- broken: ");
     expect(prompt).toContain("- unset: $NUDGE_MCP_UNSET is not set");
-    const pid = Number(outputs.at(-1));
+    const pid = Number(inside(outputs.at(-1), "mcp__fake__pid"));
     expect(pid).toBeGreaterThan(0);
     expect(() => process.kill(pid, 0)).not.toThrow();
     await nudge.close(context);

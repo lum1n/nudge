@@ -14,6 +14,7 @@ import type { Room } from "../identity/directory.ts";
 import type { Rooms } from "../identity/rooms.ts";
 import { mapStrings } from "../privacy/redact.ts";
 import { currentTurn, inTurn, type Owner } from "../privacy/turn.ts";
+import { untrustedData } from "../privacy/untrusted.ts";
 
 export type ApprovalStatus = "pending" | "approved" | "denied" | "done" | "failed";
 
@@ -95,6 +96,11 @@ export type ApprovalOutcome = {
   readonly isError?: boolean;
   /** What model requests the action made cost; it counts for the room, like a tool's. */
   readonly usage?: Usage;
+  /**
+   * Where `text` came from when strangers wrote it, such as `read_page`: the room's model gets it
+   * marked as untrusted data (ADR 20). People see it as it is.
+   */
+  readonly untrusted?: string;
 };
 
 /** Runs one kind of approved action. A throw counts as a failure with its message. */
@@ -253,7 +259,7 @@ export class Approvals {
         usage.tools[key] = sumUsage(usage.tools[key], outcome.usage);
       },
     );
-    await this.tell(room, finished, context);
+    await this.tell(room, finished, context, outcome.untrusted);
     return finished;
   }
 
@@ -334,19 +340,28 @@ export class Approvals {
   }
 
   /** Tells the room how an approval ended, as input the assistant answers. */
-  private async tell(room: Room, approval: Approval, context: Context): Promise<void> {
+  private async tell(
+    room: Room,
+    approval: Approval,
+    context: Context,
+    untrusted?: string,
+  ): Promise<void> {
     const conversation = await this.harness.conversation(
       room.conversationId as ConversationId,
       context,
     );
     if (conversation === undefined) return;
     const who = approval.decidedBy?.displayName ?? "nobody";
+    const result =
+      untrusted === undefined || approval.result === undefined
+        ? (approval.result ?? "")
+        : untrustedData(untrusted, approval.result);
     const content =
       approval.status === "denied"
         ? `${who} denied approval ${approval.id} (${approval.summary}). Don't do it.`
         : approval.status === "done"
-          ? `${who} approved ${approval.id} (${approval.summary}) and it was done:\n${approval.result ?? ""}`
-          : `${who} approved ${approval.id} (${approval.summary}) but it failed:\n${approval.result ?? ""}`;
+          ? `${who} approved ${approval.id} (${approval.summary}) and it was done:\n${result}`
+          : `${who} approved ${approval.id} (${approval.summary}) but it failed:\n${result}`;
     await conversation.submit(
       {
         type: "input",

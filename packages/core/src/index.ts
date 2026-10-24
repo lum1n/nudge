@@ -330,6 +330,13 @@ export {
   startLocalModel,
 } from "./privacy/deep/local-model.ts";
 export { keepsPlaceholders } from "./privacy/tool-values.ts";
+export {
+  isUntrusted,
+  returnsUntrusted,
+  UNTRUSTED_RULE,
+  untrustedData,
+  untrustedSources,
+} from "./privacy/untrusted.ts";
 export { canRead, onlyReads, readsOnly } from "./extensions/reads.ts";
 export type { RedactedHistory };
 export {
@@ -337,6 +344,7 @@ export {
   inTurn,
   type Owner,
   type SetsTurn,
+  hostsIn,
   type Turn,
   turnOf,
 } from "./privacy/turn.ts";

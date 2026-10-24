@@ -19,6 +19,7 @@ import {
   roomOf,
   section,
   Type,
+  untrustedData,
 } from "@nudge/core";
 import { ScriptRun, type ScriptRunResult, ScriptsDoc } from "@nudge/ext-scripts";
 import { type Found, parseReport, remember, type Report, type Watch, WatchesDoc } from "./model.ts";
@@ -85,12 +86,20 @@ export function checkPrompt(watch: Pick<Watch, "what">): string {
   ].join("\n");
 }
 
-/** The input a room gets when a check found something new; it answers as to a fired nudge. */
+/**
+ * The input a room gets when a check found something new; it answers as to a fired nudge. What
+ * was found came from outside, so it is marked as untrusted data (ADR 20).
+ */
 export function foundPrompt(watch: Pick<Watch, "id" | "what">, found: readonly Found[]): string {
   return [
     `Your watch ${watch.id} ("${watch.what}") found something new:`,
-    ...found.slice(0, 20).map((item) => `- ${item.text} (${item.key})`),
-    ...(found.length > 20 ? [`…and ${found.length - 20} more.`] : []),
+    untrustedData(
+      "watch",
+      [
+        ...found.slice(0, 20).map((item) => `- ${item.text} (${item.key})`),
+        ...(found.length > 20 ? [`…and ${found.length - 20} more.`] : []),
+      ].join("\n"),
+    ),
     "Tell the room about it now, in your own words. Nothing needs scheduling.",
   ].join("\n");
 }
@@ -367,7 +376,7 @@ function createTimer(host: Pick<ExtensionHost<unknown>, "assistant" | "now">) {
                   model: [
                     {
                       role: "user",
-                      content: `Your watch ${watchId} ("${watch.what}") posted this to the room:\n${report.message}`,
+                      content: `Your watch ${watchId} ("${watch.what}") posted this to the room:\n${untrustedData("watch", report.message)}`,
                       timestamp: host.now(),
                     },
                   ],
