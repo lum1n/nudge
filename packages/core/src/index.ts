@@ -92,6 +92,13 @@ export {
 export { defaultExtensions } from "./server/defaults.ts";
 export { defaultConfigPath, serverHome } from "./server/home.ts";
 export {
+  DATA_FORMAT,
+  DataFormatError,
+  dataFormatFile,
+  recordedDataFormat,
+  upgradeDataFormat,
+} from "./server/data-format.ts";
+export {
   type KeySource,
   readableError,
   ServerKeys,
@@ -118,6 +125,8 @@ export { openRecoveryKit, RecoveryKitError, sealRecoveryKit } from "./server/rec
 export {
   canonicalJson,
   checkManifest,
+  confirmWhenHealthy,
+  type ConfirmWhenHealthyOptions,
   newer,
   RELEASE_KEYS,
   RELEASE_MANIFEST_URL,

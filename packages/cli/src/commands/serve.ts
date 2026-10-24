@@ -9,6 +9,7 @@ import {
   buildModels,
   completeSetup,
   ConfigMissing,
+  confirmWhenHealthy,
   createBackup,
   detectLocalServers,
   errorFields,
@@ -31,6 +32,7 @@ import {
   provideGeo,
   testProviderKey,
   Updates,
+  upgradeDataFormat,
   writeRawConfig,
 } from "@nudge/core";
 import {
@@ -160,6 +162,40 @@ export async function serve(options: ServeOptions): Promise<number> {
     if (error instanceof ConfigMissing) return undefined;
     throw error;
   });
+  const theBackupKey = () => backupKey(keyPath(configPath, config ?? { assistants: [] }), true);
+  // Set to stop the server, with the code it exits with.
+  let stop = () => {};
+  let exitCode = 0;
+  const updates = selfUpdates(
+    () => config?.server?.updates !== "off",
+    async (automatic) => {
+      const raw = await readRawConfig(configPath);
+      raw.server = { ...(raw.server as object | undefined), updates: automatic ? "auto" : "off" };
+      await writeRawConfig(configPath, raw);
+      config = await loadConfig(configPath);
+    },
+    (code) => {
+      exitCode = code;
+      stop();
+    },
+    say,
+  );
+  // Before anything opens the data: a release that moves it to a newer format takes a backup and
+  // confirms itself first, since the release before can't read what it leaves (ADR 11).
+  await upgradeDataFormat(dirname(configPath), {
+    beforeMoving: async (from, to) => {
+      if (config !== undefined) {
+        const file = await createBackup({
+          configPath,
+          config,
+          dir: join(dirname(configPath), "server", "before-update"),
+          key: await theBackupKey(),
+        });
+        say(`Backed up to ${file} before moving the data from format ${from} to ${to}.`);
+      }
+      await updates?.confirm();
+    },
+  });
   // The local model is large: its download starts now, also while the server waits to be set up.
   if (localModelWanted(config)) sharedLocalModel(configPath);
   const keys = new ServerKeys(serverKeysDir(configPath));
@@ -179,24 +215,6 @@ export async function serve(options: ServeOptions): Promise<number> {
   let stopBackups = config === undefined ? () => {} : scheduleBackups(configPath, config, say);
   const testKey = (provider: string, key: string) =>
     testProviderKey(provider, key, config?.providers ?? []);
-  const theBackupKey = () => backupKey(keyPath(configPath, config ?? { assistants: [] }), true);
-  // Set when the server should stop and start again, as after installing a new release.
-  let restart = () => {};
-  let restarting = false;
-  const updates = selfUpdates(
-    () => config?.server?.updates !== "off",
-    async (automatic) => {
-      const raw = await readRawConfig(configPath);
-      raw.server = { ...(raw.server as object | undefined), updates: automatic ? "auto" : "off" };
-      await writeRawConfig(configPath, raw);
-      config = await loadConfig(configPath);
-    },
-    () => {
-      restarting = true;
-      restart();
-    },
-    say,
-  );
   const publicUrl = () => options.publicUrl ?? config?.server?.publicUrl;
   // Where the server's own Tailscale was, before Wired replaced it: its binaries and state.
   void rm(join(dirname(configPath), "server", "tailscale"), { recursive: true, force: true });
@@ -325,9 +343,14 @@ export async function serve(options: ServeOptions): Promise<number> {
         : setupLines(server.url, options.host, code, web);
     for (const line of lines) console.log(line);
     const stopReloading = reloadOnHangup(assistants, say);
-    const stopUpdates = updates?.start() ?? (() => {});
+    const health = `http://${apiAddr}/v1/health`;
+    const stopUpdates =
+      updates?.start(async () => {
+        const response = await fetch(health, { signal: AbortSignal.timeout(5_000) });
+        return response.ok && ((await response.json()) as { ok?: unknown }).ok === true;
+      }) ?? (() => {});
     await new Promise<void>((resolve) => {
-      restart = resolve;
+      stop = resolve;
       process.once("SIGINT", resolve);
       process.once("SIGTERM", resolve);
     });
@@ -337,29 +360,34 @@ export async function serve(options: ServeOptions): Promise<number> {
     await wired.stop();
     provideGeo(undefined);
     await geo.close();
-    console.log(restarting ? "Restarting into the new release…" : "Stopping…");
+    console.log(exitCode === RESTART_EXIT_CODE ? "Restarting into the new release…" : "Stopping…");
     await server.close();
   } finally {
     await assistants.close();
   }
-  return restarting ? RESTART_EXIT_CODE : 0;
+  return exitCode;
 }
 
 /**
  * Self-update (ADR 11) when `nudge-server` started this server, which says so with
  * `NUDGE_RELEASES` and `NUDGE_VERSION`: a check 10 minutes after starting (or
  * `NUDGE_UPDATE_DELAY` seconds) and every hour after, installing what it finds while `automatic`
- * says so. After 30 s of running, this release confirms itself, so a rollback no longer happens.
+ * says so. Once it has run 30 s and its health check answers well, this release confirms itself,
+ * so a rollback no longer happens; an update that doesn't within 5 minutes stops with an error,
+ * which `nudge-server` rolls back.
  */
 function selfUpdates(
   automatic: () => boolean,
   setAutomatic: (automatic: boolean) => Promise<void>,
-  restart: () => void,
+  stop: (code: number) => void,
   say: (line: string) => void,
 ):
   | {
       control: UpdateControl;
-      start(): () => void;
+      /** Starts checking for updates, and confirming this release once `healthy` says so. */
+      start(healthy: () => Promise<boolean>): () => void;
+      /** Keeps this release: `nudge-server` no longer rolls it back. */
+      confirm(): Promise<void>;
       /** Installs a newer release now, if there is one; true when the server should restart into it. */
       installNewest(): Promise<boolean>;
     }
@@ -383,7 +411,7 @@ function selfUpdates(
       try {
         say(`Installing Nudge ${release.version}…`);
         await updates.install(release);
-        restart();
+        stop(RESTART_EXIT_CODE);
       } catch (error) {
         say(`Could not install ${release.version}: ${(error as Error).message}`);
         installing = false;
@@ -412,19 +440,23 @@ function selfUpdates(
         return false;
       }
     },
-    start: () => {
+    confirm: () => updates.confirm(),
+    start: (healthy) => {
       const delay = Number(process.env.NUDGE_UPDATE_DELAY ?? 600) * 1000;
-      const confirm = setTimeout(
-        () => void updates.confirm().catch((error: Error) => say(error.message)),
-        30_000,
-      );
+      const stopConfirming = confirmWhenHealthy({
+        probe: healthy,
+        confirm: () => updates.confirm(),
+        unconfirmed: () => updates.unconfirmed(),
+        giveUp: () => stop(1),
+        say,
+      });
       let hourly: ReturnType<typeof setInterval> | undefined;
       const first = setTimeout(() => {
         void check();
         hourly = setInterval(() => void check(), 60 * 60_000);
       }, delay);
       return () => {
-        clearTimeout(confirm);
+        stopConfirming();
         clearTimeout(first);
         clearInterval(hourly);
       };
