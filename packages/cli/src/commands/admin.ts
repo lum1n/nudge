@@ -1,7 +1,7 @@
-import { readFile } from "node:fs/promises";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
   DatabaseInUse,
+  databaseHolder,
   findAssistant,
   loadConfig,
   type Nudge,
@@ -400,9 +400,9 @@ export async function reload(options: AdminOptions): Promise<boolean> {
       : [findAssistant(config, options.assistant)];
   const signalled = new Set<number>();
   for (const assistant of assistants) {
-    const lock = `${assistant.database}.lock`;
-    const pid = Number((await readFile(lock, "utf8").catch(() => "")).trim());
-    if (!Number.isInteger(pid) || pid <= 0) {
+    const pid =
+      assistant.database === undefined ? undefined : await databaseHolder(assistant.database);
+    if (pid === undefined || pid <= 0) {
       console.log(`${assistant.name}: not running`);
       continue;
     }

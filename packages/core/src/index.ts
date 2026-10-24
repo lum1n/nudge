@@ -392,7 +392,7 @@ export {
   keyFile,
   snapshotDatabase,
 } from "./encrypted-storage.ts";
-export { DatabaseInUse, lockDatabase } from "./storage-lock.ts";
+export { DatabaseInUse, databaseHolder, lockDatabase } from "./storage-lock.ts";
 export {
   type BrokenExtension,
   ExtensionBroken,
