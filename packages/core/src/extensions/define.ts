@@ -219,6 +219,12 @@ export type ExtensionParts = Omit<Extension, "name"> & {
    */
   readonly onLocation?: (playerId: string, location: LocationUpdate) => void | Promise<void>;
   /**
+   * How many ended tasks of a kind to keep per owner, by kind, for tasks started again and again,
+   * such as one a timer starts on every check: Pi Durable would keep them all for good. When the
+   * assistant opens, older ones are deleted with the tasks they owned and their documents.
+   */
+  readonly keepEnded?: Readonly<Record<string, number>>;
+  /**
    * Releases what `setup` started, such as processes or connections, once a reload replaced the
    * extension or the assistant closed. Calls that already started may still be finishing.
    */
@@ -354,6 +360,7 @@ export type SetUpExtension = {
   readonly denials?: Readonly<Record<string, ApprovalDenialHandler>>;
   readonly onRoomEvent?: (event: RoomEvent) => void | Promise<void>;
   readonly onLocation?: (playerId: string, location: LocationUpdate) => void | Promise<void>;
+  readonly keepEnded?: Readonly<Record<string, number>>;
   readonly close?: () => void | Promise<void>;
   readonly retire?: (context: Context) => void | Promise<void>;
 };
@@ -420,6 +427,7 @@ export async function setUpExtension(
     denials,
     onRoomEvent,
     onLocation,
+    keepEnded,
     close,
     retire,
     ...parts
@@ -448,6 +456,7 @@ export async function setUpExtension(
     ...(roomSocket === undefined ? {} : { roomSocket }),
     ...(onRoomEvent === undefined ? {} : { onRoomEvent }),
     ...(onLocation === undefined ? {} : { onLocation }),
+    ...(keepEnded === undefined ? {} : { keepEnded }),
     ...(close === undefined ? {} : { close }),
     ...(retire === undefined ? {} : { retire }),
   };
