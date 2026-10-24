@@ -108,7 +108,7 @@ describe.runIf(run)("a sandboxed desktop, live", () => {
     writeFileSync(join(secret, "key.txt"), "not for apps");
     process.env.NUDGE_TEST_SECRET = "hunter2";
     // What the app sees of the machine, written to its home before it starts.
-    const look = `ls "${secret}" > "$HOME/secret.txt" 2>&1; env > "$HOME/env.txt"; ls "${dir}" > "$HOME/dir.txt"; exec python3 "${fixtures}/notes.py" "$HOME/saved.txt"`;
+    const look = `ls "${secret}" > "$HOME/secret.txt" 2>&1; env > "$HOME/env.txt"; { id -u; ip route; cat /etc/resolv.conf; } > "$HOME/net.txt" 2>&1; ls "${dir}" > "$HOME/dir.txt"; exec python3 "${fixtures}/notes.py" "$HOME/saved.txt"`;
     desktop = await DesktopSession.open({
       homeDir: home,
       apps: { notes: ["sh", "-c", look] },
@@ -131,6 +131,14 @@ describe.runIf(run)("a sandboxed desktop, live", () => {
     expect(env).toMatch(new RegExp(`^HOME=${home}$`, "m"));
     // Of the directory its home is in, only the home.
     expect(readFileSync(join(home, "dir.txt"), "utf8")).toBe("home\n");
+  });
+
+  it("gives the app the internet without this machine and the local network", () => {
+    const net = readFileSync(join(home, "net.txt"), "utf8");
+    expect(net).toMatch(new RegExp(`^${process.getuid!()}$`, "m"));
+    expect(net).toMatch(/^prohibit 127\.0\.0\.0\/8/m);
+    expect(net).toMatch(/^prohibit 192\.168\.0\.0\/16/m);
+    expect(net).toContain("nameserver 10.0.2.3");
   });
 
   it("streams the screen, and takes a viewer's clicks and keys", async () => {

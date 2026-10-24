@@ -153,7 +153,10 @@ export const ALLOWED: readonly string[] = [
   "host",
   "nslookup",
   "whois",
-  // Languages and builds
+  // Languages and builds. They run without asking, scripts and code from their input included: the
+  // terminal is for such work, and asking for each would make it useless. What they can do is held
+  // by the sandbox and its limits, not by this list; their inline code is read (askedByCode) as a
+  // best effort, and `ask` makes any of them ask.
   "python",
   "python3",
   "pip",

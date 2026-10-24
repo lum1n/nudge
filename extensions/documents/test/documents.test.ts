@@ -10,7 +10,7 @@ import {
   fauxText,
   fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
-import { createNudge, LOBBY, type Nudge } from "@nudge/core";
+import { createNudge, LOBBY, type Nudge, untrustedData } from "@nudge/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { documentsExtension, extractText, type PanelOutput, searchTexts } from "../src/index.ts";
 
@@ -219,9 +219,15 @@ describe("documents", () => {
       true,
     );
 
-    expect(await say("which documents do we have?")).toMatch(/^d2 {2}notes\.txt \(29 characters\)/);
+    // Anyone could have written a document: the model gets it as untrusted data.
+    expect(await say("which documents do we have?")).toMatch(
+      /^<untrusted-data source="list_documents">\nd2 {2}notes\.txt \(29 characters\)/,
+    );
     expect(await say("Where's the dishwasher warranty?")).toBe(
-      "d1  dishwasher receipt.pdf\n  [page 1] Elkjop receipt: dishwasher Bosch, 2 year warranty [page 2] Paid 6990 kr on 12.03.2026",
+      untrustedData(
+        "search_documents",
+        "d1  dishwasher receipt.pdf\n  [page 1] Elkjop receipt: dishwasher Bosch, 2 year warranty [page 2] Paid 6990 kr on 12.03.2026",
+      ),
     );
     expect(await say("read it")).toContain("Paid 6990 kr on 12.03.2026");
 

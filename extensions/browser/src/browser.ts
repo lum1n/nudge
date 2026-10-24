@@ -1,5 +1,6 @@
 import { type ChildProcess, execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
+import { lookup } from "node:dns/promises";
 import { existsSync } from "node:fs";
 import { mkdir, open, readFile, readdir, rename, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -94,8 +95,8 @@ export class BrowserSession {
       ...(xvfb ? { env: { ...process.env, DISPLAY: xvfb.display } } : {}),
     });
     if (options.blockPrivateNetwork)
-      await context.route("**/*", (route) =>
-        isPrivateHost(hostOf(route.request().url()))
+      await context.route("**/*", async (route) =>
+        (await reachesPrivate(hostOf(route.request().url())))
           ? route.abort("blockedbyclient")
           : route.continue(),
       );
@@ -415,7 +416,7 @@ export class BrowserSession {
       const url = new URL(/^[a-z][a-z0-9+.-]*:/i.test(target) ? target : `https://${target}`);
       if (url.protocol !== "https:" && url.protocol !== "http:")
         throw new ActionError(`Only http and https URLs are allowed.`);
-      if (this.options.blockPrivateNetwork && isPrivateHost(url.hostname))
+      if (this.options.blockPrivateNetwork && (await reachesPrivate(url.hostname)))
         throw new ActionError(
           `${url.hostname} is on a local or private network, which this browser may not reach.`,
         );
@@ -718,9 +719,35 @@ function hostOf(url: string): string {
   }
 }
 
+/** How long what a name resolves to is kept, so a page's many requests ask DNS once. */
+const RESOLVED_MS = 60_000;
+const resolved = new Map<string, { at: number; private: Promise<boolean> }>();
+
+/**
+ * Whether a host is on this machine or the local network: by its name, or by any address it
+ * resolves to, so a public-looking name that points at 127.0.0.1 or the LAN is caught too. Chromium
+ * resolves the name again for itself, so a DNS answer that changes in between (rebinding) is a
+ * narrow gap left open. A name that doesn't resolve is left to Chromium, which fails on it too.
+ */
+export function reachesPrivate(host: string): Promise<boolean> {
+  if (!host) return Promise.resolve(false);
+  if (isPrivateHost(host)) return Promise.resolve(true);
+  const name = host.replace(/^\[|\]$/g, "").toLowerCase();
+  const now = Date.now();
+  const known = resolved.get(name);
+  if (known && now - known.at < RESOLVED_MS) return known.private;
+  const answer = lookup(name, { all: true, verbatim: true }).then(
+    (addresses) => addresses.some(({ address }) => isPrivateHost(address)),
+    () => false,
+  );
+  if (resolved.size > 1_000) resolved.clear();
+  resolved.set(name, { at: now, private: answer });
+  return answer;
+}
+
 /**
  * Hosts on this machine or the local network, by name or address literal. Names that resolve to
- * private addresses are not caught here.
+ * private addresses are caught by `reachesPrivate`.
  */
 export function isPrivateHost(host: string): boolean {
   const name = host

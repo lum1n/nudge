@@ -4,10 +4,12 @@ import type { DocumentReader, ToolRegistration } from "@earendil-works/pi-durabl
 import { type CallToolResult, type Tool, toLlmContent } from "@earendil-works/pi-mcp";
 import { createToolSearchTool } from "@earendil-works/pi-durable/tool-search";
 import {
+  currentTurn,
   defineNudgeExtension,
   defineTool,
   type ExtensionParts,
   requestApproval,
+  returnsUntrusted,
   roomOf,
   section,
   Type,
@@ -354,7 +356,9 @@ export default defineNudgeExtension({
         deferred: true,
         execute: async (args, api, context) => {
           const params = args as Record<string, unknown>;
-          if (!needsApproval(server, tool)) {
+          // Asked anyway, or asked only because of what the turn read.
+          const after = needsApproval(server, tool) ? "" : readAfterUntrusted();
+          if (!needsApproval(server, tool) && after === "") {
             try {
               return await call(server, tool.name, params);
             } catch (error) {
@@ -374,7 +378,8 @@ export default defineNudgeExtension({
                     kind: "call",
                     summary:
                       `${server.name}: ${tool.title ?? tool.name} ` +
-                      (shown.length > 300 ? `${shown.slice(0, 300)}…` : shown),
+                      (shown.length > 300 ? `${shown.slice(0, 300)}…` : shown) +
+                      after,
                     payload: { server: server.name, tool: tool.name, args: params as never },
                   },
                   now(),
@@ -397,7 +402,10 @@ export default defineNudgeExtension({
     return {
       tools: [
         ...roomTools,
-        ...(tools.length === 0 ? [] : [...tools, createToolSearchTool() as ToolRegistration]),
+        // What a server answers is written elsewhere: data to the model (ADR 20).
+        ...(tools.length === 0
+          ? []
+          : [...tools.map(returnsUntrusted), createToolSearchTool() as ToolRegistration]),
       ],
       roomSocket: panels.roomSocket,
       warnings: () => warnings,
@@ -484,6 +492,7 @@ export default defineNudgeExtension({
               .map((part) => (part.type === "text" ? part.text : "[image]"))
               .join("\n"),
             ...(result.isError ? { isError: true } : {}),
+            untrusted: toolName(name, tool),
           };
         },
       },
@@ -681,7 +690,8 @@ function roomServerTools({ rooms, panels, now }: RoomParts): ToolRegistration[] 
         const tool = (await rooms.tools(room.id, server)).find((t) => t.name === args.tool);
         if (tool === undefined)
           return text(`${server.name} has no tool "${args.tool}"; see mcp_tools.`, true);
-        if (!needsApproval(server, tool))
+        const after = needsApproval(server, tool) ? "" : readAfterUntrusted();
+        if (!needsApproval(server, tool) && after === "")
           return forModel(await rooms.call(room.id, server, tool.name, params), ROOM_SERVER_IMAGES);
         const shown = JSON.stringify(params);
         const approval = await api.commit(
@@ -694,7 +704,8 @@ function roomServerTools({ rooms, panels, now }: RoomParts): ToolRegistration[] 
                 kind: "roomCall",
                 summary:
                   `${server.name}: ${tool.title ?? tool.name} ` +
-                  (shown.length > 300 ? `${shown.slice(0, 300)}…` : shown),
+                  (shown.length > 300 ? `${shown.slice(0, 300)}…` : shown) +
+                  after,
                 payload: { server: server.id, tool: tool.name, args: params as never },
               },
               now(),
@@ -728,7 +739,8 @@ function roomServerTools({ rooms, panels, now }: RoomParts): ToolRegistration[] 
     },
   });
 
-  return [add, list, call, remove] as ToolRegistration[];
+  // What a server lists and answers is written elsewhere: data to the model (ADR 20).
+  return [add, returnsUntrusted(list), returnsUntrusted(call), remove] as ToolRegistration[];
 }
 
 /** Runs what people approved for the servers rooms add. */
@@ -785,9 +797,22 @@ function roomApprovals({ rooms, panels, now }: RoomParts): ExtensionParts["appro
           .map((part) => (part.type === "text" ? part.text : "[image]"))
           .join("\n"),
         ...(result.isError ? { isError: true } : {}),
+        untrusted: "mcp_call",
       };
     },
   };
+}
+
+/**
+ * Why a call that would run at once asks first, for its approval's summary: the turn read
+ * untrusted data, and even a read-only tool's arguments could carry it out (ADR 20). Empty when
+ * it read none.
+ */
+function readAfterUntrusted(): string {
+  const { untrusted } = currentTurn();
+  return untrusted === undefined
+    ? ""
+    : ` (after reading ${untrusted.join(", ")}: it could carry what the conversation holds)`;
 }
 
 /** The page the browser shows after a sign-in. */

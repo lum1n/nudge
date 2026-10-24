@@ -11,6 +11,7 @@ import {
   type ExtensionHost,
   formatTime,
   readsOnly,
+  returnsUntrusted,
   roomOf,
   type RoomSocketHandler,
   section,
@@ -449,7 +450,8 @@ export const documentsExtension = defineNudgeExtension({
     });
 
     return {
-      tools: [readsOnly(list), readsOnly(search), readsOnly(read)],
+      // Documents come from anywhere: the model reads them as data (ADR 20).
+      tools: [readsOnly(list), readsOnly(search), readsOnly(read)].map(returnsUntrusted),
       roomSocket: library.roomSocket,
       sections: [
         section("documents", async (input, context) => {

@@ -7,8 +7,7 @@ FROM debian:bookworm-slim
 # Besides certificates and tini: what the browser extension's Chromium needs, as Playwright lists
 # it for Debian 12, and Xvfb, the virtual display it runs headed on. Chromium itself is downloaded
 # the first time a room browses, into /data. bubblewrap sandboxes the terminal's commands, and the
-# desktop's apps; slirp4netns and iproute2 give the terminal's commands the internet without the
-# local network.
+# desktop's apps; slirp4netns and iproute2 give both the internet without the local network.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates tini bubblewrap slirp4netns iproute2 \
     xvfb xfonts-scalable fonts-liberation fonts-noto-color-emoji fonts-unifont fonts-ipafont-gothic \

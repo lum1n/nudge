@@ -13,6 +13,7 @@ import {
 } from "@earendil-works/pi-durable";
 import { mapStrings } from "./redact.ts";
 import { inTurn, type Owner, type SetsTurn, type Turn } from "./turn.ts";
+import { isUntrusted, untrustedData } from "./untrusted.ts";
 
 const PLACEHOLDERS = Symbol("nudge.placeholders");
 
@@ -40,22 +41,43 @@ export type ToolValues = {
  * have their values put back (unless the tool `keepsPlaceholders`), and what the tool returns,
  * prints and reports goes back to placeholders before the Harness stores it. Each call runs in
  * its conversation's turn, or the one a task above it sets (`SetsTurn`), so `currentTurn()` says
- * whether it answers something private.
+ * whether it answers something private, and whether the turn read untrusted data. What a tool
+ * marked `returnsUntrusted` gives the model is wrapped as untrusted data (ADR 20).
  */
 export function withToolValues(extension: Extension, values: ToolValues): Extension {
   if (extension.tools === undefined || extension.tools.length === 0) return extension;
   return { ...extension, tools: extension.tools.map((tool) => wrap(tool, values)) };
 }
 
+/**
+ * Per assistant, the untrusted data nested calls returned in each conversation's current turn.
+ * A script's calls leave their results in the script, not the transcript, where `turnOf` looks.
+ */
+const nestedReads = new WeakMap<ToolValues, Map<ConversationId, NestedReads>>();
+type NestedReads = { readonly start: Turn["start"]; readonly sources: Set<string>; calls: number };
+
 function wrap(tool: ToolRegistration, values: ToolValues): ToolRegistration {
   const placeholders = (tool as { [PLACEHOLDERS]?: true })[PLACEHOLDERS] === true;
+  const untrusted = isUntrusted(tool);
   const { redact, rehydrate } = values;
   const json = <T extends JsonValue | undefined>(value: T): T => mapStrings(value, redact);
+  const nested = nestedReads.get(values) ?? new Map<ConversationId, NestedReads>();
+  nestedReads.set(values, nested);
   return {
     ...tool,
     execute: async (args, api, context) => {
-      const turn =
-        (await setTurnOf(api, context)) ?? (await values.turn(api.conversationId, context));
+      const above = await callAbove(api, context);
+      const set = above.turn;
+      let turn = set ?? (await values.turn(api.conversationId, context));
+      // Turns a task sets have no model reading along (a watch's script run): not counted.
+      const record = set === undefined ? nested.get(api.conversationId) : undefined;
+      const current = record !== undefined && record.start === turn.start ? record : undefined;
+      if (current !== undefined && current.sources.size > 0)
+        turn = {
+          ...turn,
+          untrusted: [...new Set([...(turn.untrusted ?? []), ...current.sources])],
+        };
+      const before = current?.calls ?? 0;
       // Only what the player the turn acts for may see: others' private values stay placeholders,
       // in the arguments and in what its models answer.
       const viewer = (turn.by ?? turn.privateTo)?.playerId;
@@ -90,7 +112,26 @@ function wrap(tool: ToolRegistration, values: ToolValues): ToolRegistration {
       const result = await inTurn({ ...turn, redact }, () =>
         tool.execute(given as typeof args, shown, context),
       );
-      return redactResult(result, redact);
+      const redacted = redactResult(result, redact);
+      if (set !== undefined) return redacted;
+      if (above.nested) {
+        // The script gets the text as it is, so it can parse it; its own result is wrapped.
+        if (untrusted && !waits(redacted)) {
+          let record = nested.get(api.conversationId);
+          if (record === undefined || record.start !== turn.start)
+            nested.set(
+              api.conversationId,
+              (record = { start: turn.start, sources: new Set(), calls: 0 }),
+            );
+          record.sources.add(tool.name);
+          record.calls += 1;
+        }
+        return redacted;
+      }
+      const after = nested.get(api.conversationId);
+      if (after !== undefined && after.start === turn.start && after.calls > before && !untrusted)
+        return marked(redacted, `${tool.name} (${[...after.sources].join(", ")})`);
+      return untrusted && !waits(redacted) ? marked(redacted, tool.name) : redacted;
     },
     // The Harness checks arguments before they reach `execute`, with their placeholders.
     ...(placeholders ? {} : { parameters: allowingPlaceholders(tool.parameters) }),
@@ -184,29 +225,54 @@ export function withoutPlaceholders<T>(schema: T): T {
 const SETS_TURN_DEPTH = 8;
 
 /**
- * The turn the nearest task above this tool call sets (see `SetsTurn`): up through the tool tasks
- * of nested calls, to the first task that isn't one. Undefined when that task sets none, as for a
- * call the model makes, which answers what its conversation is in.
+ * What is above this tool call: the turn the nearest task that isn't a tool call sets (see
+ * `SetsTurn`), and whether a tool call is, as for a script's call. The turn is undefined when that
+ * task sets none, as for a call the model makes, which answers what its conversation is in.
  */
-async function setTurnOf(api: ToolExecutionApi, context: Context): Promise<Turn | undefined> {
+async function callAbove(
+  api: ToolExecutionApi,
+  context: Context,
+): Promise<{ turn?: Turn; nested: boolean }> {
   let id: TaskId | undefined = api.taskId;
   for (let depth = 0; id !== undefined && depth < SETS_TURN_DEPTH; depth++) {
     const record: TaskRecord<JsonValue, JsonValue, unknown> | undefined = await api.getTask(
       id,
       context,
     );
-    if (record === undefined) return undefined;
+    if (record === undefined) return { nested: depth > 1 };
     if (record.kind !== ToolTask.definition.name) {
+      const nested = depth > 1;
       const set = (record.input as Partial<SetsTurn> | null)?.turn;
-      if (typeof set !== "object" || set === null) return undefined;
+      if (typeof set !== "object" || set === null) return { nested };
       const owner = set.privateTo as Partial<Owner> | undefined;
-      return typeof owner?.playerId === "string" && typeof owner.displayName === "string"
-        ? { privateTo: { playerId: owner.playerId, displayName: owner.displayName } }
-        : {};
+      return {
+        nested,
+        turn:
+          typeof owner?.playerId === "string" && typeof owner.displayName === "string"
+            ? { privateTo: { playerId: owner.playerId, displayName: owner.displayName } }
+            : {},
+      };
     }
     id = record.owner;
   }
-  return undefined;
+  return { nested: true };
+}
+
+/** Whether a result only says the call waits for an approval: that text is ours. */
+function waits(result: ToolExecutionResult): boolean {
+  const details = result.details as { approval?: unknown } | undefined;
+  return typeof details === "object" && details !== null && details.approval !== undefined;
+}
+
+/** A result with its text wrapped as untrusted data from `source`. */
+function marked(result: ToolExecutionResult, source: string): ToolExecutionResult {
+  if (result.output === undefined) return result;
+  return {
+    ...result,
+    output: result.output.map((block) =>
+      block.type === "text" ? { ...block, text: untrustedData(source, block.text) } : block,
+    ),
+  };
 }
 
 function redactResult(
