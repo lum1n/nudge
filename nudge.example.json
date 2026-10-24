@@ -120,7 +120,7 @@
     }
   ],
   "backup": {
-    "$comment": "Encrypted backups nudge serve makes on its own: everything needed to restore, into dir (relative to this file). The key is NUDGE_BACKUP_KEY or nudge-backup.key beside this file; keep a copy of it off the machine. nudge backup makes one now, nudge restore <file> --to <dir> unpacks one.",
+    "$comment": "Encrypted backups nudge serve makes on its own: everything needed to restore, into dir (relative to this file). The key is NUDGE_BACKUP_KEY or nudge-backup.key beside this file; keep a copy of it off the machine. nudge backup makes one now, nudge restore <file> --to <dir> unpacks one. \"remote\": { \"type\": \"s3\", \"endpoint\", \"bucket\", \"region\"?, \"prefix\"? } or { \"type\": \"webdav\", \"url\" } copies each one there too, keeping as many; its credentials are set in the apps (Settings, Backups) or NUDGE_BACKUP_REMOTE_USER and NUDGE_BACKUP_REMOTE_SECRET, never here.",
     "dir": "backups",
     "everyHours": 24,
     "keep": 14
