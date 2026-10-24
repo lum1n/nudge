@@ -13,7 +13,8 @@ import type { Change } from "../changes.ts";
 import type { Room } from "../identity/directory.ts";
 import type { Rooms } from "../identity/rooms.ts";
 import { mapStrings } from "../privacy/redact.ts";
-import { currentTurn, inTurn, type Owner } from "../privacy/turn.ts";
+import { actingFor, currentTurn, inTurn, type Owner } from "../privacy/turn.ts";
+import { PLACEHOLDER } from "../privacy/vault.ts";
 import { untrustedData } from "../privacy/untrusted.ts";
 
 export type ApprovalStatus = "pending" | "approved" | "denied" | "done" | "failed";
@@ -31,6 +32,12 @@ export type Approval = {
   /** What the handler gets; the extension's own. */
   payload: JsonValue;
   requestedAt: number;
+  /**
+   * The player whose turn asked for it (see `actingFor`). The action gets only values both they
+   * and whoever decides may see. Absent for approvals stored before it was kept, and for those
+   * asked for in a turn that acted for nobody: their actions get only values nobody owns.
+   */
+  requestedBy?: Owner;
   status: ApprovalStatus;
   decidedBy?: { playerId: string; displayName: string };
   decidedAt?: number;
@@ -89,6 +96,12 @@ export type ApprovalRun = {
   /** The assistant's models, redacting and putting values back like a tool's `api.models`. */
   readonly models: Models;
   readonly context: Context;
+  /**
+   * Placeholders left in the payload, such as `⟦EMAIL2⟧`: values not both whoever asked and whoever
+   * decided may see, or forgotten ones. Empty when every value came back. A handler may refuse,
+   * or tell people what it could not fill in.
+   */
+  readonly heldBack: readonly string[];
 };
 
 export type ApprovalOutcome = {
@@ -134,7 +147,9 @@ export async function requestApproval(
   if (state.items.filter((item) => item.status === "pending").length >= MAX_PENDING)
     throw new Error(`This conversation has ${MAX_PENDING} approvals waiting already`);
   // Kept with placeholders like the transcript; the handler gets the values back.
-  const { privateTo, redact = (text: string) => text } = currentTurn();
+  const turn = currentTurn();
+  const { privateTo, redact = (text: string) => text } = turn;
+  const requestedBy = actingFor(turn);
   const approval: Approval = {
     id: `a${state.next}`,
     extension: draft.extension,
@@ -144,6 +159,8 @@ export async function requestApproval(
     requestedAt: now,
     status: "pending",
   };
+  if (requestedBy !== undefined)
+    approval.requestedBy = { playerId: requestedBy.playerId, displayName: requestedBy.displayName };
   if (privateTo !== undefined) approval.privateTo = { ...privateTo };
   if (draft.adminOnly === true) approval.adminOnly = true;
   state.next += 1;
@@ -175,14 +192,14 @@ export class Approvals {
     private readonly harness: Harness,
     private readonly rooms: Rooms,
     private readonly now: () => number,
-    /** Models that put back the values `viewer` may see; the viewer is who decided. */
+    /** Models that put back the values `viewer` may see; see `valuesFor` for the viewer. */
     private readonly models: (viewer: string | undefined) => Models,
     /** The handler an installed extension has for `kind`, looked up when an approval runs. */
     private readonly handler: (extension: string, kind: string) => ApprovalHandler | undefined,
     private readonly changed: (change: Change) => void = () => {},
     /**
-     * Puts the values `viewer` may see back in a payload, which is stored with placeholders. The
-     * viewer is who decided: an action never gets a value its decider may not see.
+     * Puts the values `viewer` may see back in a payload, which is stored with placeholders. See
+     * `valuesFor` for the viewer: an action never gets a value its decider may not see.
      */
     private readonly rehydrate: (viewer: string | undefined, text: string) => string = (_, text) =>
       text,
@@ -235,10 +252,10 @@ export class Approvals {
     });
     if (!decision.approve) {
       const denied = this.denial(decided.extension, decided.kind);
-      if (denied !== undefined)
-        await denied(this.payloadFor(decided), this.runFor(room, decided, context)).catch(
-          this.report,
-        );
+      if (denied !== undefined) {
+        const { payload, run } = this.runFor(room, decided, context);
+        await denied(payload, run).catch(this.report);
+      }
       await this.tell(room, decided, context);
       return decided;
     }
@@ -292,27 +309,36 @@ export class Approvals {
     try {
       // What the action asks for in turn, such as another approval, stays as private as it is.
       const turn = approval.privateTo === undefined ? {} : { privateTo: approval.privateTo };
-      return await inTurn(turn, () =>
-        handler(this.payloadFor(approval), this.runFor(room, approval, context)),
-      );
+      const { payload, run } = this.runFor(room, approval, context);
+      return await inTurn(turn, () => handler(payload, run));
     } catch (error) {
       return { text: (error as Error).message, isError: true };
     }
   }
 
-  /** The payload with the values its decider may see put back. */
-  private payloadFor(approval: Approval): Approval["payload"] {
-    const viewer = approval.decidedBy?.playerId;
-    return mapStrings(approval.payload, (text) => this.rehydrate(viewer, text));
-  }
-
-  private runFor(room: Room, approval: Approval, context: Context): ApprovalRun {
+  /** The payload with the values put back that `valuesFor` allows, and what a handler gets. */
+  private runFor(
+    room: Room,
+    approval: Approval,
+    context: Context,
+  ): { payload: Approval["payload"]; run: ApprovalRun } {
+    const viewer = valuesFor(approval);
+    const heldBack = new Set<string>();
+    const payload = mapStrings(approval.payload, (text) => {
+      const filled = this.rehydrate(viewer, text);
+      for (const match of filled.matchAll(PLACEHOLDER)) heldBack.add(match[0]);
+      return filled;
+    });
     return {
-      room,
-      approval,
-      commit: (apply) => this.harness.commit(apply, context),
-      models: this.models(approval.decidedBy?.playerId),
-      context,
+      payload,
+      run: {
+        room,
+        approval,
+        commit: (apply) => this.harness.commit(apply, context),
+        models: this.models(viewer),
+        context,
+        heldBack: [...heldBack],
+      },
     };
   }
 
@@ -385,6 +411,17 @@ export class Approvals {
       context,
     );
   }
+}
+
+/**
+ * Whose values an approved or denied action gets: the decider's when they also asked for it, else
+ * only values nobody owns. An owned value is visible to its owner alone, so a value both the
+ * requester and the decider may see is either unowned or theirs when they are the same player.
+ * An approval with no `requestedBy`, stored before it was kept, gets the unowned values only.
+ */
+export function valuesFor(approval: Readonly<Approval>): string | undefined {
+  const decider = approval.decidedBy?.playerId;
+  return decider !== undefined && approval.requestedBy?.playerId === decider ? decider : undefined;
 }
 
 async function readItems(read: DocumentReader, roomId: string, context: Context) {

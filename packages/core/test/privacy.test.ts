@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   builtinDetectors,
   createNudge,
+  inTurn,
   LOBBY,
   type NudgeOptions,
   quasiIdentifierDetectors,
@@ -413,6 +414,53 @@ describe("redaction in a running assistant", () => {
     }
     // The room is shared, but only Ann's turn acts on her value.
     expect(seenByTool).toEqual([placeholder, "Storgata 1"]);
+    await nudge.close(context);
+  });
+
+  it("gives the tools of a public nudge the values of whoever scheduled it", async () => {
+    const seenByTool: string[] = [];
+    const lookup = defineTool({
+      name: "lookup",
+      description: "Look something up",
+      parameters: Type.Object({ query: Type.String() }),
+      execute: async (args) => {
+        seenByTool.push(args.query);
+        return { output: [{ type: "text", text: "Nothing found." }] };
+      },
+    });
+    const { faux, options } = setup();
+    const nudge = await createNudge(
+      { ...options, extensions: [defineExtension({ name: "lookup", tools: [lookup] })] },
+      context,
+    );
+    const placeholder = await nudge.protect("Storgata 1", "PRIVATE", { owner: "ann" });
+    const ann = { playerId: "ann", displayName: "Ann" };
+    const answer = [
+      fauxAssistantMessage([fauxToolCall("lookup", { query: placeholder })], {
+        stopReason: "toolUse",
+      }),
+      fauxAssistantMessage("Nothing there."),
+    ];
+    faux.setResponses([...answer, ...answer]);
+    // One scheduled in Ann's public turn, one as nudges stored before they kept who scheduled them.
+    const scheduled = [
+      await inTurn({ by: ann }, () =>
+        nudge.nudges.schedule(LOBBY, { message: "Look it up", fireAt: Date.now() + 50 }, context),
+      ),
+      await nudge.nudges.schedule(
+        LOBBY,
+        { message: "Look it up", fireAt: Date.now() + 50 },
+        context,
+      ),
+    ];
+    expect(scheduled[0]).toMatchObject({ scheduledBy: ann });
+    expect(scheduled[0]?.privateTo).toBeUndefined();
+    expect(scheduled[1]?.scheduledBy).toBeUndefined();
+    const end = Date.now() + 5_000;
+    while (seenByTool.length < 2 && Date.now() < end)
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    await nudge.harness.waitForIdle(context);
+    expect(seenByTool.sort()).toEqual([placeholder, "Storgata 1"].sort());
     await nudge.close(context);
   });
 

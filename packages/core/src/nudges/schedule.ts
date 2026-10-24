@@ -16,6 +16,12 @@ export type ScheduledNudge = {
   createdAt: number;
   /** Set in answer to something private: only this player sees it, and what it leads to. */
   privateTo?: Owner;
+  /**
+   * Whose turn scheduled it: when it fires, its tools get this player's values, as that turn's did.
+   * Absent for nudges stored before it was kept, and for those scheduled in a turn that acted for
+   * nobody; those get only the values nobody owns.
+   */
+  scheduledBy?: Owner;
 };
 
 export type ScheduleState = {
