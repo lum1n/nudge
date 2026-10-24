@@ -11,6 +11,7 @@ import {
   setupInfo,
   setUpServer,
 } from "../api.ts";
+import { slugOf } from "../slug.ts";
 
 export const Route = createFileRoute("/setup")({ component: Setup });
 
@@ -21,17 +22,6 @@ const KEY_PAGES: Record<string, string> = {
 };
 
 type Step = "code" | "assistant" | "model" | "you" | "done";
-
-/** What the assistant is called, as its address has it: lower case, dashes for the rest. */
-function slugOf(name: string): string {
-  return name
-    .normalize("NFKD")
-    .replace(/\p{M}/gu, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 40);
-}
 
 /**
  * The setup wizard (ADR 11): a server with no config prints a one-time code and a link here. It

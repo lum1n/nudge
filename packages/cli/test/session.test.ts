@@ -29,13 +29,14 @@ vi.mock("@nudge/core", async (original) => {
 });
 
 /**
- * Ann, the first player and so an admin, and Bo, whose session it is; a value only Ann sees; and
- * nudges, one for the room and one only Ann sees.
+ * Ann, the first player and so an admin, and Bo, whose session it usually is; a value only Ann
+ * sees and one only Bo sees; and nudges, one for the room and one only Ann sees.
  */
 async function prepare(nudge: Nudge) {
-  await nudge.players.invite("Ann", context);
+  const ann = await nudge.players.invite("Ann", context);
   const bo = await nudge.players.invite("Bo", context);
   const anns = await nudge.protect("Ann's PIN 9876", "PRIVATE", { owner: "ann" });
+  const bos = await nudge.protect("Bo's alarm 2222", "PRIVATE", { owner: "bo" });
   const later = Date.now() + 86_400_000;
   const shared = await nudge.nudges.schedule(LOBBY, { message: "Water", fireAt: later }, context);
   const private_ = await nudge.nudges.schedule(
@@ -43,14 +44,23 @@ async function prepare(nudge: Nudge) {
     { message: "Ann's pills", fireAt: later, privateTo: { playerId: "ann", displayName: "Ann" } },
     context,
   );
-  return { boToken: bo.token, anns, shared: shared.id, private: private_.id };
+  return {
+    tokens: { ann: ann.token, bo: bo.token },
+    anns,
+    bos,
+    shared: shared.id,
+    private: private_.id,
+  };
 }
 
 type Prepared = Awaited<ReturnType<typeof prepare>>;
 
-/** One way to open Bo's session in the lobby; resolves with it and what was prepared. */
+/** One way to open Bo's (or Ann's) session in the lobby; resolves with it and what was prepared. */
 type Opener = {
-  open(onProblem: (message: string) => void): Promise<{ session: ChatSession; prepared: Prepared }>;
+  open(
+    onProblem: (message: string) => void,
+    player?: "ann" | "bo",
+  ): Promise<{ session: ChatSession; prepared: Prepared }>;
   close(): Promise<void>;
 };
 
@@ -76,7 +86,7 @@ afterEach(async () => {
 /** The assistant's database, opened in this process as `nudge chat` does. */
 function local(): Opener {
   return {
-    async open(onProblem) {
+    async open(onProblem, player = "bo") {
       const config = join(dir, "nudge.json");
       await writeFile(
         config,
@@ -86,7 +96,7 @@ function local(): Opener {
       const nudge = await openAssistant(loaded, loaded.assistants[0]!, context);
       const prepared = await prepare(nudge);
       await nudge.close(context);
-      const session = await openLocal({ config, player: "bo", defaultName: "x", onProblem });
+      const session = await openLocal({ config, player, defaultName: "x", onProblem });
       return { session, prepared };
     },
     close: async () => {},
@@ -98,11 +108,15 @@ function remote(): Opener {
   let nudge: Nudge | undefined;
   let server: RunningServer | undefined;
   return {
-    async open(onProblem) {
+    async open(onProblem, player = "bo") {
       nudge = await createNudge({ database: ":memory:", ...models.current! }, context);
       const prepared = await prepare(nudge);
       server = await serveNudge({ assistants: new Map([["robin", nudge]]), port: 0 });
-      const session = await openRemote({ url: server.url, token: prepared.boToken, onProblem });
+      const session = await openRemote({
+        url: server.url,
+        token: prepared.tokens[player],
+        onProblem,
+      });
       return { session, prepared };
     },
     async close() {
@@ -159,12 +173,16 @@ describe.each([
 
   it("keeps Bo's private values his, and won't forget Ann's", async () => {
     const placeholder = await session.protect("Bo's door code 1111");
-    expect((await session.privateValues()).map((value) => value.placeholder)).toEqual([
-      placeholder,
-    ]);
+    const placeholders = async () =>
+      (await session.privateValues()).map((value) => value.placeholder);
+    expect(await placeholders()).toEqual([prepared.bos, placeholder]);
     await expect(session.forgetValue(prepared.anns)).rejects.toThrow(prepared.anns);
     await session.forgetValue(placeholder);
-    expect(await session.privateValues()).toEqual([]);
+    expect(await placeholders()).toEqual([prepared.bos]);
+    await expect(session.forgetValue(placeholder)).rejects.toMatchObject({
+      name: "UsageError",
+      message: `No value ${placeholder}`,
+    });
   });
 
   it("cancels the room's nudge, but not one only Ann sees", async () => {
@@ -181,5 +199,24 @@ describe.each([
   it("says when there is no such extension", async () => {
     expect(await session.extensions()).toEqual([]);
     await expect(session.setExtension("nope", true)).rejects.toMatchObject({ name: "UsageError" });
+  });
+});
+
+describe.each([
+  ["in this process", local],
+  ["through a server", remote],
+])("an admin's chat session %s", (_, opener) => {
+  it("forgets another player's private value, as the server lets an admin", async () => {
+    const problems: string[] = [];
+    const ending = opener();
+    const { session, prepared } = await ending.open((message) => problems.push(message), "ann");
+    try {
+      await session.forgetValue(prepared.bos);
+      await expect(session.forgetValue(prepared.bos)).rejects.toThrow(`No value ${prepared.bos}`);
+    } finally {
+      await session.close();
+      await ending.close();
+    }
+    expect(problems).toEqual([]);
   });
 });
