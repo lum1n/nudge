@@ -231,6 +231,7 @@ export {
   type ClientInfo,
   DirectoryDoc,
   type DirectoryState,
+  LAST_USED_EVERY_MS,
   LOBBY,
   type PairingRecord,
   type SideConversation,

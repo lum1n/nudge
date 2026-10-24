@@ -6,6 +6,7 @@ import {
   addressOf,
   type ClientInfo,
   hashToken,
+  LAST_USED_EVERY_MS,
   parseAddress,
   type PlayerHome,
   sameHome,
@@ -36,6 +37,10 @@ export type OwnerToken = {
   readonly ownerId: string;
   readonly client?: ClientInfo;
   readonly createdAt: number;
+  /** When it last signed in, to the minute; absent until then. */
+  readonly lastUsedAt?: number;
+  /** When it stops working; absent for one that works until revoked, as apps' do. */
+  readonly expiresAt?: number;
 };
 
 type Stored = {
@@ -214,8 +219,12 @@ export class ServerOwners {
     }
   }
 
-  /** A new token for the owner, shown once. */
-  issue(ownerId: string, client?: ClientInfo): { token: string; clientId: string } {
+  /** A new token for the owner, shown once; one with `expiresAt` stops working then. */
+  issue(
+    ownerId: string,
+    client?: ClientInfo,
+    expiresAt?: number,
+  ): { token: string; clientId: string } {
     if (!this.read().owners.some((owner) => owner.id === ownerId))
       throw new Error(`No owner "${ownerId}"`);
     const token = TOKEN_PREFIX + randomBytes(32).toString("base64url");
@@ -226,20 +235,36 @@ export class ServerOwners {
         ownerId,
         ...(client === undefined ? {} : { client }),
         createdAt: this.now(),
+        ...(expiresAt === undefined ? {} : { expiresAt }),
       };
     });
     return { token, clientId };
   }
 
-  /** The owner a token signs in as, while they are still an owner. */
+  /**
+   * The owner a token signs in as, while they are still an owner and it hasn't expired. Notes
+   * when it was used, writing the file at most once a minute per token.
+   */
   authenticate(token: string): { owner: ServerOwner; clientId: string } | undefined {
     if (!token.startsWith(TOKEN_PREFIX)) return undefined;
     const stored = this.read();
-    const record = stored.tokens[hashToken(token)];
+    const hash = hashToken(token);
+    const record = stored.tokens[hash];
     const owner = stored.owners.find((o) => o.id === record?.ownerId);
-    return record === undefined || owner === undefined
-      ? undefined
-      : { owner, clientId: record.clientId };
+    if (record === undefined || owner === undefined) return undefined;
+    const now = this.now();
+    if (record.expiresAt !== undefined && record.expiresAt <= now) return undefined;
+    if (now - (record.lastUsedAt ?? 0) >= LAST_USED_EVERY_MS) {
+      try {
+        this.change((next) => {
+          const found = next.tokens[hash];
+          if (found !== undefined) next.tokens[hash] = { ...found, lastUsedAt: now };
+        });
+      } catch {
+        // A sign-in doesn't fail for want of a timestamp.
+      }
+    }
+    return { owner, clientId: record.clientId };
   }
 
   tokens(): OwnerToken[] {

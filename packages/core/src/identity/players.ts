@@ -7,6 +7,7 @@ import {
   type DirectoryState,
   freeId,
   hashToken,
+  LAST_USED_EVERY_MS,
   newPairingCode,
   newToken,
   normalizePairingCode,
@@ -18,7 +19,12 @@ import {
 } from "./directory.ts";
 
 /** What a valid token stands for. */
-export type Credential = { readonly player: Player; readonly clientId: string };
+export type Credential = {
+  readonly player: Player;
+  readonly clientId: string;
+  /** When the token stops working; absent for one that works until revoked. */
+  readonly expiresAt?: number;
+};
 
 export type Invitation = Credential & {
   /** Shown once; only its hash is kept. */
@@ -37,6 +43,9 @@ export const PAIRING_TTL_MS = 10 * 60 * 1000;
 
 /** The people who use one assistant, and their tokens. */
 export class Players {
+  /** When this process last wrote each token's `lastUsedAt`, by hash, so a burst writes once. */
+  private readonly touched = new Map<string, number>();
+
   constructor(
     private readonly harness: Harness,
     private readonly now: () => number,
@@ -191,18 +200,26 @@ export class Players {
     }, context);
   }
 
-  /** Another token for an existing player, such as for a second device. */
-  async issueToken(playerId: string, context: Context): Promise<Invitation> {
+  /**
+   * Another token for an existing player, such as for a second device or a script; one with
+   * `expiresAt` stops working then.
+   */
+  async issueToken(playerId: string, context: Context, expiresAt?: number): Promise<Invitation> {
     const token = newToken();
     const clientId = `client-${randomUUID()}`;
     const player = await this.harness.commit(async (tx) => {
       const directory = await tx.doc(DirectoryDoc);
       const player = directory.players[playerId];
       if (player === undefined) throw new Error(`No player "${playerId}"`);
-      directory.tokens[hashToken(token)] = { playerId, clientId, createdAt: this.now() };
+      directory.tokens[hashToken(token)] = {
+        playerId,
+        clientId,
+        createdAt: this.now(),
+        ...(expiresAt === undefined ? {} : { expiresAt }),
+      };
       return copyOf(player);
     }, context);
-    return { player, clientId, token };
+    return { player, clientId, token, ...(expiresAt === undefined ? {} : { expiresAt }) };
   }
 
   /** A code that a new client of `playerId` trades for a token with `pair`, once, within ten minutes. */
@@ -292,15 +309,45 @@ export class Players {
       if (hash === undefined) throw new Error(`No token for client "${clientId}"`);
       const record = { ...directory.tokens[hash]! };
       delete directory.tokens[hash];
+      this.touched.delete(hash);
       return record;
     }, context);
   }
 
+  /** What `token` stands for, unless it is unknown, revoked or expired. Notes when it was used. */
   async authenticate(token: string, context: Context): Promise<Credential | undefined> {
     const directory = await this.harness.snapshot(DirectoryDoc, context);
-    const record = directory?.tokens[hashToken(token)];
+    const hash = hashToken(token);
+    const record = directory?.tokens[hash];
     const player = record === undefined ? undefined : directory?.players[record.playerId];
-    return player === undefined ? undefined : { player, clientId: record!.clientId };
+    if (record === undefined || player === undefined) return undefined;
+    const now = this.now();
+    if (record.expiresAt !== undefined && record.expiresAt <= now) return undefined;
+    await this.touch(
+      hash,
+      Math.max(record.lastUsedAt ?? 0, this.touched.get(hash) ?? 0),
+      now,
+      context,
+    );
+    return {
+      player,
+      clientId: record.clientId,
+      ...(record.expiresAt === undefined ? {} : { expiresAt: record.expiresAt }),
+    };
+  }
+
+  /** Writes a token's `lastUsedAt`, at most once a minute: a busy client costs no commit a request. */
+  private async touch(hash: string, last: number, now: number, context: Context): Promise<void> {
+    if (now - last < LAST_USED_EVERY_MS) return;
+    this.touched.set(hash, now);
+    try {
+      await this.harness.commit(async (tx) => {
+        const record = (await tx.doc(DirectoryDoc)).tokens[hash];
+        if (record !== undefined) record.lastUsedAt = now;
+      }, context);
+    } catch {
+      // A sign-in doesn't fail for want of a timestamp; the next one a minute on tries again.
+    }
   }
 }
 

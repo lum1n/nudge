@@ -1,4 +1,4 @@
-import type { ExtensionSetup, RoomKind } from "@nudge/client";
+import type { ExtensionSetup, RoomKind, TokenInfo } from "@nudge/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { type ReactNode, useEffect, useState } from "react";
@@ -34,7 +34,7 @@ function draftOf(setup: ExtensionSetup): Draft {
   };
 }
 
-/** What an admin sets up for everyone: how the robot looks, and the extensions. */
+/** What an admin sets up for everyone: how the robot looks, the extensions, who is signed in. */
 function Settings() {
   const { assistant } = Route.useParams();
   const me = useQuery(meQuery(assistant));
@@ -43,6 +43,7 @@ function Settings() {
   return (
     <>
       <Robot />
+      <Clients />
       <Extensions />
     </>
   );
@@ -118,6 +119,126 @@ function Robot() {
       </div>
     </section>
   );
+}
+
+/** Every signed-in app, browser and script, by player, with when each was last used. */
+function Clients() {
+  const { assistant } = Route.useParams();
+  const me = useQuery(meQuery(assistant));
+  const queryClient = useQueryClient();
+  const key = [assistant, "tokens"];
+  const enabled = me.data?.admin === true;
+  const tokens = useQuery({
+    queryKey: key,
+    queryFn: () => clientFor(assistant).api.listTokens(),
+    enabled,
+  });
+  const players = useQuery({
+    queryKey: [assistant, "players"],
+    queryFn: () => clientFor(assistant).api.players(),
+    enabled,
+  });
+  const [revoking, setRevoking] = useState<string>();
+  const [error, setError] = useState<string>();
+
+  async function revoke(token: TokenInfo) {
+    setRevoking(token.clientId);
+    setError(undefined);
+    try {
+      await clientFor(assistant).api.revoke(token.clientId);
+      queryClient.setQueryData<TokenInfo[]>(key, (current) =>
+        current?.filter((t) => t.clientId !== token.clientId),
+      );
+    } catch (caught) {
+      setError((caught as Error).message);
+    } finally {
+      setRevoking(undefined);
+    }
+  }
+
+  const names = new Map(players.data?.map((player) => [player.id, player.displayName]));
+  // Most recently used first; never used last.
+  const sorted = [...(tokens.data ?? [])].sort(
+    (a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0) || b.createdAt - a.createdAt,
+  );
+  return (
+    <section className="mx-auto flex max-w-3xl flex-col gap-3 p-3 sm:p-4">
+      <div>
+        <h2 className="text-lg font-medium">Signed in</h2>
+        <p className="text-sm text-stone-600">
+          Every app, browser and script with a token, and when it was last used. Revoking one signs
+          it out at once.
+        </p>
+      </div>
+      {tokens.error ? (
+        <p className="text-sm text-red-700">{tokens.error.message}</p>
+      ) : tokens.data === undefined ? (
+        <p className="text-sm text-stone-600">Loading…</p>
+      ) : (
+        <ul className="divide-y divide-stone-200 rounded border border-stone-200 bg-white">
+          {sorted.map((token) => {
+            const expired = token.expiresAt !== undefined && token.expiresAt <= Date.now();
+            return (
+              <li key={token.clientId} className="flex items-center gap-3 p-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">
+                    {names.get(token.playerId) ?? token.playerId}
+                    <span className="font-normal text-stone-600">
+                      {" · "}
+                      {token.client === undefined
+                        ? "Token"
+                        : `${token.client.name} (${token.client.platform})`}
+                    </span>
+                    {token.clientId === me.data?.clientId && (
+                      <span className="ml-2 text-xs text-emerald-700">This browser</span>
+                    )}
+                  </p>
+                  <p className="text-sm text-stone-500">
+                    {token.lastUsedAt === undefined
+                      ? "Never used"
+                      : `Last used ${ago(token.lastUsedAt)}`}
+                    {" · added "}
+                    {new Date(token.createdAt).toLocaleDateString()}
+                    {token.expiresAt !== undefined && (
+                      <span className={expired ? "text-red-700" : undefined}>
+                        {expired ? " · expired " : " · expires "}
+                        {new Date(token.expiresAt).toLocaleString()}
+                      </span>
+                    )}
+                  </p>
+                </div>
+                {token.clientId !== me.data?.clientId && (
+                  <button
+                    type="button"
+                    disabled={revoking !== undefined}
+                    onClick={() => void revoke(token)}
+                    className="shrink-0 rounded border border-stone-300 px-3 py-1.5 text-sm disabled:opacity-50"
+                  >
+                    {revoking === token.clientId ? "Revoking…" : "Revoke"}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
+    </section>
+  );
+}
+
+const RELATIVE = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+
+/** `at` as "just now", "5 minutes ago", "yesterday", or a date once over a month ago. */
+function ago(at: number): string {
+  const minutes = Math.round((Date.now() - at) / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return RELATIVE.format(-minutes, "minute");
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return RELATIVE.format(-hours, "hour");
+  const days = Math.round(hours / 24);
+  if (days <= 30) return RELATIVE.format(-days, "day");
+  return `on ${new Date(at).toLocaleDateString()}`;
 }
 
 /** The assistant's extensions, set up by an admin: on or off, their settings and rooms. */

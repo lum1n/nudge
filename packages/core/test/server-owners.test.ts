@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { LastOwner, ServerOwners, serverOwnersFile } from "../src/index.ts";
+import { LAST_USED_EVERY_MS, LastOwner, ServerOwners, serverOwnersFile } from "../src/index.ts";
 
 describe("ServerOwners", () => {
   let dir: string;
@@ -24,6 +24,32 @@ describe("ServerOwners", () => {
     expect(new ServerOwners(file).authenticate(token)?.owner.id).toBe(ann.id);
     expect(new ServerOwners(file).authenticate("nudge_server_nope")).toBeUndefined();
     expect(new ServerOwners(file).authenticate("nudge_player_token")).toBeUndefined();
+  });
+
+  it("notes when a token was last used, at most once a minute, and stops one that expired", () => {
+    let now = 1_000_000;
+    const owners = new ServerOwners(file, () => now);
+    const ann = owners.add("robin", "ann");
+    const app = owners.issue(ann.id, { name: "Nudge", platform: "ios" });
+    const script = owners.issue(ann.id, undefined, now + 60 * 60 * 1000);
+    const lastUsed = (clientId: string) =>
+      new ServerOwners(file).tokens().find((t) => t.clientId === clientId)?.lastUsedAt;
+    expect(lastUsed(app.clientId)).toBeUndefined();
+
+    const used = now;
+    expect(owners.authenticate(app.token)?.owner.id).toBe(ann.id);
+    expect(lastUsed(app.clientId)).toBe(used);
+    now += LAST_USED_EVERY_MS - 1;
+    owners.authenticate(app.token);
+    expect(lastUsed(app.clientId)).toBe(used);
+    now += 1;
+    owners.authenticate(app.token);
+    expect(lastUsed(app.clientId)).toBe(now);
+
+    expect(owners.authenticate(script.token)?.clientId).toBe(script.clientId);
+    now += 60 * 60 * 1000;
+    expect(owners.authenticate(script.token)).toBeUndefined();
+    expect(owners.authenticate(app.token)?.owner.id).toBe(ann.id);
   });
 
   it("keeps the last owner, and forgets those of a deleted assistant with their tokens", () => {

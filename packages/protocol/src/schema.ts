@@ -924,6 +924,10 @@ export const TokenInfo = Type.Object({
   createdAt: Type.Number(),
   /** What the client said it is when it paired. */
   client: Type.Optional(ClientInfo),
+  /** When it last signed in a request or socket, to the minute; absent until then. */
+  lastUsedAt: Type.Optional(Type.Number()),
+  /** When it stops working; absent for one that works until revoked, as apps' do. */
+  expiresAt: Type.Optional(Type.Number()),
 });
 export type TokenInfo = Static<typeof TokenInfo>;
 
@@ -954,7 +958,11 @@ export const SetAdminRequest = Type.Object({ admin: Type.Boolean() });
 export type SetAdminRequest = Static<typeof SetAdminRequest>;
 
 /** A new token for an existing player; like `PairResponse`, the token is shown only here. */
-export const IssueTokenRequest = Type.Object({ playerId: Type.String() });
+export const IssueTokenRequest = Type.Object({
+  playerId: Type.String(),
+  /** When it stops working, such as for a script's; absent, it works until revoked. */
+  expiresAt: Type.Optional(Type.Number()),
+});
 export type IssueTokenRequest = Static<typeof IssueTokenRequest>;
 
 export const RoomsResponse = Type.Object({ rooms: Type.Array(Room) });

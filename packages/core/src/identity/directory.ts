@@ -93,6 +93,10 @@ export type TokenRecord = {
   createdAt: number;
   /** What the client said it is when it paired. */
   client?: ClientInfo;
+  /** When it last signed in a request or socket, to the minute; absent until then. */
+  lastUsedAt?: number;
+  /** When it stops working; absent for one that works until revoked, as apps' do. */
+  expiresAt?: number;
 };
 
 export type ClientInfo = { name: string; platform: string };
@@ -170,6 +174,12 @@ export function newPairingCode(): string {
 export function normalizePairingCode(code: string): string {
   return code.toUpperCase().replace(/[\s-]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
 }
+
+/**
+ * How stale a token's `lastUsedAt` may get before a sign-in writes it again: at most one write a
+ * minute per token, however busy it is.
+ */
+export const LAST_USED_EVERY_MS = 60 * 1000;
 
 export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");

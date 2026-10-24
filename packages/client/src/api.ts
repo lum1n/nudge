@@ -1,4 +1,5 @@
 import type {
+  AdminPlayer,
   Appearance,
   AppearanceResponse,
   Approval,
@@ -26,6 +27,7 @@ import type {
   Player,
   PlayerMemoryResponse,
   PlayerResponse,
+  PlayersResponse,
   PrivateValue,
   PrivateValuesResponse,
   PlayerSettingsResponse,
@@ -409,6 +411,11 @@ export class Api {
   async setAppearance(appearance: Appearance | null): Promise<Appearance | undefined> {
     return (await this.request<AppearanceResponse>("PUT", "/admin/appearance", { appearance }))
       .appearance;
+  }
+
+  /** Every player, with whether they are an admin. */
+  async players(): Promise<AdminPlayer[]> {
+    return (await this.request<PlayersResponse>("GET", "/admin/players")).players;
   }
 
   async createPlayer(displayName: string): Promise<Player> {
