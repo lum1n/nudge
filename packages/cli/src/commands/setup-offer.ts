@@ -24,9 +24,29 @@ export function offeredProviders(): SetupProvider[] {
   });
 }
 
-/** An assistant's name as its address has it: lower case, dashes for the rest. */
+/** Letters NFKD leaves whole, spelled the way they are in plain ASCII. */
+const SPELLED: Record<string, string> = {
+  æ: "ae",
+  Æ: "ae",
+  ø: "o",
+  Ø: "o",
+  ß: "ss",
+  ẞ: "ss",
+  đ: "d",
+  Đ: "d",
+  ł: "l",
+  Ł: "l",
+  þ: "th",
+  Þ: "th",
+};
+
+/**
+ * An assistant's name as its address has it: lower case, dashes for the rest. The web, Android
+ * and Apple apps have copies of this; keep them giving the same slug.
+ */
 export function slugOf(name: string): string {
   return name
+    .replace(/[æÆøØßẞđĐłŁþÞ]/gu, (letter) => SPELLED[letter]!)
     .normalize("NFKD")
     .replace(/\p{M}/gu, "")
     .toLowerCase()
