@@ -39,3 +39,14 @@ Notifications need a Firebase project:
 2. Under Project settings → Service accounts, generate a private key, and give the JSON file to the server's push extension as `fcm.serviceAccountFile` (see the repository's README).
 
 A server without that service account can still reach the app through a push relay (`packages/relay`) that has it. Build with `-Pnudge.pushRelay=https://relay.example`: when a server lists that relay in its push extension's `relays`, the app registers its FCM token with the relay and gives the server the relay's handle and a key of its own, made once and kept in the app's private storage. Those pushes arrive sealed for that key, and `PushService` opens them before it makes the notification.
+
+## Releases
+
+A release tag (`release.yml`) builds a signed APK, `nudge-<version>-android.apk`, with the version from the tag and the native libraries, when the repository has these secrets: `NUDGE_ANDROID_KEYSTORE` (the keystore, base64), `NUDGE_ANDROID_KEYSTORE_PASSWORD`, `NUDGE_ANDROID_KEY_ALIAS` and, when the key's password differs, `NUDGE_ANDROID_KEY_PASSWORD`. Make the keystore once and keep a copy somewhere safe: an update signed with another key won't install over the app.
+
+```bash
+keytool -genkeypair -keystore nudge-release.jks -alias nudge -keyalg RSA -keysize 4096 -validity 10000
+base64 -w0 nudge-release.jks   # the NUDGE_ANDROID_KEYSTORE secret
+```
+
+For notifications it also needs the project's `google-services.json` in the secret `NUDGE_GOOGLE_SERVICES_JSON`, and the push relay's address in the repository variable `NUDGE_PUSH_RELAY`, so servers without the project's Firebase account reach the app through the relay. Locally, the same build is `./gradlew :app:assembleRelease` with `NUDGE_KEYSTORE` (the keystore's path), `NUDGE_KEYSTORE_PASSWORD`, `NUDGE_KEY_ALIAS` and `NUDGE_KEY_PASSWORD` in the environment; without `NUDGE_KEYSTORE` it is unsigned.
