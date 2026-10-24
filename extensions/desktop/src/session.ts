@@ -15,6 +15,14 @@ import {
 import { tmpdir } from "node:os";
 import { basename, delimiter, join } from "node:path";
 import { type Address, Atspi, type Info } from "./atspi.ts";
+import {
+  type AppNetwork,
+  inAppNetwork,
+  networkProblem,
+  openAppNetwork,
+  RESOLV_CONF,
+  resolvConf,
+} from "./network.ts";
 import { type DesktopNode, type DesktopWindow, renderDesktop, roleOf } from "./snapshot.ts";
 
 export interface DesktopOptions {
@@ -26,9 +34,10 @@ export interface DesktopOptions {
   /**
    * Runs the apps in a bubblewrap sandbox: they see the system's programs and libraries read-only,
    * the desktop's home and display, and nothing else of the machine (no other homes, no Nudge
-   * data). `readable` adds directories they may read, such as where an app is unpacked.
+   * data). `readable` adds directories they may read, such as where an app is unpacked. They reach
+   * the internet but not this machine's services or the local network, unless `localNetwork`.
    */
-  sandbox?: { readable?: readonly string[] };
+  sandbox?: { readable?: readonly string[]; localNetwork?: boolean };
 }
 
 /** An action that could not be done, said so the agent can try something else. */
@@ -65,15 +74,18 @@ const NODE_LIMIT = 5_000;
 const CLICKS = ["click", "press", "activate", "toggle", "jump", "open"];
 
 /**
- * Why a desktop can't start here, if it can't: it needs Xvfb, D-Bus and AT-SPI, and bubblewrap
- * when the apps run sandboxed.
+ * Why a desktop can't start here, if it can't: it needs Xvfb, D-Bus and AT-SPI, bubblewrap when
+ * the apps run sandboxed, and slirp4netns when their network leaves out the local one.
  */
-export function desktopProblem(options: { sandbox?: boolean } = {}): string | undefined {
+export function desktopProblem(
+  options: { sandbox?: boolean; localNetwork?: boolean } = {},
+): string | undefined {
   const missing = ["Xvfb", "dbus-daemon"].filter((program) => !onPath(program));
   if (!a11yBusConfig()) missing.push("AT-SPI bus config");
   if (missing.length)
     return `This server has no ${missing.join(" or ")} for the desktop. Install xvfb, dbus and at-spi2-core (in Docker, use the stable-desktop image).`;
-  if (options.sandbox) return sandboxProblem();
+  if (options.sandbox)
+    return sandboxProblem() ?? (options.localNetwork ? undefined : networkProblem());
   return undefined;
 }
 
@@ -168,6 +180,8 @@ export class DesktopSession {
   private readonly env: NodeJS.ProcessEnv;
   private readonly runtimeDir: string;
   private readonly processes: ChildProcess[];
+  /** The sandboxed apps' network, without this machine and the local network. */
+  private readonly network: AppNetwork | undefined;
 
   private constructor(
     options: DesktopOptions,
@@ -176,6 +190,7 @@ export class DesktopSession {
     atspi: Atspi,
     runtimeDir: string,
     processes: ChildProcess[],
+    network: AppNetwork | undefined,
   ) {
     this.options = options;
     this.display = display;
@@ -183,10 +198,14 @@ export class DesktopSession {
     this.atspi = atspi;
     this.runtimeDir = runtimeDir;
     this.processes = processes;
+    this.network = network;
   }
 
   static async open(options: DesktopOptions): Promise<DesktopSession> {
-    const problem = desktopProblem({ sandbox: options.sandbox !== undefined });
+    const problem = desktopProblem({
+      sandbox: options.sandbox !== undefined,
+      localNetwork: options.sandbox?.localNetwork === true,
+    });
     if (problem) throw new Error(problem);
     sweepDesktops();
     const processes: ChildProcess[] = [];
@@ -239,8 +258,26 @@ export class DesktopSession {
         GTK_USE_PORTAL: "0",
         QT_NO_XDG_DESKTOP_PORTAL: "1",
       };
+      let network: AppNetwork | undefined;
+      if (options.sandbox && !options.sandbox.localNetwork) {
+        network = await openAppNetwork();
+        for (const child of [network.holder, network.slirp]) {
+          processes.push(child);
+          killOnExit(child);
+          record(runtimeDir, child);
+        }
+        writeFileSync(join(runtimeDir, "resolv.conf"), RESOLV_CONF);
+      }
       const atspi = await Atspi.connect(bus.address, a11y.address);
-      const session = new DesktopSession(options, xvfb.display, env, atspi, runtimeDir, processes);
+      const session = new DesktopSession(
+        options,
+        xvfb.display,
+        env,
+        atspi,
+        runtimeDir,
+        processes,
+        network,
+      );
       session.framebuffer = join(runtimeDir, "fb", "Xvfb_screen0");
       await atspi.onEvents(
         ["object:state-changed:showing", "object:state-changed:focused"],
@@ -298,9 +335,17 @@ export class DesktopSession {
         `There is no app called "${name}". ${names.length ? `The apps are: ${names.join(", ")}.` : "No apps are set up."}`,
       );
     }
-    const [program, ...args] = this.options.sandbox
-      ? ["bwrap", ...this.sandboxArgs(this.options.sandbox), "--", ...command]
-      : command;
+    const sandboxed = this.options.sandbox && [
+      "bwrap",
+      ...this.sandboxArgs(this.options.sandbox),
+      "--",
+      ...command,
+    ];
+    const [program, ...args] = !sandboxed
+      ? command
+      : this.network
+        ? inAppNetwork(this.network, sandboxed)
+        : sandboxed;
     const child = spawn(program!, args, {
       env: this.env,
       cwd: this.options.homeDir,
@@ -314,7 +359,8 @@ export class DesktopSession {
     });
     failed.catch(() => {});
     if (child.pid !== undefined) this.launched.set(child.pid, { name, child });
-    record(this.runtimeDir, child);
+    // nsenter runs bubblewrap in its place.
+    record(this.runtimeDir, child, sandboxed ? "bwrap" : undefined);
     child.once("exit", () => {
       if (child.pid !== undefined) this.launched.delete(child.pid);
     });
@@ -332,16 +378,21 @@ export class DesktopSession {
 
   /**
    * bubblewrap's arguments for an app: the system read-only, the desktop's home, display and
-   * buses writable, an empty /tmp, and no other files of the machine. It shares the network, and
-   * IPC for X's shared memory. It dies with Nudge.
+   * buses writable, an empty /tmp, and no other files of the machine. It shares IPC, for X's
+   * shared memory, and the desktop's network: in a user namespace of its own, as this user without
+   * capabilities, so it can't lift the network's blocks, with slirp4netns's DNS. It dies with Nudge.
    */
   private sandboxArgs(sandbox: NonNullable<DesktopOptions["sandbox"]>): string[] {
     const system = ["/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/etc", "/opt"];
     // Fonts' caches, and where /etc/resolv.conf points on systemd hosts.
     const extra = ["/var/cache/fontconfig", "/run/systemd/resolve", ...(sandbox.readable ?? [])];
     const socket = `/tmp/.X11-unix/X${this.display.slice(1)}`;
+    const ids = [String(process.getuid?.() ?? 0), String(process.getgid?.() ?? 0)];
     return [
       "--die-with-parent",
+      ...(this.network
+        ? ["--unshare-user", "--uid", ids[0]!, "--gid", ids[1]!, "--cap-drop", "ALL"]
+        : []),
       "--unshare-pid",
       "--unshare-uts",
       "--unshare-cgroup-try",
@@ -355,6 +406,7 @@ export class DesktopSession {
       "--tmpfs",
       "/run",
       ...extra.flatMap((path) => ["--ro-bind-try", path, path]),
+      ...(this.network ? ["--ro-bind", join(this.runtimeDir, "resolv.conf"), resolvConf()] : []),
       "--bind",
       socket,
       socket,
@@ -1083,10 +1135,13 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Notes a process group a desktop started, for `sweepDesktops`: its leader's pid and program. */
-function record(runtimeDir: string, child: ChildProcess): void {
+/**
+ * Notes a process group a desktop started, for `sweepDesktops`: its leader's pid and program, or
+ * `as`, the program it runs in its own place.
+ */
+function record(runtimeDir: string, child: ChildProcess, as?: string): void {
   if (child.pid === undefined) return;
-  const program = commandOf(child.pid);
+  const program = as ?? commandOf(child.pid);
   if (program) appendFileSync(join(runtimeDir, "groups"), `${child.pid} ${program}\n`);
 }
 

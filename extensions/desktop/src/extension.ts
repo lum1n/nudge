@@ -50,6 +50,11 @@ export default defineNudgeExtension({
       description:
         "Run the apps in a bubblewrap sandbox, where they see only the system's programs and their desktop's own files, not the server's. Needs bubblewrap and user namespaces.",
     }),
+    localNetwork: Type.Boolean({
+      default: false,
+      description:
+        "Let the sandboxed apps reach the network as the server does: the local network and this machine's own services too, without slirp4netns. Off, they reach the internet only, through slirp4netns.",
+    }),
     readable: Type.Array(Type.String(), {
       default: [],
       description:
@@ -96,10 +101,13 @@ export default defineNudgeExtension({
 
     /** One run of the desktop agent on a room's desktop: its own home, files and app settings. */
     const scopeOf = (conversationId: number) => `conversation-${conversationId}`;
+    const problemOptions = { sandbox: settings.sandbox, localNetwork: settings.localNetwork };
     const optionsFor = (conversationId: number): DesktopOptions => ({
       apps,
       homeDir: join(homes(), scopeOf(conversationId)),
-      ...(settings.sandbox ? { sandbox: { readable: settings.readable } } : {}),
+      ...(settings.sandbox
+        ? { sandbox: { readable: settings.readable, localNetwork: settings.localNetwork } }
+        : {}),
     });
     const useIn = async (
       run: { readonly models: Models; readonly conversationId: number; readonly context: Context },
@@ -108,7 +116,7 @@ export default defineNudgeExtension({
     ): Promise<DesktopAgentResult | string> => {
       const model = run.models.getModel(provider!, id.join("/")) as Model<Api> | undefined;
       if (!model) return unavailable;
-      const problem = desktopProblem({ sandbox: settings.sandbox });
+      const problem = desktopProblem(problemOptions);
       if (problem) return problem;
       // People watching the desktop see what the agent does, as the room does.
       const viewers = viewersOf(scopeOf(run.conversationId));
@@ -169,7 +177,7 @@ export default defineNudgeExtension({
       models: [{ provider: provider!, modelId: id.join("/") }],
       // For `nudge doctor`: what this server lacks for a desktop, and apps to run on it.
       problems: () => {
-        const problem = desktopProblem({ sandbox: settings.sandbox });
+        const problem = desktopProblem(problemOptions);
         if (problem) return [problem];
         return Object.keys(apps).length
           ? []
@@ -253,7 +261,7 @@ export default defineNudgeExtension({
       },
       // The room's desktop, live, for the people in the room: watch the agent, take over.
       roomSocket: async ({ room, player }, socket) => {
-        const problem = desktopProblem({ sandbox: settings.sandbox });
+        const problem = desktopProblem(problemOptions);
         if (problem) throw new Error(problem);
         const viewers = viewersOf(scopeOf(room.conversationId));
         const { session, release } = await holdDesktop(optionsFor(room.conversationId), idleMs);
