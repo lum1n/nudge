@@ -351,7 +351,16 @@ function describe(installed: readonly InstalledExtension[]): string {
 
 /** The database and everything beside it that belongs to it. */
 async function removeFiles(database: string): Promise<void> {
-  for (const suffix of ["", "-wal", "-shm", "-journal", ".key", ".lock", ".requests.jsonl"])
+  for (const suffix of [
+    "",
+    "-wal",
+    "-shm",
+    "-journal",
+    ".key",
+    ".lock",
+    ".lock-journal",
+    ".requests.jsonl",
+  ])
     await rm(`${database}${suffix}`, { force: true });
   await rm(`${database}.extensions`, { recursive: true, force: true });
 }
