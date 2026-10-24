@@ -33,7 +33,7 @@ class Servers(private val preferences: SharedPreferences) {
 
     /** Signs this device out of a server's own API, as far as it can be reached. */
     suspend fun forget(server: String) {
-        runCatching { client(server).signOut() }
+        attempt { client(server).signOut() }
         tokens(server).set(null)
         mutableOwned.value -= server
         save()
@@ -57,7 +57,7 @@ class Servers(private val preferences: SharedPreferences) {
      */
     suspend fun wiredRoot(except: String? = null, holding: String? = null): String? =
         mutableOwned.value.filter { it != except }.firstOrNull { server ->
-            val state = runCatching { client(server).wired() }.getOrNull()
+            val state = attempt { client(server).wired() }.getOrNull()
             state != null && state.state == WiredStatus.ROOT && (holding == null || state.members.any { it.name == holding })
         }
 

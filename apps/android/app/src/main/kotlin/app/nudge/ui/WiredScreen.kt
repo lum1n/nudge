@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -12,6 +13,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -24,10 +26,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.nudge.AppModel
 import app.nudge.explain
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import nudge.ffi.NudgeException
@@ -56,6 +60,10 @@ fun WiredCard(model: AppModel, server: String) {
     var turningOff by remember { mutableStateOf(false) }
     // The Wired name to make the home's address, while asking.
     var usingAddress by remember { mutableStateOf<String?>(null) }
+    // The member to remove from the network, while asking.
+    var removing by remember { mutableStateOf<String?>(null) }
+    // The name this server takes in the network, as the owner typed it; the server's own until then.
+    var name by remember(server) { mutableStateOf("") }
     val session by model.session.collectAsStateWithLifecycle()
     // Followed, so "Use as your home's address" goes once the home's address is its Wired one.
     val memberships by model.memberships.collectAsStateWithLifecycle()
@@ -65,16 +73,23 @@ fun WiredCard(model: AppModel, server: String) {
     val isHome = session?.account?.server?.trimEnd('/') == server.trimEnd('/')
     val homeOnWired = remember(session, memberships) { model.homeReach() == Reach.WIRED }
 
+    // The name the owner typed, or null to keep the server's own.
+    val picked = name.trim().takeIf { it.isNotEmpty() && it != state?.name }
+    val nameIsValid = picked?.let(::isWiredName) ?: true
+
     fun show(next: WiredState) {
         unsupported = null
         state = next
         problem = null
+        if (next.state == WiredStatus.ROOT || next.state == WiredStatus.MEMBER) name = ""
     }
 
     fun act(action: suspend () -> WiredState) = scope.launch {
         busy = true
         try {
             show(action())
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: Exception) {
             problem = explain(error)
         } finally {
@@ -96,6 +111,8 @@ fun WiredCard(model: AppModel, server: String) {
                 } else {
                     problem = explain(error)
                 }
+            } catch (error: CancellationException) {
+                throw error
             } catch (error: Exception) {
                 problem = explain(error)
             }
@@ -149,6 +166,8 @@ fun WiredCard(model: AppModel, server: String) {
                         try {
                             model.useWiredAddress(name)
                             problem = null
+                        } catch (error: CancellationException) {
+                            throw error
                         } catch (error: Exception) {
                             problem = explain(error)
                         } finally {
@@ -158,6 +177,23 @@ fun WiredCard(model: AppModel, server: String) {
                 }) { Text("Use it") }
             },
             dismissButton = { TextButton(onClick = { usingAddress = null }) { Text("Cancel") } },
+        )
+    }
+
+    removing?.let { member ->
+        AlertDialog(
+            onDismissRequest = { removing = null },
+            title = { Text("Remove $member from the network?") },
+            text = {
+                Text("It no longer reaches your servers over Wired, and can't join again with its key. A new server can then use the name.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    removing = null
+                    act { client.removeWiredMember(member) }
+                }) { Text("Remove", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { removing = null }) { Text("Cancel") } },
         )
     }
 
@@ -181,6 +217,8 @@ fun WiredCard(model: AppModel, server: String) {
                                         problem = updates.error
                                             ?: updates.available?.let { "Installing $it. The server restarts in a minute; come back then." }
                                             ?: "No newer release yet."
+                                    } catch (error: CancellationException) {
+                                        throw error
                                     } catch (error: Exception) {
                                         problem = explain(error)
                                     } finally {
@@ -206,16 +244,41 @@ fun WiredCard(model: AppModel, server: String) {
                                     Text("Turn off Wired", color = MaterialTheme.colorScheme.error)
                                 }
                             }
+                            val invalid = picked != null && !nameIsValid
+                            OutlinedTextField(
+                                value = name,
+                                onValueChange = { name = it },
+                                label = { Text("Name") },
+                                placeholder = { Text(current.name ?: "box") },
+                                singleLine = true,
+                                isError = invalid,
+                                supportingText = {
+                                    Text(
+                                        if (invalid) {
+                                            "Lowercase letters, digits and dashes, such as box."
+                                        } else {
+                                            "Others reach it at http://nudge.${picked ?: current.name ?: "box"}.wired"
+                                        },
+                                    )
+                                },
+                                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
+                                shape = MaterialTheme.shapes.large,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
                             val holder = root
                             if (holder != null && isPublic) {
                                 // Home lists this server's relay and this server joins with home's invite, which stays in the app.
                                 Button(
-                                    onClick = { act { model.servers.client(holder).connectWired(client, server) } },
-                                    enabled = !busy,
+                                    onClick = { act { model.servers.client(holder).connectWired(client, server, picked) } },
+                                    enabled = !busy && nameIsValid,
                                     modifier = Modifier.fillMaxWidth(),
                                 ) { Text("Join ${java.net.URI(holder).host ?: holder}'s network") }
                             }
-                            OutlinedButton(onClick = { act { client.enableWired() } }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                            OutlinedButton(
+                                onClick = { act { client.enableWired(picked) } },
+                                enabled = !busy && nameIsValid,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
                                 Text("Hold a network here")
                             }
                             if (holder == null && isPublic) {
@@ -239,7 +302,21 @@ fun WiredCard(model: AppModel, server: String) {
                                 color = MaterialTheme.colorScheme.primary,
                             )
                             current.members.filter { it.name != current.name }.forEach { member ->
-                                Text(if (member.anchor) "${member.name} (holds it)" else member.name)
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(if (member.anchor) "${member.name} (holds it)" else member.name, Modifier.weight(1f))
+                                    if (current.state == WiredStatus.ROOT) {
+                                        TextButton(onClick = { removing = member.name }, enabled = !busy) {
+                                            Text("Remove", color = MaterialTheme.colorScheme.error)
+                                        }
+                                    }
+                                }
+                            }
+                            if (current.state == WiredStatus.ROOT && current.members.size > 1) {
+                                Text(
+                                    "Remove a server from the network when it's gone: a new server can then take its name.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                             if (current.state == WiredStatus.ROOT && current.relays.isEmpty()) {
                                 Text(
@@ -281,3 +358,11 @@ fun WiredCard(model: AppModel, server: String) {
         }
     }
 }
+
+/**
+ * A name Wired accepts as it is: 1–63 lowercase letters, digits and dashes, not starting or ending
+ * with a dash.
+ */
+internal fun isWiredName(name: String): Boolean = WIRED_NAME.matches(name)
+
+private val WIRED_NAME = Regex("[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
