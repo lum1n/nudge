@@ -70,6 +70,30 @@ const AssistantSchema = Type.Object({
   ),
 });
 
+/**
+ * Where backups are copied off the machine, besides `dir` (ADR 8): an S3-compatible bucket or a
+ * WebDAV folder. Its credentials are kept on the server (`server/backup-remote`), not here.
+ */
+const BackupRemoteSchema = Type.Union([
+  Type.Object({
+    type: Type.Literal("s3"),
+    /** Such as https://s3.eu-north-1.amazonaws.com, https://<account>.r2.cloudflarestorage.com. */
+    endpoint: Type.String({ pattern: "^https?://" }),
+    bucket: Type.String({ minLength: 1 }),
+    /** Default the one in an AWS endpoint, else us-east-1 (R2 takes "auto"). */
+    region: Type.Optional(Type.String({ minLength: 1 })),
+    /** A folder in the bucket, such as "nudge/". */
+    prefix: Type.Optional(Type.String()),
+    /** Bucket in the path rather than the host name; default on, except for AWS. */
+    pathStyle: Type.Optional(Type.Boolean()),
+  }),
+  Type.Object({
+    type: Type.Literal("webdav"),
+    /** The folder, such as https://cloud.example/remote.php/dav/files/me/nudge/. */
+    url: Type.String({ pattern: "^https?://" }),
+  }),
+]);
+
 /** Encrypted backups `nudge serve` makes on its own; `nudge backup` makes one at any time. */
 const BackupSchema = Type.Object({
   /** Where backups go, relative to the config file: a disk, a mounted share, a synced folder. */
@@ -80,6 +104,8 @@ const BackupSchema = Type.Object({
   keep: Type.Optional(Type.Integer({ minimum: 1 })),
   /** The key, unless NUDGE_BACKUP_KEY is set; default nudge-backup.key beside the config. */
   keyFile: Type.Optional(Type.String()),
+  /** Each backup is uploaded here too, and the same number kept there. */
+  remote: Type.Optional(BackupRemoteSchema),
 });
 
 /** How the server is reached (ADR 11); `nudge serve`'s flags override it. */
@@ -122,6 +148,8 @@ export type LocalProviderConfig = Static<typeof LocalProviderSchema>;
 export type ServerSettings = Static<typeof ServerSchema>;
 export type PrivacySettings = Static<typeof PrivacySchema>;
 export type ModelChoice = Static<typeof ModelRefSchema>;
+export type BackupSettings = Static<typeof BackupSchema>;
+export type BackupRemoteConfig = Static<typeof BackupRemoteSchema>;
 
 export const DEFAULT_MODEL: ModelChoice = { provider: "anthropic", modelId: "claude-sonnet-5" };
 

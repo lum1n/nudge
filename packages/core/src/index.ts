@@ -33,6 +33,8 @@ export {
   type ExtensionConfig,
   type LocalProviderConfig,
   loadConfig,
+  type BackupRemoteConfig,
+  type BackupSettings,
   type ModelChoice,
   type NudgeConfig,
   parseConfig,
@@ -164,12 +166,24 @@ export {
   BACKUP_SUFFIX,
   BackupError,
   backupKey,
+  backupNames,
+  backupTime,
   createBackup,
   lastBackupAt,
   pruneBackups,
   readBackupManifest,
   restoreBackup,
 } from "./backup.ts";
+export {
+  amzDate,
+  type BackupRemote,
+  backupRemoteDir,
+  lastRemoteBackupAt,
+  type RemoteCredentials,
+  RemoteBackups,
+  type RemoteState,
+  signV4,
+} from "./backup-remote.ts";
 export {
   type Budget,
   BudgetReached,
