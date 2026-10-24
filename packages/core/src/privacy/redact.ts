@@ -1,6 +1,6 @@
 import type { AssistantMessage, Context, JsonValue, Message } from "@earendil-works/pi-ai";
 import type { PiiDetector } from "./detectors.ts";
-import { type Vault, withoutPartialPlaceholder } from "./vault.ts";
+import { type SpellingsSeen, type Vault, withoutPartialPlaceholder } from "./vault.ts";
 
 type Text = (text: string) => string;
 
@@ -17,18 +17,20 @@ export function mapStrings<T extends JsonValue | undefined>(value: T, change: Te
 }
 
 /**
- * A copy of a request with personal values replaced by placeholders. Covers the system prompt and
- * its sections, user and tool-result text, assistant text and tool-call arguments. Thinking can't
- * be changed (providers replay it signed), so it is dropped instead where it could carry a value:
- * before the newest user message, when unsigned (a provider then sends it as text), and when it
- * holds a value the vault knows. Leaves alone: images, and tool declarations.
+ * A copy of a request with personal values replaced by placeholders, a value's spellings by its
+ * own placeholder (`Vault.redactForModel`; `seen` notes where they were). Covers the system prompt
+ * and its sections, user and tool-result text, assistant text and tool-call arguments. Thinking
+ * can't be changed (providers replay it signed), so it is dropped instead where it could carry a
+ * value: before the newest user message, when unsigned (a provider then sends it as text), and
+ * when it holds a value the vault knows. Leaves alone: images, and tool declarations.
  */
 export function redactContext(
   context: Context,
   vault: Vault,
   detectors: readonly PiiDetector[],
+  seen?: SpellingsSeen,
 ): Context {
-  const redact: Text = (text) => vault.redact(text, detectors);
+  const redact: Text = (text) => vault.redactForModel(text, detectors, seen);
   const lastUser = context.messages.findLastIndex((message) => message.role === "user");
   const pass = (): Context => ({
     ...context,

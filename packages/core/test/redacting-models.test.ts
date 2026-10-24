@@ -100,3 +100,42 @@ describe("RedactingModels errors", () => {
     expect((await models.completeSimple(MODEL, REQUEST)).errorMessage).toBe("The budget is spent");
   });
 });
+
+describe("RedactingModels spellings", () => {
+  it("sends one placeholder for a value's spellings, and stores each as written", async () => {
+    let sent: Context | undefined;
+    const models = setup((_, context) => {
+      sent = context;
+      const stream = createAssistantMessageEventStream();
+      const message: AssistantMessage = {
+        ...failed(""),
+        stopReason: "stop",
+        content: [{ type: "text", text: "Yes, ⟦NAME1⟧ is in /home/⟦NAME1⟧." }],
+      };
+      delete message.errorMessage;
+      stream.push({ type: "done", reason: "stop", message });
+      stream.end();
+      return stream;
+    });
+    const saved: string[] = [];
+    const vault = new Vault();
+    vault.protect("Ann", "NAME", "p1");
+    vault.takeUnsaved();
+    models.bind(vault, async (entries) => {
+      saved.push(...entries.map((entry) => `${entry.placeholder}=${entry.value}`));
+    });
+    const request: Context = {
+      messages: [{ role: "user", content: "Is ann in /home/ann? And ANN, Ann?", timestamp: 0 }],
+    };
+    const reply = await models.completeSimple(MODEL, request);
+    expect(JSON.stringify(sent)).toContain("Is ⟦NAME1⟧ in /home/⟦NAME1⟧? And ⟦NAME1⟧, ⟦NAME1⟧?");
+    expect(saved).toEqual(["⟦NAME2⟧=ann", "⟦NAME3⟧=ANN"]);
+    // Stored with the spelling the request had in that place.
+    expect(reply.content).toEqual([{ type: "text", text: "Yes, ⟦NAME1⟧ is in /home/⟦NAME2⟧." }]);
+    // Put back only for the value's owner.
+    const forOwner = await models.withValues("p1").completeSimple(MODEL, request);
+    expect(forOwner.content).toEqual([{ type: "text", text: "Yes, Ann is in /home/ann." }]);
+    const forOther = await models.withValues("p2").completeSimple(MODEL, request);
+    expect(forOther.content).toEqual(reply.content);
+  });
+});
