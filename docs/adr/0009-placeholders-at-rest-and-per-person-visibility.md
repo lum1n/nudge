@@ -14,4 +14,4 @@ What this doesn't do: the model knows what it was told in a private turn and mig
 
 Databases from before this change keep their raw history until `nudge db redact`, which rewrites every transcript entry and the current memory, approvals and nudges with placeholders, then vacuums the file.
 
-Amended by ADR 14: when the detectors find more, history is rewritten once, automatically, the next time an assistant opens.
+Amended by ADR 22: when the detectors find more, history is rewritten once, automatically, the next time an assistant opens.

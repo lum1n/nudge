@@ -98,7 +98,7 @@ export class RedactingModels implements Models {
 
   /**
    * Has the local model read a request first, so what it finds is in the vault before redaction
-   * (ADR 14). Throws `DeepUnavailable` when the request must not go out without it.
+   * (ADR 22). Throws `DeepUnavailable` when the request must not go out without it.
    */
   get scan(): Scan {
     return this.root?.scan ?? this.ownScan;

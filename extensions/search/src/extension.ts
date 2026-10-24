@@ -360,7 +360,7 @@ export function searchExtension(options: SearchOptions = {}) {
       return {
         // Pages and snippets are written by strangers: the model reads them as data (ADR 20).
         tools: [readsOnly(search), readsOnly(read)].map(returnsUntrusted),
-        // The public web: shops and places in results stay readable (ADR 14).
+        // The public web: shops and places in results stay readable (ADR 22).
         publicTools: [search.name, read.name],
         sections: [
           section(

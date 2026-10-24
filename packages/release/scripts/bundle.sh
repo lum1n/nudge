@@ -55,7 +55,7 @@ rm -rf "$sqlite/deps" "$sqlite/src" "$sqlite/build/Release/obj.target" "$sqlite/
 find "$work/app/node_modules" -type d \( -name test -o -name tests -o -name __tests__ \) \
   -not -path '*/node_modules/patchright/*' -prune -exec rm -rf {} +
 "$work/node/bin/node" -e 'require(process.argv[1])' "$sqlite"
-# The local name finder's runtime (ADR 14): only this platform's CPU library, no GPU providers.
+# The local name finder's runtime (ADR 22): only this platform's CPU library, no GPU providers.
 ort=$work/app/node_modules/onnxruntime-node
 find "$ort/bin" -mindepth 2 -maxdepth 2 -type d -not -name linux -exec rm -rf {} +
 find "$ort/bin"/*/linux -mindepth 1 -maxdepth 1 -type d -not -name "$arch" -exec rm -rf {} +

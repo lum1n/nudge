@@ -159,7 +159,7 @@ export async function doctor(options: DoctorOptions): Promise<boolean> {
   return ok;
 }
 
-/** The local model (ADR 14): its files, their hashes, and that it finds a name the rules miss. */
+/** The local model (ADR 22): its files, their hashes, and that it finds a name the rules miss. */
 async function checkDeep(
   check: (passed: boolean, text: string) => void,
   dir: string,
