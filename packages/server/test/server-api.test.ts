@@ -7,7 +7,9 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { fauxProvider } from "@earendil-works/pi-ai/providers/faux";
 import { Assistants, openAssistant, ServerIdentity, ServerKeys, ServerOwners } from "@nudge/core";
+import { ServerAssistant } from "@nudge/protocol";
 import type { Hono } from "hono";
+import { Value } from "typebox/value";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp, type ServerControl } from "../src/index.ts";
 
@@ -210,6 +212,24 @@ describe("the server API", () => {
     });
     expect(changed.json).toMatchObject({ displayName: "Robin Hood", instructions: "Be brief." });
     expect((await call("GET", "/a/robin/me", { token: ann })).status).toBe(200);
+    // The budget is replaced whole, `warnUsd` included, and comes back as it was set.
+    const budget = { perPlayerUsd: 5, warnAt: 0.5, warnUsd: 40 };
+    const budgeted = await call("PATCH", "/server/assistants/robin", { token, body: { budget } });
+    expect(budgeted.status).toBe(200);
+    expect(Value.Check(ServerAssistant, budgeted.json)).toBe(true);
+    expect(budgeted.json.budget).toEqual(budget);
+    const listed = await call("GET", "/server/assistants", { token });
+    expect(listed.json.assistants.find((a: { name: string }) => a.name === "robin").budget).toEqual(
+      budget,
+    );
+    expect(
+      (
+        await call("PATCH", "/server/assistants/robin", {
+          token,
+          body: { budget: { warnUsd: 0 } },
+        })
+      ).status,
+    ).toBe(400);
     expect(
       (await call("PATCH", "/server/assistants/nobody", { token, body: { displayName: "x" } }))
         .status,
@@ -337,12 +357,21 @@ describe("the server API", () => {
       },
     });
     const token = await signIn();
-    expect((await call("GET", "/server/wired", { token })).json).toEqual({ state: "off", name: "robin" });
+    expect((await call("GET", "/server/wired", { token })).json).toEqual({
+      state: "off",
+      name: "robin",
+    });
     // As before: no body, and the server's own name.
     expect((await call("POST", "/server/wired", { token })).status).toBe(200);
-    expect((await call("POST", "/server/wired", { token, body: { name: "box" } })).status).toBe(200);
-    expect((await call("POST", "/server/wired", { token, body: { name: "Box!" } })).status).toBe(400);
-    expect((await call("POST", "/server/wired", { token, body: { name: "-box" } })).status).toBe(400);
+    expect((await call("POST", "/server/wired", { token, body: { name: "box" } })).status).toBe(
+      200,
+    );
+    expect((await call("POST", "/server/wired", { token, body: { name: "Box!" } })).status).toBe(
+      400,
+    );
+    expect((await call("POST", "/server/wired", { token, body: { name: "-box" } })).status).toBe(
+      400,
+    );
     const joined = await call("POST", "/server/wired/join", {
       token,
       body: { invite: "wired1abc", name: "box" },

@@ -108,7 +108,10 @@ describe("v1 rate and body limits", () => {
     });
     expect(limited.status).toBe(429);
     expect(Number(limited.headers.get("retry-after"))).toBeGreaterThan(0);
-    expect(((await limited.json()) as { error: string }).error).toMatch(/Too many requests/);
+    expect(await limited.json()).toEqual({
+      error: expect.stringMatching(/Too many requests/),
+      code: "rate_limited",
+    });
     // Even a right code waits: the limit comes before the code is checked.
     const { code } = await nudge.players.pairingCode(playerId, context);
     expect((await pair(app, code, { "x-peer": "10.0.0.1" })).status).toBe(429);

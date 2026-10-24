@@ -374,7 +374,21 @@ fn http_bodies_match_the_schema() {
         name: "ios".into(),
         platform: "ios".into(),
     };
-    check("ErrorResponse", &ErrorResponse { error: "x".into() });
+    // A server that gives no code, or one this client doesn't know, still reads.
+    assert_eq!(
+        serde_json::from_value::<ErrorResponse>(json!({ "error": "x" })).unwrap(),
+        ErrorResponse {
+            error: "x".into(),
+            code: None,
+        }
+    );
+    check(
+        "ErrorResponse",
+        &ErrorResponse {
+            error: "Too many requests; try again in 3 s".into(),
+            code: Some(error_code::RATE_LIMITED.into()),
+        },
+    );
     check(
         "AssistantsResponse",
         &AssistantsResponse {
@@ -853,6 +867,7 @@ fn server_and_setup_bodies_match_the_schema() {
         monthly_usd: Some(20.0),
         per_player_usd: Some(5.0),
         warn_at: Some(0.8),
+        warn_usd: Some(40.0),
     };
     let assistant = ServerAssistant {
         name: "robin".into(),

@@ -6,7 +6,7 @@ import { RoomView, ServerFrame } from "@nudge/protocol";
 import { RoomProjector } from "@nudge/protocol/project";
 import { type RunningServer, serveNudge } from "@nudge/server";
 import { Value } from "typebox/value";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   Api,
   ApiError,
@@ -312,5 +312,51 @@ describe("NudgeClient against a server", () => {
     expect(client.outbox.list()).toEqual([]);
     expect(nowhere.store.getState().pending).toEqual([]);
     nowhere.release();
+  });
+
+  it("sends a rate-limited message again once Retry-After is up", async () => {
+    let limited = 1;
+    const posts: string[] = [];
+    const tooMany: typeof fetch = (input, init) => {
+      if (init?.method !== "POST") return fetch(input, init);
+      posts.push(String(init.body));
+      if (limited-- <= 0) return fetch(input, init);
+      return Promise.resolve(
+        Response.json(
+          { error: "Too many requests; try again in 1 s", code: "rate_limited" },
+          { status: 429, headers: { "retry-after": "1" } },
+        ),
+      );
+    };
+    const { client } = clientFor(annToken, { fetch: tooMany });
+    client.open();
+    await eventually(() => client.connection.getStatus().kind === "open");
+    const room = client.room("trip");
+    const error = await client.send("trip", "Slowly").catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({ status: 429, code: "rate_limited", retryAfter: 1 });
+    expect((error as ApiError).rateLimited).toBe(true);
+    expect((error as ApiError).budgetSpent).toBe(false);
+    expect(room.store.getState().pending).toMatchObject([
+      { text: "Slowly", error: "Too many requests; sending again in 1 s" },
+    ]);
+    // Not refused: it stays in the outbox without an error, and goes again by itself.
+    expect(client.outbox.list()).toMatchObject([{ text: "Slowly" }]);
+    expect(client.outbox.list()[0]!.error).toBeUndefined();
+    await eventually(() => posts.length === 2, 3000);
+    await eventually(() => client.outbox.list().length === 0, 3000);
+    expect(posts).toHaveLength(2);
+    room.release();
+  });
+
+  it("keeps a message refused for a spent budget, and doesn't send it again", async () => {
+    const spent = "You have used your budget for the month ($0.50 of $0.50).";
+    vi.spyOn(nudge.spending, "refusalFor").mockReturnValue(spent);
+    const { client } = clientFor(annToken);
+    const error = await client.send("trip", "Hi").catch((caught: unknown) => caught);
+    expect(error).toMatchObject({ status: 429, code: "budget_spent", message: spent });
+    expect((error as ApiError).budgetSpent).toBe(true);
+    expect((error as ApiError).rateLimited).toBe(false);
+    expect(client.outbox.list()).toMatchObject([{ text: "Hi", error: spent }]);
   });
 });

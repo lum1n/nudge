@@ -14,6 +14,7 @@ import {
   AppearanceResponse,
   type AssistantsResponse,
   CLOSE,
+  ErrorResponse,
   ExtensionSetupsResponse,
   MeResponse,
   NudgesResponse,
@@ -38,7 +39,7 @@ import {
 import { RoomProjector, TIMELINE_LIMIT } from "@nudge/protocol/project";
 import type { TSchema } from "typebox";
 import { Value } from "typebox/value";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type ExtensionSettings,
   requestOrigin,
@@ -374,6 +375,17 @@ describe("v1 HTTP", () => {
       status: 204,
       json: undefined,
     });
+  });
+
+  it("refuses a message once the budget is spent, with a code that says so", async () => {
+    const spent = "You have used your budget for the month ($0.50 of $0.50).";
+    vi.spyOn(nudge.spending, "refusalFor").mockReturnValue(spent);
+    const refused = await call("POST", "/rooms/trip/messages", {
+      token: tokens.Ann,
+      body: { text: "Hi", requestId: "r1" },
+    });
+    expect(refused).toEqual({ status: 429, json: { error: spent, code: "budget_spent" } });
+    expect(Value.Check(ErrorResponse, refused.json)).toBe(true);
   });
 
   it("remembers, forgets, decides approvals and cancels nudges", async () => {

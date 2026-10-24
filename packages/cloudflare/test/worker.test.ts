@@ -1,6 +1,6 @@
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { Nudge } from "@nudge/core";
-import { PROTOCOL_VERSION } from "@nudge/protocol";
+import { type HealthResponse, PROTOCOL_VERSION } from "@nudge/protocol";
 import {
   env,
   abortAllDurableObjects,
@@ -10,7 +10,7 @@ import {
 } from "cloudflare:test";
 import { exports } from "cloudflare:workers";
 import { afterEach, describe, expect, it } from "vitest";
-import type { NudgeAssistant } from "../src/index.ts";
+import { handle, type NudgeAssistant } from "../src/index.ts";
 
 const context = BACKGROUND_CONTEXT;
 const BASE = "http://nudge.test/v1";
@@ -42,6 +42,19 @@ describe("the Worker", () => {
     expect(await response.json()).toEqual({
       assistants: [{ name: "robin", displayName: "Robin" }],
     });
+  });
+
+  it("answers a health check without a token, and without waking an assistant", async () => {
+    const response = await call("/health");
+    expect(response.status).toBe(200);
+    const body: HealthResponse = await response.json();
+    expect(body).toEqual({ ok: true, assistants: 1 });
+    // No Durable Object is reached for it.
+    const asleep = await handle(new Request(`${BASE}/health`), {
+      ...env,
+      NUDGE_ASSISTANT: {} as typeof env.NUDGE_ASSISTANT,
+    });
+    expect(await asleep.json()).toEqual(body);
   });
 
   it("answers 404 for an assistant that isn't configured", async () => {

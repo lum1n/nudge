@@ -130,7 +130,7 @@ export class NudgeAssistant extends DurableObject<NudgeEnv> {
 
     const app = new Hono();
     app.onError((error, c) => {
-      if (error instanceof HttpError) return c.json({ error: error.message }, error.status);
+      if (error instanceof HttpError) return error.respond(c);
       report(error);
       return c.json({ error: "Internal error" }, 500);
     });
