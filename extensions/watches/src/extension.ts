@@ -107,6 +107,7 @@ export function foundPrompt(watch: Pick<Watch, "id" | "what">, found: readonly F
 export const watchesExtension = defineNudgeExtension({
   name: "watches",
   version: VERSION,
+  apiVersion: "1.0",
   description:
     "Watches: the assistant checks something on a schedule and tells the room only when something new turns up.",
   settings: Settings,

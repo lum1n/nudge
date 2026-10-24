@@ -74,6 +74,7 @@ export function contactsExtension(options: ContactsOptions = {}) {
   return defineNudgeExtension({
     name: "contacts",
     version: VERSION,
+    apiVersion: "1.0",
     description:
       "Look people up in CardDAV address books; their names, e-mail addresses and phone numbers " +
       "stay hidden from the model.",

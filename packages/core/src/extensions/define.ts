@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import type { Context } from "@earendil-works/chord";
-import type { Extension, JsonObject, Session } from "@earendil-works/pi-durable";
+import type { Extension, Harness, JsonObject, Session } from "@earendil-works/pi-durable";
 import type { ApprovalDenialHandler, ApprovalHandler } from "../approvals/approvals.ts";
 import { type Static, type TSchema, Type } from "typebox";
 import { Value } from "typebox/value";
@@ -51,12 +51,52 @@ export type ExtensionHost<Settings, PlayerSettings = undefined> = {
    * or deciding an approval for one. Checking that the player may use the room is the caller's
    * job. Throws until the assistant is open.
    */
-  readonly assistant: () => Nudge;
+  readonly assistant: () => ExtensionAssistant;
   /**
    * The assistant once it is open, such as to listen to its `changes`; at once for an extension
    * a reload sets up. Never settles when the assistant fails to open.
    */
-  readonly whenOpen: () => Promise<Nudge>;
+  readonly whenOpen: () => Promise<ExtensionAssistant>;
+};
+
+/**
+ * The part of the assistant extensions may use, through `ExtensionHost.assistant` and
+ * `whenOpen`. Only what they need, so the rest of `Nudge` can change without breaking them; it
+ * is the same object, so extensions may still key maps of their own by it.
+ */
+export type ExtensionAssistant = Pick<
+  Nudge,
+  // Who and where.
+  | "displayName"
+  | "players"
+  | "profiles"
+  | "personal"
+  | "presence"
+  | "rooms"
+  | "memory"
+  | "approvals"
+  | "changes"
+  // Which extensions are on, and in which rooms.
+  | "extensions"
+  | "extensionEnabled"
+  | "roomExtensions"
+  | "setRoomExtension"
+  // Conversations.
+  | "conversation"
+  | "submit"
+  | "abort"
+  // Private values (ADR 2, 9).
+  | "protect"
+  | "protectNamed"
+  | "forgetValue"
+  | "valuesIn"
+  | "showTo"
+  | "redact"
+  | "saveVault"
+> & {
+  /** The assistant's documents, conversations and tasks. */
+  readonly harness: ExtensionDocuments &
+    Pick<Harness, "conversation" | "abortTask" | "waitForTask">;
 };
 
 /** Reading, watching and changing the assistant's documents. */
@@ -196,6 +236,12 @@ export type NudgeExtension<S extends TSchema = TSchema, P extends TSchema = TSch
   /** Lower-case letters, digits and dashes. Installing another extension with this name replaces it. */
   readonly name: string;
   readonly version: string;
+  /**
+   * The version of this extension API it was written against, `major.minor`, such as `"1.0"`;
+   * see `EXTENSION_API_VERSION`. An assistant whose API has another major, or an older minor,
+   * won't set it up. Missing is taken as compatible for now.
+   */
+  readonly apiVersion?: string;
   readonly description?: string;
   /** TypeBox schema of the settings; without one the extension takes none. */
   readonly settings?: S;
@@ -222,6 +268,31 @@ export type ExtensionUse = {
 export type ExtensionInput = Extension | NudgeExtension | ExtensionUse;
 
 const NAME = /^[a-z][a-z0-9-]*$/;
+
+/**
+ * The version of the extension API, `major.minor`: what `defineNudgeExtension`, `ExtensionHost`,
+ * `ExtensionAssistant` and `ExtensionParts` offer. The major goes up when something an extension may rely on changes
+ * or goes away, the minor when something is added. An extension names the one it was written
+ * against as its `apiVersion`.
+ */
+export const EXTENSION_API_VERSION = "1.0";
+
+const API_VERSION = /^(\d+)\.(\d+)$/;
+
+/**
+ * Why this assistant can't set up an extension written against `apiVersion`, or undefined when
+ * it can: the majors must match and the extension may not need a newer minor.
+ */
+function apiVersionProblem(name: string, apiVersion: string | undefined): string | undefined {
+  if (apiVersion === undefined) return undefined;
+  const wanted = API_VERSION.exec(apiVersion);
+  if (wanted === null)
+    return `Extension "${name}" has API version "${apiVersion}", which is not major.minor`;
+  const [, major, minor] = API_VERSION.exec(EXTENSION_API_VERSION)!;
+  if (Number(wanted[1]) !== Number(major) || Number(wanted[2]) > Number(minor))
+    return `Extension "${name}" needs extension API ${apiVersion}; this Nudge has ${EXTENSION_API_VERSION}`;
+  return undefined;
+}
 
 /** What `roomsSetting` marks its schema with, for settings forms to offer a choice of rooms. */
 export const ROOMS_SETTING = "rooms";
@@ -325,6 +396,8 @@ export async function setUpExtension(
     return { extension, detectors: [], routes: [], models: [], approvals: {}, ...rooms };
   }
   const definition = use.extension;
+  const incompatible = apiVersionProblem(definition.name, definition.apiVersion);
+  if (incompatible !== undefined) throw new Error(incompatible);
   const settings = checkSettings(definition, use.settings);
   const { dataRoot, ...base } = host;
   const dataDir = dataRoot === undefined ? undefined : join(dataRoot, definition.name);

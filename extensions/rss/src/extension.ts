@@ -61,6 +61,7 @@ export function rssExtension(options: RssOptions = {}) {
   return defineNudgeExtension({
     name: "rss",
     version: VERSION,
+    apiVersion: "1.0",
     description: "RSS and Atom feeds the assistant checks first when asked for news.",
     settings: Settings,
     setup: (host) => {

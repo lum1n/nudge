@@ -197,6 +197,7 @@ export function accExtension(options: AccOptions = {}) {
   return defineNudgeExtension({
     name: "acc",
     version: VERSION,
+    apiVersion: "1.0",
     description:
       "Start, watch and steer coding agents (Claude Code, Codex, Cursor, Copilot, pi, opencode) on your machines over SSH.",
     settings: Settings,

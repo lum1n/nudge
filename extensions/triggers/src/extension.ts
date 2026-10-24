@@ -74,6 +74,7 @@ function visible(trigger: Trigger): boolean {
 export const triggersExtension = defineNudgeExtension({
   name: NAME,
   version: VERSION,
+  apiVersion: "1.0",
   description:
     "Triggers: a secret web address per room that lets outside events, such as Home Assistant or GitHub, start a turn.",
   settings: Settings,
