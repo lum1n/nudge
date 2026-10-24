@@ -56,6 +56,8 @@ export type Thread = {
   /** How many messages this side sent, and the last one taken from theirs. */
   sent: number;
   received: number;
+  /** `in`: the last of their messages this side answered. */
+  answered?: number;
   /** Replies this side's model answered, out of `maxRounds`. */
   rounds: number;
   status: "open" | "done";
@@ -68,18 +70,45 @@ export type Thread = {
   createdAt: number;
 };
 
+/**
+ * A reply to a thread the other side started, kept until it took it: stored before it goes, so
+ * one on its way when the server restarts is sent once it is back.
+ */
+export type Outgoing = {
+  linkId: string;
+  threadId: string;
+  seq: number;
+  text: string;
+  late: boolean;
+  /** Tries that failed so far, for the backoff. */
+  tries: number;
+  /** When it is tried next. */
+  nextAt: number;
+  /** When it stops being tried: the asking side has stopped waiting for it by then. */
+  deadline: number;
+};
+
 export type PeersState = {
   links: Record<string, Link>;
   threads: Record<string, Thread>;
+  /** Replies on their way, by `outgoingId`. */
+  outbox: Record<string, Outgoing>;
   next: number;
 };
 
 export const PeersDoc = defineDoc<PeersState>({
   kind: "peers.state",
-  version: 1,
+  version: 2,
   scope: "session",
-  initial: () => ({ links: {}, threads: {}, next: 1 }),
+  initial: () => ({ links: {}, threads: {}, outbox: {}, next: 1 }),
+  // Version 2 added the outbox.
+  migrate: (value) => ({ ...(value as Omit<PeersState, "outbox">), outbox: {} }),
 });
+
+/** An outgoing reply's key in the outbox. */
+export function outgoingId(threadId: string, seq: number): string {
+  return `${threadId}:${seq}`;
+}
 
 /** Messages kept per thread; the oldest go first. */
 export const MAX_MESSAGES = 40;

@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { Context as ModelContext } from "@earendil-works/pi-ai";
 import { createModels } from "@earendil-works/pi-ai/models";
@@ -21,7 +24,7 @@ import {
 import { federationExtension } from "@nudge/ext-federation";
 import { createApp } from "@nudge/server";
 import type { Hono } from "hono";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { PeersDoc, peersExtension } from "../src/index.ts";
 
 const context = BACKGROUND_CONTEXT;
@@ -88,15 +91,21 @@ describe("peers", { timeout: 30_000 }, () => {
   const wire: { to: string; body: string }[] = [];
   /** Servers whose inbox takes messages and drops them. */
   const dropping = new Set<string>();
+  /** Servers whose inbox is unreachable, or takes messages but whose answer is lost. */
+  const failing = new Map<string, "down" | "lost">();
   const between: typeof fetch = async (input, init) => {
     const url = new URL(String(input));
     if (url.pathname.endsWith("/inbox")) {
       wire.push({ to: url.origin, body: String(init?.body) });
       if (dropping.has(url.origin)) return new Response(null, { status: 202 });
+      if (failing.get(url.origin) === "down") throw new Error(`${url.origin} is down`);
     }
     const app = apps.get(url.origin);
     if (app === undefined) throw new Error(`No server at ${url.origin}`);
-    return app.request(url.toString(), init);
+    const response = await app.request(url.toString(), init);
+    if (url.pathname.endsWith("/inbox") && failing.get(url.origin) === "lost")
+      throw new Error(`${url.origin}'s answer was lost`);
+    return response;
   };
   /** Every request each assistant's model got. */
   const requests = new Map<string, ModelContext[]>();
@@ -110,6 +119,7 @@ describe("peers", { timeout: 30_000 }, () => {
     server: string,
     script: Script,
     settings: Record<string, unknown>,
+    database = ":memory:",
   ) => {
     const faux = fauxProvider();
     const seen: ModelContext[] = [];
@@ -127,7 +137,7 @@ describe("peers", { timeout: 30_000 }, () => {
       {
         name,
         displayName,
-        database: ":memory:",
+        database,
         models,
         model: { provider: faux.provider.id, modelId: faux.getModel().id },
         extensions: [
@@ -135,7 +145,10 @@ describe("peers", { timeout: 30_000 }, () => {
             extension: federationExtension({ fetch: between, report: (e) => errors.push(e) }),
             settings: { server },
           },
-          { extension: peersExtension({ report: (e) => errors.push(e) }), settings },
+          {
+            extension: peersExtension({ report: (e) => errors.push(e), retryMs: 50 }),
+            settings,
+          },
           { extension: booker },
         ],
       },
@@ -145,29 +158,36 @@ describe("peers", { timeout: 30_000 }, () => {
     return nudge;
   };
 
+  const openAway = (script: Script, settings: object = {}, database?: string) =>
+    open("team", "Team", AWAY, script, { offer: ["booker"], ...settings }, database);
+
   const start = async (
     homeScript: Script,
     awayScript: Script,
-    { homeSettings = {}, awaySettings = {} }: { homeSettings?: object; awaySettings?: object } = {},
+    {
+      homeSettings = {},
+      awaySettings = {},
+      awayDatabase,
+    }: { homeSettings?: object; awaySettings?: object; awayDatabase?: string } = {},
   ) => {
     errors.length = 0;
     wire.length = 0;
     dropping.clear();
+    failing.clear();
     home = await open("robin", "Robin", HOME, homeScript, homeSettings as Record<string, unknown>);
-    away = await open("team", "Team", AWAY, awayScript, {
-      offer: ["booker"],
-      ...awaySettings,
-    });
+    away = await openAway(awayScript, awaySettings, awayDatabase);
     await home.players.ensure(vegard.playerId, vegard.displayName, context);
     await away.players.ensure(ann.playerId, ann.displayName, context);
     homeEvents = [];
     home.events.subscribe((event) => homeEvents.push(event));
   };
 
+  const dirs: string[] = [];
   afterEach(async () => {
     await home?.close(context);
     await away?.close(context);
     apps.clear();
+    for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
     expect(errors).toEqual([]);
   });
 
@@ -488,5 +508,129 @@ describe("peers", { timeout: 30_000 }, () => {
     // Federation reports what an inbox turned away.
     expect(errors).toEqual([new Error("https://away.example answered 429")]);
     errors.length = 0;
+  });
+
+  describe("replies on their way", () => {
+    let heard = 0;
+    /** Home asks one thing, and finishes on the first reply it reads. */
+    const asking: Script = (request, last) => {
+      if (asked(last, /Link with team/)) return linkScript(request, last);
+      if (asked(last, /ask them/i))
+        return fauxAssistantMessage(
+          [fauxToolCall("talk_to_assistant", { assistant: "team", goal: "Ask if they're there" })],
+          { stopReason: "toolUse" },
+        );
+      if (last.includes("Send your first message with say"))
+        return fauxAssistantMessage([fauxToolCall("say", { text: "Are you there?" })], {
+          stopReason: "toolUse",
+        });
+      if (last.includes("another assistant, says")) {
+        heard++;
+        return fauxAssistantMessage(
+          [fauxToolCall("finish_thread", { summary: "They're there." })],
+          {
+            stopReason: "toolUse",
+          },
+        );
+      }
+      return fauxAssistantMessage([fauxText("Okay.")]);
+    };
+    const answering: Script = (_request, last) =>
+      fauxAssistantMessage([fauxText(last.includes("Are you there") ? "Here, all day." : "Okay.")]);
+    beforeEach(() => {
+      heard = 0;
+    });
+    /** A database file of its own, so the server can open it again. */
+    const fresh = () => {
+      const dir = mkdtempSync(join(tmpdir(), "nudge-peers-"));
+      dirs.push(dir);
+      return join(dir, "away.sqlite");
+    };
+    const threadAt = async (nudge: Nudge) => Object.values((await stateOf(nudge)).threads)[0];
+    /** Only what failed to reach home was reported; it is taken as expected. */
+    const expectOnlyFailedSends = () => {
+      expect(errors.length).toBeGreaterThan(0);
+      for (const error of errors) expect(String(error)).toMatch(/home\.example/);
+      errors.length = 0;
+    };
+
+    it("sends a reply that waited across a restart, once", async () => {
+      const database = fresh();
+      await start(asking, answering, { awayDatabase: database });
+      await link();
+      failing.set(HOME, "down");
+      await say(home, "Ask them if they're there");
+      // Answered, but home can't be reached: it waits in the outbox, tried again and again.
+      await until(async () => {
+        const waiting = Object.values((await stateOf(away)).outbox);
+        return waiting.length === 1 && waiting[0]!.tries >= 2;
+      });
+      expect((await threadAt(away))?.messages.at(-1)?.text).toBe("Here, all day.");
+
+      // The server restarts on the same storage while home is still away.
+      await away.close(context);
+      away = await openAway(answering, {}, database);
+      failing.clear();
+      await until(async () => (await threadAt(home))?.status === "done");
+      await until(async () => Object.keys((await stateOf(away)).outbox).length === 0);
+
+      expect(heard).toBe(1);
+      const thread = (await threadAt(home))!;
+      expect(thread).toMatchObject({ received: 1, rounds: 1 });
+      expect(thread.messages.filter((m) => m.from === "them").map((m) => m.text)).toEqual([
+        "Here, all day.",
+      ]);
+      expectOnlyFailedSends();
+    });
+
+    it("ignores a reply it took already when it comes again", async () => {
+      await start(asking, answering);
+      await link();
+      // Home takes the reply, but its answer gets lost: away sends it again.
+      failing.set(HOME, "lost");
+      const before = wire.filter((sent) => sent.to === HOME).length;
+      await say(home, "Ask them if they're there");
+      await until(async () => (await threadAt(home))?.status === "done");
+      await until(() => wire.filter((sent) => sent.to === HOME).length >= before + 2);
+      failing.clear();
+      await until(async () => Object.keys((await stateOf(away)).outbox).length === 0);
+
+      expect(heard).toBe(1);
+      const thread = (await threadAt(home))!;
+      expect(thread).toMatchObject({ received: 1, rounds: 1 });
+      expect(thread.messages.filter((m) => m.from === "them")).toHaveLength(1);
+      expectOnlyFailedSends();
+    });
+
+    it("answers again what it was answering when the server stopped", async () => {
+      const database = fresh();
+      let release: () => void = () => {};
+      const held = new Promise<void>((resolve) => (release = resolve));
+      // The first time, the model is still working on its answer when the server stops.
+      const slow = ((request, last) =>
+        last.includes("Are you there")
+          ? held.then(() => answering(request, last))
+          : answering(request, last)) as Script;
+      await start(asking, slow, { awayDatabase: database });
+      await link();
+      await say(home, "Ask them if they're there");
+      await until(async () => (await threadAt(away))?.awaiting === true);
+      await until(() =>
+        (requests.get("team") ?? []).some((request) =>
+          JSON.stringify(request).includes("Are you there"),
+        ),
+      );
+      const closing = away.close(context);
+      release();
+      await closing;
+      // Nothing went back: the answer was cut off.
+      expect((await threadAt(home))!.messages.map((m) => m.from)).toEqual(["us"]);
+
+      away = await openAway(answering, {}, database);
+      await until(async () => (await threadAt(home))?.status === "done");
+      await until(async () => Object.keys((await stateOf(away)).outbox).length === 0);
+      expect(heard).toBe(1);
+      expect(await threadAt(away)).toMatchObject({ sent: 1, answered: 1 });
+    });
   });
 });
