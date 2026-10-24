@@ -80,7 +80,7 @@ export type PrivacyOptions = {
   readonly detectors?: readonly PiiDetector[];
   readonly onRequest?: RedactionOptions["onRequest"];
   /**
-   * The local model that reads requests first (ADR 14), shared by a host's assistants. Without
+   * The local model that reads requests first (ADR 22), shared by a host's assistants. Without
    * one, as in tests and on Durable Objects, only the rules run.
    */
   readonly deep?: DeepDetector;
@@ -415,7 +415,7 @@ export class Nudge {
       );
     const deepMode = options.privacy?.deepMode ?? "off";
     const deep = deepMode === "off" ? undefined : options.privacy?.deep;
-    // Turning the local model on asks for what ADR 14 hid, the rules for it included.
+    // Turning the local model on asks for what ADR 22 hid, the rules for it included.
     const detectors =
       options.privacy?.detectors ??
       (deep === undefined ? builtinDetectors : quasiIdentifierDetectors);

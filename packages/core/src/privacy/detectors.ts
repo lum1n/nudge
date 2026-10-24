@@ -210,7 +210,7 @@ export const builtinDetectors: readonly PiiDetector[] = [
   phoneCueDetector,
 ];
 
-/** Everything ADR 14 hid: the built-in detectors and those for names, places and hosts. */
+/** Everything ADR 22 hid: the built-in detectors and those for names, places and hosts. */
 export const quasiIdentifierDetectors: readonly PiiDetector[] = [
   ...builtinDetectors,
   usernameDetector,

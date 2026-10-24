@@ -52,7 +52,7 @@ Releases are made by pushing a tag such as `v0.2.0` ([`.github/workflows/release
 
 ## Run on Cloudflare
 
-`packages/cloudflare` runs assistants as a Worker with one SQLite-backed Durable Object per assistant, with no machine to keep ([ADR 14](docs/adr/0014-durable-object-host.md)). Set the assistants in `NUDGE_CONFIG` in its `wrangler.jsonc`, as `nudge.json` has them but without databases or extensions, and deploy:
+`packages/cloudflare` runs assistants as a Worker with one SQLite-backed Durable Object per assistant, with no machine to keep ([ADR 21](docs/adr/0021-durable-object-host.md)). Set the assistants in `NUDGE_CONFIG` in its `wrangler.jsonc`, as `nudge.json` has them but without databases or extensions, and deploy:
 
 ```bash
 cd packages/cloudflare
@@ -209,7 +209,7 @@ This covers every request, including tool rounds and the summaries made when a l
 
 Names, places, stations, organisations, addresses, hosts, plates and birth dates stay readable, so the assistant can plan a trip, call an API or tell people apart. Hide one yourself with `/private` ([ADR 15](docs/adr/0015-hide-only-what-is-critical.md)).
 
-For more, a small model on the server hides names, places and organisations too, such as a vet's name on its own ("hos Vethjem"), along with the rules for hosts, plates and birth dates. It is off unless `nudge.json` has `"privacy": { "deep": "required" }`, which refuses requests until the model runs, or `"deep": "preferred"`, which sends them with the rules alone meanwhile. `"allow": ["Kiwi"]` keeps words it hides by mistake readable. Famous people, companies, brands and big cities abroad stay readable either way. The model is GLiNER (`urchade/gliner_multi-v2.1`, Apache-2.0), run on the CPU in a process of its own. It is downloaded the first time: about 260 MB, into `server/models` beside `nudge.json`. While it reads it takes about 650 MB of memory; after two minutes with nothing to read it stops. Assistants on Cloudflare run the rules alone ([ADR 14](docs/adr/0014-quasi-identifiers-and-local-ner.md)). Check what a room sends with **Model view**.
+For more, a small model on the server hides names, places and organisations too, such as a vet's name on its own ("hos Vethjem"), along with the rules for hosts, plates and birth dates. It is off unless `nudge.json` has `"privacy": { "deep": "required" }`, which refuses requests until the model runs, or `"deep": "preferred"`, which sends them with the rules alone meanwhile. `"allow": ["Kiwi"]` keeps words it hides by mistake readable. Famous people, companies, brands and big cities abroad stay readable either way. The model is GLiNER (`urchade/gliner_multi-v2.1`, Apache-2.0), run on the CPU in a process of its own. It is downloaded the first time: about 260 MB, into `server/models` beside `nudge.json`. While it reads it takes about 650 MB of memory; after two minutes with nothing to read it stops. Assistants on Cloudflare run the rules alone ([ADR 22](docs/adr/0022-quasi-identifiers-and-local-ner.md)). Check what a room sends with **Model view**.
 
 The history is stored with the placeholders too: messages, answers, tool results, memory, approvals and nudges. The values are kept in one place, the vault, and put back only where a person sees them (and where a tool acts on them, such as sending a mail). So forgetting a value takes it out of all history at once ([ADR 9](docs/adr/0009-placeholders-at-rest-and-per-person-visibility.md)). The vault keeps only a hash of a forgotten value, so written out again it is still hidden behind its old placeholder, and the model never gets it; hiding it again on purpose keeps it once more, under a new placeholder. When the detectors learn more, the history is rewritten with them once, the next time the assistant opens.
 
@@ -576,7 +576,7 @@ Everything between assistants is signed and encrypted: each assistant has an Ed2
 
 ### Assistants talking to each other
 
-`extensions/peers` lets this assistant talk to assistants on other servers, such as to find a time with Ann's household or hand her assistant a request (ADR 16). It needs `extensions/federation` and uses its keys: everything between the two is signed and encrypted the same way.
+`extensions/peers` lets this assistant talk to assistants on other servers, such as to find a time with Ann's household or hand her assistant a request (ADR 23). It needs `extensions/federation` and uses its keys: everything between the two is signed and encrypted the same way.
 
 ```json
 { "from": "./extensions/peers", "settings": { "offer": ["calendar"] } }

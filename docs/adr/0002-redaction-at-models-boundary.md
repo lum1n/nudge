@@ -4,6 +4,6 @@ Personal data must not reach a model provider. Pi Durable's `beforeRequest` hook
 
 The transcript is stored raw on the host. Placeholders are stable per assistant, so the model's view and provider prompt caches stay consistent across turns and rooms.
 
-Amended by ADR 14: the detectors also find quasi-identifiers (places, organisations, hosts and more), and thinking that could hold a value is dropped from requests rather than replayed.
+Amended by ADR 22: the detectors also find quasi-identifiers (places, organisations, hosts and more), and thinking that could hold a value is dropped from requests rather than replayed.
 
 Amended by ADR 15: the default detectors keep only secrets, ID, card and account numbers, e-mail addresses and phone numbers; names are no longer hidden.

@@ -85,7 +85,7 @@ export async function redactHistory(
 
 /**
  * Goes up when the detectors find more, so history stored before is rewritten once: 2 added
- * places, organisations, hosts, user names, plates and the rest (ADR 14), and drops thinking that
+ * places, organisations, hosts, user names, plates and the rest (ADR 22), and drops thinking that
  * held values.
  */
 export const REDACTION_VERSION = 2;

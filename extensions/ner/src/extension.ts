@@ -10,7 +10,7 @@ const Settings = Type.Object({
 });
 
 /**
- * Names and street addresses are found by every assistant now (ADR 14); this adds the names the
+ * Names and street addresses are found by every assistant now (ADR 22); this adds the names the
  * lists don't have.
  */
 export const nerExtension = defineNudgeExtension({
