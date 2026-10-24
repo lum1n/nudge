@@ -29,6 +29,8 @@ import { parseFound, parseReport, remember, WatchesDoc, watchesExtension } from 
 const context = BACKGROUND_CONTEXT;
 const by = { playerId: "owner", displayName: "Vegard" };
 const ann = { playerId: "ann", displayName: "Ann" };
+/** Ended script runs kept for each watch. */
+const KEEP_RUNS = 3;
 
 function lastUser(request: ModelContext): string {
   const message = request.messages.findLast((m) => m.role === "user");
@@ -230,7 +232,7 @@ describe("watches that run a script", () => {
         model: { provider: faux.provider.id, modelId: faux.getModel().id },
         extensions: [
           site,
-          ...(scripts ? [scriptsExtension] : []),
+          ...(scripts ? [{ extension: scriptsExtension, settings: { keepRuns: KEEP_RUNS } }] : []),
           { extension: watchesExtension, settings: { minScriptMinutes: 0 } },
         ],
       },
@@ -364,6 +366,77 @@ describe("watches that run a script", () => {
       await until(async () =>
         ((await watch())?.lastError ?? "").includes("scripts extension is off"),
       );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps checking with its script after a restart", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nudge-watches-"));
+    try {
+      await nudge.close(context);
+      await open(join(dir, "nudge.db"), true);
+      await watchWith(`${LIST}return { items };`);
+      await until(() => news().length === 1);
+      await until(async () => ((await watch())?.checks ?? 0) >= 2);
+      await nudge.close(context);
+
+      listings = [...listings, "GLC 2027, 799 000 kr"];
+      await open(join(dir, "nudge.db"), true);
+      const before = (await watch())?.checks ?? 0;
+      await until(() => news().length === 1);
+      expect(news()[0]).toMatchObject({ text: expect.stringContaining("799 000 kr") });
+      expect(news()[0]).toMatchObject({ text: expect.not.stringContaining("780 000 kr") });
+      await until(async () => ((await watch())?.checks ?? 0) >= before + 2);
+      expect((await watch())?.lastError).toBeUndefined();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("deletes all but its last runs when the assistant opens", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nudge-watches-"));
+    const file = join(dir, "nudge.db");
+    const { DatabaseSync } = await import("node:sqlite");
+    const rows = (sql: string): { id: number }[] => {
+      const db = new DatabaseSync(file, { readOnly: true });
+      try {
+        return db.prepare(sql).all() as { id: number }[];
+      } finally {
+        db.close();
+      }
+    };
+    const runs = () =>
+      rows(
+        `SELECT id FROM tasks WHERE kind = '"scripts.run"' AND status = 'terminal' ORDER BY id`,
+      ).map((row) => row.id);
+    const owned = (ids: number[]) =>
+      rows(`SELECT id FROM tasks WHERE json_extract(record, '$.owner') IN (${ids.join(",")})`);
+    const documents = (ids: number[]) =>
+      rows(`SELECT id FROM documents WHERE scope_kind = 'task' AND owner_id IN (${ids.join(",")})`);
+    try {
+      await nudge.close(context);
+      await open(file, true);
+      await watchWith(`${LIST}return { items };`);
+      await until(async () => ((await watch())?.checks ?? 0) >= 7);
+      await nudge.close(context);
+      const ran = runs();
+      expect(ran.length).toBeGreaterThanOrEqual(7);
+      const old = ran.slice(0, -KEEP_RUNS);
+      expect(owned(old).length).toBeGreaterThan(0);
+      expect(documents(old).length).toBeGreaterThan(0);
+
+      await open(file, true);
+      await nudge.close(context);
+      // The newest stay, with any check run since; the rest are gone with what they owned.
+      expect(runs().slice(0, KEEP_RUNS)).toEqual(ran.slice(-KEEP_RUNS));
+      expect(owned(old)).toEqual([]);
+      expect(documents(old)).toEqual([]);
+
+      await open(file, true);
+      const before = (await watch())?.checks ?? 0;
+      await until(async () => ((await watch())?.checks ?? 0) >= before + 2);
+      expect((await watch())?.lastError).toBeUndefined();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

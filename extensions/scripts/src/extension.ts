@@ -54,6 +54,12 @@ const Settings = Type.Object({
     minimum: 1,
     description: "Most scripts one room may keep.",
   }),
+  keepRuns: Type.Number({
+    default: 20,
+    minimum: 1,
+    description:
+      "Ended runs to keep for each watch or other timer; older ones are deleted when the assistant starts.",
+  }),
 });
 
 /** Who a script saved now is private to, if the turn is private. */
@@ -70,6 +76,11 @@ function visible(script: Script): boolean {
 /** Whether a turn private to `privateTo`, or public, sees the script. */
 function visibleTo(script: Script, privateTo: Owner | undefined): boolean {
   return script.privateTo === undefined || script.privateTo.playerId === privateTo?.playerId;
+}
+
+/** Whether a script is the owner's: private to them, or public when they are nobody. */
+function sameOwner(script: Script, privateTo: Owner | undefined): boolean {
+  return script.privateTo?.playerId === privateTo?.playerId;
 }
 
 const text = (value: string, isError = false) => ({
@@ -252,7 +263,7 @@ export const scriptsExtension = defineNudgeExtension({
     "Scripts: the assistant saves small programs for checks it repeats, and runs them again without spending a model turn.",
   settings: Settings,
   setup: (host) => {
-    const { timeoutSeconds, memoryMb, maxPerRoom } = host.settings;
+    const { timeoutSeconds, memoryMb, maxPerRoom, keepRuns } = host.settings;
     const sandbox = new CappedSandbox(timeoutSeconds * 1000, memoryMb * 2 ** 20);
     const codemode = createCodemodeTool({ sandbox, models: false });
 
@@ -286,7 +297,8 @@ export const scriptsExtension = defineNudgeExtension({
         "run_script passes. Return what it found. A script a watch runs returns " +
         '{"items":[{"key":"…","text":"…"}]}, and may add "message" to have that text posted ' +
         "to the room as it is, without you. It runs once now as a test; it is saved only if " +
-        "that works. Saving under a name already used replaces that script.",
+        "that works. Saving again under its name replaces a script, but not one saved in public " +
+        "when this turn is private.",
       parameters: Type.Object({
         name: Type.String({ description: "Lower case words joined by dashes, like finn-glc." }),
         description: Type.String({ description: "What it does and what it returns." }),
@@ -301,10 +313,18 @@ export const scriptsExtension = defineNudgeExtension({
         if (args.code.length > MAX_CODE)
           return text(`Keep a script under ${MAX_CODE} characters.`, true);
         const { room, items, hidden } = await scriptsOf(api, context);
-        // Someone's private script: replacing it would take it from them, and their watches.
-        if (hidden.some((item) => item.name === name))
-          return text(`The name ${name} is taken; choose another.`, true);
-        const taken = items.some((item) => item.name === name);
+        // Someone's private script: replacing it would take it from them, and their watches. A
+        // public one, saved over in private, would be taken from everyone else the same way.
+        const mine = (item: Script) => item.name === name && sameOwner(item, privately().privateTo);
+        const other = [...items, ...hidden].find((item) => item.name === name && !mine(item));
+        if (other !== undefined)
+          return text(
+            other.privateTo === undefined
+              ? `${name} is a script everyone here uses; saved in private, it would replace theirs. Choose another name.`
+              : `The name ${name} is taken; choose another.`,
+            true,
+          );
+        const taken = items.some(mine);
         if (!taken && items.length >= maxPerRoom)
           return text(`This conversation keeps ${maxPerRoom} scripts already.`, true);
         const tried = await api.executeTool(
@@ -318,7 +338,7 @@ export const scriptsExtension = defineNudgeExtension({
         const now = host.now();
         await api.commit(async (tx) => {
           const state = await tx.doc(ScriptsDoc, room.id, null);
-          const before = state.items.find((item) => item.name === name);
+          const before = state.items.find(mine);
           const script: Script = {
             name,
             description: args.description.trim(),
@@ -329,10 +349,7 @@ export const scriptsExtension = defineNudgeExtension({
             lastRunAt: now,
             ...privately(),
           };
-          state.items = [
-            ...state.items.filter((item) => item.name !== name || !visible(item)),
-            script,
-          ];
+          state.items = [...state.items.filter((item) => !mine(item)), script];
         }, context);
         return text(`${taken ? "Replaced" : "Saved"} script ${name}. The test run:\n${output}`);
       },
@@ -421,6 +438,8 @@ export const scriptsExtension = defineNudgeExtension({
 
     return {
       tasks: [createScriptRun(host.now)],
+      // A watch starts a run on every check; its records would otherwise stay for good.
+      keepEnded: { [ScriptRun.definition.name]: keepRuns },
       // Scripts are kept as the model wrote them, with placeholders; the code runs with the values.
       tools: [exec, keepsPlaceholders(save), run, list, show, remove],
       sections: [

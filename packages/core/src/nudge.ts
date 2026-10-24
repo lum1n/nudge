@@ -68,6 +68,7 @@ import { type Owner, turnOf } from "./privacy/turn.ts";
 import { PLACEHOLDER, Vault, type VaultEntry } from "./privacy/vault.ts";
 import { READABLE_VERSION, VaultDoc } from "./privacy/vault-doc.ts";
 import { openDatabaseStorage } from "./encrypted-storage.ts";
+import { forgetEndedTasks } from "./ended-tasks.ts";
 import { lockDatabase } from "./storage-lock.ts";
 import { type RoomEvent, RoomEvents } from "./room-events.ts";
 import { Presence } from "./presence.ts";
@@ -404,6 +405,14 @@ export class Nudge {
       throw error;
     }
     for (const { extension } of installed) registry.install(withToolValues(extension, values));
+    // Upkeep while nothing has the file open; a failure only leaves the old tasks where they are.
+    if (file !== undefined)
+      await forgetEndedTasks(
+        file,
+        Object.assign({}, ...installed.map((installed) => installed.keepEnded ?? {})),
+      ).catch((error: unknown) =>
+        options.onReport?.(new Error("Couldn't delete old ended tasks", { cause: error })),
+      );
     const deepMode = options.privacy?.deepMode ?? "off";
     const deep = deepMode === "off" ? undefined : options.privacy?.deep;
     // Turning the local model on asks for what ADR 14 hid, the rules for it included.
