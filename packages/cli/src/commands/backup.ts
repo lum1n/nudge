@@ -1,13 +1,16 @@
 import { readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import {
+  type BackupSettings,
   backupKey,
+  backupRemoteDir,
   createBackup,
   lastBackupAt,
   loadConfig,
   type NudgeConfig,
   openRecoveryKit,
   pruneBackups,
+  RemoteBackups,
   restoreBackup,
 } from "@nudge/core";
 import { UsageError } from "../errors.ts";
@@ -40,6 +43,25 @@ export async function backup(options: {
   const keep = config.backup?.keep;
   if (keep !== undefined && options.to === undefined)
     for (const old of await pruneBackups(dir, keep)) console.log(`Deleted the old backup ${old}`);
+  if (options.to === undefined && config.backup?.remote !== undefined)
+    await uploadBackup(options.config, config.backup, file, (line) => console.log(line));
+}
+
+/**
+ * Copies a backup just made to the config's remote target, if it has one, and deletes the oldest
+ * there past `keep`, as in the folder. Throws when the upload fails; the local copy stays.
+ */
+export async function uploadBackup(
+  configPath: string,
+  settings: BackupSettings,
+  file: string,
+  log: (line: string) => void,
+  remotes = new RemoteBackups(backupRemoteDir(configPath)),
+): Promise<void> {
+  if (settings.remote === undefined) return;
+  const { label, deleted } = await remotes.upload(settings.remote, file, settings.keep ?? 14);
+  log(`Uploaded it to ${label}`);
+  for (const name of deleted) log(`Deleted the old backup ${name} from ${label}`);
 }
 
 /** Unpacks a backup into a directory of its own; nothing running is touched. */
@@ -107,6 +129,10 @@ export function scheduleBackups(
       const file = await createBackup({ configPath, config, dir: settings.dir, key });
       await pruneBackups(settings.dir, keep);
       log(`Backed up to ${file}`);
+      // The local copy is made; a remote that is down is tried again with the next one.
+      await uploadBackup(configPath, settings, file, log).catch((error: unknown) =>
+        log((error as Error).message),
+      );
     } catch (error) {
       log(`Backup failed: ${(error as Error).message}`);
     }
