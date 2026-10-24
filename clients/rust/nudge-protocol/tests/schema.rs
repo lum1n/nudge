@@ -574,6 +574,8 @@ fn http_bodies_match_the_schema() {
                 player_id: "ann".into(),
                 created_at: 1.0,
                 client: Some(client),
+                last_used_at: Some(2.0),
+                expires_at: Some(3.0),
             }],
         },
     );

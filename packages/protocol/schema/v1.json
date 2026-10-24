@@ -6402,6 +6402,12 @@
               "type": "string"
             }
           }
+        },
+        "lastUsedAt": {
+          "type": "number"
+        },
+        "expiresAt": {
+          "type": "number"
         }
       }
     },
@@ -6444,6 +6450,12 @@
                     "type": "string"
                   }
                 }
+              },
+              "lastUsedAt": {
+                "type": "number"
+              },
+              "expiresAt": {
+                "type": "number"
               }
             }
           }
@@ -6684,6 +6696,9 @@
       "properties": {
         "playerId": {
           "type": "string"
+        },
+        "expiresAt": {
+          "type": "number"
         }
       }
     },

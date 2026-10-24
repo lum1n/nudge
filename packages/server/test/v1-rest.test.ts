@@ -494,6 +494,8 @@ describe("v1 HTTP", () => {
         playerId: "di",
         createdAt: expect.any(Number),
         client: { name: "Phone", platform: "ios" },
+        // It signed in for `/me` above.
+        lastUsedAt: expect.any(Number),
       },
     ]);
     expect((await call("GET", "/admin/tokens", { token: tokens.Ann })).json.tokens).toHaveLength(4);
@@ -664,6 +666,31 @@ describe("v1 HTTP", () => {
       (await call("POST", "/admin/tokens", { token: tokens.Ann, body: { playerId: "zed" } }))
         .status,
     ).toBe(404);
+    // A script's token can expire; apps' tokens never do.
+    const expiresAt = Date.now() + 60 * 60 * 1000;
+    const scripted = await call("POST", "/admin/tokens", {
+      token: tokens.Ann,
+      body: { playerId: "cy", expiresAt },
+      schema: PairResponse,
+    });
+    const cys = await call("GET", "/admin/tokens?player=cy", {
+      token: tokens.Ann,
+      schema: TokensResponse,
+    });
+    expect(
+      cys.json.tokens.find((t: { clientId: string }) => t.clientId === scripted.json.clientId),
+    ).toMatchObject({ expiresAt });
+    expect(
+      cys.json.tokens.find((t: { clientId: string }) => t.clientId === issued.json.clientId),
+    ).not.toHaveProperty("expiresAt");
+    expect(
+      (
+        await call("POST", "/admin/tokens", {
+          token: tokens.Ann,
+          body: { playerId: "cy", expiresAt: Date.now() - 1 },
+        })
+      ).status,
+    ).toBe(400);
 
     // The caller isn't added to a room an admin makes for others.
     const created = await call("POST", "/admin/rooms", {
@@ -788,6 +815,24 @@ describe("v1 HTTP", () => {
     expect(
       (await call("DELETE", `/admin/tokens/${bo.clientId}`, { token: tokens.Ann })).status,
     ).toBe(404);
+  });
+
+  it("stops an expired token, closing its sockets with 4401", async () => {
+    const short = await nudge.players.issueToken("bo", context, Date.now() + 300);
+    const socket = new WebSocket(`${server.url.replace("http", "ws")}/v1/a/robin/connect`);
+    const frames: ServerFrame[] = [];
+    const closed = new Promise<number>((resolve) =>
+      socket.addEventListener("close", (event) => resolve(event.code)),
+    );
+    socket.addEventListener("open", () =>
+      socket.send(JSON.stringify({ type: "hello", protocol: 1, token: short.token, client })),
+    );
+    socket.addEventListener("message", (event) => frames.push(JSON.parse(String(event.data))));
+    await eventually(() => frames.length > 0);
+    expect(frames[0]?.type).toBe("welcome");
+    expect(await closed).toBe(CLOSE.unauthorized);
+    expect((await call("GET", "/me", { token: short.token })).status).toBe(401);
+    expect((await call("GET", "/me", { token: tokens.Bo })).status).toBe(200);
   });
 
   it("signs a client out by revoking its own token", async () => {

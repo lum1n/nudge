@@ -1,5 +1,6 @@
 import { findAssistant, LastOwner, loadConfig, ServerOwners, serverOwnersFile } from "@nudge/core";
 import { UsageError } from "../errors.ts";
+import { tokenUse } from "./admin.ts";
 
 export type OwnerOptions = {
   readonly config: string;
@@ -7,6 +8,8 @@ export type OwnerOptions = {
   readonly verb?: string;
   /** A player id for add and token, or an address for add; an owner id for remove. */
   readonly id?: string;
+  /** For token: when it stops working; absent, it works until its owner goes. */
+  readonly expiresAt?: number;
 };
 
 /**
@@ -56,14 +59,31 @@ export async function owner(options: OwnerOptions): Promise<void> {
       const found = owners.ownerOf(assistant, playerId);
       if (found === undefined)
         throw new UsageError(`${playerId} of ${assistant} is not an owner: nudge owner add first`);
-      const { token, clientId } = owners.issue(found.id, { name: "nudge-cli", platform: "cli" });
+      const { token, clientId } = owners.issue(
+        found.id,
+        { name: "nudge-cli", platform: "cli" },
+        options.expiresAt,
+      );
       console.log(token);
       console.log(`(client ${clientId}; shown once. It works at /v1/server, as Bearer.)`);
+      if (options.expiresAt !== undefined)
+        console.log(`It stops working at ${new Date(options.expiresAt).toISOString()}.`);
+      return;
+    }
+    case "tokens": {
+      const all = owners.tokens().sort((a, b) => a.createdAt - b.createdAt);
+      if (all.length === 0) console.log("No server tokens.");
+      for (const t of all) {
+        const client = t.client === undefined ? "" : `\t${t.client.name} (${t.client.platform})`;
+        console.log(
+          `${t.ownerId}\t${t.clientId}\t${new Date(t.createdAt).toISOString()}\t${tokenUse(t)}${client}`,
+        );
+      }
       return;
     }
     default:
       throw new UsageError(
-        "Usage: nudge owner [list|add <player or address>|remove <id>|token <player>]",
+        "Usage: nudge owner [list|add <player or address>|remove <id>|token <player>|tokens]",
       );
   }
 }

@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createNudge,
   DirectoryDoc,
+  LAST_USED_EVERY_MS,
   LOBBY,
   type NudgeOptions,
   PAIRING_TTL_MS,
@@ -90,6 +91,40 @@ describe("players and rooms", () => {
     await expect(nudge.players.revoke(laptop.clientId, context)).rejects.toThrow(
       `No token for client "${laptop.clientId}"`,
     );
+    await nudge.close(context);
+  });
+
+  it("notes when a token was last used, at most once a minute, and stops one that expired", async () => {
+    let now = 1_000_000;
+    const { options } = setup(":memory:");
+    const nudge = await createNudge({ ...options, now: () => now }, context);
+    const ann = await nudge.players.invite("Ann", context);
+    const script = await nudge.players.issueToken(ann.player.id, context, now + 60 * 60 * 1000);
+    expect(script.expiresAt).toBe(now + 60 * 60 * 1000);
+    const lastUsed = async (clientId: string) =>
+      (await nudge.players.tokens(ann.player.id, context)).find((t) => t.clientId === clientId)
+        ?.lastUsedAt;
+    expect(await lastUsed(ann.clientId)).toBeUndefined();
+
+    const used = now;
+    expect((await nudge.players.authenticate(ann.token, context))?.player.id).toBe("ann");
+    expect(await lastUsed(ann.clientId)).toBe(used);
+    now += LAST_USED_EVERY_MS - 1;
+    await nudge.players.authenticate(ann.token, context);
+    expect(await lastUsed(ann.clientId)).toBe(used);
+    now += 1;
+    await nudge.players.authenticate(ann.token, context);
+    expect(await lastUsed(ann.clientId)).toBe(now);
+
+    expect(await nudge.players.authenticate(script.token, context)).toMatchObject({
+      clientId: script.clientId,
+      expiresAt: script.expiresAt,
+    });
+    now = script.expiresAt!;
+    expect(await nudge.players.authenticate(script.token, context)).toBeUndefined();
+    // Apps' tokens have no expiry and keep working.
+    expect((await nudge.players.authenticate(ann.token, context))?.player.id).toBe("ann");
+    expect((await nudge.players.tokens(ann.player.id, context))[1]?.expiresAt).toBe(now);
     await nudge.close(context);
   });
 

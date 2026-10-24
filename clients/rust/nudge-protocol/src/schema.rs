@@ -848,6 +848,12 @@ pub struct TokenInfo {
     /// What the client said it is when it paired.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client: Option<ClientInfo>,
+    /// When it last signed in a request or socket, to the minute; absent until then.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_used_at: Option<f64>,
+    /// When it stops working; absent for one that works until revoked, as apps' do.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<f64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

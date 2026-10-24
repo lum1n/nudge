@@ -347,6 +347,8 @@ pub struct TokenInfo {
     pub created_at: f64,
     pub client_name: Option<String>,
     pub client_platform: Option<String>,
+    pub last_used_at: Option<f64>,
+    pub expires_at: Option<f64>,
 }
 
 /// A new key pair for this device's pushes through a relay; make one per install and keep it.
@@ -1167,6 +1169,8 @@ impl NudgeClient {
                 client_id: token.client_id,
                 player_id: token.player_id,
                 created_at: token.created_at,
+                last_used_at: token.last_used_at,
+                expires_at: token.expires_at,
                 client_name: token.client.as_ref().map(|c| c.name.clone()),
                 client_platform: token.client.map(|c| c.platform),
             })

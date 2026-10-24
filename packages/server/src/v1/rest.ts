@@ -738,7 +738,9 @@ export function restRoutes(options: RestOptions): Hono {
     const body = await readJson(c, IssueTokenRequest);
     if ((await c.var.nudge.players.get(body.playerId, context)) === undefined)
       throw new HttpError(404, `No player "${body.playerId}"`);
-    const issued = await c.var.nudge.players.issueToken(body.playerId, context);
+    if (body.expiresAt !== undefined && body.expiresAt <= Date.now())
+      throw new HttpError(400, "expiresAt is in the past");
+    const issued = await c.var.nudge.players.issueToken(body.playerId, context, body.expiresAt);
     return c.json(
       {
         token: issued.token,
@@ -883,6 +885,8 @@ function toTokenInfo(record: TokenRecord): TokenInfo {
     playerId: record.playerId,
     createdAt: record.createdAt,
     ...(record.client === undefined ? {} : { client: record.client }),
+    ...(record.lastUsedAt === undefined ? {} : { lastUsedAt: record.lastUsedAt }),
+    ...(record.expiresAt === undefined ? {} : { expiresAt: record.expiresAt }),
   };
 }
 

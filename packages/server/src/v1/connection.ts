@@ -46,6 +46,7 @@ export class Connection {
   private readonly subscriptions = new Map<Target, Subscription>();
   private closed = false;
   private stopWatchingToken: (() => void) | undefined;
+  private expiryTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly helloTimer: ReturnType<typeof setTimeout>;
   /** Frames are handled one at a time, in order. */
   private queue: Promise<void> = Promise.resolve();
@@ -74,6 +75,7 @@ export class Connection {
     if (this.closed) return;
     this.closed = true;
     clearTimeout(this.helloTimer);
+    clearTimeout(this.expiryTimer);
     this.stopWatchingToken?.();
     for (const subscription of this.subscriptions.values()) subscription.stop();
     this.subscriptions.clear();
@@ -125,6 +127,7 @@ export class Connection {
     );
     if (this.closed) return stop();
     this.stopWatchingToken = stop;
+    if (credential.expiresAt !== undefined) this.closeAt(credential.expiresAt);
     this.send({
       type: "welcome",
       protocol: PROTOCOL_VERSION,
@@ -134,6 +137,14 @@ export class Connection {
       clientId: credential.clientId,
       heartbeatMs: this.options.heartbeatMs,
     });
+  }
+
+  /** A token that expires closes its sockets then, as a revoked one does. */
+  private closeAt(expiresAt: number): void {
+    const left = expiresAt - Date.now();
+    if (left <= 0) return this.fail(CLOSE.unauthorized, "Token expired");
+    // Timers wait about 24 days at most; a later expiry is waited for in steps.
+    this.expiryTimer = setTimeout(() => this.closeAt(expiresAt), Math.min(left, 2 ** 31 - 1));
   }
 
   private async subscribe(target: Target, { player }: Credential): Promise<void> {
