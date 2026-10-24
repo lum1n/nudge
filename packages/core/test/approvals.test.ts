@@ -27,10 +27,10 @@ const context = BACKGROUND_CONTEXT;
 const by = { playerId: "owner", displayName: "Vegard" };
 
 /**
- * A `send_mail` tool that only asks; its handler records what it was asked to send, and its
- * denial handler what it was refused.
+ * A `send_mail` tool that only asks; its handler records what it was asked to send and what was
+ * held back, and its denial handler what it was refused.
  */
-function mailer(sent: string[], refused: string[] = []) {
+function mailer(sent: string[], refused: string[] = [], heldBack: (readonly string[])[] = []) {
   return defineNudgeExtension({
     name: "mailer",
     version: "1",
@@ -66,7 +66,8 @@ function mailer(sent: string[], refused: string[] = []) {
         }),
       ],
       approvals: {
-        send: async (payload) => {
+        send: async (payload, run) => {
+          heldBack.push(run.heldBack);
           const { to } = payload as { to: string };
           if (to === "nobody") throw new Error("No such address");
           sent.push(to);
@@ -82,7 +83,7 @@ function mailer(sent: string[], refused: string[] = []) {
   });
 }
 
-function setup(sent: string[], refused: string[] = []) {
+function setup(sent: string[], refused: string[] = [], heldBack: (readonly string[])[] = []) {
   const faux = fauxProvider();
   const models = createModels();
   models.setProvider(faux.provider);
@@ -96,7 +97,7 @@ function setup(sent: string[], refused: string[] = []) {
     models,
     model: { provider: faux.provider.id, modelId: faux.getModel().id },
     timeZone: "Europe/Oslo",
-    extensions: [mailer(sent, refused)],
+    extensions: [mailer(sent, refused, heldBack)],
   };
   const askToSend = (to: string) => {
     faux.setResponses([
@@ -205,6 +206,60 @@ describe("approvals", () => {
     await nudge.approvals.decide(LOBBY, "a1", { approve: true, by: bo }, context);
     await nudge.approvals.decide(LOBBY, "a2", { approve: true, by: ann }, context);
     expect(sent).toEqual([placeholder, "Storgata 1"]);
+    await nudge.close(context);
+  });
+
+  it("gives an action only the values both its requester and its decider may see", async () => {
+    const sent: string[] = [];
+    const heldBack: (readonly string[])[] = [];
+    const { options, askToSend } = setup(sent, [], heldBack);
+    const nudge = await createNudge(options, context);
+    const placeholder = await nudge.protect("Storgata 1", "PRIVATE", { owner: "ann" });
+    const ann = { playerId: "ann", displayName: "Ann" };
+    const bo = { playerId: "bo", displayName: "Bo" };
+    // In the shared lobby, Bo's turn asks to send to Ann's value; then Ann's own turn does.
+    for (const author of [bo, ann]) {
+      askToSend(placeholder);
+      await (await nudge.submit(LOBBY, { text: "Mail it", author }, context)).wait(context);
+    }
+    expect(await nudge.approvals.get(LOBBY, "a1", context)).toMatchObject({ requestedBy: bo });
+    expect(await nudge.approvals.get(LOBBY, "a2", context)).toMatchObject({ requestedBy: ann });
+    // Ann decides both: Bo's request never gets her value, her own does.
+    await nudge.approvals.decide(LOBBY, "a1", { approve: true, by: ann }, context);
+    await nudge.approvals.decide(LOBBY, "a2", { approve: true, by: ann }, context);
+    expect(sent).toEqual([placeholder, "Storgata 1"]);
+    expect(heldBack).toEqual([[placeholder], []]);
+    await nudge.close(context);
+  });
+
+  it("gives an approval stored without its requester only values nobody owns", async () => {
+    const sent: string[] = [];
+    const heldBack: (readonly string[])[] = [];
+    const { options } = setup(sent, [], heldBack);
+    const nudge = await createNudge(options, context);
+    const placeholder = await nudge.protect("Storgata 1", "PRIVATE", { owner: "ann" });
+    const shared = await nudge.protect("kari@example.com", "EMAIL");
+    // Asked for outside any turn, as approvals were stored before they kept who asked.
+    const asked = await nudge.harness.commit(
+      (tx) =>
+        requestApproval(
+          tx,
+          LOBBY,
+          {
+            extension: "mailer",
+            kind: "send",
+            summary: "Send a mail",
+            payload: { to: `${placeholder} ${shared}` },
+          },
+          0,
+        ),
+      context,
+    );
+    expect(asked.requestedBy).toBeUndefined();
+    const ann = { playerId: "ann", displayName: "Ann" };
+    await nudge.approvals.decide(LOBBY, asked.id, { approve: true, by: ann }, context);
+    expect(sent).toEqual([`${placeholder} kari@example.com`]);
+    expect(heldBack).toEqual([[placeholder]]);
     await nudge.close(context);
   });
 
