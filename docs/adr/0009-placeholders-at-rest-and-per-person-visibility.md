@@ -17,3 +17,5 @@ What this doesn't do: the model knows what it was told in a private turn and mig
 Databases from before this change keep their raw history until `nudge db redact`, which rewrites every transcript entry and the current memory, approvals and nudges with placeholders, then vacuums the file.
 
 Amended by ADR 22: when the detectors find more, history is rewritten once, automatically, the next time an assistant opens.
+
+Amended: a value written another way ("ann" for "Ann") is stored under a placeholder of its own, a spelling, so history gives back exactly what was written; the model sees only the value's own placeholder for all of them (`Vault.redactForModel`), so it takes them for one person. What it writes back gets the spelling the request had after the same text (`/home/⟦NAME1⟧` becomes `/home/⟦NAME2⟧` where the request had `/home/kari`, see `SpellingsSeen`), else stays the value's own and comes back as the value was first written. Spellings share their value's owner, so who may see what doesn't change.

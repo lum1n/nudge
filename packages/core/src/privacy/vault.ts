@@ -26,7 +26,8 @@ export type VaultEntry = {
   /**
    * Another way the value behind this placeholder was written, such as `vegard` for `Vegard`: it
    * matches as that value and shares its owner and state, but comes back as written, so a round
-   * trip gives the text back exactly.
+   * trip gives the text back exactly. The model sees only the value's own placeholder (see
+   * `Vault.redactForModel`).
    */
   readonly spellingOf?: string;
 };
@@ -86,6 +87,8 @@ export class Vault {
     detectors: [] as readonly PiiDetector[],
     size: 0,
     texts: new Map<string, string>(),
+    /** The same texts as the model sees them, spellings as one (see `redactForModel`). */
+    forModel: new Map<string, string>(),
   };
 
   constructor(entries: readonly VaultEntry[] = []) {
@@ -309,10 +312,52 @@ export class Vault {
     return redacted;
   }
 
+  /**
+   * `redact` for a request to the model: the spellings of a value become its own placeholder, so
+   * "Ann" and "ann" are one person to the model, while what is stored keeps each spelling's
+   * placeholder (and with it the text exactly as written). Spellings share their value's owner,
+   * so who may see what is the same either way. With `seen`, notes where each spelling was, so
+   * the model's answer can have it back (see `SpellingsSeen`); a placeholder it can't place stays
+   * the value's own, which comes back as the value was first written.
+   */
+  redactForModel(text: string, detectors: readonly PiiDetector[], seen?: SpellingsSeen): string {
+    if (text === "") return text;
+    let cache = this.cacheFor(detectors);
+    const cached = cache.forModel.get(text);
+    if (cached !== undefined) {
+      seen?.note(cache.texts.get(text) ?? "");
+      return cached;
+    }
+    const redacted = this.redact(text, detectors);
+    seen?.note(redacted);
+    const merged =
+      this.spellings.size === 0 || !redacted.includes("⟦")
+        ? redacted
+        : redacted.replace(PLACEHOLDER, (placeholder) => this.mainPlaceholder(placeholder));
+    // Kept only when `redact` kept the text too: then the vault did not change in between.
+    cache = this.cacheFor(detectors);
+    if (cache.texts.get(text) === redacted) cache.forModel.set(text, merged);
+    return merged;
+  }
+
+  /** The placeholder the model sees for `placeholder`: its value's own, for a spelling. */
+  mainPlaceholder(placeholder: string): string {
+    const spellingOf = this.byPlaceholder.get(placeholder)?.spellingOf;
+    return spellingOf !== undefined && this.byPlaceholder.has(spellingOf)
+      ? spellingOf
+      : placeholder;
+  }
+
   /** The redacted texts for `detectors` at this version of the vault, emptied when either changed. */
   private cacheFor(detectors: readonly PiiDetector[]): Vault["redacted"] {
     if (this.redacted.version !== this.changes || this.redacted.detectors !== detectors)
-      this.redacted = { version: this.changes, detectors, size: 0, texts: new Map() };
+      this.redacted = {
+        version: this.changes,
+        detectors,
+        size: 0,
+        texts: new Map(),
+        forModel: new Map(),
+      };
     return this.redacted;
   }
 
@@ -528,6 +573,57 @@ export class Vault {
     this.hiddenFrom.clear();
     this.changes++;
   }
+}
+
+/**
+ * Where the spellings of values were in one request to the model, so its answer gets them back:
+ * the model only sees a value's own placeholder (`Vault.redactForModel`), and writes
+ * `/home/⟦NAME1⟧` where the request had `/home/⟦NAME2⟧` for `/home/kari`. What tells them apart is
+ * the text right before the placeholder, back to whitespace or another placeholder: where the
+ * request had one spelling only after that same text, the answer gets that spelling's
+ * placeholder. Everywhere else, such as after a space in prose, the value's own placeholder stays
+ * and comes back as the value was first written. Only the text before counts, so a streamed answer
+ * never changes what it has shown.
+ */
+export class SpellingsSeen {
+  /** By main placeholder and the text before it: the placeholder there, null when it varied. */
+  private readonly after = new Map<string, string | null>();
+
+  constructor(private readonly vault: Pick<Vault, "mainPlaceholder">) {}
+
+  /** Notes the placeholders of `stored`, a text as `Vault.redact` gives it. */
+  note(stored: string): void {
+    if (!stored.includes("⟦")) return;
+    for (const match of stored.matchAll(PLACEHOLDER)) {
+      const before = textBefore(stored, match.index);
+      if (before === "") continue;
+      const key = `${this.vault.mainPlaceholder(match[0])} ${before}`;
+      const known = this.after.get(key);
+      if (known === undefined) this.after.set(key, match[0]);
+      else if (known !== match[0]) this.after.set(key, null);
+    }
+  }
+
+  /** The model's `text` with each placeholder as the spelling the request had in its place. */
+  restore(text: string): string {
+    if (this.after.size === 0 || !text.includes("⟦")) return text;
+    let result = "";
+    let last = 0;
+    for (const match of text.matchAll(PLACEHOLDER)) {
+      const before = textBefore(text, match.index);
+      const spelling = before === "" ? undefined : this.after.get(`${match[0]} ${before}`);
+      result += text.slice(last, match.index) + (spelling ?? match[0]);
+      last = match.index + match[0].length;
+    }
+    return result + text.slice(last);
+  }
+}
+
+/** The text right before `index`, back to whitespace, a placeholder or the start. */
+function textBefore(text: string, index: number): string {
+  let start = index;
+  while (start > 0 && !/\s/u.test(text[start - 1]!) && text[start - 1] !== "⟧") start--;
+  return text.slice(start, index);
 }
 
 /** What a forgotten value is known by: the SHA-256 of its key. */

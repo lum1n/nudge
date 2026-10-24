@@ -26,7 +26,7 @@ import { openRawDatabase } from "../src/encrypted-storage.ts";
 import { MemoryDoc } from "../src/memory/memory.ts";
 import { VaultDoc } from "../src/privacy/vault-doc.ts";
 import { redactHistory, redactWhenOutdated } from "../src/privacy/redact-history.ts";
-import { withoutPartialPlaceholder } from "../src/privacy/vault.ts";
+import { SpellingsSeen, withoutPartialPlaceholder } from "../src/privacy/vault.ts";
 
 const context = BACKGROUND_CONTEXT;
 
@@ -94,6 +94,65 @@ describe("Vault", () => {
     ]);
     // A forgotten value is still kept from the model, under its first placeholder.
     expect(vault.redact("vegard", [])).toBe("⟦NAME1⟧");
+  });
+
+  it("shows the model a value's spellings as one placeholder", () => {
+    const vault = new Vault();
+    vault.protect("Ann Berg", "NAME", "p1");
+    const text = "Ann Berg, ann berg and ANN  BERG";
+    // Stored, each spelling keeps a placeholder of its own.
+    const stored = vault.redact(text, []);
+    expect(stored).toBe("⟦NAME1⟧, ⟦NAME2⟧ and ⟦NAME3⟧");
+    expect(vault.rehydrate(stored)).toBe(text);
+    // The model sees one person, also in text stored with the spellings' placeholders.
+    expect(vault.redactForModel(text, [])).toBe("⟦NAME1⟧, ⟦NAME1⟧ and ⟦NAME1⟧");
+    expect(vault.redactForModel(stored, [])).toBe("⟦NAME1⟧, ⟦NAME1⟧ and ⟦NAME1⟧");
+    // What it writes back comes back as first protected, for those allowed to see it.
+    expect(vault.rehydrateFor("p1", "Hi ⟦NAME1⟧")).toBe("Hi Ann Berg");
+    expect(vault.rehydrateFor("p2", "Hi ⟦NAME1⟧")).toBe("Hi ⟦NAME1⟧");
+    expect(vault.showTo("p1", "Hi ⟦NAME1⟧")).toBe("Hi Ann Berg");
+    expect(vault.showTo("p2", "Hi ⟦NAME1⟧")).toBe("Hi ⟦NAME1⟧");
+    // A new spelling is stored before the model sees it, then merged too.
+    vault.takeUnsaved();
+    expect(vault.redactForModel("aNN bERG", [])).toBe("⟦NAME1⟧");
+    expect(vault.takeUnsaved()).toMatchObject([{ value: "aNN bERG", spellingOf: "⟦NAME1⟧" }]);
+    // Forgotten, the spellings stay one placeholder.
+    vault.forget("⟦NAME1⟧");
+    expect(vault.redactForModel(stored, [])).toBe("⟦NAME1⟧, ⟦NAME1⟧ and ⟦NAME1⟧");
+  });
+
+  it("gives the model's answer the spelling the request had after the same text", () => {
+    const vault = new Vault();
+    vault.protect("Kari", "NAME");
+    const seen = new SpellingsSeen(vault);
+    const sent = [
+      "Kari keeps it in /home/kari/docs",
+      "and ~kari/x, ~KARI/y, user=kari",
+      "user=kari again",
+    ].map((text) => vault.redactForModel(text, [], seen));
+    expect(sent).toEqual([
+      "⟦NAME1⟧ keeps it in /home/⟦NAME1⟧/docs",
+      "and ~⟦NAME1⟧/x, ~⟦NAME1⟧/y, user=⟦NAME1⟧",
+      "user=⟦NAME1⟧ again",
+    ]);
+    const answer = seen.restore("⟦NAME1⟧: /home/⟦NAME1⟧/docs, ~⟦NAME1⟧/z, user=⟦NAME1⟧ (⟦NAME1⟧)");
+    // After a space, or after "~" where both spellings were, it stays the value as first written.
+    expect(answer).toBe("⟦NAME1⟧: /home/⟦NAME2⟧/docs, ~⟦NAME1⟧/z, user=⟦NAME2⟧ (⟦NAME1⟧)");
+    expect(vault.rehydrate(answer)).toBe("Kari: /home/kari/docs, ~Kari/z, user=kari (Kari)");
+    // Placeholders the request did not have are left alone.
+    expect(seen.restore("/home/⟦NAME7⟧ and /home/⟦EMAIL1⟧")).toBe(
+      "/home/⟦NAME7⟧ and /home/⟦EMAIL1⟧",
+    );
+  });
+
+  it("merges spellings after the redaction is cached", () => {
+    const vault = new Vault();
+    vault.protect("Kari", "NAME");
+    expect(vault.redact("kari", [])).toBe("⟦NAME2⟧");
+    expect(vault.redact("kari", [])).toBe("⟦NAME2⟧");
+    expect(vault.redactForModel("kari", [])).toBe("⟦NAME1⟧");
+    expect(vault.redactForModel("kari", [])).toBe("⟦NAME1⟧");
+    expect(vault.redact("kari", [])).toBe("⟦NAME2⟧");
   });
 
   it("leaves numbers that fail their checksums alone", () => {
@@ -373,9 +432,11 @@ describe("redaction in a running assistant", () => {
       await nudge.submit(LOBBY, { text: "What is in /home/kari/docs, Kari?", author }, context)
     ).wait(context);
     expect(settled.status).toBe("done");
+    // The model saw one placeholder for "kari" and "Kari"; after "/home/" it was "kari".
     expect(seenByTool).toEqual(["/home/kari/docs"]);
     for (const request of sent) expect(request).not.toMatch(/kari/i);
-    expect(sent[1]).toContain("/home/⟦NAME2⟧/docs: notes.txt");
+    expect(sent[0]).toContain("What is in /home/⟦NAME1⟧/docs, ⟦NAME1⟧?");
+    expect(sent[1]).toContain("/home/⟦NAME1⟧/docs: notes.txt");
     await nudge.close(context);
   });
 

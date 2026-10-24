@@ -1,12 +1,13 @@
-import type { ExtensionSetup, RoomKind, TokenInfo } from "@nudge/client";
+import type { ExtensionSetup, RoomKind, ServerAssistant, TokenInfo } from "@nudge/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
-import { ApiError, clientFor, useRoomList } from "../../api.ts";
+import { ApiError, asOwner, clientFor, useRoomList } from "../../api.ts";
 import { type Appearance, lookOf } from "../../avatar/appearance.ts";
 import { Avatar } from "../../avatar/Avatar.tsx";
 import { LookPicker } from "../../avatar/LookPicker.tsx";
 import { invite, pairAnotherDevice, type Pairing, PairingCard } from "../../pairing.tsx";
+import { BUDGET_DEFAULTS, type BudgetDraft, budgetDraftOf, budgetOf } from "../../budget.ts";
 import { meQuery } from "../../queries.ts";
 import { ObjectFields, RoomsContext, type Schema, withoutDefaults } from "../../schema-form.tsx";
 
@@ -36,8 +37,8 @@ function draftOf(setup: ExtensionSetup): Draft {
 }
 
 /**
- * What an admin sets up for everyone: how the robot looks, who uses it and is signed in, the
- * extensions.
+ * What an admin sets up for everyone: how the robot looks, who uses it and is signed in, what it
+ * may spend, the extensions.
  */
 function Settings() {
   const { assistant } = Route.useParams();
@@ -48,6 +49,7 @@ function Settings() {
     <>
       <Robot />
       <People />
+      <Budget />
       <Clients />
       <Extensions />
     </>
@@ -202,6 +204,165 @@ function People() {
       {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
       {pairing !== undefined && (
         <PairingCard pairing={pairing} onDone={() => setPairing(undefined)} />
+      )}
+    </section>
+  );
+}
+
+const BUDGET_FIELDS: { key: keyof BudgetDraft; label: string; hint: string; unit: string }[] = [
+  {
+    key: "monthlyUsd",
+    label: "Monthly limit",
+    hint: "For everyone together. Empty: no limit.",
+    unit: "$",
+  },
+  {
+    key: "perPlayerUsd",
+    label: "Limit per person",
+    hint: "A month, for each person. Empty: no limit.",
+    unit: "$",
+  },
+  {
+    key: "warnAtPercent",
+    label: "Warn at",
+    hint: `Of a limit, when admins hear of it. Empty: ${BUDGET_DEFAULTS.warnAtPercent}.`,
+    unit: "%",
+  },
+  {
+    key: "warnUsd",
+    label: "Without a monthly limit, warn at",
+    hint: `What spend a month admins hear of. Empty: $${BUDGET_DEFAULTS.warnUsd}.`,
+    unit: "$",
+  },
+];
+
+/**
+ * What the assistant may spend on models a month. It is the server's setting, so only its owners
+ * change it: through the server's own API, signed in with this device's server token or the
+ * player's own.
+ */
+function Budget() {
+  const { assistant } = Route.useParams();
+  const me = useQuery(meQuery(assistant));
+  const queryClient = useQueryClient();
+  const key = [assistant, "server-assistant"];
+  const settings = useQuery({
+    queryKey: key,
+    queryFn: () =>
+      asOwner(assistant, async (api) => {
+        const found = (await api.assistants()).find((item) => item.name === assistant);
+        if (found === undefined) throw new Error(`The server has no assistant "${assistant}"`);
+        return found;
+      }),
+    enabled: me.data?.admin === true,
+    retry: false,
+  });
+  const [draft, setDraft] = useState<BudgetDraft>();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string>();
+  const [saved, setSaved] = useState(false);
+
+  const savedDraft = budgetDraftOf(settings.data?.budget);
+  const shown = draft ?? savedDraft;
+  const dirty = draft !== undefined && stable(draft) !== stable(savedDraft);
+
+  async function save() {
+    const parsed = budgetOf(shown);
+    if ("error" in parsed) {
+      setError(parsed.error);
+      return;
+    }
+    setSaving(true);
+    setError(undefined);
+    try {
+      const next = await asOwner(assistant, (api) =>
+        api.updateAssistant(assistant, { budget: parsed.budget }),
+      );
+      queryClient.setQueryData<ServerAssistant>(key, next);
+      setDraft(undefined);
+      setSaved(true);
+    } catch (caught) {
+      setError((caught as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="mx-auto flex max-w-3xl flex-col gap-3 p-3 sm:p-4">
+      <div>
+        <h2 className="text-lg font-medium">Budget</h2>
+        <p className="text-sm text-stone-600">
+          What the assistant may spend on models a month, in US dollars. Past a limit it stops
+          answering until the month is over. Saving reopens the assistant, so apps connect again.
+        </p>
+      </div>
+      {settings.error ? (
+        <p className="text-sm text-stone-600">
+          {settings.error instanceof ApiError && settings.error.status === 403
+            ? "Only an owner of this server can change the budget."
+            : settings.error instanceof ApiError && settings.error.status === 404
+              ? "This server can't change the budget from the web. Run it with nudge serve."
+              : settings.error.message}
+        </p>
+      ) : settings.data === undefined ? (
+        <p className="text-sm text-stone-600">Loading…</p>
+      ) : (
+        <div className="flex flex-col gap-3 rounded border border-stone-200 bg-white p-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {BUDGET_FIELDS.map((field) => (
+              <label key={field.key} className="flex flex-col gap-1 text-sm">
+                <span className="font-medium">{field.label}</span>
+                <span className="flex items-center gap-1">
+                  {field.unit === "$" && <span className="text-stone-500">$</span>}
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    step="any"
+                    max={field.unit === "%" ? 100 : undefined}
+                    value={shown[field.key]}
+                    onChange={(event) => {
+                      setSaved(false);
+                      setError(undefined);
+                      setDraft({ ...shown, [field.key]: event.target.value });
+                    }}
+                    className="w-32 rounded border border-stone-300 px-2 py-1"
+                  />
+                  {field.unit === "%" && <span className="text-stone-500">%</span>}
+                </span>
+                <span className="text-xs text-stone-500">{field.hint}</span>
+              </label>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={!dirty || saving}
+              onClick={() => void save()}
+              className="rounded bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-40"
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+            {dirty && (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => {
+                  setDraft(undefined);
+                  setError(undefined);
+                }}
+                className="rounded border border-stone-300 px-3 py-1.5 text-sm"
+              >
+                Discard
+              </button>
+            )}
+            {error !== undefined && <span className="text-sm text-red-700">{error}</span>}
+            {saved && !dirty && error === undefined && (
+              <span className="text-sm text-emerald-700">Saved.</span>
+            )}
+          </div>
+        </div>
       )}
     </section>
   );
