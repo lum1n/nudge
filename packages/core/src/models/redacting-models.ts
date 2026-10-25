@@ -23,12 +23,18 @@ import {
   type ModelsSimpleStreamOptions,
   type Tool,
 } from "@earendil-works/pi-ai";
+import { type ResolveAttachment, resolveAttachments } from "../attachments/attachments.ts";
 import type { PiiDetector } from "../privacy/detectors.ts";
 import { DeepUnavailable } from "../privacy/deep/detector.ts";
 import { mapStrings, redactContext, rehydrateMessage } from "../privacy/redact.ts";
 import { withoutPlaceholders } from "../privacy/tool-values.ts";
 import { SpellingsSeen, type Vault, type VaultEntry } from "../privacy/vault.ts";
 import type { ModelFailure } from "./model-errors.ts";
+
+const notShown: ResolveAttachment = async (_roomId, id) => ({
+  type: "text",
+  text: `[${id} is not shown to you]`,
+});
 
 export type RedactionOptions = {
   readonly detectors: readonly PiiDetector[];
@@ -61,6 +67,7 @@ export class RedactingModels implements Models {
   private ownDetectors: readonly PiiDetector[];
   private ownRefuse: () => string | undefined = () => undefined;
   private ownScan: Scan = async () => {};
+  private ownAttachments: ResolveAttachment | undefined;
   private readonly valued = new Map<string | undefined, RedactingModels>();
 
   /**
@@ -106,6 +113,18 @@ export class RedactingModels implements Models {
 
   set scan(scan: Scan) {
     this.ownScan = scan;
+  }
+
+  /**
+   * What an attachment's image part in a request becomes (ADR 24). Without one, every such part
+   * is replaced by a line saying it isn't shown, so no part without bytes reaches a provider.
+   */
+  get attachments(): ResolveAttachment | undefined {
+    return this.root?.attachments ?? this.ownAttachments;
+  }
+
+  set attachments(resolve: ResolveAttachment | undefined) {
+    this.ownAttachments = resolve;
   }
 
   /**
@@ -315,8 +334,9 @@ export class RedactingModels implements Models {
     this.checkAllowed();
     let redacted: Context;
     try {
-      await this.scanFirst(context);
-      redacted = redactContext(withDeclaredTools(context), this.vault, this.detectors, seen);
+      const resolved = await resolveAttachments(context, this.attachments ?? notShown);
+      await this.scanFirst(resolved);
+      redacted = redactContext(withDeclaredTools(resolved), this.vault, this.detectors, seen);
       await this.flush();
     } catch (error) {
       throw error instanceof RequestRefused ? error : new RedactionFailed(error);

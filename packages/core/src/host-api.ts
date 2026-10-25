@@ -6,6 +6,11 @@ import {
   type Submission,
   watchEvents,
 } from "@earendil-works/pi-durable";
+import {
+  type AttachmentInfo,
+  attachmentImagePart,
+  attachmentLine,
+} from "./attachments/attachments.ts";
 
 /** Who wrote a message. Stored with the entry; the model only sees the display name. */
 export type Author = {
@@ -29,6 +34,11 @@ export type MessageDraft = {
    * there was one. Needs an author.
    */
   readonly private?: boolean;
+  /**
+   * Ids of attachments the author uploaded to the room and hasn't sent (ADR 24); the text may then
+   * be empty. Needs an author.
+   */
+  readonly attachments?: readonly string[];
 };
 
 export const MESSAGE_ENTRY = "nudge.message";
@@ -43,6 +53,8 @@ export type MessageEntryData = {
   readonly sentAt: number;
   /** See `MessageDraft.private`. */
   readonly private?: true;
+  /** What it was sent with, names with placeholders. */
+  readonly attachments?: AttachmentInfo[];
 };
 
 export async function submitMessage(
@@ -52,6 +64,8 @@ export async function submitMessage(
   now: number,
   timeZone: string,
   context: Context,
+  /** The attachments `draft.attachments` names, as `Attachments.claim` gave them, in `roomId`. */
+  attached?: { readonly roomId: string; readonly attachments: readonly AttachmentInfo[] },
 ): Promise<Submission> {
   const conversation = await harness.conversation(conversationId, context);
   if (conversation === undefined) throw new Error(`No conversation ${conversationId}`);
@@ -59,15 +73,24 @@ export async function submitMessage(
   const secret = draft.private === true && author !== undefined;
   // The minute it was sent, so the model knows the time without a prompt that changes every minute.
   const sent = author === undefined ? "" : `${author.displayName} (${formatClock(now, timeZone)})`;
+  const attachments = author === undefined ? [] : (attached?.attachments ?? []);
+  const body = [draft.text, ...attachments.map(attachmentLine)]
+    .filter((line) => line !== "")
+    .join("\n");
+  const text =
+    author === undefined
+      ? draft.text
+      : secret
+        ? `${sent} (privately: only ${author.displayName} sees this message and your answer to it; don't bring it up with anyone else): ${body}`
+        : `${sent}: ${body}`;
+  // The images themselves are filled in per request, where the room lets them (ADR 24).
+  const images = attachments
+    .filter((attachment) => attachment.kind === "image")
+    .map((attachment) => attachmentImagePart(attached!.roomId, attachment));
   return conversation.submit(
     {
       type: "input",
-      content:
-        author === undefined
-          ? draft.text
-          : secret
-            ? `${sent} (privately: only ${author.displayName} sees this message and your answer to it; don't bring it up with anyone else): ${draft.text}`
-            : `${sent}: ${draft.text}`,
+      content: images.length === 0 ? text : [{ type: "text", text }, ...images],
       requestId:
         requestId === undefined || author?.clientId === undefined
           ? requestId
@@ -86,6 +109,9 @@ export async function submitMessage(
                 ...(requestId === undefined ? {} : { requestId }),
                 sentAt: now,
                 ...(secret ? { private: true as const } : {}),
+                ...(attachments.length === 0
+                  ? {}
+                  : { attachments: attachments.map((attachment) => ({ ...attachment })) }),
               } satisfies MessageEntryData,
             },
     },

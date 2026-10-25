@@ -43,11 +43,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.nudge.R
 import kotlinx.coroutines.flow.MutableStateFlow
 import nudge.client.Connector
 import nudge.client.ConnectorsState
@@ -79,8 +81,8 @@ fun ConnectorsScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
         topBar = {
             TopAppBar(
                 colors = groupedTopBarColors(),
-                title = { Text("Connectors") },
-                navigationIcon = { IconButton(onClick = close) { Icon(Icons.Outlined.Close, "Close") } },
+                title = { Text(stringResource(R.string.panels_connectors)) },
+                navigationIcon = { IconButton(onClick = close) { Icon(Icons.Outlined.Close, stringResource(R.string.panels_close)) } },
             )
         },
     ) { padding ->
@@ -90,7 +92,7 @@ fun ConnectorsScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
             val panel = connectors
             when {
                 status is PanelStatus.Closed && status.code.toInt() == 4404 -> Text(
-                    "No connectors here. Turn on the connectors extension for this room under About this room.",
+                    stringResource(R.string.panels_connectors_off),
                     Modifier.align(Alignment.Center).padding(32.dp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -102,9 +104,7 @@ fun ConnectorsScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
                 ) {
                     item {
                         Text(
-                            "APIs this room's assistant can call. Ask it in the chat to add one, and say what for. " +
-                                "Turn on Always use first to have it try one before anything else for those tasks. " +
-                                "API keys go here only: the assistant never sees them.",
+                            stringResource(R.string.panels_connectors_intro),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -112,7 +112,7 @@ fun ConnectorsScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
                     }
                     state.error?.let { item { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 16.dp)) } }
                     if (all.isEmpty()) {
-                        item { Text("No connectors yet.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(16.dp)) }
+                        item { Text(stringResource(R.string.panels_connectors_empty), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(16.dp)) }
                     }
                     items(all, key = { it.id }) { connector ->
                         ConnectorCard(connector, panel, state.admin, remove = { removing = connector })
@@ -126,15 +126,15 @@ fun ConnectorsScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
         AlertDialog(
             onDismissRequest = { removing = null },
             icon = { Icon(Icons.Outlined.Delete, null) },
-            title = { Text("Remove ${connector.name}?") },
-            text = { Text("The assistant can't call it any more, and its API key is forgotten.") },
+            title = { Text(stringResource(R.string.panels_remove_title, connector.name)) },
+            text = { Text(stringResource(R.string.panels_connector_remove_text)) },
             confirmButton = {
                 TextButton(onClick = {
                     removing = null
                     connectors?.remove(connector)
-                }) { Text("Remove") }
+                }) { Text(stringResource(R.string.panels_remove)) }
             },
-            dismissButton = { TextButton(onClick = { removing = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { removing = null }) { Text(stringResource(R.string.panels_cancel)) } },
         )
     }
 }
@@ -158,15 +158,15 @@ private fun ConnectorCard(connector: Connector, panel: ObservedConnectors, admin
                     )
                 }
                 if (connector.shared) {
-                    Text("Shared with every room", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.panels_connector_shared), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (!connector.shared || admin) {
                     Box {
-                        IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "Connector actions") }
+                        IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, stringResource(R.string.panels_connector_actions)) }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                             if (admin) {
                                 DropdownMenuItem(
-                                    text = { Text(if (connector.shared) "Stop sharing with every room" else "Share with every room") },
+                                    text = { Text(stringResource(if (connector.shared) R.string.panels_connector_unshare else R.string.panels_connector_share)) },
                                     onClick = {
                                         menu = false
                                         if (connector.shared) panel.unshare(connector) else panel.share(connector)
@@ -174,7 +174,7 @@ private fun ConnectorCard(connector: Connector, panel: ObservedConnectors, admin
                                 )
                             }
                             if (!connector.shared) {
-                                DropdownMenuItem(text = { Text("Remove") }, onClick = {
+                                DropdownMenuItem(text = { Text(stringResource(R.string.panels_remove)) }, onClick = {
                                     menu = false
                                     remove()
                                 })
@@ -183,10 +183,10 @@ private fun ConnectorCard(connector: Connector, panel: ObservedConnectors, admin
                     }
                 }
             }
-            if (connector.shared) Text(if (connector.alwaysFirst) "Used first for: ${connector.useFor}" else connector.useFor)
+            if (connector.shared) Text(if (connector.alwaysFirst) stringResource(R.string.panels_connector_used_first, connector.useFor) else connector.useFor)
             if (connector.notes.isNotBlank()) {
                 Text(
-                    "Learned: ${connector.notes}",
+                    stringResource(R.string.panels_connector_learned, connector.notes),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -196,7 +196,7 @@ private fun ConnectorCard(connector: Connector, panel: ObservedConnectors, admin
             OutlinedTextField(
                 value = useFor,
                 onValueChange = { useFor = it },
-                label = { Text("Use it for") },
+                label = { Text(stringResource(R.string.panels_connector_use_for)) },
                 shape = MaterialTheme.shapes.large,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -204,12 +204,12 @@ private fun ConnectorCard(connector: Connector, panel: ObservedConnectors, admin
                 onClick = { panel.setUseFor(connector, useFor.trim()) },
                 enabled = useFor.isNotBlank() && useFor.trim() != connector.useFor,
                 shapes = ButtonDefaults.shapes(),
-            ) { Text("Save") }
+            ) { Text(stringResource(R.string.panels_save)) }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Always use first")
+                    Text(stringResource(R.string.panels_connector_always_first))
                     Text(
-                        "Tried before browsing or answering from memory, for what it's for",
+                        stringResource(R.string.panels_connector_always_first_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -222,7 +222,11 @@ private fun ConnectorCard(connector: Connector, panel: ObservedConnectors, admin
 
             connector.auth?.let { auth ->
                 Text(
-                    "API key (${auth.placement} ${auth.name}): ${if (connector.hasKey) "set" else "not set"}",
+                    stringResource(
+                        if (connector.hasKey) R.string.panels_connector_key_set else R.string.panels_connector_key_not_set,
+                        auth.placement,
+                        auth.name,
+                    ),
                     style = MaterialTheme.typography.labelLarge,
                     color = if (connector.hasKey) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.tertiary,
                 )
@@ -230,7 +234,7 @@ private fun ConnectorCard(connector: Connector, panel: ObservedConnectors, admin
                 OutlinedTextField(
                     value = key,
                     onValueChange = { key = it },
-                    placeholder = { Text(if (connector.hasKey) "Replace the key" else "Paste the key") },
+                    placeholder = { Text(stringResource(if (connector.hasKey) R.string.panels_connector_replace_key else R.string.panels_connector_paste_key)) },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
@@ -245,18 +249,18 @@ private fun ConnectorCard(connector: Connector, panel: ObservedConnectors, admin
                         },
                         enabled = key.isNotBlank(),
                         shapes = ButtonDefaults.shapes(),
-                    ) { Text("Save key") }
+                    ) { Text(stringResource(R.string.panels_connector_save_key)) }
                     if (connector.hasKey) {
-                        OutlinedButton(onClick = { panel.clearKey(connector) }, shapes = ButtonDefaults.shapes()) { Text("Clear") }
+                        OutlinedButton(onClick = { panel.clearKey(connector) }, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.panels_clear)) }
                     }
                 }
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Local network")
+                    Text(stringResource(R.string.panels_connector_local))
                     Text(
-                        "May reach this machine and the local network, such as Home Assistant or a NAS",
+                        stringResource(R.string.panels_connector_local_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -268,7 +272,7 @@ private fun ConnectorCard(connector: Connector, panel: ObservedConnectors, admin
             }
 
             Text(
-                "Calls that only read, though not GET: one METHOD /path per line, such as POST /graphql. They run without asking.",
+                stringResource(R.string.panels_connector_read_paths_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -285,7 +289,7 @@ private fun ConnectorCard(connector: Connector, panel: ObservedConnectors, admin
                 onClick = { panel.setReadPaths(connector, readPaths.lines().map { it.trim() }.filter { it.isNotEmpty() }) },
                 enabled = readPaths.lines().map { it.trim() }.filter { it.isNotEmpty() } != connector.readPaths,
                 shapes = ButtonDefaults.shapes(),
-            ) { Text("Save read paths") }
+            ) { Text(stringResource(R.string.panels_connector_save_read_paths)) }
         }
     }
 }

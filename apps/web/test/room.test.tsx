@@ -163,6 +163,23 @@ describe("the room page", () => {
     expect(text(html)).toContain(" Robin ");
   });
 
+  it("offers dictation only where the browser recognizes speech", async () => {
+    hold(view());
+    expect(text(await render())).not.toContain("Dictate");
+    vi.stubGlobal("window", { SpeechRecognition: class {} });
+    try {
+      hold(view());
+      expect(text(await render())).toContain("Dictate");
+    } finally {
+      vi.unstubAllGlobals();
+      vi.stubGlobal("matchMedia", () => ({
+        matches: false,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }));
+    }
+  });
+
   it("greets an empty room with the robot", async () => {
     hold(view({ timeline: [] }));
     expect(text(await render())).toContain("Say hello to Robin.");

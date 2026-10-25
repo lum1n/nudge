@@ -1,16 +1,10 @@
-import type { RoomKind } from "@nudge/client";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useState } from "react";
 import { clientFor, useRoomList } from "../../api.ts";
-import { type PushState, usePush } from "../../push.ts";
+import { m } from "../../i18n/index.ts";
+import { usePush } from "../../push.ts";
 
 export const Route = createFileRoute("/$assistant/")({ component: Rooms });
-
-const KIND_LABEL: Record<RoomKind, string> = {
-  lobby: "Everyone",
-  personal: "Personal",
-  shared: "Shared",
-};
 
 function Rooms() {
   const { assistant } = Route.useParams();
@@ -57,11 +51,13 @@ function Rooms() {
   }
 
   const view = roomList?.view;
-  if (view === undefined) return <p className="p-4 text-stone-500">Loading…</p>;
+  if (view === undefined) return <p className="p-4 text-stone-500">{m.common.loading}</p>;
   return (
     <section className="mx-auto flex max-w-2xl flex-col gap-4 p-3 sm:p-4">
       <div className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium tracking-wide text-stone-500 uppercase">Rooms</h2>
+        <h2 className="text-sm font-medium tracking-wide text-stone-500 uppercase">
+          {m.profile.rooms.title}
+        </h2>
         <ul className="divide-y divide-stone-200 rounded border border-stone-200 bg-white">
           {view.rooms.map(({ room, running, pendingApprovals }) => (
             <li key={room.id}>
@@ -73,10 +69,12 @@ function Rooms() {
                 <span>{room.name}</span>
                 <span className="flex items-baseline gap-3 text-sm text-stone-500">
                   {pendingApprovals > 0 && (
-                    <span className="text-amber-700">{pendingApprovals} to approve</span>
+                    <span className="text-amber-700">
+                      {m.profile.rooms.toApprove(pendingApprovals)}
+                    </span>
                   )}
-                  {running && <span>answering…</span>}
-                  <span>{KIND_LABEL[room.kind]}</span>
+                  {running && <span>{m.profile.rooms.answering}</span>}
+                  <span>{m.profile.rooms.kinds[room.kind]}</span>
                 </span>
               </Link>
             </li>
@@ -90,25 +88,25 @@ function Rooms() {
           disabled={busy}
           className="self-start rounded border px-3 py-1 text-sm disabled:opacity-50"
         >
-          Open my room
+          {m.profile.rooms.openMine}
         </button>
         <form
           onSubmit={(event) => void create(event)}
           className="flex flex-col gap-2 rounded border border-stone-200 bg-white p-3"
         >
           <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">
-            New shared room
+            {m.profile.rooms.newShared}
           </h3>
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="Room name"
+            placeholder={m.profile.rooms.name}
             className="rounded border border-stone-300 px-2 py-1 text-sm"
           />
           <input
             value={members}
             onChange={(event) => setMembers(event.target.value)}
-            placeholder="Member ids, comma-separated (optional)"
+            placeholder={m.profile.rooms.members}
             className="rounded border border-stone-300 px-2 py-1 text-sm"
           />
           <button
@@ -116,7 +114,7 @@ function Rooms() {
             disabled={busy || name.trim() === ""}
             className="self-start rounded bg-stone-900 px-3 py-1 text-sm text-white disabled:opacity-50"
           >
-            Create
+            {m.profile.rooms.create}
           </button>
         </form>
         {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
@@ -126,26 +124,19 @@ function Rooms() {
   );
 }
 
-const PUSH_NOTE: Record<Exclude<PushState, "on" | "off">, string> = {
-  unsupported:
-    "This browser can't show notifications. On an iPhone, add Nudge to the home screen first.",
-  blocked: "Notifications are blocked for this site in the browser's settings.",
-  unavailable: "This server sends no notifications.",
-};
-
 /** Turns this browser's notifications for the assistant's rooms on or off. */
 function Notifications({ assistant }: { assistant: string }) {
   const push = usePush(assistant);
   if (push.state === undefined && push.error === undefined) return null;
   return (
     <div className="flex flex-col gap-2 rounded border border-stone-200 bg-white p-3">
-      <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">Notifications</h3>
+      <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">
+        {m.profile.notifications.title}
+      </h3>
       {push.state === "on" || push.state === "off" ? (
         <div className="flex items-center justify-between gap-2 text-sm">
           <span>
-            {push.state === "on"
-              ? "This browser gets answers, nudges and approvals from your rooms."
-              : "Get answers, nudges and approvals from your rooms on this browser."}
+            {push.state === "on" ? m.profile.notifications.on : m.profile.notifications.off}
           </span>
           <button
             type="button"
@@ -153,12 +144,12 @@ function Notifications({ assistant }: { assistant: string }) {
             disabled={push.busy}
             className="shrink-0 rounded border px-3 py-1 disabled:opacity-50"
           >
-            {push.state === "on" ? "Turn off" : "Turn on"}
+            {push.state === "on" ? m.profile.notifications.turnOff : m.profile.notifications.turnOn}
           </button>
         </div>
       ) : (
         push.state !== undefined && (
-          <p className="text-sm text-stone-500">{PUSH_NOTE[push.state]}</p>
+          <p className="text-sm text-stone-500">{m.profile.notifications[push.state]}</p>
         )
       )}
       {push.error !== undefined && <p className="text-sm text-red-700">{push.error}</p>}

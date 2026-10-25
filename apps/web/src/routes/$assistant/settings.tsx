@@ -15,7 +15,9 @@ import { Avatar } from "../../avatar/Avatar.tsx";
 import { LookPicker } from "../../avatar/LookPicker.tsx";
 import { invite, pairAnotherDevice, type Pairing, PairingCard } from "../../pairing.tsx";
 import { BUDGET_DEFAULTS, type BudgetDraft, budgetDraftOf, budgetOf } from "../../budget.ts";
+import { dateLocale, m } from "../../i18n/index.ts";
 import { meQuery } from "../../queries.ts";
+import { dollars, monthLabel, type SpendRow, spendRows } from "../../spend.ts";
 import { ObjectFields, RoomsContext, type Schema, withoutDefaults } from "../../schema-form.tsx";
 
 export const Route = createFileRoute("/$assistant/settings")({ component: Settings });
@@ -28,11 +30,7 @@ type Draft = {
   rooms?: RoomKind[];
 };
 
-const KINDS: { kind: RoomKind; label: string }[] = [
-  { kind: "lobby", label: "Everyone" },
-  { kind: "personal", label: "Personal" },
-  { kind: "shared", label: "Shared" },
-];
+const KINDS: RoomKind[] = ["lobby", "personal", "shared"];
 
 function draftOf(setup: ExtensionSetup): Draft {
   return {
@@ -50,13 +48,14 @@ function draftOf(setup: ExtensionSetup): Draft {
 function Settings() {
   const { assistant } = Route.useParams();
   const me = useQuery(meQuery(assistant));
-  if (me.data !== undefined && !me.data.admin)
-    return <Page>Only an admin can change the assistant's settings.</Page>;
+  if (me.data !== undefined && !me.data.admin) return <Page>{m.settings.onlyAdmin}</Page>;
   return (
     <>
       <Robot />
       <People />
+      <Guests />
       <Budget />
+      <SpendByMonth />
       <Clients />
       <Backups />
       <Extensions />
@@ -143,21 +142,15 @@ function Backups() {
   if (status === 404) return null;
   const intro = (
     <div>
-      <h2 className="text-lg font-medium">Backups</h2>
-      <p className="text-sm text-stone-600">
-        The whole server, encrypted with its backup key. A copy on another machine survives the
-        server's disk: an S3-compatible bucket (AWS, Backblaze B2, Cloudflare R2, MinIO) or a WebDAV
-        folder (Nextcloud, a NAS). Only encrypted files leave the server.
-      </p>
+      <h2 className="text-lg font-medium">{m.settings.backups.title}</h2>
+      <p className="text-sm text-stone-600">{m.settings.backups.intro}</p>
     </div>
   );
   if (status === 401 || status === 403)
     return (
       <section className="mx-auto flex max-w-3xl flex-col gap-3 p-3 sm:p-4">
         {intro}
-        <p className="text-sm text-stone-600">
-          Only the server's owners can see them. If you own it, sign in to the server from here.
-        </p>
+        <p className="text-sm text-stone-600">{m.settings.backups.ownersOnly}</p>
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -171,14 +164,14 @@ function Backups() {
             }
             className="rounded bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-50"
           >
-            {busy === "sign-in" ? "Signing in…" : "Sign in as an owner"}
+            {busy === "sign-in" ? m.settings.backups.signingIn : m.settings.backups.signIn}
           </button>
           {error !== undefined && <span className="text-sm text-red-700">{error}</span>}
         </div>
       </section>
     );
   if (state.error) return <Page>{state.error.message}</Page>;
-  if (state.data === undefined || draft === undefined) return <Page>Loading…</Page>;
+  if (state.data === undefined || draft === undefined) return <Page>{m.common.loading}</Page>;
 
   const backups = state.data;
   const saved = (next: BackupState) => {
@@ -211,24 +204,26 @@ function Backups() {
       <div className="flex flex-col gap-1 rounded border border-stone-200 bg-white p-3 text-sm">
         <p>
           {backups.on
-            ? `Every ${backups.everyHours === 24 ? "day" : `${backups.everyHours} hours`}, the last ${backups.keep} kept, in ${backups.dir}.`
-            : "Off: this server makes no backups of its own. Setting a copy below turns them on, daily."}
+            ? m.settings.backups.on(backups.everyHours, backups.keep, backups.dir)
+            : m.settings.backups.off}
         </p>
         {backups.on && (
           <p className="text-stone-600">
             {backups.lastBackupAt === undefined
-              ? "None made yet."
-              : `The newest was made ${ago(backups.lastBackupAt)}.`}
+              ? m.settings.backups.noneMade
+              : m.settings.backups.newest(ago(backups.lastBackupAt))}
             {backups.remote !== undefined &&
               (backups.lastUploadAt === undefined
-                ? " None uploaded yet."
-                : ` Last uploaded ${ago(backups.lastUploadAt)}.`)}
+                ? m.settings.backups.noneUploaded
+                : m.settings.backups.lastUploaded(ago(backups.lastUploadAt)))}
           </p>
         )}
         {backups.lastError !== undefined && (
           <p className="text-red-700">
-            The last upload failed{backups.lastErrorAt ? ` ${ago(backups.lastErrorAt)}` : ""}:{" "}
-            {backups.lastError}
+            {m.settings.backups.uploadFailed(
+              backups.lastErrorAt ? ago(backups.lastErrorAt) : undefined,
+            )}
+            : {backups.lastError}
           </p>
         )}
       </div>
@@ -238,16 +233,16 @@ function Backups() {
           event.preventDefault();
           void run("save", async () => {
             saved(await serverApi().setBackupRemote(remoteRequest(draft)));
-            return "Saved: the server wrote a test file there and deleted it again.";
+            return m.settings.backups.savedRemote;
           });
         }}
       >
         <fieldset className="flex flex-wrap gap-4 text-sm">
-          <legend className="mb-1 font-medium">Copy each backup to</legend>
+          <legend className="mb-1 font-medium">{m.settings.backups.copyTo}</legend>
           {(
             [
-              ["s3", "An S3-compatible bucket"],
-              ["webdav", "A WebDAV folder"],
+              ["s3", m.settings.backups.s3],
+              ["webdav", m.settings.backups.webdav],
             ] as const
           ).map(([type, label]) => (
             <label key={type} className="flex items-center gap-2">
@@ -263,38 +258,35 @@ function Backups() {
         </fieldset>
         {draft.type === "s3" ? (
           <div className="grid gap-3 sm:grid-cols-2">
-            {field("endpoint", "Endpoint", {
+            {field("endpoint", m.settings.backups.endpoint, {
               placeholder: "https://s3.eu-north-1.amazonaws.com",
             })}
-            {field("bucket", "Bucket")}
-            {field("region", "Region", { hint: "Optional: us-east-1 unless the endpoint says" })}
-            {field("prefix", "Folder in the bucket", { placeholder: "nudge/" })}
-            {field("user", "Access key id")}
-            {field("secret", "Secret access key", {
+            {field("bucket", m.settings.backups.bucket)}
+            {field("region", m.settings.backups.region, { hint: m.settings.backups.regionHint })}
+            {field("prefix", m.settings.backups.prefix, { placeholder: "nudge/" })}
+            {field("user", m.settings.backups.accessKey)}
+            {field("secret", m.settings.backups.secretKey, {
               type: "password",
-              ...(keptSecret ? { placeholder: "Kept; type to change it" } : {}),
+              ...(keptSecret ? { placeholder: m.settings.backups.kept } : {}),
             })}
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              {field("url", "Folder address", {
+              {field("url", m.settings.backups.url, {
                 placeholder: "https://cloud.example/remote.php/dav/files/me/nudge/",
               })}
             </div>
-            {field("user", "User name")}
-            {field("secret", "Password", {
+            {field("user", m.settings.backups.user)}
+            {field("secret", m.settings.backups.password, {
               type: "password",
-              hint: "An app password, if the service has them",
-              ...(keptSecret ? { placeholder: "Kept; type to change it" } : {}),
+              hint: m.settings.backups.passwordHint,
+              ...(keptSecret ? { placeholder: m.settings.backups.kept } : {}),
             })}
           </div>
         )}
         {backups.credentials?.from === "env" && (
-          <p className="text-sm text-stone-600">
-            The server takes its credentials from NUDGE_BACKUP_REMOTE_USER and
-            NUDGE_BACKUP_REMOTE_SECRET, which win over what is set here.
-          </p>
+          <p className="text-sm text-stone-600">{m.settings.backups.fromEnv}</p>
         )}
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -302,7 +294,7 @@ function Backups() {
             disabled={busy !== undefined}
             className="rounded bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-50"
           >
-            {busy === "save" ? "Checking…" : "Check and save"}
+            {busy === "save" ? m.settings.backups.checking : m.settings.backups.checkAndSave}
           </button>
           {backups.remote !== undefined && (
             <button
@@ -311,12 +303,12 @@ function Backups() {
               onClick={() =>
                 void run("remove", async () => {
                   saved(await serverApi().removeBackupRemote());
-                  return "Backups stay on the server only. What was copied there is left there.";
+                  return m.settings.backups.stopped;
                 })
               }
               className="rounded border border-stone-300 px-3 py-1.5 text-sm disabled:opacity-50"
             >
-              Stop copying
+              {m.settings.backups.stopCopying}
             </button>
           )}
           {backups.on && (
@@ -329,13 +321,13 @@ function Backups() {
                   await queryClient.invalidateQueries({ queryKey: key });
                   if (made.uploadError !== undefined) throw new Error(made.uploadError);
                   return backups.remote === undefined
-                    ? `Made ${made.file}.`
-                    : `Made ${made.file} and uploaded it.`;
+                    ? m.settings.backups.made(made.file)
+                    : m.settings.backups.madeAndUploaded(made.file);
                 })
               }
               className="rounded border border-stone-300 px-3 py-1.5 text-sm disabled:opacity-50"
             >
-              {busy === "now" ? "Backing up…" : "Back up now"}
+              {busy === "now" ? m.settings.backups.backingUp : m.settings.backups.backUpNow}
             </button>
           )}
         </div>
@@ -372,10 +364,8 @@ function Robot() {
   return (
     <section className="mx-auto flex max-w-3xl flex-col gap-3 p-3 sm:p-4">
       <div>
-        <h2 className="text-lg font-medium">Robot</h2>
-        <p className="text-sm text-stone-600">
-          How the assistant looks to everyone who uses it, in every app.
-        </p>
+        <h2 className="text-lg font-medium">{m.settings.robot.title}</h2>
+        <p className="text-sm text-stone-600">{m.settings.robot.intro}</p>
       </div>
       <div className="flex flex-col items-center gap-4 rounded border border-stone-200 bg-white p-4 sm:flex-row sm:items-start">
         <Avatar mood="idle" appearance={look} size={150} className="shrink-0" />
@@ -388,7 +378,7 @@ function Robot() {
               onClick={() => void save(look)}
               className="rounded bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-40"
             >
-              Save
+              {m.common.save}
             </button>
             {dirty && (
               <button
@@ -397,7 +387,7 @@ function Robot() {
                 onClick={() => setDraft(undefined)}
                 className="rounded border border-stone-300 px-3 py-1.5 text-sm"
               >
-                Discard
+                {m.settings.discard}
               </button>
             )}
             {saved !== undefined && !dirty && (
@@ -407,7 +397,7 @@ function Robot() {
                 onClick={() => void save(null)}
                 className="rounded border border-stone-300 px-3 py-1.5 text-sm"
               >
-                Back to the app icon's
+                {m.settings.robot.appIcon}
               </button>
             )}
             {error !== undefined && <span className="text-sm text-red-700">{error}</span>}
@@ -461,18 +451,15 @@ function People() {
   return (
     <section className="mx-auto flex max-w-3xl flex-col gap-3 p-3 sm:p-4">
       <div>
-        <h2 className="text-lg font-medium">People and devices</h2>
-        <p className="text-sm text-stone-600">
-          Invite someone, or sign in another device of yours: either gets a pairing code and a QR
-          code for the Nudge app.
-        </p>
+        <h2 className="text-lg font-medium">{m.settings.people.title}</h2>
+        <p className="text-sm text-stone-600">{m.settings.people.intro}</p>
       </div>
       <form onSubmit={onInvite} className="flex flex-wrap gap-2">
         <input
           value={name}
           onChange={(event) => setName(event.target.value)}
-          placeholder="Their name"
-          aria-label="Their name"
+          placeholder={m.settings.people.name}
+          aria-label={m.settings.people.name}
           className="min-w-0 flex-1 rounded border border-stone-300 bg-white px-3 py-1.5"
         />
         <button
@@ -480,7 +467,7 @@ function People() {
           disabled={busy || name.trim() === ""}
           className="rounded bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-40"
         >
-          Invite someone
+          {m.settings.people.invite}
         </button>
         <button
           type="button"
@@ -488,7 +475,7 @@ function People() {
           onClick={onAnotherDevice}
           className="rounded border border-stone-300 px-3 py-1.5 text-sm disabled:opacity-40"
         >
-          Sign in another device
+          {m.settings.people.anotherDevice}
         </button>
       </form>
       {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
@@ -499,32 +486,155 @@ function People() {
   );
 }
 
-const BUDGET_FIELDS: { key: keyof BudgetDraft; label: string; hint: string; unit: string }[] = [
-  {
-    key: "monthlyUsd",
-    label: "Monthly limit",
-    hint: "For everyone together. Empty: no limit.",
-    unit: "$",
-  },
-  {
-    key: "perPlayerUsd",
-    label: "Limit per person",
-    hint: "A month, for each person. Empty: no limit.",
-    unit: "$",
-  },
-  {
-    key: "warnAtPercent",
-    label: "Warn at",
-    hint: `Of a limit, when admins hear of it. Empty: ${BUDGET_DEFAULTS.warnAtPercent}.`,
-    unit: "%",
-  },
-  {
-    key: "warnUsd",
-    label: "Without a monthly limit, warn at",
-    hint: `What spend a month admins hear of. Empty: $${BUDGET_DEFAULTS.warnUsd}.`,
-    unit: "$",
-  },
-];
+/**
+ * Invites for people from other assistants, through the federation extension: by the address
+ * their home gave them, with a join link for them to paste into their home. Not shown on an
+ * assistant without the extension.
+ */
+function Guests() {
+  const { assistant } = Route.useParams();
+  const queryClient = useQueryClient();
+  const key = [assistant, "invites"];
+  // Made on use only: a client opens a socket.
+  const api = () => clientFor(assistant).api;
+  const invites = useQuery({ queryKey: key, queryFn: () => api().invites(), retry: false });
+  const [address, setAddress] = useState("");
+  const [link, setLink] = useState<{ address: string; link: string }>();
+  const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+
+  if (invites.error instanceof ApiError && invites.error.status === 404) return null;
+
+  async function run(work: () => Promise<unknown>) {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await work();
+      await queryClient.invalidateQueries({ queryKey: key });
+    } catch (caught) {
+      setError((caught as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onInvite(event: FormEvent) {
+    event.preventDefault();
+    const typed = address.trim();
+    void run(async () => {
+      const made = await api().invite(typed);
+      setAddress("");
+      setCopied(false);
+      setLink({ address: made.invite.address, link: made.link });
+    });
+  }
+
+  return (
+    <section className="mx-auto flex max-w-3xl flex-col gap-3 p-3 sm:p-4">
+      <div>
+        <h2 className="text-lg font-medium">{m.settings.guests.title}</h2>
+        <p className="text-sm text-stone-600">{m.settings.guests.intro}</p>
+      </div>
+      <form onSubmit={onInvite} className="flex flex-wrap gap-2">
+        <input
+          value={address}
+          onChange={(event) => setAddress(event.target.value)}
+          placeholder="robin@nudge.example.com/home"
+          aria-label={m.settings.guests.address}
+          autoComplete="off"
+          className="min-w-0 flex-1 rounded border border-stone-300 bg-white px-3 py-1.5 font-mono text-sm"
+        />
+        <button
+          type="submit"
+          disabled={busy || address.trim() === ""}
+          className="rounded bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-40"
+        >
+          {m.settings.guests.invite}
+        </button>
+      </form>
+      {link !== undefined && (
+        <div className="flex flex-col gap-2 rounded border border-stone-200 bg-white p-3 text-sm">
+          <p>
+            {m.settings.guests.sendBefore}
+            <span className="font-mono">{link.address}</span>
+            {m.settings.guests.sendAfter}
+          </p>
+          <code className="rounded bg-stone-100 px-2 py-1 text-xs [overflow-wrap:anywhere]">
+            {link.link}
+          </code>
+          <span className="flex gap-3">
+            <button
+              type="button"
+              onClick={() =>
+                void navigator.clipboard.writeText(link.link).then(() => setCopied(true))
+              }
+              className="underline"
+            >
+              {copied ? m.settings.guests.copied : m.settings.guests.copy}
+            </button>
+            <button
+              type="button"
+              onClick={() => setLink(undefined)}
+              className="text-stone-600 underline"
+            >
+              {m.settings.guests.done}
+            </button>
+          </span>
+        </div>
+      )}
+      {(invites.data ?? []).length > 0 && (
+        <ul className="flex flex-col gap-1 rounded border border-stone-200 bg-white p-3">
+          {invites.data!.map((invite) => (
+            <li key={invite.id} className="flex items-baseline justify-between gap-2 text-sm">
+              <span>
+                <span className="font-mono">{invite.address}</span>{" "}
+                <span className="text-stone-500">
+                  {m.settings.guests.until(
+                    new Date(invite.expiresAt).toLocaleDateString(dateLocale()),
+                  )}
+                </span>
+              </span>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void run(() => api().cancelInvite(invite.id))}
+                className="text-xs text-red-700 hover:underline disabled:opacity-50"
+              >
+                {m.settings.guests.cancel}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {invites.error && !(invites.error instanceof ApiError && invites.error.status === 404) && (
+        <p className="text-sm text-red-700">{invites.error.message}</p>
+      )}
+      {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
+    </section>
+  );
+}
+
+/** The budget's fields, in the current language. */
+function budgetFields(): { key: keyof BudgetDraft; label: string; hint: string; unit: string }[] {
+  const words = m.settings.budget;
+  return [
+    { key: "monthlyUsd", label: words.monthly, hint: words.monthlyHint, unit: "$" },
+    { key: "perPlayerUsd", label: words.perPerson, hint: words.perPersonHint, unit: "$" },
+    {
+      key: "warnAtPercent",
+      label: words.warnAt,
+      hint: words.warnAtHint(BUDGET_DEFAULTS.warnAtPercent),
+      unit: "%",
+    },
+    {
+      key: "warnUsd",
+      label: words.warnUsd,
+      hint: words.warnUsdHint(BUDGET_DEFAULTS.warnUsd),
+      unit: "$",
+    },
+  ];
+}
 
 /**
  * What the assistant may spend on models a month. It is the server's setting, so only its owners
@@ -541,7 +651,7 @@ function Budget() {
     queryFn: () =>
       asOwner(assistant, async (api) => {
         const found = (await api.assistants()).find((item) => item.name === assistant);
-        if (found === undefined) throw new Error(`The server has no assistant "${assistant}"`);
+        if (found === undefined) throw new Error(m.settings.budget.noAssistant(assistant));
         return found;
       }),
     enabled: me.data?.admin === true,
@@ -581,26 +691,23 @@ function Budget() {
   return (
     <section className="mx-auto flex max-w-3xl flex-col gap-3 p-3 sm:p-4">
       <div>
-        <h2 className="text-lg font-medium">Budget</h2>
-        <p className="text-sm text-stone-600">
-          What the assistant may spend on models a month, in US dollars. Past a limit it stops
-          answering until the month is over. Saving reopens the assistant, so apps connect again.
-        </p>
+        <h2 className="text-lg font-medium">{m.settings.budget.title}</h2>
+        <p className="text-sm text-stone-600">{m.settings.budget.intro}</p>
       </div>
       {settings.error ? (
         <p className="text-sm text-stone-600">
           {settings.error instanceof ApiError && settings.error.status === 403
-            ? "Only an owner of this server can change the budget."
+            ? m.settings.budget.ownerOnly
             : settings.error instanceof ApiError && settings.error.status === 404
-              ? "This server can't change the budget from the web. Run it with nudge serve."
+              ? m.settings.budget.notHere
               : settings.error.message}
         </p>
       ) : settings.data === undefined ? (
-        <p className="text-sm text-stone-600">Loading…</p>
+        <p className="text-sm text-stone-600">{m.common.loading}</p>
       ) : (
         <div className="flex flex-col gap-3 rounded border border-stone-200 bg-white p-4">
           <div className="grid gap-3 sm:grid-cols-2">
-            {BUDGET_FIELDS.map((field) => (
+            {budgetFields().map((field) => (
               <label key={field.key} className="flex flex-col gap-1 text-sm">
                 <span className="font-medium">{field.label}</span>
                 <span className="flex items-center gap-1">
@@ -632,7 +739,7 @@ function Budget() {
               onClick={() => void save()}
               className="rounded bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-40"
             >
-              {saving ? "Saving…" : "Save"}
+              {saving ? m.settings.saving : m.common.save}
             </button>
             {dirty && (
               <button
@@ -644,17 +751,102 @@ function Budget() {
                 }}
                 className="rounded border border-stone-300 px-3 py-1.5 text-sm"
               >
-                Discard
+                {m.settings.discard}
               </button>
             )}
             {error !== undefined && <span className="text-sm text-red-700">{error}</span>}
             {saved && !dirty && error === undefined && (
-              <span className="text-sm text-emerald-700">Saved.</span>
+              <span className="text-sm text-emerald-700">{m.settings.saved}</span>
             )}
           </div>
         </div>
       )}
     </section>
+  );
+}
+
+/** What each month cost, by person and by room, as the server counted it; admins only. */
+function SpendByMonth() {
+  const { assistant } = Route.useParams();
+  const me = useQuery(meQuery(assistant));
+  const enabled = me.data?.admin === true;
+  const api = () => clientFor(assistant).api;
+  const usage = useQuery({ queryKey: [assistant, "usage"], queryFn: () => api().usage(), enabled });
+  const players = useQuery({
+    queryKey: [assistant, "players"],
+    queryFn: () => api().players(),
+    enabled,
+  });
+  const rooms = useQuery({
+    queryKey: [assistant, "all-rooms"],
+    queryFn: () => api().allRooms(),
+    enabled,
+  });
+  const months = [...(usage.data?.months ?? [])].sort((a, b) => b.month.localeCompare(a.month));
+  const [shown, setShown] = useState<string>();
+  if (usage.data === undefined) return null;
+  const month = months.find((item) => item.month === (shown ?? usage.data.month)) ?? months[0];
+  const playerNames = new Map(players.data?.map((player) => [player.id, player.displayName]));
+  const roomNames = new Map(rooms.data?.map((room) => [room.id, room.name]));
+
+  return (
+    <section className="mx-auto flex max-w-3xl flex-col gap-3 p-3 sm:p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h2 className="text-lg font-medium">{m.settings.spend.title}</h2>
+          <p className="text-sm text-stone-600">{m.settings.spend.intro}</p>
+        </div>
+        {months.length > 1 && (
+          <select
+            value={month?.month}
+            onChange={(event) => setShown(event.target.value)}
+            aria-label={m.settings.spend.month}
+            className="rounded border border-stone-300 bg-white px-2 py-1 text-sm"
+          >
+            {months.map((item) => (
+              <option key={item.month} value={item.month}>
+                {monthLabel(item.month)}: {dollars(item.total)}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+      {month === undefined ? (
+        <p className="text-sm text-stone-600">{m.settings.spend.none}</p>
+      ) : (
+        <div className="grid gap-3 rounded border border-stone-200 bg-white p-4 sm:grid-cols-2">
+          <p className="text-sm sm:col-span-2">
+            {monthLabel(month.month)}:{" "}
+            <span className="font-medium tabular-nums">{dollars(month.total)}</span>
+          </p>
+          <SpendList
+            title={m.settings.spend.byPerson}
+            rows={spendRows(month.players, playerNames)}
+          />
+          <SpendList title={m.settings.spend.byRoom} rows={spendRows(month.rooms, roomNames)} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SpendList({ title, rows }: { title: string; rows: SpendRow[] }) {
+  return (
+    <div className="flex flex-col gap-1 text-sm">
+      <h3 className="font-medium">{title}</h3>
+      {rows.length === 0 ? (
+        <p className="text-stone-500">{m.settings.spend.nothing}</p>
+      ) : (
+        <ul className="flex flex-col gap-1">
+          {rows.map((row) => (
+            <li key={row.id} className="flex justify-between gap-2">
+              <span className="truncate">{row.name}</span>
+              <span className="tabular-nums">{dollars(row.usd)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -701,16 +893,13 @@ function Clients() {
   return (
     <section className="mx-auto flex max-w-3xl flex-col gap-3 p-3 sm:p-4">
       <div>
-        <h2 className="text-lg font-medium">Signed in</h2>
-        <p className="text-sm text-stone-600">
-          Every app, browser and script with a token, and when it was last used. Revoking one signs
-          it out at once.
-        </p>
+        <h2 className="text-lg font-medium">{m.settings.clients.title}</h2>
+        <p className="text-sm text-stone-600">{m.settings.clients.intro}</p>
       </div>
       {tokens.error ? (
         <p className="text-sm text-red-700">{tokens.error.message}</p>
       ) : tokens.data === undefined ? (
-        <p className="text-sm text-stone-600">Loading…</p>
+        <p className="text-sm text-stone-600">{m.common.loading}</p>
       ) : (
         <ul className="divide-y divide-stone-200 rounded border border-stone-200 bg-white">
           {sorted.map((token) => {
@@ -723,23 +912,25 @@ function Clients() {
                     <span className="font-normal text-stone-600">
                       {" · "}
                       {token.client === undefined
-                        ? "Token"
+                        ? m.settings.clients.token
                         : `${token.client.name} (${token.client.platform})`}
                     </span>
                     {token.clientId === me.data?.clientId && (
-                      <span className="ml-2 text-xs text-emerald-700">This browser</span>
+                      <span className="ml-2 text-xs text-emerald-700">
+                        {m.settings.clients.thisBrowser}
+                      </span>
                     )}
                   </p>
                   <p className="text-sm text-stone-500">
                     {token.lastUsedAt === undefined
-                      ? "Never used"
-                      : `Last used ${ago(token.lastUsedAt)}`}
-                    {" · added "}
-                    {new Date(token.createdAt).toLocaleDateString()}
+                      ? m.settings.clients.neverUsed
+                      : m.settings.clients.lastUsed(ago(token.lastUsedAt))}
+                    {m.settings.clients.added}
+                    {new Date(token.createdAt).toLocaleDateString(dateLocale())}
                     {token.expiresAt !== undefined && (
                       <span className={expired ? "text-red-700" : undefined}>
-                        {expired ? " · expired " : " · expires "}
-                        {new Date(token.expiresAt).toLocaleString()}
+                        {expired ? m.settings.clients.expired : m.settings.clients.expires}
+                        {new Date(token.expiresAt).toLocaleString(dateLocale())}
                       </span>
                     )}
                   </p>
@@ -751,7 +942,9 @@ function Clients() {
                     onClick={() => void revoke(token)}
                     className="shrink-0 rounded border border-stone-300 px-3 py-1.5 text-sm disabled:opacity-50"
                   >
-                    {revoking === token.clientId ? "Revoking…" : "Revoke"}
+                    {revoking === token.clientId
+                      ? m.settings.clients.revoking
+                      : m.settings.clients.revoke}
                   </button>
                 )}
               </li>
@@ -764,18 +957,17 @@ function Clients() {
   );
 }
 
-const RELATIVE = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
-
 /** `at` as "just now", "5 minutes ago", "yesterday", or a date once over a month ago. */
 function ago(at: number): string {
+  const relative = new Intl.RelativeTimeFormat(dateLocale(), { numeric: "auto" });
   const minutes = Math.round((Date.now() - at) / 60_000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return RELATIVE.format(-minutes, "minute");
+  if (minutes < 1) return m.settings.justNow;
+  if (minutes < 60) return relative.format(-minutes, "minute");
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return RELATIVE.format(-hours, "hour");
+  if (hours < 24) return relative.format(-hours, "hour");
   const days = Math.round(hours / 24);
-  if (days <= 30) return RELATIVE.format(-days, "day");
-  return `on ${new Date(at).toLocaleDateString()}`;
+  if (days <= 30) return relative.format(-days, "day");
+  return m.settings.onDate(new Date(at).toLocaleDateString(dateLocale()));
 }
 
 /** The assistant's extensions, set up by an admin: on or off, their settings and rooms. */
@@ -805,18 +997,18 @@ function Extensions() {
   }, [setups.data]);
 
   if (me.data !== undefined && !me.data.admin)
-    return <Page>Only an admin can set up extensions.</Page>;
+    return <Page>{m.settings.extensions.onlyAdmin}</Page>;
   if (setups.error)
     return (
       <Page>
         <span className="text-red-700">
           {setups.error instanceof ApiError && setups.error.status === 404
-            ? "This server can't set up extensions from the web. Run it with nudge serve."
+            ? m.settings.extensions.notHere
             : setups.error.message}
         </span>
       </Page>
     );
-  if (setups.data === undefined || drafts === undefined) return <Page>Loading…</Page>;
+  if (setups.data === undefined || drafts === undefined) return <Page>{m.common.loading}</Page>;
 
   const dirty = stable(drafts) !== stable(setups.data.map(draftOf));
   const update = (from: string, change: Partial<Draft>) => {
@@ -869,23 +1061,21 @@ function Extensions() {
     <RoomsContext value={rooms.data ?? []}>
       <section className="mx-auto flex max-w-3xl flex-col gap-4 p-3 pb-28 sm:p-4 sm:pb-28">
         <div>
-          <h2 className="text-lg font-medium">Extensions</h2>
-          <p className="text-sm text-stone-600">
-            What the assistant can do beyond talking. Saving installs them again right away and
-            writes them to the server's nudge.json; if one fails to start, nothing changes. Each
-            room can still turn them on or off for itself.
-          </p>
+          <h2 className="text-lg font-medium">{m.settings.extensions.title}</h2>
+          <p className="text-sm text-stone-600">{m.settings.extensions.intro}</p>
         </div>
         {configured.length > 0 && (
           <div className="flex flex-col gap-3">
-            <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">Added</h3>
+            <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">
+              {m.settings.extensions.added}
+            </h3>
             {configured.map(card)}
           </div>
         )}
         {available.length > 0 && (
           <div className="flex flex-col gap-3">
             <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">
-              Not added yet
+              {m.settings.extensions.notAdded}
             </h3>
             {available.map(card)}
           </div>
@@ -897,9 +1087,9 @@ function Extensions() {
                 {error !== undefined ? (
                   <span className="text-red-700">{error}</span>
                 ) : dirty ? (
-                  "Unsaved changes"
+                  m.settings.extensions.unsaved
                 ) : (
-                  <span className="text-emerald-700">Saved and installed.</span>
+                  <span className="text-emerald-700">{m.settings.extensions.installed}</span>
                 )}
               </p>
               {dirty && (
@@ -913,7 +1103,7 @@ function Extensions() {
                     }}
                     className="rounded border border-stone-300 px-3 py-1.5 text-sm disabled:opacity-50"
                   >
-                    Discard
+                    {m.settings.discard}
                   </button>
                   <button
                     type="button"
@@ -921,7 +1111,7 @@ function Extensions() {
                     onClick={() => void save()}
                     className="rounded bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-50"
                   >
-                    {saving ? "Saving…" : "Save"}
+                    {saving ? m.settings.saving : m.common.save}
                   </button>
                 </span>
               )}
@@ -978,7 +1168,9 @@ function ExtensionCard({
           )}
         </div>
         <label htmlFor={toggleId} className="flex shrink-0 cursor-pointer items-center gap-2">
-          <span className="text-sm text-stone-600">{draft.enabled ? "On" : "Off"}</span>
+          <span className="text-sm text-stone-600">
+            {draft.enabled ? m.settings.extensions.on : m.settings.extensions.off}
+          </span>
           <input
             id={toggleId}
             type="checkbox"
@@ -996,18 +1188,17 @@ function ExtensionCard({
       </div>
       {setup.error !== undefined && (
         <p className="rounded bg-red-50 px-2 py-1 text-sm text-red-800">
-          Couldn't load it: {setup.error}
+          {m.settings.extensions.loadFailed(setup.error)}
         </p>
       )}
       {setup.failed !== undefined && (
         <p className="rounded bg-red-50 px-2 py-1 text-sm text-red-800">
-          Failed to start, so the assistant runs without it: {setup.failed}
+          {m.settings.extensions.startFailed(setup.failed)}
         </p>
       )}
       {setup.missingEnv.length > 0 && (
         <p className="rounded bg-amber-50 px-2 py-1 text-sm text-amber-900">
-          Needs {setup.missingEnv.map((name) => `$${name}`).join(", ")} in the server's environment,
-          or the value in its settings, before it can start.
+          {m.settings.extensions.needsEnv(setup.missingEnv.map((name) => `$${name}`).join(", "))}
         </p>
       )}
       {(hasFields || setup.error === undefined) && (
@@ -1017,7 +1208,11 @@ function ExtensionCard({
           onClick={() => setOpen(!open)}
           className="self-start text-sm text-stone-600 underline"
         >
-          {open ? "Hide settings" : hasFields ? "Settings" : "Rooms"}
+          {open
+            ? m.settings.extensions.hideSettings
+            : hasFields
+              ? m.settings.extensions.settings
+              : m.settings.extensions.rooms}
         </button>
       )}
       {open && (
@@ -1030,10 +1225,10 @@ function ExtensionCard({
             />
           )}
           <fieldset className="flex flex-col gap-1">
-            <legend className="text-sm font-medium">On by default in</legend>
+            <legend className="text-sm font-medium">{m.settings.extensions.onByDefault}</legend>
             <div className="flex flex-wrap gap-x-4 gap-y-1">
-              {KINDS.map(({ kind, label }) => {
-                const rooms = draft.rooms ?? KINDS.map((item) => item.kind);
+              {KINDS.map((kind) => {
+                const rooms = draft.rooms ?? KINDS;
                 return (
                   <label key={kind} className="flex items-center gap-2 text-sm">
                     <input
@@ -1042,21 +1237,17 @@ function ExtensionCard({
                       checked={rooms.includes(kind)}
                       onChange={(event) => {
                         const next = event.target.checked
-                          ? KINDS.map((item) => item.kind).filter(
-                              (item) => item === kind || rooms.includes(item),
-                            )
+                          ? KINDS.filter((item) => item === kind || rooms.includes(item))
                           : rooms.filter((item) => item !== kind);
                         onChange({ rooms: next.length === KINDS.length ? undefined : next });
                       }}
                     />
-                    {label}
+                    {m.settings.extensions.kinds[kind]}
                   </label>
                 );
               })}
             </div>
-            <p className="text-xs text-stone-500">
-              People in a room can still turn it on or off there.
-            </p>
+            <p className="text-xs text-stone-500">{m.settings.extensions.roomsCanChange}</p>
           </fieldset>
         </div>
       )}

@@ -94,7 +94,7 @@ class Geofences(
             return@withLock
         }
         if (!permitted()) {
-            mutableProblem.value = "Nudge may not use this phone's location all the time. Allow it in the system's settings."
+            mutableProblem.value = text(R.string.model_geofences_no_permission)
             return@withLock
         }
         try {

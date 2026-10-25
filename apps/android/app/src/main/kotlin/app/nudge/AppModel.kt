@@ -4,6 +4,7 @@
 package app.nudge
 
 import android.content.Context
+import androidx.annotation.StringRes
 import com.google.firebase.messaging.FirebaseMessaging
 import java.io.File
 import kotlinx.coroutines.CancellationException
@@ -416,11 +417,11 @@ class AppModel(private val context: Context) {
                     val joining = owner.wired()
                     if (joining.state == WiredStatus.MEMBER) return
                     if (joining.state != WiredStatus.STARTING) {
-                        throw NudgeException.Status(502.toUShort(), joining.error ?: "The server didn't join home's Wired network.")
+                        throw NudgeException.Status(502.toUShort(), joining.error ?: text(R.string.model_wired_not_joined))
                     }
                     delay(2_000)
                 }
-                throw NudgeException.Status(504.toUShort(), "The server is still joining home's Wired network. Try again in a minute.")
+                throw NudgeException.Status(504.toUShort(), text(R.string.model_wired_still_joining))
             }
             else -> {}
         }
@@ -654,8 +655,8 @@ class AppModel(private val context: Context) {
      * have invited their address.
      */
     suspend fun join(link: JoinLink) {
-        val home = mutableSession.value ?: throw IllegalStateException("Sign in at home first.")
-        if (home.account.isAt(link.server, link.assistant)) throw IllegalStateException("That is your home.")
+        val home = mutableSession.value ?: throw IllegalStateException(text(R.string.model_join_sign_in_first))
+        if (home.account.isAt(link.server, link.assistant)) throw IllegalStateException(text(R.string.model_join_is_home))
         syncing.withLock {
             if (mutablePlaces.value.none { it.account.isAt(link.server, link.assistant) }) {
                 mutablePlaces.value += joined(home, link.server, link.assistant)
@@ -682,10 +683,7 @@ class AppModel(private val context: Context) {
                 if (error.status.toInt() != 401 && error.status.toInt() != 404) throw error
             }
         }
-        throw IllegalStateException(
-            "That code has expired or was used, or none of your assistants is on ${hostOf(link.server)}. " +
-                "Reload the sign-in page for a new one.",
-        )
+        throw IllegalStateException(text(R.string.model_sign_in_expired, hostOf(link.server)))
     }
 
     /** Starts or stops carrying the player's own memory to an assistant they joined. */
@@ -916,25 +914,15 @@ sealed interface SetUpServer {
 }
 
 /** Why the home can't join an assistant on a server this device owns, or more on servers. */
-class ServerProblem(val kind: Kind) : Exception(kind.text) {
-    enum class Kind(val text: String) {
-        NO_FEDERATION("Your home has no federation yet, so it can't join assistants on other servers."),
-        NO_FEDERATION_EXTENSION("Your home's server has no federation extension to turn on. Update it first."),
-        PRIVATE_HOME(
-            "This device reaches your home at a local address, which other servers can't reach. " +
-                "Sign in to your home at its public address, or hold a Wired network at home and use its address: " +
-                "under Settings → Servers, open your home's server.",
-        ),
-        NEEDS_WIRED(
-            "Your home is on Wired, but none of your servers here holds its network. " +
-                "Open your home under Settings → Servers and hold a network there, then try again.",
-        ),
-        WIRED_ELSEWHERE(
-            "This server is in another Wired network. Turn Wired off on it under Settings → Servers, " +
-                "then try again: it joins your home's.",
-        ),
-        NOT_JOINED("Joining the assistant from home didn't work."),
-        NOT_ON_EXE("This server isn't one this device made on exe.dev."),
+class ServerProblem(val kind: Kind) : Exception(text(kind.text)) {
+    enum class Kind(@StringRes val text: Int) {
+        NO_FEDERATION(R.string.problem_no_federation),
+        NO_FEDERATION_EXTENSION(R.string.problem_no_federation_extension),
+        PRIVATE_HOME(R.string.problem_private_home),
+        NEEDS_WIRED(R.string.problem_needs_wired),
+        WIRED_ELSEWHERE(R.string.problem_wired_elsewhere),
+        NOT_JOINED(R.string.problem_not_joined),
+        NOT_ON_EXE(R.string.problem_not_on_exe),
     }
 }
 
@@ -964,14 +952,9 @@ inline fun <T> attempt(block: () -> T): Result<T> = try {
 /** What to tell the user. */
 fun explain(error: Throwable): String = when (error) {
     is NudgeException.Status ->
-        if (error.status.toInt() == 401) {
-            "That didn't work. A pairing code works once, for ten minutes: ask an admin for a new one. " +
-                "A token works until it is revoked."
-        } else {
-            error.detail
-        }
-    is NudgeException.Network -> "Can't reach the server: ${error.detail}"
-    is NudgeException.Decode -> "The server's answer made no sense: ${error.detail}"
+        if (error.status.toInt() == 401) text(R.string.error_unauthorized) else error.detail
+    is NudgeException.Network -> text(R.string.error_network, error.detail)
+    is NudgeException.Decode -> text(R.string.error_decode, error.detail)
     is NudgeException.Config -> error.detail
     else -> error.message ?: error.toString()
 }

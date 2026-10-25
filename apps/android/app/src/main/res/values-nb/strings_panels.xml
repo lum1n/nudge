@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="panels_back">Tilbake</string>
+    <string name="panels_close">Lukk</string>
+    <string name="panels_save">Lagre</string>
+    <string name="panels_saving">Lagrer …</string>
+    <string name="panels_discard">Forkast</string>
+    <string name="panels_unsaved">Endringer som ikke er lagret</string>
+    <string name="panels_remove">Fjern</string>
+    <string name="panels_remove_title">Fjerne %1$s?</string>
+    <string name="panels_cancel">Avbryt</string>
+    <string name="panels_clear">Fjern</string>
+    <string name="panels_disconnected">Frakoblet.</string>
+    <string name="panels_disconnected_because">Frakoblet: %1$s.</string>
+    <string name="panels_someone_else">Noen andre</string>
+    <string name="panels_take_control">Ta kontrollen</string>
+
+    <!-- The browser. -->
+    <string name="panels_browser">Nettleser</string>
+    <string name="panels_browser_off">Dette rommet har ingen nettleser. Slå på nettleserutvidelsen for det under Om dette rommet.</string>
+    <string name="panels_browser_starting">Starter nettleseren …</string>
+    <string name="panels_browser_intro">Dette er rommets egen nettleser. Logg inn på et nettsted her når assistenten ber deg om det. Det du skriver, går bare til denne nettleseren; assistenten ser aldri passord.</string>
+    <string name="panels_browser_watching">%1$s bruker nettleseren; du ser på.</string>
+    <string name="panels_browser_remember">Husk innlogginger jeg skriver her, så assistenten kan logge inn selv neste gang</string>
+    <string name="panels_browser_done">Ferdig</string>
+    <string name="panels_browser_nothing_saved">Ingenting å lagre. Be assistenten prøve igjen.</string>
+    <string name="panels_browser_saved">Lagret innloggingen for %1$s. Be assistenten prøve igjen.</string>
+    <string name="panels_browser_waiting">Venter på siden …</string>
+    <string name="panels_browser_page">Rommets nettleser, på %1$s</string>
+    <string name="panels_browser_type">Skriv på siden</string>
+    <string name="panels_browser_logins">Lagrede innlogginger</string>
+    <string name="panels_browser_no_logins">Ingen ennå. Innlogginger du husker her, vises her.</string>
+    <string name="panels_browser_saved_on">lagret %1$s</string>
+    <string name="panels_browser_forget">Glem</string>
+
+    <!-- The desktop. -->
+    <string name="panels_desktop">Skrivebord</string>
+    <string name="panels_desktop_off">Dette rommet har ikke noe skrivebord. Slå på skrivebordsutvidelsen for det under Om dette rommet.</string>
+    <string name="panels_desktop_starting">Starter skrivebordet …</string>
+    <string name="panels_desktop_intro">Dette er rommets eget skrivebord. Se assistenten bruke appene sine, eller ta over: trykk for å klikke, og skriv nedenfor i vinduet du trykket på.</string>
+    <string name="panels_desktop_watching">%1$s bruker skrivebordet; du ser på.</string>
+    <string name="panels_desktop_start_app">Start %1$s</string>
+    <string name="panels_desktop_drag_selects">Når du drar, markerer og flytter du ting.</string>
+    <string name="panels_desktop_drag_scrolls">Når du drar, ruller du.</string>
+    <string name="panels_desktop_drag_to_select">Dra for å markere</string>
+    <string name="panels_desktop_working">Assistenten: %1$s</string>
+    <string name="panels_desktop_waiting">Venter på skjermen …</string>
+    <string name="panels_desktop_screen">Rommets skrivebord</string>
+    <string name="panels_desktop_type">Skriv på skrivebordet</string>
+
+    <!-- Terminalen. -->
+    <string name="panels_terminal">Terminal</string>
+    <string name="panels_terminal_off">Ingen terminal her. Slå på terminalutvidelsen for dette rommet under Om dette rommet.</string>
+    <string name="panels_terminal_empty">Ingen kommandoer ennå. De assistenten kjører her, vises mens de kjører.</string>
+    <string name="panels_terminal_waiting">Venter på godkjenning</string>
+    <string name="panels_terminal_running">Kjører…</string>
+    <string name="panels_terminal_exit">Avslutningskode %1$d</string>
+    <string name="panels_terminal_failed">Feilet</string>
+    <string name="panels_terminal_stopped">Stoppet</string>
+    <string name="panels_terminal_denied">Avslått</string>
+    <string name="panels_terminal_denied_by">av %1$s</string>
+    <string name="panels_terminal_approved_by">godkjent av %1$s</string>
+
+    <!-- Connectors. -->
+    <string name="panels_connectors">Koblinger</string>
+    <string name="panels_connectors_off">Ingen koblinger her. Slå på koblingsutvidelsen for dette rommet under Om dette rommet.</string>
+    <string name="panels_connectors_intro">API-er som assistenten i dette rommet kan kalle. Be den i chatten om å legge til en, og si hva den skal brukes til. Slå på Bruk alltid først for å få den til å prøve en før noe annet for de oppgavene. API-nøkler legges inn bare her: assistenten ser dem aldri.</string>
+    <string name="panels_connectors_empty">Ingen koblinger ennå.</string>
+    <string name="panels_connector_remove_text">Assistenten kan ikke kalle den lenger, og API-nøkkelen glemmes.</string>
+    <string name="panels_connector_shared">Delt med alle rom</string>
+    <string name="panels_connector_actions">Handlinger for koblingen</string>
+    <string name="panels_connector_unshare">Slutt å dele med alle rom</string>
+    <string name="panels_connector_share">Del med alle rom</string>
+    <string name="panels_connector_used_first">Brukes først til: %1$s</string>
+    <string name="panels_connector_learned">Lært: %1$s</string>
+    <string name="panels_connector_use_for">Bruk den til</string>
+    <string name="panels_connector_always_first">Bruk alltid først</string>
+    <string name="panels_connector_always_first_hint">Prøves før nettlesing eller svar fra hukommelsen, for det den er til</string>
+    <string name="panels_connector_key_set">API-nøkkel (%1$s %2$s): lagt inn</string>
+    <string name="panels_connector_key_not_set">API-nøkkel (%1$s %2$s): ikke lagt inn</string>
+    <string name="panels_connector_replace_key">Erstatt nøkkelen</string>
+    <string name="panels_connector_paste_key">Lim inn nøkkelen</string>
+    <string name="panels_connector_save_key">Lagre nøkkelen</string>
+    <string name="panels_connector_local">Lokalt nettverk</string>
+    <string name="panels_connector_local_hint">Kan nå denne maskinen og det lokale nettverket, som Home Assistant eller en NAS</string>
+    <string name="panels_connector_read_paths_hint">Kall som bare leser, men ikke er GET: én METODE /sti per linje, som POST /graphql. De kjøres uten å spørre.</string>
+    <string name="panels_connector_save_read_paths">Lagre lesestiene</string>
+
+    <!-- MCP servers. -->
+    <string name="panels_mcp">MCP-servere</string>
+    <string name="panels_mcp_off">Ingen MCP-servere her. Slå på mcp-utvidelsen for dette rommet under Om dette rommet.</string>
+    <string name="panels_mcp_intro">MCP-servere som assistenten i dette rommet kan bruke. Be den i chatten om å legge til en. Nøkler og innlogginger legges inn bare her: assistenten ser dem aldri.</string>
+    <string name="panels_mcp_empty">Ingen MCP-servere ennå.</string>
+    <string name="panels_mcp_remove_text">Assistenten kan ikke bruke den lenger, og nøklene og innloggingen glemmes.</string>
+    <string name="panels_mcp_actions">Handlinger for serveren</string>
+    <string name="panels_mcp_added_by">Lagt til av %1$s</string>
+    <plurals name="panels_mcp_tools">
+        <item quantity="one">%d verktøy</item>
+        <item quantity="other">%d verktøy</item>
+    </plurals>
+    <string name="panels_mcp_signed_in">Logget inn.</string>
+    <string name="panels_mcp_not_signed_in">Ikke logget inn. Servere som trenger det, ber om det.</string>
+    <string name="panels_mcp_sign_in">Logg inn</string>
+    <string name="panels_mcp_sign_in_again">Logg inn på nytt</string>
+    <string name="panels_mcp_sign_out">Logg ut</string>
+    <string name="panels_mcp_approval">Godkjenning</string>
+    <string name="panels_mcp_ask_writes">Spør før kall som endrer noe</string>
+    <string name="panels_mcp_ask_always">Spør før hvert kall</string>
+    <string name="panels_mcp_ask_never">Spør aldri</string>
+    <string name="panels_mcp_try_again">Prøv igjen</string>
+    <string name="panels_mcp_header_set">Header %1$s: lagt inn</string>
+    <string name="panels_mcp_header_not_set">Header %1$s: ikke lagt inn</string>
+    <string name="panels_mcp_variable_set">Variabel %1$s: lagt inn</string>
+    <string name="panels_mcp_variable_not_set">Variabel %1$s: ikke lagt inn</string>
+    <string name="panels_mcp_replace">Erstatt den</string>
+    <string name="panels_mcp_paste">Lim den inn</string>
+    <string name="panels_mcp_paste_without">Lim den inn (uten «%1$s»)</string>
+
+    <!-- Extensions. -->
+    <string name="panels_extensions">Utvidelser</string>
+    <string name="panels_extensions_no_setup">Denne serveren kan ikke sette opp utvidelser fra appen. Kjør den med nudge serve.</string>
+    <string name="panels_extensions_saved">Lagret og installert.</string>
+    <string name="panels_extensions_intro">Det assistenten kan gjøre utover å snakke. Når du lagrer, installeres de på nytt med en gang og skrives til nudge.json på serveren; hvis en ikke starter, endres ingenting. Hvert rom kan fortsatt slå dem på eller av for seg selv.</string>
+    <string name="panels_extensions_added">Lagt til</string>
+    <string name="panels_extensions_available">Ikke lagt til ennå</string>
+    <string name="panels_extensions_failed">Kunne ikke laste den: %1$s</string>
+    <string name="panels_extensions_needs_env">Trenger %1$s i miljøet til serveren, eller verdien i innstillingene, før den kan starte.</string>
+    <string name="panels_extensions_hide_settings">Skjul innstillinger</string>
+    <string name="panels_extensions_settings">Innstillinger</string>
+    <string name="panels_extensions_rooms">Rom</string>
+    <string name="panels_extensions_on_by_default">På som standard i</string>
+    <string name="panels_extensions_kind_lobby">Alle</string>
+    <string name="panels_extensions_kind_personal">Personlig</string>
+    <string name="panels_extensions_kind_shared">Delt</string>
+    <string name="panels_extensions_rooms_hint">Personer i et rom kan fortsatt slå den på eller av der.</string>
+</resources>

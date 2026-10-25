@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="channel_news">Svar og godkjenninger</string>
+    <string name="channel_news_description">Når et svar er klart eller en handling venter på at du godkjenner den</string>
+</resources>

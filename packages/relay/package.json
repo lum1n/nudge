@@ -18,7 +18,8 @@
     }
   },
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "bundle": "esbuild src/main.ts --bundle --platform=node --target=node22 --format=esm --conditions=@nudge/source --legal-comments=external --outfile=dist/bundle/nudge-relay.mjs"
   },
   "dependencies": {
     "@hono/node-server": "2.1.5",
@@ -28,6 +29,7 @@
   },
   "devDependencies": {
     "@nudge/core": "workspace:*",
-    "@nudge/server": "workspace:*"
+    "@nudge/server": "workspace:*",
+    "esbuild": "0.28.2"
   }
 }

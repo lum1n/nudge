@@ -1,4 +1,4 @@
-import type { Apns, Fcm } from "@nudge/ext-push";
+import type { Apns, Fcm } from "@nudge/ext-push/senders";
 import { type Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { type Static, type TSchema, Type } from "typebox";

@@ -13,6 +13,7 @@ import { documentsExtension, roomDocuments } from "@nudge/ext-documents";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import terminal from "../src/extension.ts";
 import type { FileOptions, SandboxOptions } from "../src/sandbox.ts";
+import type { TerminalCommand, TerminalFrame } from "../src/sessions.ts";
 
 const context = BACKGROUND_CONTEXT;
 const EMAIL = "kari.nordmann@example.no";
@@ -263,5 +264,84 @@ describe("terminal extension", () => {
     nudge = await open();
     await say(nudge, "Hand it over");
     expect(json(requests[1])).toContain("the documents extension isn't on here");
+  });
+
+  describe("its panel", () => {
+    /** A panel on the room's terminal socket, as the apps open one. */
+    const openPanel = async (open: Nudge) => {
+      await open.players.invite("Ann", context);
+      const frames: TerminalFrame[] = [];
+      const room = (await open.rooms.get(LOBBY, context))!;
+      const player = (await open.players.get("ann", context))!;
+      const session = await open.roomSocket("terminal")!(
+        { room, player, admin: false },
+        { send: (data) => frames.push(JSON.parse(data) as TerminalFrame), close: () => {} },
+      );
+      const commands = (): TerminalCommand[] =>
+        frames.findLast((frame) => frame.type === "commands")?.commands ?? [];
+      return { frames, session, commands };
+    };
+
+    it("shows the commands the assistant ran, with their output as it came", async () => {
+      const { faux, reply, call, open } = setup();
+      faux.setResponses([call("ls"), reply(fauxAssistantMessage([fauxText("Done.")]))]);
+      nudge = await open();
+      const panel = await openPanel(nudge);
+      expect(panel.commands()).toEqual([]);
+      await say(nudge, "What is there?");
+
+      expect(panel.frames).toContainEqual({ type: "output", id: "c1", chunk: "contacts.csv\n" });
+      expect(panel.commands()).toMatchObject([
+        {
+          id: "c1",
+          command: "ls",
+          status: "done",
+          exitCode: 0,
+          output: `contacts.csv\n${EMAIL}\n`,
+        },
+      ]);
+    });
+
+    it("shows a command waiting for approval, then who approved it and how it ran", async () => {
+      const { faux, reply, call, open } = setup();
+      faux.setResponses([
+        call("rm -r old"),
+        reply(fauxAssistantMessage([fauxText("It waits.")])),
+        call("rm -r older"),
+        reply(fauxAssistantMessage([fauxText("It waits too.")])),
+      ]);
+      nudge = await open();
+      const panel = await openPanel(nudge);
+      await say(nudge, "Delete the old folder");
+      await say(nudge, "And the older one");
+      const approvals = await nudge.approvals.list(LOBBY, context);
+      const first = approvals.find((item) => item.summary.endsWith("rm -r old"));
+      const second = approvals.find((item) => item.summary.endsWith("rm -r older"));
+      expect(panel.commands()).toMatchObject([
+        { id: "c1", command: "rm -r old", status: "waiting", approval: first!.id },
+        { id: "c2", command: "rm -r older", status: "waiting", approval: second!.id },
+      ]);
+
+      const by = { playerId: "owner", displayName: "Vegard" };
+      await nudge.approvals.decide(LOBBY, first!.id, { approve: true, by }, context);
+      await nudge.approvals.decide(LOBBY, second!.id, { approve: false, by }, context);
+      expect(panel.commands()).toMatchObject([
+        { id: "c1", status: "done", decidedBy: "Vegard", exitCode: 0 },
+        { id: "c2", status: "denied", decidedBy: "Vegard" },
+      ]);
+      expect(ran.map((r) => r.command)).toEqual(["rm -r old"]);
+    });
+
+    it("is only watched", async () => {
+      const { open } = setup();
+      nudge = await open();
+      const panel = await openPanel(nudge);
+      panel.session.receive(JSON.stringify({ type: "run", command: "ls" }));
+      expect(panel.frames.at(-1)).toEqual({
+        type: "error",
+        message: "The terminal is only watched",
+      });
+      expect(ran).toHaveLength(0);
+    });
   });
 });

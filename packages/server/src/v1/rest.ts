@@ -16,6 +16,9 @@ import {
   InvalidPersonal,
   InvalidProfile,
   MAX_ROUTE_BODY,
+  AttachmentNotFound,
+  AttachmentRefused,
+  AttachmentRemoved,
   NotAllowed,
   type Nudge,
   type PersonalUpdate,
@@ -42,6 +45,8 @@ import {
   IssueTokenRequest,
   type MeResponse,
   MessageRequest,
+  type Attachment,
+  RoomImagesRequest,
   type MessageResponse,
   type ModelViewResponse,
   type NudgesResponse,
@@ -485,7 +490,8 @@ export function restRoutes(options: RestOptions): Hono {
   api.post("/rooms/:room/messages", async (c) => {
     const room = await usableRoom(c);
     const body = await readJson(c, MessageRequest);
-    if (body.text.trim() === "") throw new HttpError(400, "A message needs text");
+    if (body.text.trim() === "" && (body.attachments ?? []).length === 0)
+      throw new HttpError(400, "A message needs text");
     const { player, clientId } = c.var.credential;
     let submission;
     try {
@@ -498,15 +504,90 @@ export function restRoutes(options: RestOptions): Hono {
           requestId: body.requestId,
           whenBusy: body.whenBusy,
           ...(body.private === true ? { private: true } : {}),
+          ...(body.attachments === undefined ? {} : { attachments: body.attachments }),
         },
         context,
       );
     } catch (error) {
       if (error instanceof BudgetReached)
         throw new HttpError(429, error.message, ERROR_CODE.budgetSpent);
-      throw error;
+      throw attachmentError(error);
     }
     return c.json({ submissionId: submission.id } satisfies MessageResponse, 202);
+  });
+
+  // The body is the file itself (ADR 24); its name comes in the query, its type as Content-Type.
+  api.post("/rooms/:room/attachments", async (c) => {
+    const room = await usableRoom(c);
+    const bytes = new Uint8Array(await c.req.arrayBuffer());
+    try {
+      const attachment = await c.var.nudge.addAttachment(
+        room.id,
+        {
+          name: c.req.query("name") ?? "",
+          mime: c.req.header("content-type") ?? "",
+          bytes,
+          by: c.var.credential.player.id,
+        },
+        context,
+      );
+      return c.json(viewerOf(c).strings(attachment) satisfies Attachment, 201);
+    } catch (error) {
+      throw attachmentError(error);
+    }
+  });
+
+  api.get("/rooms/:room/attachments/:attachment", async (c) => {
+    const room = await usableRoom(c);
+    let found;
+    try {
+      found = await c.var.nudge.attachments.read(
+        room.id,
+        c.req.param("attachment"),
+        c.var.credential.player.id,
+        context,
+      );
+    } catch (error) {
+      throw attachmentError(error);
+    }
+    const { info, bytes } = found;
+    // Only images that can't carry script are shown in place; anything else is a download, so
+    // an uploaded page or SVG can't run as the web app.
+    const inline = info.kind === "image";
+    const name = viewerOf(c).strings(info.name);
+    return c.body(new Uint8Array(bytes), 200, {
+      "Content-Type": inline ? info.mime : "application/octet-stream",
+      "Content-Length": String(bytes.length),
+      "Content-Disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(name)}`,
+      "X-Content-Type-Options": "nosniff",
+      "Content-Security-Policy": "sandbox; default-src 'none'",
+      "Cache-Control": "private, max-age=3600",
+    });
+  });
+
+  // Who attached it, or an admin; its bytes are gone at once.
+  api.delete("/rooms/:room/attachments/:attachment", async (c) => {
+    const room = await usableRoom(c);
+    const { player } = c.var.credential;
+    try {
+      await c.var.nudge.attachments.remove(
+        room.id,
+        c.req.param("attachment"),
+        { playerId: player.id, admin: await c.var.nudge.players.isAdmin(player.id, context) },
+        context,
+      );
+    } catch (error) {
+      throw attachmentError(error);
+    }
+    return c.body(null, 204);
+  });
+
+  // Consent, as for extensions: anyone in the room may change it, never the model.
+  api.put("/rooms/:room/images", async (c) => {
+    const room = await usableRoom(c);
+    const body = await readJson(c, RoomImagesRequest);
+    const changed = await c.var.nudge.setImagesToModel(room.id, body.allowed, context);
+    return c.json(await roomOf(c.var.nudge, changed));
   });
 
   // What the privacy promise rests on, for anyone in the room to check.
@@ -876,6 +957,14 @@ export function pairingLink(server: string, assistant: string, code: string): st
 }
 
 /** The room in the path, if the caller may use it. Rooms they may not use do not exist for them. */
+/** An attachment's refusal as an HTTP error; anything else as it is. */
+function attachmentError(error: unknown): unknown {
+  if (error instanceof AttachmentNotFound) return new HttpError(404, error.message);
+  if (error instanceof AttachmentRemoved) return new HttpError(410, error.message);
+  if (error instanceof AttachmentRefused) return new HttpError(400, error.message);
+  return error;
+}
+
 async function usableRoom(c: HonoContext<Env>): Promise<CoreRoom> {
   const id = c.req.param("room") ?? "";
   const room = await c.var.nudge.rooms.get(id, context);

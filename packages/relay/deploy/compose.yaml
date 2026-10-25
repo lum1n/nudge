@@ -1,0 +1,26 @@
+# The push relay on a machine with a public name, behind Caddy, which gets its TLS certificate.
+# In this directory: put relay.json (from relay.example.json), the APNs key and the Firebase service
+# account in ./data, point the name's DNS here, open ports 80 and 443, then
+#   RELAY_DOMAIN=relay.example.org docker compose up -d
+# The apps are built with https://relay.example.org (-Pnudge.pushRelay, NUDGE_PUSH_RELAY), and
+# servers list it in their push extension's "relays". ./data/relay-handle.key, made on first start,
+# is what keeps the apps' handles working: back it up.
+services:
+  relay:
+    image: ghcr.io/lum1n/nudge-relay:stable
+    restart: unless-stopped
+    # The image runs as uid 1000, which must be able to write ./data.
+    volumes:
+      - ./data:/data
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    # Caddy sets X-Forwarded-For itself, so the relay's "trustProxy" sees the sender's address.
+    command: caddy reverse-proxy --from ${RELAY_DOMAIN:?set RELAY_DOMAIN} --to relay:8790
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy:/data
+volumes:
+  caddy:

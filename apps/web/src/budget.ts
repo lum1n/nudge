@@ -1,4 +1,5 @@
 import type { AssistantBudget } from "@nudge/client";
+import { m } from "./i18n/index.ts";
 
 /** An assistant's budget as the settings page edits it: what is typed in each field. */
 export type BudgetDraft = {
@@ -43,21 +44,21 @@ export function budgetOf(
     warnUsd?: number;
   } = {};
   const fields = [
-    ["monthlyUsd", draft.monthlyUsd, "The monthly limit"],
-    ["perPlayerUsd", draft.perPlayerUsd, "The limit per person"],
-    ["warnUsd", draft.warnUsd, "The amount to hear of spend at"],
+    ["monthlyUsd", draft.monthlyUsd, m.settings.budget.monthlyField],
+    ["perPlayerUsd", draft.perPlayerUsd, m.settings.budget.perPersonField],
+    ["warnUsd", draft.warnUsd, m.settings.budget.warnUsdField],
   ] as const;
   for (const [key, typed, label] of fields) {
     if (typed.trim() === "") continue;
     const value = Number(typed.trim());
     if (!Number.isFinite(value) || value <= 0)
-      return { error: `${label} must be a number of dollars above 0` };
+      return { error: m.settings.budget.notDollars(label) };
     budget[key] = value;
   }
   if (draft.warnAtPercent.trim() !== "") {
     const percent = Number(draft.warnAtPercent.trim());
     if (!Number.isFinite(percent) || percent <= 0 || percent > 100)
-      return { error: "Warn at must be a percent from above 0 to 100" };
+      return { error: m.settings.budget.notPercent };
     budget.warnAt = percent / 100;
   }
   return { budget: Object.keys(budget).length === 0 ? null : budget };

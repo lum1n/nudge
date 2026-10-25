@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A room's browser, desktop, terminal, connectors and MCP servers, and the assistant's extensions. -->
+<resources>
+    <string name="panels_back">Back</string>
+    <string name="panels_close">Close</string>
+    <string name="panels_save">Save</string>
+    <string name="panels_saving">Saving…</string>
+    <string name="panels_discard">Discard</string>
+    <string name="panels_unsaved">Unsaved changes</string>
+    <string name="panels_remove">Remove</string>
+    <string name="panels_remove_title">Remove %1$s?</string>
+    <string name="panels_cancel">Cancel</string>
+    <string name="panels_clear">Clear</string>
+    <string name="panels_disconnected">Disconnected.</string>
+    <string name="panels_disconnected_because">Disconnected: %1$s.</string>
+    <string name="panels_someone_else">Someone else</string>
+    <string name="panels_take_control">Take control</string>
+
+    <!-- The browser. -->
+    <string name="panels_browser">Browser</string>
+    <string name="panels_browser_off">This room has no browser. Turn on the browser extension for it under About this room.</string>
+    <string name="panels_browser_starting">Starting the browser…</string>
+    <string name="panels_browser_intro">This is the room\'s own browser. Log in to a site here when the assistant asks you to. What you type goes to this browser only; the assistant never sees passwords.</string>
+    <string name="panels_browser_watching">%1$s is using the browser; you are watching.</string>
+    <string name="panels_browser_remember">Remember logins I type here, so the assistant can log in by itself next time</string>
+    <string name="panels_browser_done">Done</string>
+    <string name="panels_browser_nothing_saved">Nothing to save. Ask the assistant to try again.</string>
+    <string name="panels_browser_saved">Saved the login for %1$s. Ask the assistant to try again.</string>
+    <string name="panels_browser_waiting">Waiting for the page…</string>
+    <string name="panels_browser_page">The room\'s browser, at %1$s</string>
+    <string name="panels_browser_type">Type into the page</string>
+    <string name="panels_browser_logins">Saved logins</string>
+    <string name="panels_browser_no_logins">None yet. Logins you remember here show up here.</string>
+    <string name="panels_browser_saved_on">saved %1$s</string>
+    <string name="panels_browser_forget">Forget</string>
+
+    <!-- The desktop. -->
+    <string name="panels_desktop">Desktop</string>
+    <string name="panels_desktop_off">This room has no desktop. Turn on the desktop extension for it under About this room.</string>
+    <string name="panels_desktop_starting">Starting the desktop…</string>
+    <string name="panels_desktop_intro">This is the room\'s own desktop. Watch the assistant use its apps, or take over: tap to click, and type below into the window you tapped.</string>
+    <string name="panels_desktop_watching">%1$s is using the desktop; you are watching.</string>
+    <string name="panels_desktop_start_app">Start %1$s</string>
+    <string name="panels_desktop_drag_selects">Dragging selects and moves things.</string>
+    <string name="panels_desktop_drag_scrolls">Dragging scrolls.</string>
+    <string name="panels_desktop_drag_to_select">Drag to select</string>
+    <string name="panels_desktop_working">The assistant: %1$s</string>
+    <string name="panels_desktop_waiting">Waiting for the screen…</string>
+    <string name="panels_desktop_screen">The room\'s desktop</string>
+    <string name="panels_desktop_type">Type into the desktop</string>
+
+    <!-- The terminal. -->
+    <string name="panels_terminal">Terminal</string>
+    <string name="panels_terminal_off">No terminal here. Turn on the terminal extension for this room under About this room.</string>
+    <string name="panels_terminal_empty">No commands yet. The ones the assistant runs here show up as they run.</string>
+    <string name="panels_terminal_waiting">Waiting for approval</string>
+    <string name="panels_terminal_running">Running…</string>
+    <string name="panels_terminal_exit">Exit %1$d</string>
+    <string name="panels_terminal_failed">Failed</string>
+    <string name="panels_terminal_stopped">Stopped</string>
+    <string name="panels_terminal_denied">Denied</string>
+    <string name="panels_terminal_denied_by">by %1$s</string>
+    <string name="panels_terminal_approved_by">approved by %1$s</string>
+
+    <!-- Connectors. -->
+    <string name="panels_connectors">Connectors</string>
+    <string name="panels_connectors_off">No connectors here. Turn on the connectors extension for this room under About this room.</string>
+    <string name="panels_connectors_intro">APIs this room\'s assistant can call. Ask it in the chat to add one, and say what for. Turn on Always use first to have it try one before anything else for those tasks. API keys go here only: the assistant never sees them.</string>
+    <string name="panels_connectors_empty">No connectors yet.</string>
+    <string name="panels_connector_remove_text">The assistant can\'t call it any more, and its API key is forgotten.</string>
+    <string name="panels_connector_shared">Shared with every room</string>
+    <string name="panels_connector_actions">Connector actions</string>
+    <string name="panels_connector_unshare">Stop sharing with every room</string>
+    <string name="panels_connector_share">Share with every room</string>
+    <string name="panels_connector_used_first">Used first for: %1$s</string>
+    <string name="panels_connector_learned">Learned: %1$s</string>
+    <string name="panels_connector_use_for">Use it for</string>
+    <string name="panels_connector_always_first">Always use first</string>
+    <string name="panels_connector_always_first_hint">Tried before browsing or answering from memory, for what it\'s for</string>
+    <!-- %1$s is where the key goes (header, query), %2$s its name. -->
+    <string name="panels_connector_key_set">API key (%1$s %2$s): set</string>
+    <string name="panels_connector_key_not_set">API key (%1$s %2$s): not set</string>
+    <string name="panels_connector_replace_key">Replace the key</string>
+    <string name="panels_connector_paste_key">Paste the key</string>
+    <string name="panels_connector_save_key">Save key</string>
+    <string name="panels_connector_local">Local network</string>
+    <string name="panels_connector_local_hint">May reach this machine and the local network, such as Home Assistant or a NAS</string>
+    <string name="panels_connector_read_paths_hint">Calls that only read, though not GET: one METHOD /path per line, such as POST /graphql. They run without asking.</string>
+    <string name="panels_connector_save_read_paths">Save read paths</string>
+
+    <!-- MCP servers. -->
+    <string name="panels_mcp">MCP servers</string>
+    <string name="panels_mcp_off">No MCP servers here. Turn on the mcp extension for this room under About this room.</string>
+    <string name="panels_mcp_intro">MCP servers this room\'s assistant can use. Ask it in the chat to add one. Keys and sign-ins go here only: the assistant never sees them.</string>
+    <string name="panels_mcp_empty">No MCP servers yet.</string>
+    <string name="panels_mcp_remove_text">The assistant can\'t use it any more, and its keys and sign-in are forgotten.</string>
+    <string name="panels_mcp_actions">Server actions</string>
+    <string name="panels_mcp_added_by">Added by %1$s</string>
+    <plurals name="panels_mcp_tools">
+        <item quantity="one">%d tool</item>
+        <item quantity="other">%d tools</item>
+    </plurals>
+    <string name="panels_mcp_signed_in">Signed in.</string>
+    <string name="panels_mcp_not_signed_in">Not signed in. Servers that need it ask for it.</string>
+    <string name="panels_mcp_sign_in">Sign in</string>
+    <string name="panels_mcp_sign_in_again">Sign in again</string>
+    <string name="panels_mcp_sign_out">Sign out</string>
+    <string name="panels_mcp_approval">Approval</string>
+    <string name="panels_mcp_ask_writes">Ask before calls that change something</string>
+    <string name="panels_mcp_ask_always">Ask before every call</string>
+    <string name="panels_mcp_ask_never">Never ask</string>
+    <string name="panels_mcp_try_again">Try again</string>
+    <string name="panels_mcp_header_set">Header %1$s: set</string>
+    <string name="panels_mcp_header_not_set">Header %1$s: not set</string>
+    <string name="panels_mcp_variable_set">Variable %1$s: set</string>
+    <string name="panels_mcp_variable_not_set">Variable %1$s: not set</string>
+    <string name="panels_mcp_replace">Replace it</string>
+    <string name="panels_mcp_paste">Paste it</string>
+    <string name="panels_mcp_paste_without">Paste it (without \"%1$s\")</string>
+
+    <!-- Extensions. -->
+    <string name="panels_extensions">Extensions</string>
+    <string name="panels_extensions_no_setup">This server can\'t set up extensions from the app. Run it with nudge serve.</string>
+    <string name="panels_extensions_saved">Saved and installed.</string>
+    <string name="panels_extensions_intro">What the assistant can do beyond talking. Saving installs them again right away and writes them to the server\'s nudge.json; if one fails to start, nothing changes. Each room can still turn them on or off for itself.</string>
+    <string name="panels_extensions_added">Added</string>
+    <string name="panels_extensions_available">Not added yet</string>
+    <string name="panels_extensions_failed">Couldn\'t load it: %1$s</string>
+    <string name="panels_extensions_needs_env">Needs %1$s in the server\'s environment, or the value in its settings, before it can start.</string>
+    <string name="panels_extensions_hide_settings">Hide settings</string>
+    <string name="panels_extensions_settings">Settings</string>
+    <string name="panels_extensions_rooms">Rooms</string>
+    <string name="panels_extensions_on_by_default">On by default in</string>
+    <string name="panels_extensions_kind_lobby">Everyone</string>
+    <string name="panels_extensions_kind_personal">Personal</string>
+    <string name="panels_extensions_kind_shared">Shared</string>
+    <string name="panels_extensions_rooms_hint">People in a room can still turn it on or off there.</string>
+</resources>

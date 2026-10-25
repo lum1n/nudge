@@ -60,6 +60,18 @@ export {
   requestApproval,
 } from "./approvals/approvals.ts";
 export { consequentialLabel } from "./approvals/consequential.ts";
+export {
+  ATTACHMENT_MAX_BYTES,
+  type AttachmentInfo,
+  AttachmentNotFound,
+  type AttachmentRecord,
+  AttachmentRefused,
+  AttachmentRemoved,
+  Attachments,
+  ATTACHMENTS_PER_MESSAGE,
+  type AttachmentUpload,
+  MODEL_IMAGE_MAX_BYTES,
+} from "./attachments/attachments.ts";
 export { type Change, type ChangeListener, Changes } from "./changes.ts";
 export { type RawConfig, readRawConfig, writeRawConfig } from "./config-file.ts";
 export {

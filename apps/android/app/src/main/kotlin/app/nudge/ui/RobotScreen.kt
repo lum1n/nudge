@@ -1,5 +1,6 @@
 package app.nudge.ui
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -44,9 +45,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
+import app.nudge.R
 import app.nudge.Session
 import app.nudge.avatar.Accessory
 import app.nudge.avatar.Avatar
@@ -69,6 +72,32 @@ private val SWATCHES = listOf(
 )
 
 private val HEX = Regex("^#[0-9a-fA-F]{6}$")
+
+/** What each look to start from is called here; the names key them on the server and in [PRESETS]. */
+private val PRESET_NAMES = mapOf(
+    "Nudge" to R.string.setup_robot_preset_nudge,
+    "Ember" to R.string.setup_robot_preset_ember,
+    "Moss" to R.string.setup_robot_preset_moss,
+    "Grape" to R.string.setup_robot_preset_grape,
+    "Graphite" to R.string.setup_robot_preset_graphite,
+)
+
+@StringRes
+private fun eyeShapeLabel(shape: EyeShape): Int = when (shape) {
+    EyeShape.PILL -> R.string.setup_robot_eyes_pill
+    EyeShape.ROUND -> R.string.setup_robot_eyes_round
+    EyeShape.SQUARE -> R.string.setup_robot_eyes_square
+    EyeShape.WIDE -> R.string.setup_robot_eyes_wide
+}
+
+@StringRes
+private fun accessoryLabel(accessory: Accessory): Int = when (accessory) {
+    Accessory.NONE -> R.string.setup_robot_wears_none
+    Accessory.ANTENNA -> R.string.setup_robot_wears_antenna
+    Accessory.HEADPHONES -> R.string.setup_robot_wears_headphones
+    Accessory.SPROUT -> R.string.setup_robot_wears_sprout
+    Accessory.CROWN -> R.string.setup_robot_wears_crown
+}
 
 /**
  * How the assistant's robot looks to everyone who uses it, in every app, set by an admin. Room
@@ -106,8 +135,8 @@ fun RobotScreen(session: Session, close: () -> Unit) {
         topBar = {
             TopAppBar(
                 colors = groupedTopBarColors(),
-                title = { Text("Robot") },
-                navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                title = { Text(stringResource(R.string.setup_robot)) },
+                navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.setup_back)) } },
             )
         },
         bottomBar = {
@@ -119,16 +148,16 @@ fun RobotScreen(session: Session, close: () -> Unit) {
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Text(
-                            problem ?: "Unsaved changes",
+                            problem ?: stringResource(R.string.setup_robot_unsaved),
                             Modifier.weight(1f),
                             color = if (problem != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                         )
                         if (dirty) {
                             OutlinedButton(onClick = { draft = null }, enabled = !saving, shapes = ButtonDefaults.shapes()) {
-                                Text("Discard")
+                                Text(stringResource(R.string.setup_robot_discard))
                             }
                             Button(onClick = { save(look) }, enabled = !saving, shapes = ButtonDefaults.shapes()) {
-                                Text(if (saving) "Saving…" else "Save")
+                                Text(stringResource(if (saving) R.string.setup_robot_saving else R.string.setup_robot_save))
                             }
                         }
                     }
@@ -145,13 +174,13 @@ fun RobotScreen(session: Session, close: () -> Unit) {
                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                     Avatar(Mood.IDLE, appearance = look, size = 160.dp)
                     Text(
-                        "How the assistant looks to everyone who uses it, in every app.",
+                        stringResource(R.string.setup_robot_intro),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
-            item { Section("Start from") }
+            item { Section(stringResource(R.string.setup_robot_start_from)) }
             item {
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     PRESETS.forEach { (name, preset) ->
@@ -160,27 +189,27 @@ fun RobotScreen(session: Session, close: () -> Unit) {
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Portrait(appearance = preset, size = 52.dp)
-                            Text(name, style = MaterialTheme.typography.labelMedium)
+                            Text(PRESET_NAMES[name]?.let { stringResource(it) } ?: name, style = MaterialTheme.typography.labelMedium)
                         }
                     }
                 }
             }
-            item { Section("Colours") }
-            item { ColourRow("Ribbon", look.body.first) { draft = look.copy(body = it to look.body.second) } }
-            item { ColourRow("Ribbon end", look.body.second) { draft = look.copy(body = look.body.first to it) } }
-            item { ColourRow("Eyes", look.eyes) { draft = look.copy(eyes = it) } }
-            item { ColourRow("Sparks", look.sparks) { draft = look.copy(sparks = it) } }
-            item { Section("Eyes") }
+            item { Section(stringResource(R.string.setup_robot_colours)) }
+            item { ColourRow(stringResource(R.string.setup_robot_ribbon), look.body.first) { draft = look.copy(body = it to look.body.second) } }
+            item { ColourRow(stringResource(R.string.setup_robot_ribbon_end), look.body.second) { draft = look.copy(body = look.body.first to it) } }
+            item { ColourRow(stringResource(R.string.setup_robot_eyes), look.eyes) { draft = look.copy(eyes = it) } }
+            item { ColourRow(stringResource(R.string.setup_robot_sparks), look.sparks) { draft = look.copy(sparks = it) } }
+            item { Section(stringResource(R.string.setup_robot_eyes)) }
             item {
-                Choices(EyeShape.entries, look.eyeShape) { draft = look.copy(eyeShape = it) }
+                Choices(EyeShape.entries, look.eyeShape, ::eyeShapeLabel) { draft = look.copy(eyeShape = it) }
             }
-            item { Section("Wears") }
+            item { Section(stringResource(R.string.setup_robot_wears)) }
             item {
-                Choices(Accessory.entries, look.accessory) { draft = look.copy(accessory = it) }
+                Choices(Accessory.entries, look.accessory, ::accessoryLabel) { draft = look.copy(accessory = it) }
             }
             if (chosen && !dirty) {
                 item {
-                    TextButton(onClick = { save(null) }, enabled = !saving) { Text("Back to the app icon's") }
+                    TextButton(onClick = { save(null) }, enabled = !saving) { Text(stringResource(R.string.setup_robot_reset)) }
                 }
             }
         }
@@ -188,13 +217,13 @@ fun RobotScreen(session: Session, close: () -> Unit) {
 }
 
 @Composable
-private fun <T : Enum<T>> Choices(options: List<T>, chosen: T, pick: (T) -> Unit) {
+private fun <T : Enum<T>> Choices(options: List<T>, chosen: T, label: (T) -> Int, pick: (T) -> Unit) {
     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         options.forEach { option ->
             FilterChip(
                 selected = option == chosen,
                 onClick = { pick(option) },
-                label = { Text(option.name.lowercase().replaceFirstChar { it.uppercase() }) },
+                label = { Text(stringResource(label(option))) },
             )
         }
     }

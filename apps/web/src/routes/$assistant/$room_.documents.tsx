@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { type ChangeEvent, useEffect, useState } from "react";
 import { forgetToken } from "../../api.ts";
 import { base64, type DocumentInfo, save, useDocuments } from "../../documents.ts";
+import { dateLocale, m } from "../../i18n/index.ts";
 
 export const Route = createFileRoute("/$assistant/$room_/documents")({ component: Documents });
 
@@ -45,32 +46,30 @@ function Documents() {
   return (
     <section className="mx-auto flex max-w-3xl flex-col gap-3 p-3 sm:p-4">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-        <h2 className="text-lg font-medium">Documents</h2>
+        <h2 className="text-lg font-medium">{m.panels.documents.title}</h2>
         <Link
           to="/$assistant/$room"
           params={{ assistant, room }}
           className="text-sm text-stone-600 hover:underline"
         >
-          Back to the room
+          {m.panels.backToRoom}
         </Link>
       </div>
-      <p className="text-sm text-stone-600">
-        Receipts, warranties, contracts and letters for this room. Their text is read here, on the
-        host, so the assistant can search them; the files are stored encrypted. Images are kept but
-        not read.
-      </p>
+      <p className="text-sm text-stone-600">{m.panels.documents.intro}</p>
       {state.status === "closed" ? (
         <p className="text-red-700">
           {state.closeCode === NOT_FOUND
-            ? "This assistant has no documents extension here, or you are not in this room."
-            : `Disconnected${state.error ? `: ${state.error}` : ""}.`}
+            ? m.panels.documents.notFound
+            : m.panels.disconnected(state.error)}
         </p>
       ) : socket === undefined || state.view === undefined ? (
-        <p className="text-stone-500">Connecting…</p>
+        <p className="text-stone-500">{m.panels.connecting}</p>
       ) : (
         <>
           <label className="flex cursor-pointer items-center gap-3 self-start rounded bg-stone-900 px-3 py-1 text-sm text-white">
-            {uploading === undefined ? "Upload" : `Uploading ${uploading}…`}
+            {uploading === undefined
+              ? m.panels.documents.upload
+              : m.panels.documents.uploading(uploading)}
             <input
               type="file"
               multiple
@@ -82,7 +81,7 @@ function Documents() {
           </label>
           {state.error ? <p className="text-sm text-red-700">{state.error}</p> : null}
           {state.view.length === 0 ? (
-            <p className="text-stone-500">No documents yet.</p>
+            <p className="text-stone-500">{m.panels.documents.empty}</p>
           ) : (
             <ul className="divide-y divide-stone-200 rounded border border-stone-200 bg-white">
               {state.view.map((document) => (
@@ -95,20 +94,20 @@ function Documents() {
                     {document.name}
                   </button>
                   <span className="text-xs text-stone-500">
-                    {document.pages === undefined ? "" : `${document.pages} pages · `}
+                    {document.pages === undefined ? "" : m.panels.documents.pages(document.pages)}
                     {Math.max(1, Math.round(document.size / 1024))} kB · {document.addedBy} ·{" "}
-                    {new Date(document.addedAt).toLocaleDateString()}
+                    {new Date(document.addedAt).toLocaleDateString(dateLocale())}
                     {document.note === undefined ? "" : ` · ${document.note}`}
                   </span>
                   <button
                     type="button"
                     onClick={() => {
-                      if (confirm(`Delete ${document.name}?`))
+                      if (confirm(m.panels.documents.confirmDelete(document.name)))
                         socket.send({ type: "remove", id: document.id });
                     }}
                     className="ml-auto text-xs text-stone-400 hover:text-red-700"
                   >
-                    Delete
+                    {m.panels.documents.delete}
                   </button>
                 </li>
               ))}

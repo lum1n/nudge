@@ -19,6 +19,7 @@ import {
 import type {
   Appearance,
   Approval,
+  Attachment,
   Fact,
   RoomListNudge,
   RoomListEntry,
@@ -316,6 +317,7 @@ function entryItem(id: string, entry: EntryRecord): TimelineItem {
         ...(data.clientId === undefined ? {} : { clientId: data.clientId }),
         ...(data.requestId === undefined ? {} : { requestId: data.requestId }),
         ...privately(entry),
+        ...attachmentsOf(data),
       };
     }
     case FIRE_ENTRY: {
@@ -358,6 +360,20 @@ function privateToOf(entry: {
     return owner === undefined ? undefined : { id: owner.playerId, displayName: owner.displayName };
   }
   return undefined;
+}
+
+/** A message's attachments, as the protocol shows them. */
+function attachmentsOf(data: MessageEntryData): { attachments?: Attachment[] } {
+  if (data.attachments === undefined || data.attachments.length === 0) return {};
+  return {
+    attachments: data.attachments.map(({ id, name, mime, size, kind }) => ({
+      id,
+      name,
+      mime,
+      size,
+      kind,
+    })),
+  };
 }
 
 /** What an answer to this entry answers, when it isn't a message: a fired nudge or a watch. */
@@ -471,6 +487,7 @@ function queued(item: InboxItem): QueuedMessage[] {
         ...(data.requestId === undefined ? {} : { requestId: data.requestId }),
         nudge: false,
         ...privately(entry),
+        ...attachmentsOf(data),
       },
     ];
   }
@@ -540,6 +557,7 @@ export function toRoom(room: CoreRoom, players: (id: string) => CorePlayer | und
       const player = players(id);
       return player === undefined ? [] : [toPlayer(player)];
     }),
+    ...(room.imagesToModel === true ? { imagesToModel: true } : {}),
   };
 }
 

@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Rooms, a room's timeline and composer, its info, lists and documents, and dictation. -->
+<resources>
+    <!-- Shared by several screens. -->
+    <string name="room_ok">OK</string>
+    <string name="room_cancel">Cancel</string>
+    <string name="room_close">Close</string>
+    <string name="room_done">Done</string>
+    <string name="room_try_again">Try again</string>
+    <string name="room_name">Name</string>
+    <string name="room_remove">Remove</string>
+    <string name="room_download">Download</string>
+    <string name="room_delete">Delete</string>
+
+    <!-- The room. -->
+    <string name="room_answering">Answering…</string>
+    <string name="room_just_you">Just you</string>
+    <string name="room_location_you">you</string>
+    <string name="room_location_and">" and "</string>
+    <string name="room_location_is">" · 📍 knows where %1$s is"</string>
+    <string name="room_location_are">" · 📍 knows where %1$s are"</string>
+    <string name="room_rooms">Rooms</string>
+    <string name="room_activity">Activity</string>
+    <string name="room_lists">Lists</string>
+    <string name="room_room">Room</string>
+    <string name="room_left">You left this room</string>
+    <string name="room_no_such_room">No such room</string>
+    <string name="room_problem_title">Something went wrong</string>
+    <string name="room_say_hello">Say hello to %1$s.</string>
+    <string name="room_queued_next">next</string>
+    <string name="room_queued">queued</string>
+    <string name="room_load_earlier">Load earlier</string>
+    <string name="room_activity_empty">Nothing yet: tool calls, nudges, watches and approvals show up here.</string>
+    <string name="room_private_on">Private: only you see it and the answer</string>
+    <string name="room_send_privately">Send privately</string>
+    <string name="room_private_message">Private message</string>
+    <string name="room_message">Message</string>
+    <string name="room_stop">Stop</string>
+    <string name="room_send">Send</string>
+    <string name="room_retrying">Trying again (%1$s): %2$s</string>
+    <string name="room_compacting">Summarizing the conversation so far…</string>
+    <string name="room_compaction_failed">Couldn\'t summarize: %1$s</string>
+
+    <!-- The timeline and the activity. -->
+    <string name="room_sent_private">%1$s sent a private message</string>
+    <string name="room_you">You</string>
+    <string name="room_someone">Someone</string>
+    <string name="room_answering_privately">Answering %1$s privately…</string>
+    <string name="room_answered_privately">Answered %1$s privately</string>
+    <string name="room_marker_compacted">Earlier messages summarized</string>
+    <string name="room_marker_cleared">Conversation started over</string>
+    <string name="room_only_you_spoken">only you</string>
+    <string name="room_nudge">Nudge</string>
+    <string name="room_watch">Watch</string>
+    <string name="room_today">Today</string>
+    <string name="room_yesterday">Yesterday</string>
+    <string name="room_sending">Sending…</string>
+    <string name="room_waiting">Waiting for the connection</string>
+    <string name="room_not_sent">Not sent: %1$s</string>
+    <string name="room_retry">Retry</string>
+    <string name="room_dismiss">Dismiss</string>
+    <string name="room_nudge_for">A nudge for %1$s</string>
+    <string name="room_approval_for_ended">An approval for %1$s ended</string>
+    <string name="room_thinking">Thinking</string>
+    <string name="room_open_browser_login">Open the room\'s browser to log in</string>
+    <string name="room_working">Working…</string>
+    <string name="room_stopped">Stopped</string>
+    <string name="room_couldnt_answer">Couldn\'t answer</string>
+    <string name="room_tool_running">Running</string>
+    <string name="room_tool_failed">Failed</string>
+    <string name="room_tool_done">Done</string>
+    <string name="room_needs_approval">Needs approval</string>
+    <string name="room_approval">Approval</string>
+    <string name="room_approve">Approve</string>
+    <string name="room_deny">Deny</string>
+    <string name="room_approved">Approved</string>
+    <string name="room_approved_by">Approved by %1$s</string>
+    <string name="room_denied">Denied</string>
+    <string name="room_denied_by">Denied by %1$s</string>
+    <string name="room_approved_done">Approved, done</string>
+    <string name="room_approved_by_done">Approved by %1$s, done</string>
+    <string name="room_approved_failed">Approved, but it failed</string>
+    <string name="room_approved_by_failed">Approved by %1$s, but it failed</string>
+    <string name="room_only_you">Only you</string>
+    <!-- In place of a value the server hid from this person. -->
+    <string name="room_hidden">" hidden "</string>
+
+    <!-- The list of rooms. -->
+    <string name="room_settings">Settings</string>
+    <string name="room_new_room">New room</string>
+    <string name="room_my_room">My room</string>
+    <string name="room_my_room_at">My room at %1$s</string>
+    <string name="room_new_shared_room">New shared room</string>
+    <string name="room_new_shared_room_at">New shared room at %1$s</string>
+    <string name="room_no_rooms">No rooms yet.</string>
+    <string name="room_couldnt_open">Couldn\'t open the room</string>
+    <string name="room_signed_out_here">Signed out here. Joining again from home…</string>
+    <string name="room_offline">Offline · reconnecting</string>
+    <string name="room_reconnecting">Reconnecting…</string>
+    <string name="room_disconnected">Disconnected (%1$s)</string>
+    <string name="room_actions">Room actions</string>
+    <string name="room_kind_personal">Personal room</string>
+    <string name="room_kind_shared">Shared room</string>
+    <string name="room_kind_lobby">Lobby</string>
+    <string name="room_rename">Rename</string>
+    <string name="room_create">Create</string>
+    <string name="room_rename_title">Rename room</string>
+    <string name="room_pick">Pick a room</string>
+
+    <!-- About this room. -->
+    <string name="room_info_title">About this room</string>
+    <string name="room_info_documents">Documents</string>
+    <string name="room_info_connectors">Connectors</string>
+    <string name="room_info_mcp">MCP servers</string>
+    <string name="room_info_browser">Browser</string>
+    <string name="room_info_desktop">Desktop</string>
+    <string name="room_info_terminal">Terminal</string>
+    <string name="room_info_in_this_room">In this room</string>
+    <string name="room_info_members">Members</string>
+    <string name="room_info_memory">Memory</string>
+    <string name="room_info_fact_owner">%1$s\'s own</string>
+    <string name="room_info_fact_by">Added by %1$s</string>
+    <string name="room_info_forget">Forget</string>
+    <string name="room_info_remember">Remember in this room…</string>
+    <string name="room_info_location">Location</string>
+    <string name="room_info_location_profile">Turn on Share where I am in your profile to change it.</string>
+    <string name="room_info_location_known">The assistant knows where you are here</string>
+    <string name="room_info_location_not_shared">Not shared</string>
+    <string name="room_info_location_explain">Anyone here can then ask about what is near you. Everyone sees that you share it; the place stays hidden from them and the model.</string>
+    <string name="room_info_location_explain_not_yet">Anyone here can then ask about what is near you. Everyone sees that you share it; the place stays hidden from them and the model. Your devices haven\'t shared where you are yet.</string>
+    <string name="room_info_location_share">Let the assistant know where I am here</string>
+    <string name="room_info_nudges">Nudges</string>
+    <string name="room_info_extensions">Extensions</string>
+    <string name="room_info_model_saw">What the model saw</string>
+    <string name="room_info_role_system">System</string>
+    <string name="room_info_role_user">Messages</string>
+    <string name="room_info_role_assistant">Assistant</string>
+    <string name="room_info_role_tool">Tool result</string>
+    <string name="room_info_show">Show</string>
+
+    <!-- Signed in: links, invites and web sign-in. -->
+    <string name="room_signed_out_device">This device was signed out. Ask for a new pairing code.</string>
+    <string name="room_link_title">Sign in with link?</string>
+    <string name="room_link_body">To use the link for %1$s on %2$s, this device signs out of %3$s first.</string>
+    <string name="room_sign_out">Sign out</string>
+    <string name="room_join_title">Join %1$s?</string>
+    <string name="room_join_body">%1$s, your home, tells %2$s on %3$s who you are: your name, picture, time zone and language. Its rooms show up beside your own.</string>
+    <string name="room_join">Join</string>
+    <string name="room_web_sign_in_title">Sign in on the web?</string>
+    <string name="room_web_signed_in">Signed in</string>
+    <string name="room_web_signed_in_body">The browser is signed in to %1$s as you.</string>
+    <string name="room_web_sign_in_body">The browser that shows this code on %1$s gets signed in as you. Only go on if you opened that page yourself.</string>
+    <string name="room_sign_in">Sign in</string>
+
+    <!-- Dictation and speech languages. -->
+    <string name="room_speech_mic_needed">Nudge needs the microphone to hear you. Allow it in the phone\'s settings.</string>
+    <string name="room_speech_unavailable">This phone has no speech recognition.</string>
+    <string name="room_speech_stop">Stop dictating</string>
+    <string name="room_speech_dictate">Dictate</string>
+    <string name="room_speech_online_title">Use the phone\'s speech service?</string>
+    <string name="room_speech_online_language">This phone can\'t recognize %1$s on its own, so your voice would go to its speech service (usually Google) to be written out. Nudge hides personal details from the assistant\'s model, but can\'t do that for your voice.</string>
+    <string name="room_speech_online">This phone can\'t recognize speech on its own, so your voice would go to its speech service (usually Google) to be written out. Nudge hides personal details from the assistant\'s model, but can\'t do that for your voice.</string>
+    <string name="room_speech_use_it">Use it</string>
+    <string name="room_speech_not_now">Not now</string>
+    <string name="room_speech_title">Speech</string>
+    <string name="room_speech_back">Back</string>
+    <string name="room_speech_languages">Languages you speak</string>
+    <string name="room_speech_move_up">Move up</string>
+    <string name="room_speech_add">Add a language</string>
+    <string name="room_speech_detects">The phone hears which of these you speak, and can switch between them as you talk.</string>
+    <string name="room_speech_tap">Tap the language next to the mic to switch between them.</string>
+    <string name="room_speech_off_phone">Off the phone</string>
+    <string name="room_speech_online_explain">For languages this phone can\'t recognize on its own, its speech service (usually Google) hears your voice instead.</string>
+    <string name="room_speech_use_service">Use the phone\'s speech service</string>
+    <string name="room_speech_pack_service">Through the phone\'s speech service</string>
+    <string name="room_speech_pack_installed">On this phone</string>
+    <string name="room_speech_pack_downloading">Downloading…</string>
+    <string name="room_speech_pack_downloadable">Not downloaded yet</string>
+    <string name="room_speech_pack_missing">Not on this phone: only through its speech service</string>
+    <string name="room_speech_pack_maybe">On this phone, if the phone has it</string>
+
+    <!-- Lists. -->
+    <string name="room_lists_off">No lists here. Turn on the lists extension for this room under About this room.</string>
+    <string name="room_lists_add_to">Add to %1$s…</string>
+    <string name="room_lists_new">New list</string>
+    <string name="room_lists_first_item">First item</string>
+    <string name="room_lists_actions">List actions</string>
+    <string name="room_lists_clear_done">Clear done</string>
+    <string name="room_lists_delete">Delete list</string>
+
+    <!-- Documents. -->
+    <string name="room_documents_title">Documents</string>
+    <string name="room_documents_couldnt_save">Couldn\'t save %1$s: %2$s</string>
+    <string name="room_documents_couldnt_read">Couldn\'t read %1$s</string>
+    <string name="room_documents_uploading">Uploading %1$s…</string>
+    <string name="room_documents_upload">Upload</string>
+    <string name="room_documents_off">No documents here. Turn on the documents extension for this room under About this room.</string>
+    <string name="room_documents_delete_title">Delete %1$s?</string>
+    <string name="room_documents_delete_body">It goes for everyone in the room, and the assistant can\'t read it any more.</string>
+    <string name="room_documents_about">Receipts, warranties, contracts and letters for this room. Their text is read on the server, so the assistant can search them; the files are stored encrypted. Images are kept but not read.</string>
+    <string name="room_documents_find">Find by name</string>
+    <string name="room_documents_none">No documents yet.</string>
+    <plurals name="room_documents_pages">
+        <item quantity="one">%d page</item>
+        <item quantity="other">%d pages</item>
+    </plurals>
+</resources>

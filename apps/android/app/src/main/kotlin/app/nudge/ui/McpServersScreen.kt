@@ -46,6 +46,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -55,6 +57,7 @@ import app.nudge.McpKey
 import app.nudge.McpServer
 import app.nudge.McpServersState
 import app.nudge.ObservedMcpServers
+import app.nudge.R
 import app.nudge.observeMcpServers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -63,9 +66,9 @@ import nudge.ffi.PanelStatus
 
 /** Which calls wait for a person's approval, as the extension names them. */
 private val APPROVALS = listOf(
-    "writes" to "Ask before calls that change something",
-    "always" to "Ask before every call",
-    "never" to "Never ask",
+    "writes" to R.string.panels_mcp_ask_writes,
+    "always" to R.string.panels_mcp_ask_always,
+    "never" to R.string.panels_mcp_ask_never,
 )
 
 /**
@@ -91,8 +94,8 @@ fun McpServersScreen(client: NudgeClient, roomId: String, server: String, close:
         topBar = {
             TopAppBar(
                 colors = groupedTopBarColors(),
-                title = { Text("MCP servers") },
-                navigationIcon = { IconButton(onClick = close) { Icon(Icons.Outlined.Close, "Close") } },
+                title = { Text(stringResource(R.string.panels_mcp)) },
+                navigationIcon = { IconButton(onClick = close) { Icon(Icons.Outlined.Close, stringResource(R.string.panels_close)) } },
             )
         },
     ) { padding ->
@@ -102,7 +105,7 @@ fun McpServersScreen(client: NudgeClient, roomId: String, server: String, close:
             val panel = servers
             when {
                 status is PanelStatus.Closed && status.code.toInt() == 4404 -> Text(
-                    "No MCP servers here. Turn on the mcp extension for this room under About this room.",
+                    stringResource(R.string.panels_mcp_off),
                     Modifier.align(Alignment.Center).padding(32.dp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -114,8 +117,7 @@ fun McpServersScreen(client: NudgeClient, roomId: String, server: String, close:
                 ) {
                     item {
                         Text(
-                            "MCP servers this room's assistant can use. Ask it in the chat to add one. Keys and sign-ins " +
-                                "go here only: the assistant never sees them.",
+                            stringResource(R.string.panels_mcp_intro),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -123,7 +125,7 @@ fun McpServersScreen(client: NudgeClient, roomId: String, server: String, close:
                     }
                     state.error?.let { item { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 16.dp)) } }
                     if (all.isEmpty()) {
-                        item { Text("No MCP servers yet.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(16.dp)) }
+                        item { Text(stringResource(R.string.panels_mcp_empty), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(16.dp)) }
                     }
                     items(all, key = { it.id }) { mcp ->
                         McpServerCard(mcp, panel, server, remove = { removing = mcp })
@@ -137,15 +139,15 @@ fun McpServersScreen(client: NudgeClient, roomId: String, server: String, close:
         AlertDialog(
             onDismissRequest = { removing = null },
             icon = { Icon(Icons.Outlined.Delete, null) },
-            title = { Text("Remove ${mcp.name}?") },
-            text = { Text("The assistant can't use it any more, and its keys and sign-in are forgotten.") },
+            title = { Text(stringResource(R.string.panels_remove_title, mcp.name)) },
+            text = { Text(stringResource(R.string.panels_mcp_remove_text)) },
             confirmButton = {
                 TextButton(onClick = {
                     removing = null
                     servers?.remove(mcp)
-                }) { Text("Remove") }
+                }) { Text(stringResource(R.string.panels_remove)) }
             },
-            dismissButton = { TextButton(onClick = { removing = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { removing = null }) { Text(stringResource(R.string.panels_cancel)) } },
         )
     }
 }
@@ -171,9 +173,9 @@ private fun McpServerCard(mcp: McpServer, panel: ObservedMcpServers, base: Strin
                     )
                 }
                 Box {
-                    IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "Server actions") }
+                    IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, stringResource(R.string.panels_mcp_actions)) }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        DropdownMenuItem(text = { Text("Remove") }, onClick = {
+                        DropdownMenuItem(text = { Text(stringResource(R.string.panels_remove)) }, onClick = {
                             menu = false
                             remove()
                         })
@@ -182,7 +184,8 @@ private fun McpServerCard(mcp: McpServer, panel: ObservedMcpServers, base: Strin
             }
             Text(mcp.useFor)
             Text(
-                "Added by ${mcp.addedBy}" + (mcp.tools?.let { " · $it ${if (it == 1) "tool" else "tools"}" } ?: ""),
+                stringResource(R.string.panels_mcp_added_by, mcp.addedBy) +
+                    (mcp.tools?.let { " · " + pluralStringResource(R.plurals.panels_mcp_tools, it, it) } ?: ""),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -194,7 +197,7 @@ private fun McpServerCard(mcp: McpServer, panel: ObservedMcpServers, base: Strin
             // back to the Nudge server, not to the app.
             if (mcp.url != null && mcp.keys.isEmpty()) {
                 Text(
-                    if (mcp.signedIn) "Signed in." else "Not signed in. Servers that need it ask for it.",
+                    stringResource(if (mcp.signedIn) R.string.panels_mcp_signed_in else R.string.panels_mcp_not_signed_in),
                     style = MaterialTheme.typography.labelLarge,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -211,14 +214,14 @@ private fun McpServerCard(mcp: McpServer, panel: ObservedMcpServers, base: Strin
                         },
                         enabled = !signingIn,
                         shapes = ButtonDefaults.shapes(),
-                    ) { Text(if (mcp.signedIn) "Sign in again" else "Sign in") }
+                    ) { Text(stringResource(if (mcp.signedIn) R.string.panels_mcp_sign_in_again else R.string.panels_mcp_sign_in)) }
                     if (mcp.signedIn) {
-                        OutlinedButton(onClick = { panel.signOut(mcp) }, shapes = ButtonDefaults.shapes()) { Text("Sign out") }
+                        OutlinedButton(onClick = { panel.signOut(mcp) }, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.panels_mcp_sign_out)) }
                     }
                 }
             }
 
-            Text("Approval", style = MaterialTheme.typography.labelLarge)
+            Text(stringResource(R.string.panels_mcp_approval), style = MaterialTheme.typography.labelLarge)
             APPROVALS.forEach { (approval, label) ->
                 Row(
                     Modifier.fillMaxWidth().selectable(selected = mcp.approval == approval, onClick = {
@@ -227,10 +230,10 @@ private fun McpServerCard(mcp: McpServer, panel: ObservedMcpServers, base: Strin
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     RadioButton(selected = mcp.approval == approval, onClick = null)
-                    Text(label, Modifier.padding(start = 12.dp))
+                    Text(stringResource(label), Modifier.padding(start = 12.dp))
                 }
             }
-            OutlinedButton(onClick = { panel.refresh(mcp) }, shapes = ButtonDefaults.shapes()) { Text("Try again") }
+            OutlinedButton(onClick = { panel.refresh(mcp) }, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.panels_mcp_try_again)) }
         }
     }
 }
@@ -240,7 +243,15 @@ private fun McpServerCard(mcp: McpServer, panel: ObservedMcpServers, base: Strin
 private fun McpKeyForm(mcp: McpServer, key: McpKey, panel: ObservedMcpServers) {
     var value by remember(mcp.id, key.name) { mutableStateOf("") }
     Text(
-        "${if (key.placement == "header") "Header" else "Variable"} ${key.name}: ${if (key.set) "set" else "not set"}",
+        stringResource(
+            when {
+                key.placement == "header" && key.set -> R.string.panels_mcp_header_set
+                key.placement == "header" -> R.string.panels_mcp_header_not_set
+                key.set -> R.string.panels_mcp_variable_set
+                else -> R.string.panels_mcp_variable_not_set
+            },
+            key.name,
+        ),
         style = MaterialTheme.typography.labelLarge,
         color = if (key.set) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.tertiary,
     )
@@ -249,7 +260,14 @@ private fun McpKeyForm(mcp: McpServer, key: McpKey, panel: ObservedMcpServers) {
         value = value,
         onValueChange = { value = it },
         placeholder = {
-            Text(if (key.set) "Replace it" else "Paste it" + (key.prefix?.trim()?.takeIf { it.isNotEmpty() }?.let { " (without \"$it\")" } ?: ""))
+            val prefix = key.prefix?.trim()?.takeIf { it.isNotEmpty() }
+            Text(
+                when {
+                    key.set -> stringResource(R.string.panels_mcp_replace)
+                    prefix != null -> stringResource(R.string.panels_mcp_paste_without, prefix)
+                    else -> stringResource(R.string.panels_mcp_paste)
+                },
+            )
         },
         singleLine = true,
         visualTransformation = PasswordVisualTransformation(),
@@ -265,9 +283,9 @@ private fun McpKeyForm(mcp: McpServer, key: McpKey, panel: ObservedMcpServers) {
             },
             enabled = value.isNotBlank(),
             shapes = ButtonDefaults.shapes(),
-        ) { Text("Save") }
+        ) { Text(stringResource(R.string.panels_save)) }
         if (key.set) {
-            OutlinedButton(onClick = { panel.clearKey(mcp, key) }, shapes = ButtonDefaults.shapes()) { Text("Clear") }
+            OutlinedButton(onClick = { panel.clearKey(mcp, key) }, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.panels_clear)) }
         }
     }
 }

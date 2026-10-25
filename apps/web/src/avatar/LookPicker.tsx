@@ -1,3 +1,4 @@
+import { m } from "../i18n/index.ts";
 import { ACCESSORIES, type Appearance, EYE_SHAPES, PRESETS } from "./appearance.ts";
 
 /** The choices of a robot's look: a preset to start from, its colours, its eyes and what it wears. */
@@ -29,37 +30,43 @@ export function LookPicker({
                 background: `linear-gradient(135deg, ${preset.body[0]}, ${preset.body[1]})`,
               }}
             />
-            {name}
+            {m.setup.look.presets[name] ?? name}
           </button>
         ))}
       </div>
       <div className="grid grid-cols-2 gap-2 text-sm">
         <Colour
-          label="Ribbon"
+          label={m.setup.look.ribbon}
           value={look.body[0]}
           onChange={(c) => setLook({ ...look, body: [c, look.body[1]] })}
         />
         <Colour
-          label="Ribbon end"
+          label={m.setup.look.ribbonEnd}
           value={look.body[1]}
           onChange={(c) => setLook({ ...look, body: [look.body[0], c] })}
         />
-        <Colour label="Eyes" value={look.eyes} onChange={(c) => setLook({ ...look, eyes: c })} />
         <Colour
-          label="Sparks"
+          label={m.setup.look.eyeColour}
+          value={look.eyes}
+          onChange={(c) => setLook({ ...look, eyes: c })}
+        />
+        <Colour
+          label={m.setup.look.sparks}
           value={look.sparks}
           onChange={(c) => setLook({ ...look, sparks: c })}
         />
       </div>
       <Choice
-        label="Eyes"
+        label={m.setup.look.eyes}
         options={EYE_SHAPES}
+        name={(shape) => m.setup.look.eyeShapes[shape]}
         value={look.eyeShape}
         onChange={(eyeShape) => setLook({ ...look, eyeShape })}
       />
       <Choice
-        label="Wears"
+        label={m.setup.look.wears}
         options={ACCESSORIES}
+        name={(accessory) => m.setup.look.accessories[accessory]}
         value={look.accessory}
         onChange={(accessory) => setLook({ ...look, accessory })}
       />
@@ -96,11 +103,14 @@ function Colour({
 function Choice<T extends string>({
   label,
   options,
+  name,
   value,
   onChange,
 }: {
   label: string;
   options: readonly T[];
+  /** What an option is called. */
+  name: (option: T) => string;
   value: T;
   onChange: (value: T) => void;
 }) {
@@ -114,7 +124,7 @@ function Choice<T extends string>({
       >
         {options.map((option) => (
           <option key={option} value={option}>
-            {option}
+            {name(option)}
           </option>
         ))}
       </select>

@@ -29,6 +29,8 @@ export const Room = Type.Object({
   kind: RoomKind,
   name: Type.String(),
   members: Type.Array(Player),
+  /** The model gets the images people attach here as they are (ADR 24); off when absent. */
+  imagesToModel: Type.Optional(Type.Boolean()),
 });
 export type Room = Static<typeof Room>;
 
@@ -40,6 +42,28 @@ export const ApprovalStatus = Type.Union([
   Type.Literal("failed"),
 ]);
 export type ApprovalStatus = Static<typeof ApprovalStatus>;
+
+/** Largest attachment, in bytes. */
+export const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+/** Most attachments one message names. */
+export const ATTACHMENTS_PER_MESSAGE = 8;
+
+/**
+ * A file someone attached to a message (ADR 24). Its bytes come from
+ * `GET /rooms/<room>/attachments/<id>`.
+ */
+export const Attachment = Type.Object({
+  /** `a1`, `a2`, … within its room. */
+  id: Type.String(),
+  name: Type.String(),
+  /** Its media type, such as `image/jpeg`. */
+  mime: Type.String(),
+  /** In bytes. */
+  size: Type.Integer({ minimum: 0 }),
+  /** `image` for PNG, JPEG, GIF and WebP, which can reach the model; `file` for the rest. */
+  kind: Type.Union([Type.Literal("image"), Type.Literal("file")]),
+});
+export type Attachment = Static<typeof Attachment>;
 
 // The timeline: what a chat shows, oldest first.
 
@@ -81,6 +105,8 @@ export const TimelineItem = Type.Union([
     requestId: Type.Optional(Type.String()),
     /** A private message: only its author sees the text; everyone else gets it empty. */
     privateTo: Type.Optional(Player),
+    /** What it was sent with; left out for those a private message isn't for. */
+    attachments: Type.Optional(Type.Array(Attachment)),
   }),
   /** A scheduled nudge that fired; the assistant answers it like a message. */
   Type.Object({
@@ -158,6 +184,8 @@ export const QueuedMessage = Type.Object({
   nudge: Type.Boolean(),
   /** Only this player sees it; everyone else gets it emptied, so they know there was one. */
   privateTo: Type.Optional(Player),
+  /** As on a user item. */
+  attachments: Type.Optional(Type.Array(Attachment)),
 });
 export type QueuedMessage = Static<typeof QueuedMessage>;
 
@@ -453,6 +481,7 @@ export const WhenBusy = Type.Union([
 export type WhenBusy = Static<typeof WhenBusy>;
 
 export const MessageRequest = Type.Object({
+  /** May be empty when the message has attachments. */
   text: Type.String(),
   /** Chosen by the client; sending the same one again is answered with the same submission. */
   requestId: Type.String(),
@@ -460,8 +489,16 @@ export const MessageRequest = Type.Object({
   whenBusy: Type.Optional(WhenBusy),
   /** Only the sender sees the message and the answer to it; the room sees that there was one. */
   private: Type.Optional(Type.Boolean()),
+  /** Ids of attachments the sender uploaded to the room and hasn't sent yet. */
+  attachments: Type.Optional(
+    Type.Array(Type.String(), { maxItems: ATTACHMENTS_PER_MESSAGE, uniqueItems: true }),
+  ),
 });
 export type MessageRequest = Static<typeof MessageRequest>;
+
+/** Whether the model gets the images attached in a room as they are (ADR 24). */
+export const RoomImagesRequest = Type.Object({ allowed: Type.Boolean() });
+export type RoomImagesRequest = Static<typeof RoomImagesRequest>;
 
 export const MessageResponse = Type.Object({ submissionId: Type.Integer() });
 export type MessageResponse = Static<typeof MessageResponse>;

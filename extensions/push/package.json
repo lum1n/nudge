@@ -12,6 +12,11 @@
       "@nudge/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./senders": {
+      "@nudge/source": "./src/senders.ts",
+      "types": "./dist/senders.d.ts",
+      "default": "./dist/senders.js"
     }
   },
   "scripts": {

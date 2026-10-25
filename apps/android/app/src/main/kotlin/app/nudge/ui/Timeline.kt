@@ -43,6 +43,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -54,15 +56,16 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import app.nudge.R
 import app.nudge.avatar.LocalRobotLook
 import app.nudge.avatar.Portrait
+import app.nudge.text
 import java.text.DateFormat
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Date
-import java.util.Locale
 import nudge.client.needsLogin
 import nudge.ffi.AnswerStatus
 import nudge.ffi.ApprovalStatus
@@ -87,10 +90,10 @@ fun TimelineRow(item: TimelineItem, me: String?, assistant: String, openBrowser:
     when (item) {
         // Someone else's private message: the server sent it empty, so it is a line, not a bubble.
         is TimelineItem.User -> if (item.privateTo != null && item.text.isEmpty()) {
-            PrivateLine("${item.privateTo?.displayName} sent a private message")
+            PrivateLine(stringResource(R.string.room_sent_private, "${item.privateTo?.displayName}"))
         } else {
             val mine = item.author == null || item.author?.id == me
-            val sender = if (mine) "You" else item.author?.displayName ?: "Someone"
+            val sender = if (mine) stringResource(R.string.room_you) else item.author?.displayName ?: stringResource(R.string.room_someone)
             Column(
                 Modifier.fillMaxWidth().spokenAs(sender, item.text, item.sentAt, onlyYou = item.privateTo != null),
                 horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
@@ -106,15 +109,15 @@ fun TimelineRow(item: TimelineItem, me: String?, assistant: String, openBrowser:
                 AnswerCard(item, assistant, mine = true, openBrowser, openActivity)
             } else {
                 PrivateLine(
-                    if (item.status == AnswerStatus.RUNNING) "Answering ${owner.displayName} privately…"
-                    else "Answered ${owner.displayName} privately",
+                    if (item.status == AnswerStatus.RUNNING) stringResource(R.string.room_answering_privately, owner.displayName)
+                    else stringResource(R.string.room_answered_privately, owner.displayName),
                 )
             }
         }
         is TimelineItem.Marker -> Row(verticalAlignment = Alignment.CenterVertically) {
             HorizontalDivider(Modifier.weight(1f))
             Text(
-                if (item.kind == MarkerKind.COMPACTED) "Earlier messages summarized" else "Conversation started over",
+                stringResource(if (item.kind == MarkerKind.COMPACTED) R.string.room_marker_compacted else R.string.room_marker_cleared),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 8.dp),
@@ -128,11 +131,11 @@ fun TimelineRow(item: TimelineItem, me: String?, assistant: String, openBrowser:
  * A message as TalkBack reads it, in one go: who sent it, that only the reader sees it, what it
  * says and when.
  */
-private fun Modifier.spokenAs(sender: String, text: String, sentAt: Double?, onlyYou: Boolean) = clearAndSetSemantics {
+private fun Modifier.spokenAs(sender: String, said: String, sentAt: Double?, onlyYou: Boolean) = clearAndSetSemantics {
     contentDescription = listOfNotNull(
         sender,
-        if (onlyYou) "only you" else null,
-        withHidden(text).text.trim(),
+        if (onlyYou) text(R.string.room_only_you_spoken) else null,
+        withHidden(said).text.trim(),
         sentAt?.let(::timeOfDay),
     ).joinToString(", ")
 }
@@ -192,7 +195,7 @@ private fun PromptedChip(prompt: PromptedBy, color: Color, content: Color) {
                 null,
                 Modifier.size(14.dp),
             )
-            Text(if (prompt == PromptedBy.NUDGE) "Nudge" else "Watch", style = MaterialTheme.typography.labelMedium)
+            Text(stringResource(if (prompt == PromptedBy.NUDGE) R.string.room_nudge else R.string.room_watch), style = MaterialTheme.typography.labelMedium)
         }
     }
 }
@@ -205,13 +208,14 @@ fun timeOfDay(at: Double): String = DateFormat.getTimeInstance(DateFormat.SHORT)
 fun DayDivider(at: Double) {
     val day = Instant.ofEpochMilli(at.toLong()).atZone(ZoneId.systemDefault()).toLocalDate()
     val today = LocalDate.now()
+    val locale = LocalConfiguration.current.locales[0]
     val label = when (day) {
-        today -> "Today"
-        today.minusDays(1) -> "Yesterday"
+        today -> stringResource(R.string.room_today)
+        today.minusDays(1) -> stringResource(R.string.room_yesterday)
         else -> {
             val skeleton = if (day.year == today.year) "EEEEdMMMM" else "EEEEdMMMMy"
-            val pattern = android.text.format.DateFormat.getBestDateTimePattern(Locale.getDefault(), skeleton)
-            DateTimeFormatter.ofPattern(pattern).format(day)
+            val pattern = android.text.format.DateFormat.getBestDateTimePattern(locale, skeleton)
+            DateTimeFormatter.ofPattern(pattern, locale).format(day)
         }
     }
     Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -266,13 +270,13 @@ fun PendingRow(message: PendingMessage, retry: () -> Unit, dismiss: () -> Unit) 
         Bubble(message.text, mine = true, author = null, faded = true)
         val small = MaterialTheme.typography.labelSmall
         when (val state = message.state) {
-            is PendingState.Sending -> Text("Sending…", style = small, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            is PendingState.Sending -> Text(stringResource(R.string.room_sending), style = small, color = MaterialTheme.colorScheme.onSurfaceVariant)
             is PendingState.Waiting ->
-                Text("Waiting for the connection", style = small, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.room_waiting), style = small, color = MaterialTheme.colorScheme.onSurfaceVariant)
             is PendingState.Failed -> Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Not sent: ${state.error}", style = small, color = MaterialTheme.colorScheme.error)
-                TextButton(onClick = retry, shapes = ButtonDefaults.shapes()) { Text("Retry") }
-                TextButton(onClick = dismiss, shapes = ButtonDefaults.shapes()) { Text("Dismiss") }
+                Text(stringResource(R.string.room_not_sent, state.error), style = small, color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = retry, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.room_retry)) }
+                TextButton(onClick = dismiss, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.room_dismiss)) }
             }
         }
     }
@@ -284,13 +288,13 @@ fun PendingRow(message: PendingMessage, retry: () -> Unit, dismiss: () -> Unit) 
 fun ActivityRow(item: TimelineItem, openBrowser: () -> Unit) {
     when (item) {
         is TimelineItem.Nudge -> if (item.privateTo != null && item.text.isEmpty()) {
-            PrivateLine("A nudge for ${item.privateTo?.displayName}")
+            PrivateLine(stringResource(R.string.room_nudge_for, "${item.privateTo?.displayName}"))
         } else Surface(
             color = MaterialTheme.colorScheme.secondaryContainer,
             shape = MaterialTheme.shapes.large,
             modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {},
         ) { Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Icon(Icons.Outlined.NotificationsActive, "Nudge")
+            Icon(Icons.Outlined.NotificationsActive, stringResource(R.string.room_nudge))
             Column {
                 Text(withHidden(item.text))
                 Text(
@@ -300,7 +304,7 @@ fun ActivityRow(item: TimelineItem, openBrowser: () -> Unit) {
             }
         } }
         is TimelineItem.Approval -> if (item.privateTo != null && item.summary.isEmpty()) {
-            PrivateLine("An approval for ${item.privateTo?.displayName} ended")
+            PrivateLine(stringResource(R.string.room_approval_for_ended, "${item.privateTo?.displayName}"))
         } else {
             // Ended: nothing left to decide.
             ApprovalCard(item.summary, item.status, item.decidedBy) {}
@@ -321,7 +325,7 @@ private fun Answer(answer: TimelineItem.Answer, openBrowser: () -> Unit, openAct
         answer.parts.forEach { part ->
             when (part) {
                 is Part.Text -> SelectionContainer { Text(markdown(part.text)) }
-                is Part.Reasoning -> Expandable("Thinking") {
+                is Part.Reasoning -> Expandable(stringResource(R.string.room_thinking)) {
                     Text(part.text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 // The browser stopped for a login only a person can type.
@@ -329,7 +333,7 @@ private fun Answer(answer: TimelineItem.Answer, openBrowser: () -> Unit, openAct
                     Button(onClick = openBrowser, shapes = ButtonDefaults.shapes()) {
                         Icon(Icons.Outlined.Language, null, Modifier.size(ButtonDefaults.IconSize))
                         Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                        Text("Open the room's browser to log in")
+                        Text(stringResource(R.string.room_open_browser_login))
                     }
                 } else {
                     Tool(part.tool)
@@ -345,14 +349,14 @@ private fun Answer(answer: TimelineItem.Answer, openBrowser: () -> Unit, openAct
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     LoadingIndicator(Modifier.size(32.dp))
-                    Text("Working…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.room_working), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             AnswerStatus.STOPPED ->
-                Text("Stopped", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.room_stopped), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             AnswerStatus.FAILED -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Icon(Icons.Outlined.ErrorOutline, null, tint = MaterialTheme.colorScheme.error)
-                Text(answer.error ?: "Couldn't answer", color = MaterialTheme.colorScheme.error)
+                Text(answer.error ?: stringResource(R.string.room_couldnt_answer), color = MaterialTheme.colorScheme.error)
             }
             AnswerStatus.DONE -> {}
         }
@@ -386,11 +390,13 @@ private fun Tool(tool: ToolPart) {
         Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 when (tool.status) {
-                    ToolStatus.PENDING, ToolStatus.RUNNING ->
-                        LoadingIndicator(Modifier.size(20.dp).semantics { contentDescription = "Running" })
+                    ToolStatus.PENDING, ToolStatus.RUNNING -> {
+                        val running = stringResource(R.string.room_tool_running)
+                        LoadingIndicator(Modifier.size(20.dp).semantics { contentDescription = running })
+                    }
                     ToolStatus.DONE -> Icon(
                         if (tool.isError == true) Icons.Outlined.ErrorOutline else Icons.Outlined.CheckCircle,
-                        if (tool.isError == true) "Failed" else "Done",
+                        stringResource(if (tool.isError == true) R.string.room_tool_failed else R.string.room_tool_done),
                         Modifier.size(16.dp),
                         tint = if (tool.isError == true) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                     )
@@ -443,7 +449,7 @@ fun ApprovalCard(summary: String, status: ApprovalStatus, decidedBy: String?, de
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.PanTool, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.tertiary)
                 Text(
-                    if (status == ApprovalStatus.PENDING) "Needs approval" else "Approval",
+                    stringResource(if (status == ApprovalStatus.PENDING) R.string.room_needs_approval else R.string.room_approval),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.tertiary,
                 )
@@ -454,20 +460,20 @@ fun ApprovalCard(summary: String, status: ApprovalStatus, decidedBy: String?, de
                     Button(onClick = { decide(true) }, shapes = ButtonDefaults.shapes()) {
                         Icon(Icons.Outlined.Check, null, Modifier.size(ButtonDefaults.IconSize))
                         Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                        Text("Approve")
+                        Text(stringResource(R.string.room_approve))
                     }
-                    OutlinedButton(onClick = { decide(false) }, shapes = ButtonDefaults.shapes()) { Text("Deny") }
+                    OutlinedButton(onClick = { decide(false) }, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.room_deny)) }
                 }
             } else {
-                val by = decidedBy?.let { " by $it" } ?: ""
+                // Ended, so never pending here; each said with and without who decided.
+                val (plain, named) = when (status) {
+                    ApprovalStatus.APPROVED -> R.string.room_approved to R.string.room_approved_by
+                    ApprovalStatus.DENIED -> R.string.room_denied to R.string.room_denied_by
+                    ApprovalStatus.DONE -> R.string.room_approved_done to R.string.room_approved_by_done
+                    ApprovalStatus.FAILED, ApprovalStatus.PENDING -> R.string.room_approved_failed to R.string.room_approved_by_failed
+                }
                 Text(
-                    when (status) {
-                        ApprovalStatus.APPROVED -> "Approved$by"
-                        ApprovalStatus.DENIED -> "Denied$by"
-                        ApprovalStatus.DONE -> "Approved$by, done"
-                        ApprovalStatus.FAILED -> "Approved$by, but it failed"
-                        ApprovalStatus.PENDING -> ""
-                    },
+                    decidedBy?.let { stringResource(named, it) } ?: stringResource(plain),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -494,7 +500,7 @@ private fun PrivateLine(text: String) {
 private fun OnlyYou() {
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Outlined.Lock, null, Modifier.size(12.dp), tint = MaterialTheme.colorScheme.tertiary)
-        Text("Only you", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
+        Text(stringResource(R.string.room_only_you), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
     }
 }
 
@@ -507,12 +513,15 @@ private val HIDDEN = SpanStyle(
     background = androidx.compose.ui.graphics.Color(0x33808080),
 )
 
+/** What stands in for a hidden value: " hidden ". */
+private fun hidden() = text(R.string.room_hidden)
+
 /** Text with each hidden value shown as "hidden". */
 fun withHidden(text: String): AnnotatedString = buildAnnotatedString {
     var last = 0
     for (match in PLACEHOLDER.findAll(text)) {
         append(text.substring(last, match.range.first))
-        withStyle(HIDDEN) { append(" hidden ") }
+        withStyle(HIDDEN) { append(hidden()) }
         last = match.range.last + 1
     }
     append(text.substring(last))
@@ -532,7 +541,7 @@ fun markdown(text: String): AnnotatedString = buildAnnotatedString {
     while (i < text.length) {
         val hidden = PLACEHOLDER.matchAt(text, i)
         if (hidden != null) {
-            withStyle(HIDDEN) { append(" hidden ") }
+            withStyle(HIDDEN) { append(hidden()) }
             i = hidden.range.last + 1
             continue
         }

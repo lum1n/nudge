@@ -11,6 +11,7 @@ import {
   setupInfo,
   setUpServer,
 } from "../api.ts";
+import { m } from "../i18n/index.ts";
 import { slugOf } from "../slug.ts";
 
 export const Route = createFileRoute("/setup")({ component: Setup });
@@ -66,7 +67,7 @@ function Setup() {
     } catch (caught) {
       setError(
         caught instanceof ApiError && caught.status === 410
-          ? "Setup closed: the server is set up already, or took too many wrong codes. Restart it for a new code."
+          ? m.setup.wizard.closed
           : (caught as Error).message,
       );
     } finally {
@@ -83,13 +84,17 @@ function Setup() {
   }
 
   if (info === undefined)
-    return <Page title="Set up Nudge">{error ? <Problem text={error} /> : <p>Loading…</p>}</Page>;
+    return (
+      <Page title={m.setup.wizard.title}>
+        {error ? <Problem text={error} /> : <p>{m.common.loading}</p>}
+      </Page>
+    );
   if (!info.open && step !== "done")
     return (
-      <Page title="Nudge is set up">
-        <p className="text-stone-700">This server is set up already.</p>
+      <Page title={m.setup.wizard.setUpTitle}>
+        <p className="text-stone-700">{m.setup.wizard.setUpAlready}</p>
         <Link to="/login" className="underline">
-          Sign in
+          {m.setup.wizard.signIn}
         </Link>
       </Page>
     );
@@ -97,7 +102,7 @@ function Setup() {
   switch (step) {
     case "code":
       return (
-        <Page title="Set up Nudge">
+        <Page title={m.setup.wizard.title}>
           <Form
             onSubmit={() =>
               run(async () => {
@@ -106,7 +111,7 @@ function Setup() {
               })
             }
           >
-            <Field label="Setup code" hint="The server printed it when it started.">
+            <Field label={m.setup.wizard.code} hint={m.setup.wizard.codeHint}>
               <input
                 value={code}
                 onChange={(event) => setCode(event.target.value)}
@@ -115,41 +120,41 @@ function Setup() {
                 className="rounded border border-stone-300 bg-white px-3 py-2 font-mono uppercase"
               />
             </Field>
-            <Submit busy={busy} disabled={code.trim() === ""} label="Continue" />
+            <Submit busy={busy} disabled={code.trim() === ""} label={m.setup.wizard.continue} />
             {error && <Problem text={error} />}
           </Form>
         </Page>
       );
     case "assistant":
       return (
-        <Page title="Name your assistant" back={() => setStep("code")}>
+        <Page title={m.setup.wizard.nameTitle} back={() => setStep("code")}>
           <Form onSubmit={() => setStep("model")}>
-            <Field label="Its name" hint="What it calls itself. You can change it later.">
+            <Field label={m.setup.wizard.name} hint={m.setup.wizard.nameHint}>
               <input
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 autoFocus
-                placeholder="Robin"
+                placeholder={m.setup.wizard.namePlaceholder}
                 className="rounded border border-stone-300 bg-white px-3 py-2"
               />
             </Field>
-            <Field
-              label="In its address"
-              hint="Part of every address of the people here, so this one stays."
-            >
+            <Field label={m.setup.wizard.slug} hint={m.setup.wizard.slugHint}>
               <input
                 value={assistant}
                 onChange={(event) => setSlug(slugOf(event.target.value))}
                 className="rounded border border-stone-300 bg-white px-3 py-2 font-mono"
               />
             </Field>
-            <Submit disabled={name.trim() === "" || assistant === ""} label="Continue" />
+            <Submit
+              disabled={name.trim() === "" || assistant === ""}
+              label={m.setup.wizard.continue}
+            />
           </Form>
         </Page>
       );
     case "model":
       return (
-        <Page title="Choose its model" back={() => setStep("assistant")}>
+        <Page title={m.setup.wizard.modelTitle} back={() => setStep("assistant")}>
           <Form
             onSubmit={() =>
               run(async () => {
@@ -162,14 +167,14 @@ function Setup() {
             }
           >
             <fieldset className="flex flex-col gap-2">
-              <legend className="mb-1 text-sm">Who runs the model</legend>
+              <legend className="mb-1 text-sm">{m.setup.wizard.whoRuns}</legend>
               {info.providers.map((p) => (
                 <Choice
                   key={p.id}
                   checked={provider === p.id}
                   onChange={() => chooseProvider(p.id)}
                   label={p.name}
-                  detail="With your own API key"
+                  detail={m.setup.wizard.ownKey}
                 />
               ))}
               {info.local.map((server) => (
@@ -178,12 +183,12 @@ function Setup() {
                   checked={provider === server.id}
                   onChange={() => chooseProvider(server.id)}
                   label={server.name}
-                  detail="Running on this machine; no key"
+                  detail={m.setup.wizard.local}
                 />
               ))}
             </fieldset>
             {(offered !== undefined || local !== undefined) && (
-              <Field label="Model">
+              <Field label={m.setup.wizard.model}>
                 <select
                   value={modelId}
                   onChange={(event) => setModelId(event.target.value)}
@@ -204,10 +209,10 @@ function Setup() {
             )}
             {offered !== undefined && (
               <Field
-                label="API key"
+                label={m.setup.wizard.key}
                 hint={
                   <>
-                    Kept encrypted on this server, never shown again.{" "}
+                    {m.setup.wizard.keyHint}{" "}
                     {KEY_PAGES[offered.id] && (
                       <a
                         href={KEY_PAGES[offered.id]}
@@ -215,7 +220,7 @@ function Setup() {
                         rel="noreferrer"
                         className="underline"
                       >
-                        Get one
+                        {m.setup.wizard.getKey}
                       </a>
                     )}
                   </>
@@ -240,7 +245,7 @@ function Setup() {
                 modelId === undefined ||
                 (local === undefined && key.trim() === "")
               }
-              label={busy ? "Trying the key…" : "Continue"}
+              label={busy ? m.setup.wizard.tryingKey : m.setup.wizard.continue}
             />
             {error && <Problem text={error} />}
           </Form>
@@ -248,7 +253,7 @@ function Setup() {
       );
     case "you":
       return (
-        <Page title="And you?" back={() => setStep("model")}>
+        <Page title={m.setup.wizard.youTitle} back={() => setStep("model")}>
           <Form
             onSubmit={() =>
               run(async () => {
@@ -268,8 +273,8 @@ function Setup() {
             }
           >
             <Field
-              label="Your name"
-              hint={`You will be ${name.trim() || "the assistant"}'s first person, its admin, and this server's owner.`}
+              label={m.setup.wizard.yourName}
+              hint={m.setup.wizard.yourNameHint(name.trim() || undefined)}
             >
               <input
                 value={you}
@@ -285,15 +290,12 @@ function Setup() {
                 onChange={(event) => setBackups(event.target.checked)}
                 className="mt-1"
               />
-              <span>
-                Back up every night, keeping two weeks, beside the data. Copy them somewhere else
-                too: a backup on the same disk won't survive the disk.
-              </span>
+              <span>{m.setup.wizard.backups}</span>
             </label>
             <Submit
               busy={busy}
               disabled={you.trim() === ""}
-              label={busy ? "Setting up…" : "Set up"}
+              label={busy ? m.setup.wizard.settingUp : m.setup.wizard.setUp}
             />
             {error && <Problem text={error} />}
           </Form>
@@ -344,13 +346,10 @@ function Done({
   }
 
   return (
-    <Page title={`${name} is ready`}>
+    <Page title={m.setup.done.title(name)}>
       <section className="flex flex-col gap-2">
-        <h2 className="font-medium">Your phone</h2>
-        <p className="text-sm text-stone-700">
-          Scan this with the Nudge app, or type the code {pairing?.code ?? "…"} in it. It works
-          once, for ten minutes.
-        </p>
+        <h2 className="font-medium">{m.setup.done.phone}</h2>
+        <p className="text-sm text-stone-700">{m.setup.done.scan(pairing?.code ?? "…")}</p>
         {pairing && (
           <div
             className="w-48 self-center"
@@ -360,15 +359,12 @@ function Done({
         )}
       </section>
       <section className="flex flex-col gap-2">
-        <h2 className="font-medium">Recovery kit</h2>
-        <p className="text-sm text-stone-700">
-          With it and a backup, everything here can be brought back. Keep it somewhere other than
-          this server, with the passphrase in your password manager.
-        </p>
+        <h2 className="font-medium">{m.setup.done.kit}</h2>
+        <p className="text-sm text-stone-700">{m.setup.done.kitIntro}</p>
         <form onSubmit={saveKit} className="flex flex-col gap-2">
           <input
             type="password"
-            placeholder="Passphrase, 8 characters or more"
+            placeholder={m.setup.done.passphrase}
             value={passphrase}
             onChange={(event) => setPassphrase(event.target.value)}
             autoComplete="new-password"
@@ -376,7 +372,7 @@ function Done({
           />
           <input
             type="password"
-            placeholder="The same again"
+            placeholder={m.setup.done.again}
             value={again}
             onChange={(event) => setAgain(event.target.value)}
             autoComplete="new-password"
@@ -384,7 +380,7 @@ function Done({
           />
           <Submit
             disabled={passphrase.length < 8 || passphrase !== again}
-            label={saved ? "Saved; save it again" : "Save the recovery kit"}
+            label={saved ? m.setup.done.savedKit : m.setup.done.saveKit}
           />
         </form>
       </section>
@@ -394,7 +390,7 @@ function Done({
         params={{ assistant }}
         className="rounded bg-stone-900 px-3 py-2 text-center text-white"
       >
-        Open {name}
+        {m.setup.done.open(name)}
       </Link>
     </Page>
   );
@@ -413,7 +409,7 @@ function Page({
     <main className="mx-auto flex max-w-sm flex-col gap-5 px-4 pt-16 pb-16">
       {back && (
         <button type="button" onClick={back} className="self-start text-sm text-stone-500">
-          ← Back
+          ← {m.common.back}
         </button>
       )}
       <h1 className="text-2xl font-semibold">{title}</h1>
