@@ -125,6 +125,8 @@ export type Room = {
   createdAt: number;
   /** Extensions turned on or off in this room, by name; the others follow the config. */
   extensions?: Record<string, boolean>;
+  /** People here let the model see the images they attach as they are (ADR 24). */
+  imagesToModel?: true;
 };
 
 export type DirectoryState = {
