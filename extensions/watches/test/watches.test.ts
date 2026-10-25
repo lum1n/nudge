@@ -24,7 +24,14 @@ import {
 } from "@nudge/core/testing";
 import { scriptsExtension } from "@nudge/ext-scripts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { parseFound, parseReport, remember, WatchesDoc, watchesExtension } from "../src/index.ts";
+import {
+  checkPrompt,
+  parseFound,
+  parseReport,
+  remember,
+  WatchesDoc,
+  watchesExtension,
+} from "../src/index.ts";
 
 const context = BACKGROUND_CONTEXT;
 const by = { playerId: "owner", displayName: "Vegard" };
@@ -181,6 +188,21 @@ describe("watches", () => {
       message: "Two new",
     });
     expect(remember(["a"], ["b", "a", "b"])).toEqual(["a", "b"]);
+  });
+
+  it("tells a check the keys earlier checks gave, so the same item keeps its key", () => {
+    const what = "Newest Claude Code on npm";
+    expect(checkPrompt({ what, seen: [] })).not.toContain("Keys earlier checks gave");
+    const prompt = checkPrompt({
+      what,
+      seen: ["2.1.309", "line\nbreak", "x".repeat(201), "2.1.310"],
+    });
+    expect(prompt).toContain(
+      'Keys earlier checks gave, newest last; give the same key for the same item: "2.1.309", "2.1.310"',
+    );
+    // Long or multi-line keys are left out, and nothing marks the check as having read outside text.
+    expect(prompt).not.toContain("break");
+    expect(prompt).not.toContain("untrusted-data");
   });
 });
 

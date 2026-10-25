@@ -431,6 +431,8 @@ export {
   UNTRUSTED_RULE,
   untrustedData,
   untrustedSources,
+  withoutPartialMarker,
+  withoutUntrustedMarkers,
 } from "./privacy/untrusted.ts";
 export { canRead, onlyReads, readsOnly } from "./extensions/reads.ts";
 export type { RedactedHistory };

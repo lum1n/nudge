@@ -28,6 +28,7 @@ import type { PiiDetector } from "../privacy/detectors.ts";
 import { DeepUnavailable } from "../privacy/deep/detector.ts";
 import { mapStrings, redactContext, rehydrateMessage } from "../privacy/redact.ts";
 import { withoutPlaceholders } from "../privacy/tool-values.ts";
+import { withoutUntrustedMarkers } from "../privacy/untrusted.ts";
 import { SpellingsSeen, type Vault, type VaultEntry } from "../privacy/vault.ts";
 import type { ModelFailure } from "./model-errors.ts";
 
@@ -410,13 +411,15 @@ export class RedactingModels implements Models {
           partial,
         };
       }
-      case "text_end":
-        shown.set(event.contentIndex, vault.rehydrate(event.content));
+      case "text_end": {
+        const content = withoutUntrustedMarkers(vault.rehydrate(event.content));
+        shown.set(event.contentIndex, content);
         return {
           ...event,
-          content: vault.rehydrate(event.content),
+          content,
           partial: rehydrateMessage(event.partial, vault, true),
         };
+      }
       case "toolcall_delta":
         return {
           ...event,

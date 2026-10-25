@@ -69,8 +69,17 @@ type TimerCheckpoint = {
   run?: number;
 };
 
-/** What the model is asked in a check; its reply is read, not shown. */
-export function checkPrompt(watch: Pick<Watch, "what">): string {
+/**
+ * What the model is asked in a check; its reply is read, not shown. Each check starts afresh, so
+ * it is given the keys earlier checks used, to name the same item the same way. They aren't
+ * marked as untrusted data, which would make every check ask before it calls out (ADR 20); short
+ * one-line keys, quoted, leave little room to say anything.
+ */
+export function checkPrompt(watch: Pick<Watch, "what" | "seen">): string {
+  const keys = watch.seen
+    .slice(-50)
+    .filter((key) => key.length <= 200 && !/[\r\n]/.test(key))
+    .map((key) => JSON.stringify(key));
   return [
     "This is a scheduled check for a watch, not a conversation: nobody reads this reply.",
     `The watch: ${watch.what}`,
@@ -78,9 +87,15 @@ export function checkPrompt(watch: Pick<Watch, "what">): string {
       "approvals, change anything or add watches.",
     'End your reply with only a JSON object: {"items":[{"key":"…","text":"…"}]}, listing ' +
       "everything that matches right now. `key` names an item the same way in every check (its " +
-      "URL or id); `text` is one short line about it. When the watch is a condition, such as a " +
-      "price above a limit, give one item while it holds, keyed by what it is about (like " +
-      '"price-above-2kr-2026-10-15"). Give {"items":[]} when nothing matches.',
+      'URL or id; a release by its version alone, like "2.1.310"); `text` is one short line ' +
+      "about it. When the watch is a condition, such as a price above a limit, give one item " +
+      'while it holds, keyed by what it is about (like "price-above-2kr-2026-10-15"). Give ' +
+      '{"items":[]} when nothing matches.',
+    ...(keys.length === 0
+      ? []
+      : [
+          `Keys earlier checks gave, newest last; give the same key for the same item: ${keys.join(", ")}`,
+        ]),
   ].join("\n");
 }
 
@@ -98,7 +113,7 @@ export function foundPrompt(watch: Pick<Watch, "id" | "what">, found: readonly F
         ...(found.length > 20 ? [`…and ${found.length - 20} more.`] : []),
       ].join("\n"),
     ),
-    "Tell the room about it now, in your own words. Nothing needs scheduling.",
+    "Tell the room about it now, in your own words, without the untrusted-data markers. Nothing needs scheduling.",
   ].join("\n");
 }
 
