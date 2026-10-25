@@ -96,6 +96,23 @@ export class Rooms {
     return room;
   }
 
+  /** Lets the model see the images attached in the room, or stops it (ADR 24). */
+  async setImagesToModel(id: string, allowed: boolean, context: Context): Promise<Room> {
+    const room = await this.harness.commit(async (tx) => {
+      const room = (await tx.doc(DirectoryDoc)).rooms[id];
+      if (room === undefined) throw new Error(`No room "${id}"`);
+      if (allowed) room.imagesToModel = true;
+      else delete room.imagesToModel;
+      return {
+        ...room,
+        members: [...room.members],
+        ...(room.extensions === undefined ? {} : { extensions: { ...room.extensions } }),
+      };
+    }, context);
+    this.changed({ kind: "rooms" });
+    return room;
+  }
+
   /** Records the lobby, the root conversation, in the directory. */
   async adoptLobby(conversationId: ConversationId, context: Context): Promise<void> {
     if ((await this.get(LOBBY, context)) !== undefined) return;

@@ -75,6 +75,7 @@ export type ExtensionAssistant = Pick<
   | "rooms"
   | "memory"
   | "approvals"
+  | "attachments"
   | "changes"
   // Which extensions are on, and in which rooms.
   | "extensions"

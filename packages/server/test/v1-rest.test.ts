@@ -2,6 +2,8 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
 import {
+  ATTACHMENT_MAX_BYTES as CORE_ATTACHMENT_MAX_BYTES,
+  ATTACHMENTS_PER_MESSAGE as CORE_ATTACHMENTS_PER_MESSAGE,
   ConfigError,
   createNudge,
   defineNudgeExtension,
@@ -13,6 +15,9 @@ import {
   AdminPlayer,
   AppearanceResponse,
   type AssistantsResponse,
+  Attachment,
+  ATTACHMENT_MAX_BYTES,
+  ATTACHMENTS_PER_MESSAGE,
   CLOSE,
   ErrorResponse,
   ExtensionSetupsResponse,
@@ -36,7 +41,7 @@ import {
   TokensResponse,
   UsageResponse,
 } from "@nudge/protocol";
-import { RoomProjector, TIMELINE_LIMIT } from "@nudge/protocol/project";
+import { RoomProjector, TIMELINE_LIMIT, Viewer } from "@nudge/protocol/project";
 import type { TSchema } from "typebox";
 import { Value } from "typebox/value";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -375,6 +380,109 @@ describe("v1 HTTP", () => {
       status: 204,
       json: undefined,
     });
+  });
+
+  it("uploads, sends, serves and removes attachments, and asks before images reach the model", async () => {
+    const png = Buffer.from("89504e470d0a1a0a0000000d49484452", "hex");
+    const upload = (token: string, name: string, type: string, body: Uint8Array) =>
+      fetch(`${server.url}/v1/a/robin/rooms/trip/attachments?name=${encodeURIComponent(name)}`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": type },
+        body,
+      });
+    const download = (token: string, id: string) =>
+      fetch(`${server.url}/v1/a/robin/rooms/trip/attachments/${id}`, {
+        headers: { authorization: `Bearer ${token}` },
+      });
+    expect(ATTACHMENT_MAX_BYTES).toBe(CORE_ATTACHMENT_MAX_BYTES);
+    expect(ATTACHMENTS_PER_MESSAGE).toBe(CORE_ATTACHMENTS_PER_MESSAGE);
+
+    const image = await upload(tokens.Ann!, "photo.png", "image/png", png);
+    expect(image.status).toBe(201);
+    const attachment = (await image.json()) as unknown;
+    expect(Value.Check(Attachment, attachment)).toBe(true);
+    expect(attachment).toMatchObject({ id: "a1", kind: "image", size: png.length });
+    const page = await upload(tokens.Ann!, "page.html", "text/html", Buffer.from("<script>"));
+    expect(((await page.json()) as { id: string }).id).toBe("a2");
+    // Over the limit, and from someone not in the room.
+    expect(
+      (await upload(tokens.Ann!, "big", "image/png", new Uint8Array(ATTACHMENT_MAX_BYTES + 1)))
+        .status,
+    ).toBe(413);
+    expect((await upload(tokens.Cy!, "x.png", "image/png", png)).status).toBe(404);
+    // Unsent, it is its uploader's alone.
+    expect((await download(tokens.Bo!, "a1")).status).toBe(404);
+
+    const sent = await call("POST", "/rooms/trip/messages", {
+      token: tokens.Ann,
+      body: { text: "", requestId: "r1", attachments: ["a1", "a2"] },
+    });
+    expect(sent.status).toBe(202);
+    expect(
+      await call("POST", "/rooms/trip/messages", {
+        token: tokens.Bo,
+        body: { text: "mine now", requestId: "r2", attachments: ["a1"] },
+      }),
+    ).toMatchObject({ status: 404 });
+    await nudge.harness.waitForIdle(context);
+
+    const shown = await download(tokens.Bo!, "a1");
+    expect(shown.status).toBe(200);
+    expect(shown.headers.get("content-type")).toBe("image/png");
+    expect(shown.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(shown.headers.get("content-disposition")).toBe("inline; filename*=UTF-8''photo.png");
+    expect(Buffer.from(await shown.arrayBuffer())).toEqual(png);
+    const file = await download(tokens.Bo!, "a2");
+    expect(file.headers.get("content-type")).toBe("application/octet-stream");
+    expect(file.headers.get("content-disposition")).toMatch(/^attachment;/);
+    expect(file.headers.get("content-security-policy")).toContain("sandbox");
+
+    const watch = await nudge.watchRoom("trip", context);
+    const projected = new RoomProjector().project({
+      room: { id: "trip", kind: "shared", name: "Trip", members: [] },
+      view: watch.value,
+      approvals: [],
+      memory: [],
+      nudges: [],
+    });
+    await watch.stop();
+    const message = projected.timeline.find((item) => item.type === "user");
+    expect(message).toMatchObject({
+      text: "",
+      attachments: [
+        { id: "a1", name: "photo.png", kind: "image" },
+        { id: "a2", name: "page.html", kind: "file" },
+      ],
+    });
+
+    const room = await call("PUT", "/rooms/trip/images", {
+      token: tokens.Bo,
+      body: { allowed: true },
+      schema: Room,
+    });
+    expect(room.json.imagesToModel).toBe(true);
+    expect(
+      await call("PUT", "/rooms/trip/images", { token: tokens.Cy, body: { allowed: true } }),
+    ).toMatchObject({ status: 404 });
+
+    const remove = (token: string, id: string) =>
+      fetch(`${server.url}/v1/a/robin/rooms/trip/attachments/${id}`, {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${token}` },
+      });
+    expect((await remove(tokens.Bo!, "a1")).status).toBe(400);
+    expect((await remove(tokens.Ann!, "a1")).status).toBe(204);
+    expect((await download(tokens.Bo!, "a1")).status).toBe(410);
+
+    // A private message's attachments are its author's, like its text.
+    const secret: TimelineItem = {
+      ...message!,
+      privateTo: { id: "ann", displayName: "Ann" },
+    } as TimelineItem;
+    expect(new Viewer("bo", (text) => text).timeline([secret])[0]).not.toHaveProperty(
+      "attachments",
+    );
+    expect(new Viewer("ann", (text) => text).timeline([secret])[0]).toHaveProperty("attachments");
   });
 
   it("refuses a message once the budget is spent, with a code that says so", async () => {

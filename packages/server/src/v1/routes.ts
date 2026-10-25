@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { LogFields, ModelErrors, Nudge } from "@nudge/core";
-import { CLOSE, type HealthResponse } from "@nudge/protocol";
+import { ATTACHMENT_MAX_BYTES, CLOSE, type HealthResponse } from "@nudge/protocol";
 import { type Context as HonoContext, Hono } from "hono";
 import type { UpgradeWebSocket } from "hono/ws";
 import { Connection, type ConnectionOptions } from "./connection.ts";
@@ -72,10 +72,15 @@ export function v1Routes(options: V1Options): Hono {
   app.use("/setup", limits.attempts);
   app.use("/setup/*", limits.attempts);
   app.use("/sign-in", limits.attempts);
-  // Extension routes check their own limits, which may be larger.
+  // Extension routes check their own limits, which may be larger; an attachment is a file.
   const restBody = limitBody(MAX_REST_BODY);
+  const attachmentBody = limitBody(ATTACHMENT_MAX_BYTES);
   app.use(async (c, next) =>
-    /\/a\/[^/]+\/ext(\/|$)/.test(c.req.path) ? next() : restBody(c, next),
+    /\/a\/[^/]+\/ext(\/|$)/.test(c.req.path)
+      ? next()
+      : /\/a\/[^/]+\/rooms\/[^/]+\/attachments\/?$/.test(c.req.path)
+        ? attachmentBody(c, next)
+        : restBody(c, next),
   );
 
   // A new epoch per app, so clients that reconnect after a restart know to subscribe again.

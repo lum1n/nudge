@@ -31,4 +31,4 @@ More:
 
 `extensions/ner` adds names the lists don't have, such as relatives' (`extraNames`). `extensions/contacts` hides the whole names, e-mail addresses and phone numbers in your address books ([Contacts](../README.md#contacts), [ADR 16](adr/0016-contacts-are-known-private-values.md)).
 
-Display names of players are always protected. Images are passed through unchanged. Extensions keep their own data (connector notes, browser site notes, uploaded documents) as they stored it.
+Display names of players are always protected. Images are passed through unchanged. That is why images people attach to messages reach the model only in a room where people turned `imagesToModel` on; elsewhere the model gets only a line naming each attachment ([ADR 24](adr/0024-attachments-in-chat.md)). Extensions keep their own data (connector notes, browser site notes, uploaded documents) as they stored it.
