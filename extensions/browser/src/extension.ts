@@ -1,16 +1,21 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Context } from "@earendil-works/chord";
-import type { Api, Model, Models, ThinkingLevel } from "@earendil-works/pi-ai";
-import { defineDoc, type Tx } from "@earendil-works/pi-durable";
 import {
+  type Api,
   type Approval,
+  type Context,
+  defineDoc,
   defineNudgeExtension,
   defineTool,
+  type Model,
+  type Models,
   requestApproval,
   returnsUntrusted,
   roomOf,
+  type SessionDocToken,
+  type ThinkingLevel,
+  type Tx,
   Type,
 } from "@nudge/core";
 import {
@@ -37,7 +42,7 @@ type SiteNotesState = { rooms: Record<string, Record<string, SiteNote>> };
  * Version 1 kept one set of notes shared by every room. Nothing tells which room a shared note came
  * from, so the move to version 2 drops them; rooms write fresh ones on their next visits.
  */
-export const SiteNotesDoc = defineDoc<SiteNotesState>({
+export const SiteNotesDoc: SessionDocToken<SiteNotesState> = defineDoc({
   kind: "browser.sites",
   version: 2,
   scope: "session",

@@ -1,6 +1,10 @@
-import type { Context } from "@earendil-works/chord";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { ExtensionDocuments, RoomSocketHandler, SecretStore } from "@nudge/core";
+import {
+  BACKGROUND_CONTEXT,
+  type Context,
+  type ExtensionDocuments,
+  type RoomSocketHandler,
+  type SecretStore,
+} from "@nudge/core";
 import {
   type Connector,
   ConnectorsDoc,

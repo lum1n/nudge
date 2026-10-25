@@ -1,5 +1,9 @@
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { ExtensionDocuments, RoomSocketHandler, SecretStore } from "@nudge/core";
+import {
+  BACKGROUND_CONTEXT,
+  type ExtensionDocuments,
+  type RoomSocketHandler,
+  type SecretStore,
+} from "@nudge/core";
 import type { OAuthLogins } from "./oauth.ts";
 import { keySecret, PANEL, type RoomServers } from "./room-servers.ts";
 import {

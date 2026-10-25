@@ -1,10 +1,9 @@
 import { constants } from "node:fs";
 import { access, mkdir } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import type { Models } from "@earendil-works/pi-ai";
 import {
-  type BackupSettings,
   backupRemoteDir,
+  type BackupSettings,
   buildModels,
   builtinDetectors,
   checkExtensions,
@@ -19,6 +18,7 @@ import {
   loadConfig,
   LOCAL_MODEL,
   localModelDir,
+  type Models,
   openLocalModel,
   RemoteBackups,
   ServerKeys,

@@ -1,7 +1,5 @@
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { createModels } from "@earendil-works/pi-ai/models";
-import { fauxProvider } from "@earendil-works/pi-ai/providers/faux";
-import { createNudge } from "@nudge/core";
+import { BACKGROUND_CONTEXT, createNudge } from "@nudge/core";
+import { createModels, fauxProvider } from "@nudge/core/testing";
 import { describe, expect, it } from "vitest";
 import { nerExtension } from "../src/index.ts";
 

@@ -1,23 +1,21 @@
-import type { Context } from "@earendil-works/chord";
 import {
+  type Context,
   type Conversation,
   type ConversationId,
-  defineTask,
-  type DocumentReader,
-  type TaskId,
-  type TaskRuntime,
-} from "@earendil-works/pi-durable";
-import {
-  defineNudgeExtension,
   currentTurn,
+  defineNudgeExtension,
+  defineTask,
   defineTool,
   DirectoryDoc,
+  type DocumentReader,
   type ExtensionHost,
   FIRE_ENTRY,
-  keepsPlaceholders,
   type FireEntryData,
+  keepsPlaceholders,
   roomOf,
   section,
+  type TaskId,
+  type TaskRuntime,
   Type,
   untrustedData,
 } from "@nudge/core";

@@ -1,13 +1,11 @@
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { Context as ModelContext } from "@earendil-works/pi-ai";
-import { createModels } from "@earendil-works/pi-ai/models";
+import { BACKGROUND_CONTEXT, createNudge, LOBBY, type ModelContext, type Nudge } from "@nudge/core";
 import {
+  createModels,
   fauxAssistantMessage,
   fauxProvider,
   fauxText,
   fauxToolCall,
-} from "@earendil-works/pi-ai/providers/faux";
-import { createNudge, LOBBY, type Nudge } from "@nudge/core";
+} from "@nudge/core/testing";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   type Contact,

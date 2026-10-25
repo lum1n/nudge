@@ -1,27 +1,27 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { Context as ModelContext } from "@earendil-works/pi-ai";
-import { createModels } from "@earendil-works/pi-ai/models";
 import {
-  fauxAssistantMessage,
-  fauxProvider,
-  fauxText,
-  fauxToolCall,
-} from "@earendil-works/pi-ai/providers/faux";
-import type { JsonObject } from "@earendil-works/pi-durable";
-import {
+  BACKGROUND_CONTEXT,
   createNudge,
   defineNudgeExtension,
   defineTool,
+  type JsonObject,
   LOBBY,
+  type ModelContext,
   type Nudge,
   readsOnly,
   type RoomEvent,
   roomOf,
   Type,
 } from "@nudge/core";
+import {
+  createModels,
+  fauxAssistantMessage,
+  fauxProvider,
+  fauxText,
+  fauxToolCall,
+} from "@nudge/core/testing";
 import { scriptsExtension } from "@nudge/ext-scripts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parseFound, parseReport, remember, WatchesDoc, watchesExtension } from "../src/index.ts";

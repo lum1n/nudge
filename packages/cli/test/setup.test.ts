@@ -2,8 +2,8 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
+  BACKGROUND_CONTEXT,
   backupKey,
   DEFAULT_MODEL,
   loadConfig,

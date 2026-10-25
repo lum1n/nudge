@@ -1,13 +1,19 @@
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { Context as ModelContext } from "@earendil-works/pi-ai";
-import { createModels } from "@earendil-works/pi-ai/models";
 import {
+  BACKGROUND_CONTEXT,
+  createNudge,
+  type Geo,
+  type ModelContext,
+  type Nudge,
+  type Player,
+  type RoomEvent,
+} from "@nudge/core";
+import {
+  createModels,
   fauxAssistantMessage,
   fauxProvider,
   fauxText,
   fauxToolCall,
-} from "@earendil-works/pi-ai/providers/faux";
-import { createNudge, type Geo, type Nudge, type Player, type RoomEvent } from "@nudge/core";
+} from "@nudge/core/testing";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createPlacesExtension, kindOf, nameOf, PlacesDoc } from "../src/index.ts";
 

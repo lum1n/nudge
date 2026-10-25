@@ -1,10 +1,15 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { createModels } from "@earendil-works/pi-ai/models";
-import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
-import { createNudge, LOBBY, loadConfig, type Nudge, openAssistant } from "@nudge/core";
+import {
+  BACKGROUND_CONTEXT,
+  createNudge,
+  loadConfig,
+  LOBBY,
+  type Nudge,
+  openAssistant,
+} from "@nudge/core";
+import { createModels, fauxAssistantMessage, fauxProvider } from "@nudge/core/testing";
 import type { RoomView } from "@nudge/protocol";
 import { type RunningServer, serveNudge } from "@nudge/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

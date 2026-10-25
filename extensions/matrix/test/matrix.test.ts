@@ -1,8 +1,5 @@
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { Context as ModelContext } from "@earendil-works/pi-ai";
-import { createModels } from "@earendil-works/pi-ai/models";
-import { fauxAssistantMessage, fauxProvider, fauxText } from "@earendil-works/pi-ai/providers/faux";
-import { createNudge, type Nudge } from "@nudge/core";
+import { BACKGROUND_CONTEXT, createNudge, type ModelContext, type Nudge } from "@nudge/core";
+import { createModels, fauxAssistantMessage, fauxProvider, fauxText } from "@nudge/core/testing";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { matrixExtension, type SyncResponse } from "../src/index.ts";
 

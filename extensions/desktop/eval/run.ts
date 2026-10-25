@@ -8,8 +8,7 @@
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import type { Api, Model, ThinkingLevel } from "@earendil-works/pi-ai";
-import { builtinModels } from "@earendil-works/pi-ai/providers/all";
+import { type Api, builtinModels, type Model, type ThinkingLevel } from "@nudge/core";
 // The browser eval's report: the leak check and the table are the same for both.
 import { findLeaks, type RunRecord, summaryTable } from "../../browser/eval/report.ts";
 // Not ../src/index.ts: that pulls in @nudge/core's source, which plain Node cannot strip.

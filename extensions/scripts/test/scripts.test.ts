@@ -1,22 +1,22 @@
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { JsonObject } from "@earendil-works/pi-durable";
-import type { Context as ModelContext } from "@earendil-works/pi-ai";
-import { createModels } from "@earendil-works/pi-ai/models";
 import {
-  fauxAssistantMessage,
-  fauxProvider,
-  fauxText,
-  fauxToolCall,
-} from "@earendil-works/pi-ai/providers/faux";
-import {
+  BACKGROUND_CONTEXT,
   createNudge,
   defineNudgeExtension,
   defineTool,
+  type JsonObject,
   LOBBY,
+  type ModelContext,
   type Nudge,
   readsOnly,
   Type,
 } from "@nudge/core";
+import {
+  createModels,
+  fauxAssistantMessage,
+  fauxProvider,
+  fauxText,
+  fauxToolCall,
+} from "@nudge/core/testing";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ScriptsDoc, scriptsExtension, withArgs } from "../src/index.ts";
 

@@ -1,26 +1,26 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { Context as ModelContext } from "@earendil-works/pi-ai";
-import { createModels } from "@earendil-works/pi-ai/models";
 import {
-  fauxAssistantMessage,
-  fauxProvider,
-  fauxText,
-  fauxToolCall,
-} from "@earendil-works/pi-ai/providers/faux";
-import {
+  BACKGROUND_CONTEXT,
   createNudge,
   defineNudgeExtension,
   defineTool,
   LOBBY,
+  type ModelContext,
   type Nudge,
   requestApproval,
-  roomOf,
   type RoomEvent,
+  roomOf,
   Type,
 } from "@nudge/core";
+import {
+  createModels,
+  fauxAssistantMessage,
+  fauxProvider,
+  fauxText,
+  fauxToolCall,
+} from "@nudge/core/testing";
 import { federationExtension } from "@nudge/ext-federation";
 import { createApp } from "@nudge/server";
 import type { Hono } from "hono";

@@ -1,4 +1,4 @@
-import { defineDocFamily, type Tx } from "@earendil-works/pi-durable";
+import { defineDocFamily, type SessionDocFamilyToken, type Tx } from "@nudge/core";
 
 /** A header or variable a person gives the value of on the room's MCP panel, never the model. */
 export type ServerKey = {
@@ -41,7 +41,7 @@ export type RoomServersState = {
 };
 
 /** The MCP servers people added to a room, keyed by room id. */
-export const RoomServersDoc = defineDocFamily<RoomServersState, null>({
+export const RoomServersDoc: SessionDocFamilyToken<RoomServersState, null> = defineDocFamily({
   kind: "nudge.mcp.servers",
   version: 1,
   scope: "session",

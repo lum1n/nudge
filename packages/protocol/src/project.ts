@@ -1,23 +1,21 @@
-import type {
-  ConversationView,
-  EntryRecord,
-  InboxItem,
-  InboxState,
-  LiveState,
-  ToolSlot,
-} from "@earendil-works/pi-durable";
-import type {
-  ApprovalEntryData,
-  Approval as CoreApproval,
-  FactPerson,
-  RoomFact as CoreRoomFact,
-  FireEntryData,
-  MessageEntryData,
-  Player as CorePlayer,
-  Room as CoreRoom,
-  ScheduledNudge,
+import {
+  addressOf,
+  type Approval as CoreApproval,
+  type ApprovalEntryData,
+  type ConversationView,
+  type EntryRecord,
+  type FactPerson,
+  type FireEntryData,
+  type InboxItem,
+  type InboxState,
+  type LiveState,
+  type MessageEntryData,
+  type Player as CorePlayer,
+  type Room as CoreRoom,
+  type RoomFact as CoreRoomFact,
+  type ScheduledNudge,
+  type ToolSlot,
 } from "@nudge/core";
-import { addressOf } from "@nudge/core";
 import type {
   Appearance,
   Approval,

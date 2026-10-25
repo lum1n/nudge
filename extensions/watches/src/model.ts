@@ -1,4 +1,4 @@
-import { defineDocFamily } from "@earendil-works/pi-durable";
+import { defineDocFamily, type SessionDocFamilyToken } from "@nudge/core";
 
 // Stored in a document, so plain JSON.
 export type Watch = {
@@ -31,7 +31,7 @@ export type Watch = {
 export type WatchesState = { items: Watch[]; next: number };
 
 /** A room's watches, keyed by room id. */
-export const WatchesDoc = defineDocFamily<WatchesState, null>({
+export const WatchesDoc: SessionDocFamilyToken<WatchesState, null> = defineDocFamily({
   kind: "watches.list",
   version: 1,
   scope: "session",

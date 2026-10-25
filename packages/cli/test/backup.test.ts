@@ -6,8 +6,13 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { databaseEncryption, LOBBY, loadConfig, openAssistant } from "@nudge/core";
+import {
+  BACKGROUND_CONTEXT,
+  databaseEncryption,
+  loadConfig,
+  LOBBY,
+  openAssistant,
+} from "@nudge/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { main } from "../src/cli.ts";
 import { backup, backupControl, restore } from "../src/commands/backup.ts";

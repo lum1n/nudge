@@ -22,8 +22,6 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@earendil-works/chord": "1.2.0",
-    "@earendil-works/pi-durable": "1.2.0",
     "@hono/node-server": "2.1.5",
     "@nudge/core": "workspace:*",
     "@nudge/protocol": "workspace:*",
@@ -32,7 +30,6 @@
     "ws": "8.22.0"
   },
   "devDependencies": {
-    "@earendil-works/pi-ai": "1.2.0",
     "@nudge/ext-browser": "workspace:*",
     "@nudge/ext-connectors": "workspace:*",
     "@nudge/ext-desktop": "workspace:*",

@@ -1,7 +1,5 @@
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { createModels } from "@earendil-works/pi-ai/models";
-import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
-import { createNudge, type Nudge } from "@nudge/core";
+import { BACKGROUND_CONTEXT, createNudge, type Nudge } from "@nudge/core";
+import { createModels, fauxAssistantMessage, fauxProvider } from "@nudge/core/testing";
 import { RoomView, ServerFrame } from "@nudge/protocol";
 import { RoomProjector } from "@nudge/protocol/project";
 import { type RunningServer, serveNudge } from "@nudge/server";

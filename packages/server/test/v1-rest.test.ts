@@ -1,7 +1,5 @@
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { createModels } from "@earendil-works/pi-ai/models";
-import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
 import {
+  BACKGROUND_CONTEXT,
   ConfigError,
   createNudge,
   defineNudgeExtension,
@@ -9,6 +7,7 @@ import {
   requestApproval,
   Type,
 } from "@nudge/core";
+import { createModels, fauxAssistantMessage, fauxProvider } from "@nudge/core/testing";
 import {
   AdminPlayer,
   AppearanceResponse,

@@ -1,12 +1,12 @@
-import type { AuthProvider } from "@earendil-works/pi-mcp";
+import type { SecretStore } from "@nudge/core";
 import {
   adaptOAuthProvider,
   authorizeMcp,
+  type AuthProvider,
   McpOAuthProvider,
   type McpOAuthState,
   type McpOAuthStateStore,
-} from "@earendil-works/pi-mcp/oauth";
-import type { SecretStore } from "@nudge/core";
+} from "@nudge/core/mcp";
 
 /** A sign-in started on a room's panel, waiting for the authorization server to send them back. */
 type Pending = {

@@ -9,10 +9,8 @@ import {
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { createModels } from "@earendil-works/pi-ai/models";
-import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
-import { createNudge, type Nudge, requestApproval } from "@nudge/core";
+import { BACKGROUND_CONTEXT, createNudge, type Nudge, requestApproval } from "@nudge/core";
+import { createModels, fauxAssistantMessage, fauxProvider } from "@nudge/core/testing";
 import { type RunningServer, serveNudge } from "@nudge/server";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { generateVapidKeys, PushDoc, type PushMessage, pushExtension } from "../src/index.ts";

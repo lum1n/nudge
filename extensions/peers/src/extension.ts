@@ -1,19 +1,17 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import type { Context } from "@earendil-works/chord";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import {
-  type Conversation,
-  type ConversationId,
-  defineTask,
-  type DocumentReader,
-  type TaskId,
-} from "@earendil-works/pi-durable";
 import {
   assistantAddressOf,
+  BACKGROUND_CONTEXT,
+  type Context,
+  type Conversation,
+  type ConversationId,
   currentTurn,
   defineNudgeExtension,
+  defineTask,
   defineTool,
   DirectoryDoc,
+  type DocumentReader,
+  type ExtensionAssistant,
   type ExtensionHost,
   type ExtensionRoute,
   FIRE_ENTRY,
@@ -21,7 +19,6 @@ import {
   isWiredHost,
   keepsPlaceholders,
   LOBBY,
-  type ExtensionAssistant,
   parseAssistantAddress,
   peek,
   requestApproval,
@@ -29,6 +26,7 @@ import {
   roomOf,
   section,
   type Signed,
+  type TaskId,
   Type,
 } from "@nudge/core";
 import { type Channel, channelOf, type Keys, onFederated, type Place } from "@nudge/ext-federation";

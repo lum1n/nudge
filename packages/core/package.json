@@ -11,6 +11,26 @@
       "@nudge/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./testing": {
+      "@nudge/source": "./src/testing.ts",
+      "types": "./dist/testing.d.ts",
+      "default": "./dist/testing.js"
+    },
+    "./mcp": {
+      "@nudge/source": "./src/mcp.ts",
+      "types": "./dist/mcp.d.ts",
+      "default": "./dist/mcp.js"
+    },
+    "./codemode": {
+      "@nudge/source": "./src/codemode.ts",
+      "types": "./dist/codemode.d.ts",
+      "default": "./dist/codemode.js"
+    },
+    "./cloudflare": {
+      "@nudge/source": "./src/cloudflare.ts",
+      "types": "./dist/cloudflare.d.ts",
+      "default": "./dist/cloudflare.js"
     }
   },
   "scripts": {
@@ -21,7 +41,9 @@
   "dependencies": {
     "@earendil-works/chord": "1.2.0",
     "@earendil-works/pi-ai": "1.2.0",
+    "@earendil-works/pi-codemode": "1.2.0",
     "@earendil-works/pi-durable": "1.2.0",
+    "@earendil-works/pi-mcp": "1.2.0",
     "@huggingface/tokenizers": "0.2.0",
     "better-sqlite3-multiple-ciphers": "13.0.3",
     "onnxruntime-node": "1.23.2",

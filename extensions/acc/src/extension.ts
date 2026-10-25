@@ -1,7 +1,6 @@
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { ConversationId } from "@earendil-works/pi-durable";
-import { fillVariables } from "@nudge/bridge";
 import {
+  BACKGROUND_CONTEXT,
+  type ConversationId,
   currentTurn,
   defineNudgeExtension,
   defineTool,
@@ -17,6 +16,7 @@ import {
   section,
   Type,
 } from "@nudge/core";
+import { fillVariables } from "@nudge/bridge";
 import { join } from "node:path";
 import { Asked } from "./asked.ts";
 import { type HostEntry, Hosts } from "./hosts.ts";

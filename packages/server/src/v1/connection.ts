@@ -1,5 +1,4 @@
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { Credential } from "@nudge/core";
+import { BACKGROUND_CONTEXT, type Credential } from "@nudge/core";
 import {
   CLOSE,
   ClientFrame,

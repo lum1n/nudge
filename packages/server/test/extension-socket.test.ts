@@ -1,7 +1,11 @@
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { createModels } from "@earendil-works/pi-ai/models";
-import { fauxProvider } from "@earendil-works/pi-ai/providers/faux";
-import { createNudge, DirectoryDoc, defineNudgeExtension, type Nudge } from "@nudge/core";
+import {
+  BACKGROUND_CONTEXT,
+  createNudge,
+  defineNudgeExtension,
+  DirectoryDoc,
+  type Nudge,
+} from "@nudge/core";
+import { createModels, fauxProvider } from "@nudge/core/testing";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type RunningServer, serveNudge } from "../src/index.ts";
 

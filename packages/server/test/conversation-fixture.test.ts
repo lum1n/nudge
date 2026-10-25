@@ -1,15 +1,21 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { createModels } from "@earendil-works/pi-ai/models";
 import {
+  BACKGROUND_CONTEXT,
+  type ConversationView,
+  createNudge,
+  FIRE_ENTRY,
+  type InboxState,
+  MESSAGE_ENTRY,
+  type Nudge,
+} from "@nudge/core";
+import {
+  createModels,
   fauxAssistantMessage,
   fauxProvider,
   fauxText,
   fauxThinking,
   fauxToolCall,
-} from "@earendil-works/pi-ai/providers/faux";
-import type { ConversationView, InboxState } from "@earendil-works/pi-durable";
-import { createNudge, FIRE_ENTRY, MESSAGE_ENTRY, type Nudge } from "@nudge/core";
+} from "@nudge/core/testing";
 import { apply, diff, type Op } from "@nudge/protocol";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 

@@ -1,8 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { ApiError, listAssistants, memoryTokens, NudgeClient } from "@nudge/client";
 import {
   type Author,
+  BACKGROUND_CONTEXT,
   canUse,
   ExtensionBroken,
   ExtensionNotFound,
@@ -13,6 +12,7 @@ import {
   openAssistant,
   type Room as CoreRoom,
 } from "@nudge/core";
+import { ApiError, listAssistants, memoryTokens, NudgeClient } from "@nudge/client";
 import type { Approval, Fact, PrivateValue, RoomExtension, RoomView } from "@nudge/protocol";
 import { toApproval, toFact } from "@nudge/protocol/project";
 import { Hubs } from "@nudge/server";

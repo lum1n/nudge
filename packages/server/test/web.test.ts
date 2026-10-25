@@ -1,10 +1,8 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { createModels } from "@earendil-works/pi-ai/models";
-import { fauxProvider } from "@earendil-works/pi-ai/providers/faux";
-import { createNudge, type Nudge } from "@nudge/core";
+import { BACKGROUND_CONTEXT, createNudge, type Nudge } from "@nudge/core";
+import { createModels, fauxProvider } from "@nudge/core/testing";
 import type { AssistantsResponse } from "@nudge/protocol";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/index.ts";

@@ -1,15 +1,15 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, extname, join } from "node:path";
-import type { Context } from "@earendil-works/chord";
-import type { Tx } from "@earendil-works/pi-durable";
 import {
   type Approval,
+  type Context,
   currentTurn,
   defineNudgeExtension,
   defineTool,
   requestApproval,
   roomOf,
+  type Tx,
   Type,
 } from "@nudge/core";
 import { roomDocuments } from "@nudge/ext-documents";

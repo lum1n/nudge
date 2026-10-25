@@ -1,11 +1,12 @@
-import type { Context } from "@earendil-works/chord";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
+  BACKGROUND_CONTEXT,
+  type Context,
   currentTurn,
   defineNudgeExtension,
   defineTool,
   DirectoryDoc,
   distanceMeters,
+  type ExtensionAssistant,
   type ExtensionRoute,
   FIRE_ENTRY,
   type FireEntryData,
@@ -15,7 +16,6 @@ import {
   GeoUnavailable,
   keepsPlaceholders,
   type LocationUpdate,
-  type ExtensionAssistant,
   type Owner,
   PersonalDoc,
   providedGeo,

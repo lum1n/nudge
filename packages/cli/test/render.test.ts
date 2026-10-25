@@ -1,12 +1,11 @@
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { createModels } from "@earendil-works/pi-ai/models";
+import { BACKGROUND_CONTEXT, createNudge, LOBBY, type Nudge } from "@nudge/core";
 import {
+  createModels,
   fauxAssistantMessage,
   fauxProvider,
   fauxText,
   fauxToolCall,
-} from "@earendil-works/pi-ai/providers/faux";
-import { createNudge, LOBBY, type Nudge } from "@nudge/core";
+} from "@nudge/core/testing";
 import type { RoomView, TimelineItem } from "@nudge/protocol";
 import { Hubs } from "@nudge/server";
 import { describe, expect, it } from "vitest";

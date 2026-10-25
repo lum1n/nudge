@@ -1,6 +1,5 @@
-import { createModels } from "@earendil-works/pi-ai/models";
-import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
 import type { NudgeOptions } from "@nudge/core";
+import { createModels, fauxAssistantMessage, fauxProvider } from "@nudge/core/testing";
 import { NudgeAssistant as Base } from "../src/index.ts";
 
 export { default } from "../src/index.ts";

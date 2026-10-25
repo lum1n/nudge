@@ -1,5 +1,4 @@
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { canUse, type RoomSocketSession } from "@nudge/core";
+import { BACKGROUND_CONTEXT, canUse, type RoomSocketSession } from "@nudge/core";
 import { CLOSE } from "@nudge/protocol";
 import type { WSContext } from "hono/ws";
 import type { Hubs } from "./hub.ts";

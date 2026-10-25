@@ -1,11 +1,11 @@
-import type { Context as ModelContext } from "@earendil-works/pi-ai";
-import { createModels } from "@earendil-works/pi-ai/models";
+import type { ModelContext } from "@nudge/core";
 import {
+  createModels,
   fauxAssistantMessage,
   fauxProvider,
   fauxText,
   fauxToolCall,
-} from "@earendil-works/pi-ai/providers/faux";
+} from "@nudge/core/testing";
 import { describe, expect, it } from "vitest";
 import { type DesktopStep, runDesktopAgent } from "../src/agent.ts";
 import { progressLine } from "../src/tools.ts";

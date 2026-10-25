@@ -1,11 +1,9 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { createModels } from "@earendil-works/pi-ai/models";
-import { fauxProvider } from "@earendil-works/pi-ai/providers/faux";
 import {
   Assistants,
+  BACKGROUND_CONTEXT,
   createLogger,
   ModelErrors,
   openAssistant,
@@ -13,6 +11,7 @@ import {
   ServerKeys,
   ServerOwners,
 } from "@nudge/core";
+import { createModels, fauxProvider } from "@nudge/core/testing";
 import type { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp, type ServerControl } from "../src/index.ts";

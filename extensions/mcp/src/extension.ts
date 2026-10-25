@@ -1,19 +1,20 @@
 import { join } from "node:path";
-import type { Context } from "@earendil-works/chord";
-import type { DocumentReader, ToolRegistration } from "@earendil-works/pi-durable";
-import { type CallToolResult, type Tool, toLlmContent } from "@earendil-works/pi-mcp";
-import { createToolSearchTool } from "@earendil-works/pi-durable/tool-search";
 import {
+  type Context,
+  createToolSearchTool,
   currentTurn,
   defineNudgeExtension,
   defineTool,
+  type DocumentReader,
   type ExtensionParts,
   requestApproval,
   returnsUntrusted,
   roomOf,
   section,
+  type ToolRegistration,
   Type,
 } from "@nudge/core";
+import { type CallToolResult, toLlmContent, type Tool } from "@nudge/core/mcp";
 import { OAuthLogins } from "./oauth.ts";
 import { Panels } from "./panel.ts";
 import { McpPool, type ServerConfig } from "./pool.ts";

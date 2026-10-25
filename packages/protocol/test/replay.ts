@@ -1,4 +1,4 @@
-import type { ConversationView } from "@earendil-works/pi-durable";
+import type { ConversationView } from "@nudge/core";
 import { apply, type Op } from "../src/index.ts";
 import recording from "./fixtures/conversation-view.json" with { type: "json" };
 

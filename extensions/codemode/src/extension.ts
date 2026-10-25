@@ -1,12 +1,14 @@
-import { CodemodeSandbox } from "@earendil-works/pi-codemode";
-import type { CodemodeRun, CodemodeRunOptions } from "@earendil-works/pi-codemode";
-import type {
-  NestedToolExecutionResult,
-  ToolExecutionApi,
-  ToolRegistration,
-} from "@earendil-works/pi-durable";
-import { CODEMODE_TOOL_NAME, createCodemodeExtension } from "@earendil-works/pi-durable/codemode";
-import { defineNudgeExtension, type ExtensionParts, Type } from "@nudge/core";
+import {
+  CODEMODE_TOOL_NAME,
+  createCodemodeExtension,
+  defineNudgeExtension,
+  type ExtensionParts,
+  type NestedToolExecutionResult,
+  type ToolExecutionApi,
+  type ToolRegistration,
+  Type,
+} from "@nudge/core";
+import { type CodemodeRun, type CodemodeRunOptions, CodemodeSandbox } from "@nudge/core/codemode";
 
 const VERSION = "0.1.0";
 

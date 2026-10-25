@@ -1,5 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { defineDoc } from "@earendil-works/pi-durable";
+import { defineDoc, type SessionDocToken } from "@nudge/core";
 
 // Stored in a document, so plain JSON.
 export type Trigger = {
@@ -29,7 +29,7 @@ export type Trigger = {
 export type TriggersState = { items: Trigger[]; next: number };
 
 /** Every room's triggers: a call has only the secret to go on, so they are looked up together. */
-export const TriggersDoc = defineDoc<TriggersState>({
+export const TriggersDoc: SessionDocToken<TriggersState> = defineDoc({
   kind: "triggers.list",
   version: 1,
   scope: "session",

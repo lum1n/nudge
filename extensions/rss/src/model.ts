@@ -1,4 +1,4 @@
-import { defineDocFamily } from "@earendil-works/pi-durable";
+import { defineDocFamily, type SessionDocFamilyToken } from "@nudge/core";
 
 // Stored in a document, so plain JSON.
 export type RoomFeed = {
@@ -14,7 +14,7 @@ export type RoomFeed = {
 export type FeedsState = { feeds: RoomFeed[]; next: number };
 
 /** The feeds people added in a room, keyed by room id. */
-export const FeedsDoc = defineDocFamily<FeedsState, null>({
+export const FeedsDoc: SessionDocFamilyToken<FeedsState, null> = defineDocFamily({
   kind: "rss.feeds",
   version: 1,
   scope: "session",

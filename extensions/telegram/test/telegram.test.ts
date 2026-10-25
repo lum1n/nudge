@@ -1,8 +1,12 @@
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { Context as ModelContext } from "@earendil-works/pi-ai";
-import { createModels } from "@earendil-works/pi-ai/models";
-import { fauxAssistantMessage, fauxProvider, fauxText } from "@earendil-works/pi-ai/providers/faux";
-import { createNudge, defineNudgeExtension, type Nudge, requestApproval } from "@nudge/core";
+import {
+  BACKGROUND_CONTEXT,
+  createNudge,
+  defineNudgeExtension,
+  type ModelContext,
+  type Nudge,
+  requestApproval,
+} from "@nudge/core";
+import { createModels, fauxAssistantMessage, fauxProvider, fauxText } from "@nudge/core/testing";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { split } from "@nudge/bridge";
 import { telegramExtension, type Update } from "../src/index.ts";

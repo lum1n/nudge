@@ -1,4 +1,4 @@
-import { defineDoc } from "@earendil-works/pi-durable";
+import { defineDoc, type SessionDocToken } from "@nudge/core";
 import { type Keys, type Place, samePlace } from "@nudge/ext-federation";
 
 /** The player something private belongs to, with the name others are told it went to. */
@@ -96,7 +96,7 @@ export type PeersState = {
   next: number;
 };
 
-export const PeersDoc = defineDoc<PeersState>({
+export const PeersDoc: SessionDocToken<PeersState> = defineDoc({
   kind: "peers.state",
   version: 2,
   scope: "session",

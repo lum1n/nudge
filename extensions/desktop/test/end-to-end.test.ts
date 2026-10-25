@@ -1,15 +1,13 @@
 // The whole way through on a real desktop: a room asks, the desktop agent (a scripted model) starts
 // a GTK app, fills in a field and reads it back. Run with NUDGE_DESKTOP_TESTS=1 (see desktop.test.ts).
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { Context as ModelContext } from "@earendil-works/pi-ai";
-import { createModels } from "@earendil-works/pi-ai/models";
+import { BACKGROUND_CONTEXT, createNudge, LOBBY, type ModelContext } from "@nudge/core";
 import {
+  createModels,
   fauxAssistantMessage,
   fauxProvider,
   fauxText,
   fauxToolCall,
-} from "@earendil-works/pi-ai/providers/faux";
-import { createNudge, LOBBY } from "@nudge/core";
+} from "@nudge/core/testing";
 import { describe, expect, it } from "vitest";
 import desktop from "../src/extension.ts";
 

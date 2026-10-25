@@ -20,9 +20,5 @@
   "dependencies": {
     "@nudge/bridge": "workspace:*",
     "@nudge/core": "workspace:*"
-  },
-  "devDependencies": {
-    "@earendil-works/chord": "1.2.0",
-    "@earendil-works/pi-ai": "1.2.0"
   }
 }

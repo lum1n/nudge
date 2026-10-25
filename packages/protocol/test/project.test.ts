@@ -1,5 +1,4 @@
-import type { ConversationView, EntryRecord } from "@earendil-works/pi-durable";
-import type { Approval, ScheduledNudge } from "@nudge/core";
+import type { Approval, ConversationView, EntryRecord, ScheduledNudge } from "@nudge/core";
 import * as core from "@nudge/core";
 import { Value } from "typebox/value";
 import { describe, expect, it } from "vitest";

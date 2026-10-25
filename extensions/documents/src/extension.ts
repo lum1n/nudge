@@ -1,10 +1,10 @@
 import { createHash, randomBytes } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Context } from "@earendil-works/chord";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { defineDocFamily } from "@earendil-works/pi-durable";
 import {
+  BACKGROUND_CONTEXT,
+  type Context,
+  defineDocFamily,
   defineNudgeExtension,
   defineTool,
   type ExtensionDocuments,
@@ -15,6 +15,7 @@ import {
   roomOf,
   type RoomSocketHandler,
   section,
+  type SessionDocFamilyToken,
   Type,
 } from "@nudge/core";
 import {
@@ -48,16 +49,17 @@ export type DocumentInfo = {
 };
 
 /** A room's documents, keyed by room id; their texts are kept apart, so listing stays cheap. */
-export const DocumentsDoc = defineDocFamily<{ items: DocumentInfo[]; next: number }, null>({
-  kind: "documents.room",
-  version: 1,
-  scope: "session",
-  family: true,
-  initial: () => ({ items: [], next: 1 }),
-});
+export const DocumentsDoc: SessionDocFamilyToken<{ items: DocumentInfo[]; next: number }, null> =
+  defineDocFamily({
+    kind: "documents.room",
+    version: 1,
+    scope: "session",
+    family: true,
+    initial: () => ({ items: [], next: 1 }),
+  });
 
 /** One document's text, keyed `<room>/<id>`. */
-export const DocumentTextDoc = defineDocFamily<{ text: string }, null>({
+export const DocumentTextDoc: SessionDocFamilyToken<{ text: string }, null> = defineDocFamily({
   kind: "documents.text",
   version: 1,
   scope: "session",

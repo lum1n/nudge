@@ -1,20 +1,18 @@
-import type { Context } from "@earendil-works/chord";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type {
-  ConversationView,
-  ConversationWatch,
-  DocumentWatch,
-} from "@earendil-works/pi-durable";
 import {
   type Approval,
-  type Change,
+  BACKGROUND_CONTEXT,
   canUse,
+  type Change,
+  type Context,
+  type ConversationView,
+  type ConversationWatch,
   DirectoryDoc,
   type DirectoryState,
+  type DocumentWatch,
   type LogFields,
-  type RoomFact,
   type Nudge,
   type Room as CoreRoom,
+  type RoomFact,
   type ScheduledNudge,
 } from "@nudge/core";
 import type { RoomListEntry, RoomListView, Player, Room, RoomView } from "@nudge/protocol";

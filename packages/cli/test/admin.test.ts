@@ -1,8 +1,7 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { loadConfig, type Nudge, openAssistant } from "@nudge/core";
+import { BACKGROUND_CONTEXT, loadConfig, type Nudge, openAssistant } from "@nudge/core";
 import { type RunningServer, serveNudge } from "@nudge/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {

@@ -1,5 +1,9 @@
-import { defineDocFamily } from "@earendil-works/pi-durable";
-import { distanceMeters, type GeoPoint } from "@nudge/core";
+import {
+  defineDocFamily,
+  distanceMeters,
+  type GeoPoint,
+  type SessionDocFamilyToken,
+} from "@nudge/core";
 
 // Stored in a document, so plain JSON. Coordinates are kept here and nowhere the model reads.
 
@@ -79,7 +83,7 @@ export function emptyPlaces(): PlayerPlaces {
 }
 
 /** Each player's saved places and arrival reminders. */
-export const PlacesDoc = defineDocFamily<PlayerPlaces, null>({
+export const PlacesDoc: SessionDocFamilyToken<PlayerPlaces, null> = defineDocFamily({
   kind: "places.player",
   version: 1,
   scope: "session",
