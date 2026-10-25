@@ -15,9 +15,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.nudge.AppModel
+import app.nudge.R
 import app.nudge.ServerProblem
 import app.nudge.explain
 import kotlinx.coroutines.launch
@@ -44,8 +46,8 @@ fun HomeFederationCard(model: AppModel) {
     var problem by remember { mutableStateOf<String?>(null) }
     Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = MaterialTheme.shapes.large) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Your home first", style = MaterialTheme.typography.titleMedium)
-            Text(missing.text)
+            Text(stringResource(R.string.setup_home_first), style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(missing.text))
             if (missing == ServerProblem.Kind.NO_FEDERATION) {
                 Button(
                     enabled = !busy,
@@ -63,10 +65,10 @@ fun HomeFederationCard(model: AppModel) {
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text(if (busy) "Turning it on…" else "Turn on federation at home") }
+                ) { Text(stringResource(if (busy) R.string.setup_federation_turning_on else R.string.setup_federation_turn_on)) }
                 session?.let {
                     Text(
-                        "Other servers will reach your home at ${it.account.server}.",
+                        stringResource(R.string.setup_federation_reach, it.account.server),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

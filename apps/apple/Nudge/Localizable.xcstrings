@@ -1,0 +1,4236 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%@ API key" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API-nøkkel for %@"
+          }
+        }
+      }
+    },
+    "%@ is ready" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ er klar"
+          }
+        }
+      }
+    },
+    "%@ is ready for %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ er klar for %2$@"
+          }
+        }
+      }
+    },
+    "%@ is using the browser; you are watching." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ bruker nettleseren; du ser på."
+          }
+        }
+      }
+    },
+    "%@ is using the desktop; you are watching." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ bruker skrivebordet; du ser på."
+          }
+        }
+      }
+    },
+    "%@ key" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nøkkel for %@"
+          }
+        }
+      }
+    },
+    "%@ on %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ på %2$@"
+          }
+        }
+      }
+    },
+    "%@ tells it who you are: your name, picture, time zone and language. Its rooms show up beside your own." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ forteller den hvem du er: navnet ditt, bildet, tidssonen og språket. Rommene dens vises ved siden av dine egne."
+          }
+        }
+      }
+    },
+    "%u to approve" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%u å godkjenne"
+          }
+        }
+      }
+    },
+    "1. Sign in to exe.dev" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1. Logg inn på exe.dev"
+          }
+        }
+      }
+    },
+    "2. Name the server" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2. Gi serveren et navn"
+          }
+        }
+      }
+    },
+    "A server on exe.dev" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En server på exe.dev"
+          }
+        }
+      }
+    },
+    "A server that isn't set up yet prints its address and a setup code when it starts." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En server som ikke er satt opp ennå, skriver ut adressen sin og en oppsettkode når den starter."
+          }
+        }
+      }
+    },
+    "A small server in your exe.dev account, with an HTTPS address." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En liten server i exe.dev-kontoen din, med en HTTPS-adresse."
+          }
+        }
+      }
+    },
+    "API key (%@ %@)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API-nøkkel (%1$@ %2$@)"
+          }
+        }
+      }
+    },
+    "APIs this room's assistant can call. Ask it in the chat to add one, and say what for. Turn on Always use first to have it try one before anything else for those tasks. API keys go here only: the assistant never sees them." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API-er assistenten i dette rommet kan kalle. Be den i chatten om å legge til et, og si hva det skal brukes til. Slå på Bruk alltid først for at den skal prøve det før noe annet for de oppgavene. API-nøkler legges bare inn her: assistenten ser dem aldri."
+          }
+        }
+      }
+    },
+    "Account" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konto"
+          }
+        }
+      }
+    },
+    "Actions waiting for approval" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Handlinger som venter på godkjenning"
+          }
+        }
+      }
+    },
+    "Activity" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktivitet"
+          }
+        }
+      }
+    },
+    "Add" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legg til"
+          }
+        }
+      }
+    },
+    "Add a language" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legg til et språk"
+          }
+        }
+      }
+    },
+    "Add a region" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legg til en region"
+          }
+        }
+      }
+    },
+    "Add to %@…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legg til i %@ …"
+          }
+        }
+      }
+    },
+    "Address" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adresse"
+          }
+        }
+      }
+    },
+    "Addresses, places and routes for reminders when someone gets somewhere, from OpenStreetMap. The server downloads the map of each region and keeps it, so where people go stays here." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adresser, steder og ruter for påminnelser når noen kommer et sted, fra OpenStreetMap. Serveren laster ned kartet over hver region og beholder det, så hvor folk drar, blir her."
+          }
+        }
+      }
+    },
+    "Always use first" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bruk alltid først"
+          }
+        }
+      }
+    },
+    "An address, a name or a number: the others and the assistant see it as hidden, in every room. Forgotten, everyone sees only that it was hidden." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En adresse, et navn eller et nummer: de andre og assistenten ser det som skjult, i alle rom. Når det er glemt, ser alle bare at det var skjult."
+          }
+        }
+      }
+    },
+    "An admin of another assistant invites you by your address; the invite opens here. What only you see stays home." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En administrator for en annen assistent inviterer deg med adressen din; invitasjonen åpnes her. Det bare du ser, blir hjemme."
+          }
+        }
+      }
+    },
+    "And you?" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Og du?"
+          }
+        }
+      }
+    },
+    "Answering" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Svarer"
+          }
+        }
+      }
+    },
+    "Answers and nudges" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Svar og påminnelser"
+          }
+        }
+      }
+    },
+    "Approval" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Godkjenning"
+          }
+        }
+      }
+    },
+    "Approve" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Godkjenn"
+          }
+        }
+      }
+    },
+    "Ask an admin of the assistant for one, or for its QR code: they make it under People and devices in their settings, in the Android app or on the web. It works once, for ten minutes. A token (`nudge_…`) works here too." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Be en administrator for assistenten om en, eller om QR-koden: de lager den under Personer og enheter i innstillingene sine, i Android-appen eller på nettet. Den virker én gang, i ti minutter. Et token (`nudge_…`) virker her også."
+          }
+        }
+      }
+    },
+    "Ask before calls that change something" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spør før kall som endrer noe"
+          }
+        }
+      }
+    },
+    "Ask before every call" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spør før hvert kall"
+          }
+        }
+      }
+    },
+    "Ask the assistant to save a place or remind you when you get somewhere. The model only sees places as placeholders such as ⟦PLACE:home⟧." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Be assistenten lagre et sted eller minne deg på noe når du kommer et sted. Modellen ser bare steder som plassholdere, for eksempel ⟦PLACE:home⟧."
+          }
+        }
+      }
+    },
+    "Assistant" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Assistent"
+          }
+        }
+      }
+    },
+    "Assistants" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Assistenter"
+          }
+        }
+      }
+    },
+    "Assistants you joined get this too." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Assistenter du har blitt med i, får dette også."
+          }
+        }
+      }
+    },
+    "At most %lld GB on disk (%@ now)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Høyst %1$lld GB på disk (%2$@ nå)"
+          }
+        }
+      }
+    },
+    "Back" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tilbake"
+          }
+        }
+      }
+    },
+    "Back to the app icon's" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tilbake til appikonets"
+          }
+        }
+      }
+    },
+    "Back up every night, keeping two weeks, beside the data" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ta sikkerhetskopi hver natt, og behold to uker, ved siden av dataene"
+          }
+        }
+      }
+    },
+    "Browser" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nettleser"
+          }
+        }
+      }
+    },
+    "Bus and train departures" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buss- og togavganger"
+          }
+        }
+      }
+    },
+    "Calls that only read, though not GET: one METHOD /path per line, such as POST /graphql. They run without asking." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kall som bare leser, selv om de ikke er GET: én METODE /sti per linje, for eksempel POST /graphql. De kjøres uten å spørre."
+          }
+        }
+      }
+    },
+    "Can't invite" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kan ikke invitere"
+          }
+        }
+      }
+    },
+    "Can't open the MCP servers" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kan ikke åpne MCP-serverne"
+          }
+        }
+      }
+    },
+    "Can't open the browser" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kan ikke åpne nettleseren"
+          }
+        }
+      }
+    },
+    "Can't open the connectors" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kan ikke åpne koblingene"
+          }
+        }
+      }
+    },
+    "Can't open the desktop" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kan ikke åpne skrivebordet"
+          }
+        }
+      }
+    },
+    "Can't open the documents" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kan ikke åpne dokumentene"
+          }
+        }
+      }
+    },
+    "Can't open the lists" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kan ikke åpne listene"
+          }
+        }
+      }
+    },
+    "Can't set up extensions" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kan ikke sette opp utvidelser"
+          }
+        }
+      }
+    },
+    "Cancel" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avbryt"
+          }
+        }
+      }
+    },
+    "Cancel the invite" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avbryt invitasjonen"
+          }
+        }
+      }
+    },
+    "Check for updates" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se etter oppdateringer"
+          }
+        }
+      }
+    },
+    "Check for updates now" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se etter oppdateringer nå"
+          }
+        }
+      }
+    },
+    "Checking Wired…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sjekker Wired …"
+          }
+        }
+      }
+    },
+    "Checking…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sjekker …"
+          }
+        }
+      }
+    },
+    "Choose a picture" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Velg et bilde"
+          }
+        }
+      }
+    },
+    "Choose its model" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Velg modell"
+          }
+        }
+      }
+    },
+    "Clear" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fjern"
+          }
+        }
+      }
+    },
+    "Clear done" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fjern fullførte"
+          }
+        }
+      }
+    },
+    "Colours" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Farger"
+          }
+        }
+      }
+    },
+    "Connectors" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Koblinger"
+          }
+        }
+      }
+    },
+    "Continue" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fortsett"
+          }
+        }
+      }
+    },
+    "Conversation started over" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Samtalen startet på nytt"
+          }
+        }
+      }
+    },
+    "Copy the command" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopier kommandoen"
+          }
+        }
+      }
+    },
+    "Couldn't load it: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kunne ikke laste den: %@"
+          }
+        }
+      }
+    },
+    "Couldn't open the room" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kunne ikke åpne rommet"
+          }
+        }
+      }
+    },
+    "Couldn't save the robot" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kunne ikke lagre roboten"
+          }
+        }
+      }
+    },
+    "Couldn't summarize: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kunne ikke oppsummere: %@"
+          }
+        }
+      }
+    },
+    "Country, state or province" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Land, delstat eller provins"
+          }
+        }
+      }
+    },
+    "Create" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opprett"
+          }
+        }
+      }
+    },
+    "Delete" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slett"
+          }
+        }
+      }
+    },
+    "Delete %@?" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slette %@?"
+          }
+        }
+      }
+    },
+    "Delete list" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slett listen"
+          }
+        }
+      }
+    },
+    "Delete this assistant" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slett denne assistenten"
+          }
+        }
+      }
+    },
+    "Deletes %@ from your exe.dev account, with its assistants, their history and the backups on it." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sletter %@ fra exe.dev-kontoen din, med assistentene, historikken deres og sikkerhetskopiene på den."
+          }
+        }
+      }
+    },
+    "Deny" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avslå"
+          }
+        }
+      }
+    },
+    "Desktop" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skrivebord"
+          }
+        }
+      }
+    },
+    "Dictate" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dikter"
+          }
+        }
+      }
+    },
+    "Dictate on this device?" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diktere på denne enheten?"
+          }
+        }
+      }
+    },
+    "Dictation" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diktering"
+          }
+        }
+      }
+    },
+    "Dictation hears which of these you speak, and can switch between them from one sentence to the next." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dikteringen hører hvilket av disse du snakker, og kan bytte mellom dem fra én setning til den neste."
+          }
+        }
+      }
+    },
+    "Dictation stopped" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dikteringen stoppet"
+          }
+        }
+      }
+    },
+    "Discard" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forkast"
+          }
+        }
+      }
+    },
+    "Disconnected" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Frakoblet"
+          }
+        }
+      }
+    },
+    "Dismiss" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avvis"
+          }
+        }
+      }
+    },
+    "Documents" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dokumenter"
+          }
+        }
+      }
+    },
+    "Done" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ferdig"
+          }
+        }
+      }
+    },
+    "Download" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last ned"
+          }
+        }
+      }
+    },
+    "Download %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last ned %@"
+          }
+        }
+      }
+    },
+    "Downloading the speech model" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Laster ned talemodellen"
+          }
+        }
+      }
+    },
+    "Drag to select" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dra for å velge"
+          }
+        }
+      }
+    },
+    "Dragging scrolls." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Å dra blar."
+          }
+        }
+      }
+    },
+    "Dragging selects and moves things." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Å dra velger og flytter ting."
+          }
+        }
+      }
+    },
+    "E-mail" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "E-post"
+          }
+        }
+      }
+    },
+    "Earlier messages summarized" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tidligere meldinger oppsummert"
+          }
+        }
+      }
+    },
+    "Every room" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle rom"
+          }
+        }
+      }
+    },
+    "Everyone" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle"
+          }
+        }
+      }
+    },
+    "Everything on it goes for good, and nothing is kept: make a recovery kit and download a backup first if you need one. Type %@ to remove it." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alt på den forsvinner for godt, og ingenting beholdes: lag et gjenopprettingssett og last ned en sikkerhetskopi først hvis du trenger det. Skriv %@ for å fjerne den."
+          }
+        }
+      }
+    },
+    "Extensions" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Utvidelser"
+          }
+        }
+      }
+    },
+    "Eyes" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Øyne"
+          }
+        }
+      }
+    },
+    "Facts about you, shown in your own room. Shared, every room you're in sees them, and the assistant there too." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fakta om deg, vist i ditt eget rom. Når de er delt, ser alle rom du er i dem, og assistenten der også."
+          }
+        }
+      }
+    },
+    "Fetch the region someone's phone says they are in, anywhere in the world." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hent regionen noens telefon sier at de er i, hvor som helst i verden."
+          }
+        }
+      }
+    },
+    "Find by name" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finn etter navn"
+          }
+        }
+      }
+    },
+    "First item" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Første punkt"
+          }
+        }
+      }
+    },
+    "Follow people" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Følg personer"
+          }
+        }
+      }
+    },
+    "For \"remind me when I get home\": the device tells home when you get to a place you have a reminder for." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For «minn meg på det når jeg kommer hjem»: enheten forteller hjemmet når du kommer til et sted du har en påminnelse for."
+          }
+        }
+      }
+    },
+    "For every assistant here. Tried once before it is kept." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For alle assistentene her. Prøves én gang før den beholdes."
+          }
+        }
+      }
+    },
+    "For filling in forms, writing mail and finding what is near you. Only you see them, and they stay at home: the model gets placeholders such as ⟦EMAIL1⟧, in your own room and private messages, and tools get the real values. Your location is sent while the app is open." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For å fylle ut skjemaer, skrive e-post og finne det som er i nærheten av deg. Bare du ser dem, og de blir hjemme: modellen får plassholdere som ⟦EMAIL1⟧, i ditt eget rom og i private meldinger, og verktøy får de ekte verdiene. Posisjonen din sendes mens appen er åpen."
+          }
+        }
+      }
+    },
+    "Forget" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Glem"
+          }
+        }
+      }
+    },
+    "Forget for good" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Glem for godt"
+          }
+        }
+      }
+    },
+    "Full name" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fullt navn"
+          }
+        }
+      }
+    },
+    "Get a key" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skaff en nøkkel"
+          }
+        }
+      }
+    },
+    "Hide" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skjul"
+          }
+        }
+      }
+    },
+    "Hide a value…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skjul en verdi …"
+          }
+        }
+      }
+    },
+    "Hold a network here" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hold et nettverk her"
+          }
+        }
+      }
+    },
+    "Holds the network as %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Holder nettverket som %@"
+          }
+        }
+      }
+    },
+    "How the assistant's robot looks to everyone. Turn extensions on or off and change their settings, for every room. Invite someone from another assistant by their address." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hvordan assistentens robot ser ut for alle. Slå utvidelser av eller på og endre innstillingene deres, for alle rom. Inviter noen fra en annen assistent med adressen deres."
+          }
+        }
+      }
+    },
+    "In its address" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I adressen"
+          }
+        }
+      }
+    },
+    "In its address: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I adressen: %@"
+          }
+        }
+      }
+    },
+    "In the network as %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I nettverket som %@"
+          }
+        }
+      }
+    },
+    "In this room" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I dette rommet"
+          }
+        }
+      }
+    },
+    "Instructions" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Instruksjoner"
+          }
+        }
+      }
+    },
+    "Invites" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invitasjoner"
+          }
+        }
+      }
+    },
+    "It gets federation, and you join it from home as the person you are there now: its rooms and history stay, and your other devices list it." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Den får føderasjon, og du blir med i den hjemmefra som den personen du er der nå: rommene og historikken blir, og de andre enhetene dine viser den."
+          }
+        }
+      }
+    },
+    "It goes for everyone in the room, and the assistant can't read it any more." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Den forsvinner for alle i rommet, og assistenten kan ikke lese den lenger."
+          }
+        }
+      }
+    },
+    "It no longer reaches your servers over Wired, and can't join again with its key. A new server can then use the name." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Den når ikke lenger serverne dine over Wired, og kan ikke bli med igjen med nøkkelen sin. En ny server kan da bruke navnet."
+          }
+        }
+      }
+    },
+    "Its address will be https://%@.exe.xyz" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adressen blir https://%@.exe.xyz"
+          }
+        }
+      }
+    },
+    "Its name" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Navnet"
+          }
+        }
+      }
+    },
+    "Its rooms show beside your home's, and you are its admin and an owner of this server." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rommene vises ved siden av hjemmets, og du er administrator for den og en eier av denne serveren."
+          }
+        }
+      }
+    },
+    "Its rooms, history and memory go. The server keeps a backup for 30 days. Type %@ to delete it." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rommene, historikken og minnet forsvinner. Serveren beholder en sikkerhetskopi i 30 dager. Skriv %@ for å slette den."
+          }
+        }
+      }
+    },
+    "Its setup code" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oppsettkoden"
+          }
+        }
+      }
+    },
+    "Join" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bli med"
+          }
+        }
+      }
+    },
+    "Join %@ on Nudge" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bli med i %@ på Nudge"
+          }
+        }
+      }
+    },
+    "Join %@ to your cluster?" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legge til %@ i klyngen din?"
+          }
+        }
+      }
+    },
+    "Join %@'s Wired network" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bli med i Wired-nettverket til %@"
+          }
+        }
+      }
+    },
+    "Join %@'s network" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bli med i nettverket til %@"
+          }
+        }
+      }
+    },
+    "Join %@?" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bli med i %@?"
+          }
+        }
+      }
+    },
+    "Join it from home" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bli med i den hjemmefra"
+          }
+        }
+      }
+    },
+    "Join my cluster" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bli med i klyngen min"
+          }
+        }
+      }
+    },
+    "Joined from home" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fra hjemmet"
+          }
+        }
+      }
+    },
+    "Joining…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blir med …"
+          }
+        }
+      }
+    },
+    "Keep" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Behold"
+          }
+        }
+      }
+    },
+    "Keep the recovery kit" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ta vare på gjenopprettingssettet"
+          }
+        }
+      }
+    },
+    "Kept encrypted on the server, never shown again." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lagres kryptert på serveren, vises aldri igjen."
+          }
+        }
+      }
+    },
+    "Key" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nøkkel"
+          }
+        }
+      }
+    },
+    "Language" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Språk"
+          }
+        }
+      }
+    },
+    "Languages you speak" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Språk du snakker"
+          }
+        }
+      }
+    },
+    "Learned: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lært: %@"
+          }
+        }
+      }
+    },
+    "Leave" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forlat"
+          }
+        }
+      }
+    },
+    "Leave %@?" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forlate %@?"
+          }
+        }
+      }
+    },
+    "Let the assistant know where I am here" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La assistenten vite hvor jeg er her"
+          }
+        }
+      }
+    },
+    "Lists" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lister"
+          }
+        }
+      }
+    },
+    "Load earlier" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last inn tidligere"
+          }
+        }
+      }
+    },
+    "Local network" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lokalt nettverk"
+          }
+        }
+      }
+    },
+    "Location" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Posisjon"
+          }
+        }
+      }
+    },
+    "Lowercase letters, digits and dashes, such as box." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Små bokstaver, sifre og bindestreker, for eksempel box."
+          }
+        }
+      }
+    },
+    "MCP servers" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP-servere"
+          }
+        }
+      }
+    },
+    "MCP servers this room's assistant can use. Ask it in the chat to add one. Keys and sign-ins go here only: the assistant never sees them." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP-servere assistenten i dette rommet kan bruke. Be den i chatten om å legge til en. Nøkler og innlogginger legges bare inn her: assistenten ser dem aldri."
+          }
+        }
+      }
+    },
+    "Make a server on exe.dev" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lag en server på exe.dev"
+          }
+        }
+      }
+    },
+    "Make it" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lag den"
+          }
+        }
+      }
+    },
+    "Make one on exe.dev" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lag en på exe.dev"
+          }
+        }
+      }
+    },
+    "Make the server" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lag serveren"
+          }
+        }
+      }
+    },
+    "Make your own on exe.dev, and assistants on it." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lag din egen på exe.dev, og assistenter på den."
+          }
+        }
+      }
+    },
+    "Maps" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kart"
+          }
+        }
+      }
+    },
+    "May reach this machine and the local network, such as Home Assistant or a NAS" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kan nå denne maskinen og det lokale nettverket, for eksempel Home Assistant eller en NAS"
+          }
+        }
+      }
+    },
+    "Me: I join it from my home, and keep one sign-in" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meg: jeg blir med i den hjemmefra og beholder én innlogging"
+          }
+        }
+      }
+    },
+    "Members" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Medlemmer"
+          }
+        }
+      }
+    },
+    "Memory" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minne"
+          }
+        }
+      }
+    },
+    "Message" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Melding"
+          }
+        }
+      }
+    },
+    "Model" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modell"
+          }
+        }
+      }
+    },
+    "Model (%@)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modell (%@)"
+          }
+        }
+      }
+    },
+    "Model id" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modell-ID"
+          }
+        }
+      }
+    },
+    "Model keys" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modellnøkler"
+          }
+        }
+      }
+    },
+    "Monthly limit" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Månedlig grense"
+          }
+        }
+      }
+    },
+    "My memory" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minnet mitt"
+          }
+        }
+      }
+    },
+    "My room" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rommet mitt"
+          }
+        }
+      }
+    },
+    "Name" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Navn"
+          }
+        }
+      }
+    },
+    "Name your assistant" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gi assistenten et navn"
+          }
+        }
+      }
+    },
+    "Name, then its first item below" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Navn, og så første punkt under"
+          }
+        }
+      }
+    },
+    "Needs %@ in the server's environment, or the value in its settings, before it can start." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trenger %@ i serverens miljø, eller verdien i innstillingene, før den kan starte."
+          }
+        }
+      }
+    },
+    "Needs approval" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trenger godkjenning"
+          }
+        }
+      }
+    },
+    "Never ask" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spør aldri"
+          }
+        }
+      }
+    },
+    "New" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ny"
+          }
+        }
+      }
+    },
+    "New assistant" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ny assistent"
+          }
+        }
+      }
+    },
+    "New list" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ny liste"
+          }
+        }
+      }
+    },
+    "New room" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nytt rom"
+          }
+        }
+      }
+    },
+    "New shared room" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nytt delt rom"
+          }
+        }
+      }
+    },
+    "New shared room…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nytt delt rom …"
+          }
+        }
+      }
+    },
+    "New to exe.dev? Signing in makes your account: it asks for your email and sends a link. The app keeps its key and token on this device; they can make and remove servers, nothing else." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ny på exe.dev? Når du logger inn, lages kontoen din: den spør om e-posten din og sender en lenke. Appen beholder nøkkelen og tokenet på denne enheten; de kan lage og fjerne servere, ingenting annet."
+          }
+        }
+      }
+    },
+    "No MCP servers here" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen MCP-servere her"
+          }
+        }
+      }
+    },
+    "No MCP servers yet." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen MCP-servere ennå."
+          }
+        }
+      }
+    },
+    "No connectors here" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen koblinger her"
+          }
+        }
+      }
+    },
+    "No connectors yet." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen koblinger ennå."
+          }
+        }
+      }
+    },
+    "No documents here" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen dokumenter her"
+          }
+        }
+      }
+    },
+    "No documents yet." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen dokumenter ennå."
+          }
+        }
+      }
+    },
+    "No lists here" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen lister her"
+          }
+        }
+      }
+    },
+    "No open invites" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen åpne invitasjoner"
+          }
+        }
+      }
+    },
+    "No rooms yet." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen rom ennå."
+          }
+        }
+      }
+    },
+    "No server with a public address has joined yet: open one of them here and join this network." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen server med offentlig adresse har blitt med ennå: åpne en av dem her og bli med i dette nettverket."
+          }
+        }
+      }
+    },
+    "No server yet?" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen server ennå?"
+          }
+        }
+      }
+    },
+    "No such room" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rommet finnes ikke"
+          }
+        }
+      }
+    },
+    "None yet. Logins you remember here show up here." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen ennå. Innlogginger du husker her, vises her."
+          }
+        }
+      }
+    },
+    "Not sent: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ikke sendt: %@"
+          }
+        }
+      }
+    },
+    "Not shared" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ikke delt"
+          }
+        }
+      }
+    },
+    "Not valid JSON yet" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ikke gyldig JSON ennå"
+          }
+        }
+      }
+    },
+    "Not with this model" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ikke med denne modellen"
+          }
+        }
+      }
+    },
+    "Nothing yet" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingenting ennå"
+          }
+        }
+      }
+    },
+    "Notifications" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Varsler"
+          }
+        }
+      }
+    },
+    "Nudge makes a small server in your exe.dev account, billed to it, with an HTTPS address of its own." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nudge lager en liten server i exe.dev-kontoen din, fakturert til den, med en egen HTTPS-adresse."
+          }
+        }
+      }
+    },
+    "Nudge recovery kit for %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nudge-gjenopprettingssett for %@"
+          }
+        }
+      }
+    },
+    "Nudge tells you when an answer is ready or an action waits for your approval, while the app is closed." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nudge sier fra når et svar er klart eller en handling venter på godkjenningen din, mens appen er lukket."
+          }
+        }
+      }
+    },
+    "Nudge writes out what you say on this device, so your voice never leaves it. It needs a speech model for that (%@), downloaded once. Settings has others." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nudge skriver ut det du sier på denne enheten, så stemmen din forlater den aldri. Den trenger en talemodell for det (%@), lastet ned én gang. Innstillinger har andre."
+          }
+        }
+      }
+    },
+    "Nudges" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Påminnelser"
+          }
+        }
+      }
+    },
+    "OK" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
+        }
+      }
+    },
+    "On by default in" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "På som standard i"
+          }
+        }
+      }
+    },
+    "On their own" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Frittstående"
+          }
+        }
+      }
+    },
+    "On this device" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "På denne enheten"
+          }
+        }
+      }
+    },
+    "One per line" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Én per linje"
+          }
+        }
+      }
+    },
+    "Only you" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bare du"
+          }
+        }
+      }
+    },
+    "Only you see" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bare du ser"
+          }
+        }
+      }
+    },
+    "Open the room's browser to log in" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Åpne rommets nettleser for å logge inn"
+          }
+        }
+      }
+    },
+    "Or join one: hold a network on your home server first, then come back here." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eller bli med i et: hold et nettverk på hjemmeserveren din først, og kom så tilbake hit."
+          }
+        }
+      }
+    },
+    "Or paste a token" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eller lim inn et token"
+          }
+        }
+      }
+    },
+    "Other assistants" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Andre assistenter"
+          }
+        }
+      }
+    },
+    "Other servers will reach your home at %@." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Andre servere når hjemmet ditt på %@."
+          }
+        }
+      }
+    },
+    "Others reach it at http://nudge.%@.wired" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Andre når den på http://nudge.%@.wired"
+          }
+        }
+      }
+    },
+    "Pairing code" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Koblingskode"
+          }
+        }
+      }
+    },
+    "Part of every address of the people here, so this one stays." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Del av adressen til alle personene her, så denne blir."
+          }
+        }
+      }
+    },
+    "Part of my cluster" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Del av klyngen min"
+          }
+        }
+      }
+    },
+    "Passphrase, 8 characters or more" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Passfrase, 8 tegn eller mer"
+          }
+        }
+      }
+    },
+    "Paste the key" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lim inn nøkkelen"
+          }
+        }
+      }
+    },
+    "People in a room can still turn it on or off there." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Personer i et rom kan fortsatt slå den av eller på der."
+          }
+        }
+      }
+    },
+    "Personal details" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Personopplysninger"
+          }
+        }
+      }
+    },
+    "Phone" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Telefon"
+          }
+        }
+      }
+    },
+    "Pick a room" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Velg et rom"
+          }
+        }
+      }
+    },
+    "Places" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Steder"
+          }
+        }
+      }
+    },
+    "Private message" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Privat melding"
+          }
+        }
+      }
+    },
+    "Private: only you see it and the answer" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Privat: bare du ser den og svaret"
+          }
+        }
+      }
+    },
+    "Profile" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profil"
+          }
+        }
+      }
+    },
+    "Provider" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leverandør"
+          }
+        }
+      }
+    },
+    "Recovery kit" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gjenopprettingssett"
+          }
+        }
+      }
+    },
+    "Remember logins I type here, so the assistant can log in by itself next time" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Husk innlogginger jeg skriver her, så assistenten kan logge inn selv neste gang"
+          }
+        }
+      }
+    },
+    "Remember…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Husk …"
+          }
+        }
+      }
+    },
+    "Reminders when I arrive" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Påminnelser når jeg kommer fram"
+          }
+        }
+      }
+    },
+    "Remove" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fjern"
+          }
+        }
+      }
+    },
+    "Remove %@ from the network?" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fjerne %@ fra nettverket?"
+          }
+        }
+      }
+    },
+    "Remove %@?" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fjerne %@?"
+          }
+        }
+      }
+    },
+    "Remove from my servers" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fjern fra serverne mine"
+          }
+        }
+      }
+    },
+    "Remove this server" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fjern denne serveren"
+          }
+        }
+      }
+    },
+    "Rename" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gi nytt navn"
+          }
+        }
+      }
+    },
+    "Rename room" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gi rommet nytt navn"
+          }
+        }
+      }
+    },
+    "Rename…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gi nytt navn …"
+          }
+        }
+      }
+    },
+    "Replace the key" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bytt ut nøkkelen"
+          }
+        }
+      }
+    },
+    "Retry" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prøv igjen"
+          }
+        }
+      }
+    },
+    "Ribbon" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bånd"
+          }
+        }
+      }
+    },
+    "Ribbon end" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Båndets ende"
+          }
+        }
+      }
+    },
+    "Robot" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Robot"
+          }
+        }
+      }
+    },
+    "Room" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rom"
+          }
+        }
+      }
+    },
+    "Rooms" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rom"
+          }
+        }
+      }
+    },
+    "Running on the server; no key" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kjører på serveren; ingen nøkkel"
+          }
+        }
+      }
+    },
+    "Said to the model before every conversation" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sagt til modellen før hver samtale"
+          }
+        }
+      }
+    },
+    "Save" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lagre"
+          }
+        }
+      }
+    },
+    "Save key" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lagre nøkkel"
+          }
+        }
+      }
+    },
+    "Save read paths" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lagre lesestier"
+          }
+        }
+      }
+    },
+    "Saved" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lagret"
+          }
+        }
+      }
+    },
+    "Saved and installed." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lagret og installert."
+          }
+        }
+      }
+    },
+    "Saved logins" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lagrede innlogginger"
+          }
+        }
+      }
+    },
+    "Saving…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lagrer …"
+          }
+        }
+      }
+    },
+    "Say hello to %@." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Si hei til %@."
+          }
+        }
+      }
+    },
+    "Send" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send"
+          }
+        }
+      }
+    },
+    "Send privately" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send privat"
+          }
+        }
+      }
+    },
+    "Send the invite for %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send invitasjonen til %@"
+          }
+        }
+      }
+    },
+    "Send the link" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send lenken"
+          }
+        }
+      }
+    },
+    "Send them this link, or have them type the code %@ in the Nudge app. It works once, for ten minutes." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send dem denne lenken, eller be dem skrive inn koden %@ i Nudge-appen. Den virker én gang, i ti minutter."
+          }
+        }
+      }
+    },
+    "Sending" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sender"
+          }
+        }
+      }
+    },
+    "Server" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server"
+          }
+        }
+      }
+    },
+    "Server name" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Servernavn"
+          }
+        }
+      }
+    },
+    "Servers" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Servere"
+          }
+        }
+      }
+    },
+    "Servers (%lld)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Servere (%lld)"
+          }
+        }
+      }
+    },
+    "Servers outside your cluster, without federation. One set up from your home can join your cluster later, keeping its rooms and history." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Servere utenfor klyngen din, uten føderasjon. En som er satt opp fra hjemmet ditt, kan bli med i klyngen senere og beholde rommene og historikken."
+          }
+        }
+      }
+    },
+    "Servers that need it ask for it." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Servere som trenger den, spør etter den."
+          }
+        }
+      }
+    },
+    "Set up" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sett opp"
+          }
+        }
+      }
+    },
+    "Set up Nudge" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sett opp Nudge"
+          }
+        }
+      }
+    },
+    "Set up one I started" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sett opp en jeg har startet"
+          }
+        }
+      }
+    },
+    "Settings" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Innstillinger"
+          }
+        }
+      }
+    },
+    "Share where I am" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Del hvor jeg er"
+          }
+        }
+      }
+    },
+    "Share with all my rooms" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Del med alle rommene mine"
+          }
+        }
+      }
+    },
+    "Share with every room" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Del med alle rom"
+          }
+        }
+      }
+    },
+    "Shared with every room" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delt med alle rom"
+          }
+        }
+      }
+    },
+    "Show" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vis"
+          }
+        }
+      }
+    },
+    "Sign in" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Logg inn"
+          }
+        }
+      }
+    },
+    "Sign in again" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Logg inn på nytt"
+          }
+        }
+      }
+    },
+    "Sign in on the web?" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Logge inn på nettet?"
+          }
+        }
+      }
+    },
+    "Sign in to exe.dev" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Logg inn på exe.dev"
+          }
+        }
+      }
+    },
+    "Sign in with link?" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Logge inn med lenke?"
+          }
+        }
+      }
+    },
+    "Sign out" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Logg ut"
+          }
+        }
+      }
+    },
+    "Sign out of %@?" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Logge ut av %@?"
+          }
+        }
+      }
+    },
+    "Sign-in" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Innlogging"
+          }
+        }
+      }
+    },
+    "Signed in" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Logget inn"
+          }
+        }
+      }
+    },
+    "Signed in as" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Logget inn som"
+          }
+        }
+      }
+    },
+    "Signed in to exe.dev" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Logget inn på exe.dev"
+          }
+        }
+      }
+    },
+    "Someone else: it is their home, and they are its admin" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noen andre: det er hjemmet deres, og de er administrator for den"
+          }
+        }
+      }
+    },
+    "Something went wrong" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noe gikk galt"
+          }
+        }
+      }
+    },
+    "Sparks" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gnister"
+          }
+        }
+      }
+    },
+    "Speech" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tale"
+          }
+        }
+      }
+    },
+    "Speech model" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Talemodell"
+          }
+        }
+      }
+    },
+    "Start %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start %@"
+          }
+        }
+      }
+    },
+    "Start again" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start på nytt"
+          }
+        }
+      }
+    },
+    "Start from" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start fra"
+          }
+        }
+      }
+    },
+    "Starting Wired…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Starter Wired …"
+          }
+        }
+      }
+    },
+    "Starting the browser…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Starter nettleseren …"
+          }
+        }
+      }
+    },
+    "Starting the desktop…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Starter skrivebordet …"
+          }
+        }
+      }
+    },
+    "Stop" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stopp"
+          }
+        }
+      }
+    },
+    "Stop dictating" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stopp dikteringen"
+          }
+        }
+      }
+    },
+    "Stop sharing with every room" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slutt å dele med alle rom"
+          }
+        }
+      }
+    },
+    "Stopped" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stoppet"
+          }
+        }
+      }
+    },
+    "Such as en, nb or de" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For eksempel en, nb eller de"
+          }
+        }
+      }
+    },
+    "Summarizing the conversation so far…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oppsummerer samtalen så langt …"
+          }
+        }
+      }
+    },
+    "Swipe a server to remove it, as when it's gone: a new server can then take its name." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sveip en server for å fjerne den, som når den er borte: en ny server kan da ta navnet."
+          }
+        }
+      }
+    },
+    "Take control" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ta kontroll"
+          }
+        }
+      }
+    },
+    "Take my own memory there" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ta med mitt eget minne dit"
+          }
+        }
+      }
+    },
+    "The assistant can't call it any more, and its API key is forgotten." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Assistenten kan ikke kalle det lenger, og API-nøkkelen glemmes."
+          }
+        }
+      }
+    },
+    "The assistant can't use it any more, and its keys and sign-in are forgotten." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Assistenten kan ikke bruke den lenger, og nøklene og innloggingen glemmes."
+          }
+        }
+      }
+    },
+    "The assistant knows where you are here" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Assistenten vet hvor du er her"
+          }
+        }
+      }
+    },
+    "The assistant reads your nudges' times in your time zone and answers you in your language." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Assistenten leser tidspunktene for påminnelsene dine i tidssonen din og svarer deg på språket ditt."
+          }
+        }
+      }
+    },
+    "The assistant's" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Assistentens"
+          }
+        }
+      }
+    },
+    "The assistant: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Assistenten: %@"
+          }
+        }
+      }
+    },
+    "The backup key, sealed with a passphrase" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nøkkelen til sikkerhetskopiene, forseglet med en passfrase"
+          }
+        }
+      }
+    },
+    "The browser is signed in to %@ as you." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nettleseren er logget inn på %@ som deg."
+          }
+        }
+      }
+    },
+    "The browser that shows this code gets signed in as you. Only go on if you opened that page yourself." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nettleseren som viser denne koden, blir logget inn som deg. Fortsett bare hvis du åpnet den siden selv."
+          }
+        }
+      }
+    },
+    "The room's browser, at %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rommets nettleser, på %@"
+          }
+        }
+      }
+    },
+    "The room's desktop" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rommets skrivebord"
+          }
+        }
+      }
+    },
+    "The server printed it when it started." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serveren skrev den ut da den startet."
+          }
+        }
+      }
+    },
+    "Their address" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adressen deres"
+          }
+        }
+      }
+    },
+    "Their name" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Navnet deres"
+          }
+        }
+      }
+    },
+    "Their text is read on the server, so the assistant can search them; the files are stored encrypted. Images are kept but not read." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Teksten deres leses på serveren, så assistenten kan søke i dem; filene lagres kryptert. Bilder beholdes, men leses ikke."
+          }
+        }
+      }
+    },
+    "Then it and your home reach each other, with no port open at home." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Da når den og hjemmet ditt hverandre, uten noen åpen port hjemme."
+          }
+        }
+      }
+    },
+    "They find it in Settings of their app. The invite works for seven days; send them the link." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De finner den i Innstillinger i appen sin. Invitasjonen virker i sju dager; send dem lenken."
+          }
+        }
+      }
+    },
+    "Thinking" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tenker"
+          }
+        }
+      }
+    },
+    "This device signs out of the assistants you joined from there too. You'll need a new pairing code to sign in again." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Denne enheten logger også ut av assistentene du ble med i derfra. Du trenger en ny koblingskode for å logge inn igjen."
+          }
+        }
+      }
+    },
+    "This is the room's own browser. Log in to a site here when the assistant asks you to. What you type goes to this browser only; the assistant never sees passwords." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dette er rommets egen nettleser. Logg inn på et nettsted her når assistenten ber deg om det. Det du skriver, går bare til denne nettleseren; assistenten ser aldri passord."
+          }
+        }
+      }
+    },
+    "This is the room's own desktop. Watch the assistant use its apps, or take over: tap to click, and type below into the window you tapped." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dette er rommets eget skrivebord. Se assistenten bruke appene sine, eller ta over: trykk for å klikke, og skriv under i vinduet du trykket på."
+          }
+        }
+      }
+    },
+    "This month" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Denne måneden"
+          }
+        }
+      }
+    },
+    "This room has no browser" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dette rommet har ingen nettleser"
+          }
+        }
+      }
+    },
+    "This room has no desktop" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dette rommet har ikke noe skrivebord"
+          }
+        }
+      }
+    },
+    "This server leaves the network, and stops reaching your other servers through it." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Denne serveren forlater nettverket og slutter å nå de andre serverne dine gjennom det."
+          }
+        }
+      }
+    },
+    "This server's release has no Wired." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Denne serverens versjon har ikke Wired."
+          }
+        }
+      }
+    },
+    "Time zone" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tidssone"
+          }
+        }
+      }
+    },
+    "To use this link, this device signs out of %@ first." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For å bruke denne lenken logger denne enheten først ut av %@."
+          }
+        }
+      }
+    },
+    "Tool calls, nudges, watches and approvals" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verktøykall, påminnelser, overvåkinger og godkjenninger"
+          }
+        }
+      }
+    },
+    "Tool calls, nudges, watches and approvals show up here." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verktøykall, påminnelser, overvåkinger og godkjenninger vises her."
+          }
+        }
+      }
+    },
+    "Tried before browsing or answering from memory, for what it's for" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prøves før nettsøk eller svar fra minnet, for det den er til"
+          }
+        }
+      }
+    },
+    "Try again" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prøv igjen"
+          }
+        }
+      }
+    },
+    "Trying again (%lld): %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prøver igjen (%1$lld): %2$@"
+          }
+        }
+      }
+    },
+    "Turn off" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slå av"
+          }
+        }
+      }
+    },
+    "Turn off Wired" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slå av Wired"
+          }
+        }
+      }
+    },
+    "Turn off Wired here?" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slå av Wired her?"
+          }
+        }
+      }
+    },
+    "Turn on Share where I am in your profile to change it." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slå på Del hvor jeg er i profilen din for å endre det."
+          }
+        }
+      }
+    },
+    "Turn on federation at home" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slå på føderasjon hjemme"
+          }
+        }
+      }
+    },
+    "Turn on notifications" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slå på varsler"
+          }
+        }
+      }
+    },
+    "Turn on the connectors extension for this room under Room." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slå på koblingsutvidelsen for dette rommet under Rom."
+          }
+        }
+      }
+    },
+    "Turn on the documents extension for this room under Room." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slå på dokumentutvidelsen for dette rommet under Rom."
+          }
+        }
+      }
+    },
+    "Turn on the lists extension for this room under Room." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slå på listeutvidelsen for dette rommet under Rom."
+          }
+        }
+      }
+    },
+    "Turn on the mcp extension for this room under Room." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slå på mcp-utvidelsen for dette rommet under Rom."
+          }
+        }
+      }
+    },
+    "Turning it on…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slår den på …"
+          }
+        }
+      }
+    },
+    "Type into the desktop" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skriv på skrivebordet"
+          }
+        }
+      }
+    },
+    "Type into the page" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skriv på siden"
+          }
+        }
+      }
+    },
+    "Until %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Til %@"
+          }
+        }
+      }
+    },
+    "Update automatically" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oppdater automatisk"
+          }
+        }
+      }
+    },
+    "Upload" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last opp"
+          }
+        }
+      }
+    },
+    "Uploading %@…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Laster opp %@ …"
+          }
+        }
+      }
+    },
+    "Use as your home's address" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bruk som hjemmets adresse"
+          }
+        }
+      }
+    },
+    "Use http://nudge.%@.wired as your home's address?" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bruke http://nudge.%@.wired som hjemmets adresse?"
+          }
+        }
+      }
+    },
+    "Use it" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bruk den"
+          }
+        }
+      }
+    },
+    "Use it for" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bruk den til"
+          }
+        }
+      }
+    },
+    "Use this device's: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bruk denne enhetens: %@"
+          }
+        }
+      }
+    },
+    "Waiting for the connection" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Venter på tilkoblingen"
+          }
+        }
+      }
+    },
+    "Waiting for the page…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Venter på siden …"
+          }
+        }
+      }
+    },
+    "Waiting for the screen…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Venter på skjermen …"
+          }
+        }
+      }
+    },
+    "Waiting to join" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Venter på å bli med"
+          }
+        }
+      }
+    },
+    "Watching %lld places for your reminders." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Overvåker %lld steder for påminnelsene dine."
+          }
+        }
+      }
+    },
+    "Wears" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Har på seg"
+          }
+        }
+      }
+    },
+    "What it calls itself. You can change it later." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Det den kaller seg selv. Du kan endre det senere."
+          }
+        }
+      }
+    },
+    "What the assistant can do beyond talking. Saving installs them again right away and writes them to the server's nudge.json; if one fails to start, nothing changes. Each room can still turn them on or off for itself." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Det assistenten kan gjøre utover å snakke. Når du lagrer, installeres de på nytt med en gang og skrives til serverens nudge.json; hvis én ikke starter, endres ingenting. Hvert rom kan fortsatt slå dem av eller på for seg selv."
+          }
+        }
+      }
+    },
+    "What the assistant knows in this room." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Det assistenten vet i dette rommet."
+          }
+        }
+      }
+    },
+    "What the model saw" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Det modellen så"
+          }
+        }
+      }
+    },
+    "What you say is written out on this device: your voice never leaves it. Nudge hides personal details from the assistant's model in the text, as in what you type." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Det du sier, skrives ut på denne enheten: stemmen din forlater den aldri. Nudge skjuler personopplysninger for assistentens modell i teksten, som i det du skriver."
+          }
+        }
+      }
+    },
+    "Where is the server?" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hvor er serveren?"
+          }
+        }
+      }
+    },
+    "Where your Nudge runs." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Nudge-en din kjører."
+          }
+        }
+      }
+    },
+    "Who is it for?" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hvem er den for?"
+          }
+        }
+      }
+    },
+    "Wired" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wired"
+          }
+        }
+      }
+    },
+    "With it and a backup, everything on this server can be brought back. Keep it away from the server, and the passphrase in your password manager." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Med det og en sikkerhetskopi kan alt på denne serveren hentes tilbake. Oppbevar det et annet sted enn serveren, og passfrasen i passordbehandleren din."
+          }
+        }
+      }
+    },
+    "With your own API key" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Med din egen API-nøkkel"
+          }
+        }
+      }
+    },
+    "Working…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jobber …"
+          }
+        }
+      }
+    },
+    "You have rooms on these. If one is yours, manage it here: your home vouches for you." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du har rom på disse. Hvis en av dem er din, kan du administrere den her: hjemmet ditt går god for deg."
+          }
+        }
+      }
+    },
+    "You joined it from home: its rooms are beside your own." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du ble med i den hjemmefra: rommene ligger ved siden av dine egne."
+          }
+        }
+      }
+    },
+    "You left this room" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du forlot dette rommet"
+          }
+        }
+      }
+    },
+    "You will be %@'s first person, its admin, and this server's owner." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du blir den første personen hos %@, administratoren og eieren av denne serveren."
+          }
+        }
+      }
+    },
+    "You'll need a new pairing code from it to sign in again." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du trenger en ny koblingskode fra den for å logge inn igjen."
+          }
+        }
+      }
+    },
+    "Your address" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adressen din"
+          }
+        }
+      }
+    },
+    "Your assistant on Nudge" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Assistenten din på Nudge"
+          }
+        }
+      }
+    },
+    "Your devices stop managing it. You stay its owner, and nothing on the server changes." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enhetene dine slutter å administrere den. Du forblir eieren, og ingenting på serveren endres."
+          }
+        }
+      }
+    },
+    "Your email, or what exe.dev asks" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "E-posten din, eller det exe.dev spør om"
+          }
+        }
+      }
+    },
+    "Your home first" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hjemmet ditt først"
+          }
+        }
+      }
+    },
+    "Your home stops sending it your profile and memory, and this device signs out of it. You stay a member there." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hjemmet ditt slutter å sende den profilen og minnet ditt, og denne enheten logger ut av den. Du forblir medlem der."
+          }
+        }
+      }
+    },
+    "Your limit" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grensen din"
+          }
+        }
+      }
+    },
+    "Your messages" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meldingene dine"
+          }
+        }
+      }
+    },
+    "Your name" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Navnet ditt"
+          }
+        }
+      }
+    },
+    "Your other servers then reach your home over Wired. Your home's address is who it is to other assistants: the ones you joined from home have to be joined again." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De andre serverne dine når da hjemmet ditt over Wired. Hjemmets adresse er hvem det er for andre assistenter: de du ble med i hjemmefra, må du bli med i på nytt."
+          }
+        }
+      }
+    },
+    "Your servers reach each other over Wired, encrypted, with no port open at home: home holds the network, and servers with a public address join it." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serverne dine når hverandre over Wired, kryptert, uten noen åpen port hjemme: hjemmet holder nettverket, og servere med offentlig adresse blir med i det."
+          }
+        }
+      }
+    },
+    "Your servers stop reaching each other through this network." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serverne dine slutter å nå hverandre gjennom dette nettverket."
+          }
+        }
+      }
+    },
+    "Yours" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dine"
+          }
+        }
+      }
+    },
+    "Yours: their assistants, model keys and updates." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dine: assistentene deres, modellnøkler og oppdateringer."
+          }
+        }
+      }
+    },
+    "exe.dev asks for your email and sends you a link. Open it, then come back: the app is signed in once exe.dev has your key." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "exe.dev spør om e-posten din og sender deg en lenke. Åpne den, og kom så tilbake: appen er logget inn når exe.dev har nøkkelen din."
+          }
+        }
+      }
+    },
+    "exe.dev token" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "exe.dev-token"
+          }
+        }
+      }
+    },
+    "next" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "neste"
+          }
+        }
+      }
+    },
+    "queued" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "i kø"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

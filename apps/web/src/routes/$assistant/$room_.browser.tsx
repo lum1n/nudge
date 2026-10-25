@@ -9,6 +9,7 @@ import {
   useLiveState,
   useLiveView,
 } from "../../live-view.ts";
+import { dateLocale, m } from "../../i18n/index.ts";
 
 export const Route = createFileRoute("/$assistant/$room_/browser")({ component: Browser });
 
@@ -31,27 +32,24 @@ function Browser() {
   return (
     <section className="mx-auto flex max-w-3xl flex-col gap-3 p-3 sm:p-4">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-        <h2 className="text-lg font-medium">Browser</h2>
+        <h2 className="text-lg font-medium">{m.panels.browser.title}</h2>
         <Link
           to="/$assistant/$room"
           params={{ assistant, room }}
           className="text-sm text-stone-600 hover:underline"
         >
-          Back to the room
+          {m.panels.backToRoom}
         </Link>
       </div>
-      <p className="text-sm text-stone-600">
-        This is the room's own browser. Log in to a site here when the assistant asks you to. What
-        you type goes to this browser only; the assistant never sees passwords.
-      </p>
+      <p className="text-sm text-stone-600">{m.panels.browser.intro}</p>
       {state.status === "closed" ? (
         <p className="text-red-700">
           {state.closeCode === NOT_FOUND
-            ? "This assistant has no browser extension, or you are not in this room."
-            : `Disconnected${state.error ? `: ${state.error}` : ""}.`}
+            ? m.panels.browser.notFound
+            : m.panels.disconnected(state.error)}
         </p>
       ) : socket === undefined || state.status === "connecting" ? (
-        <p className="text-stone-500">Starting the browser…</p>
+        <p className="text-stone-500">{m.panels.browser.starting}</p>
       ) : (
         <Live socket={socket} />
       )}
@@ -113,12 +111,12 @@ function Live({ socket }: { socket: LiveSocket }) {
     <div className="relative left-1/2 flex w-[min(1282px,calc(100vw-2rem))] -translate-x-1/2 flex-col gap-2">
       {state.control !== undefined && !inControl && (
         <div className="flex items-center gap-3 rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          {state.control.holder ?? "Someone else"} is using the browser; you are watching.
+          {m.panels.browser.watching(state.control.holder ?? m.panels.someoneElse)}
           <button
             onClick={() => socket.send({ type: "take" })}
             className="rounded border border-amber-700 px-2 py-0.5 hover:bg-amber-100"
           >
-            Take control
+            {m.panels.takeControl}
           </button>
         </div>
       )}
@@ -126,8 +124,8 @@ function Live({ socket }: { socket: LiveSocket }) {
         <button
           type="button"
           onClick={() => drive({ type: "navigate", url: "back" })}
-          aria-label="Back"
-          title="Back"
+          aria-label={m.common.back}
+          title={m.common.back}
           className="rounded border border-stone-300 px-2 text-sm"
         >
           ←
@@ -135,16 +133,18 @@ function Live({ socket }: { socket: LiveSocket }) {
         <input
           value={address}
           onChange={(event) => setAddress(event.target.value)}
-          aria-label="Address"
+          aria-label={m.panels.browser.address}
           className="min-w-0 flex-1 rounded border border-stone-300 px-2 py-1 text-sm"
         />
-        <button className="rounded border border-stone-300 px-3 text-sm">Go</button>
+        <button className="rounded border border-stone-300 px-3 text-sm">
+          {m.panels.browser.go}
+        </button>
       </form>
       <canvas
         ref={canvas}
         tabIndex={0}
         aria-disabled={!inControl}
-        aria-label="The room's browser. Click to focus, then type."
+        aria-label={m.panels.browser.canvas}
         className={`w-full rounded border border-stone-300 bg-white focus:outline-2 focus:outline-sky-600 ${inControl ? "cursor-pointer" : "cursor-not-allowed opacity-90"}`}
         onClick={(event) => {
           event.currentTarget.focus();
@@ -169,7 +169,7 @@ function Live({ socket }: { socket: LiveSocket }) {
           if (text) drive({ type: "text", text });
         }}
       />
-      {frame === undefined && <p className="text-stone-500">Waiting for the page…</p>}
+      {frame === undefined && <p className="text-stone-500">{m.panels.browser.waiting}</p>}
       <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2 text-sm">
           <input
@@ -177,21 +177,21 @@ function Live({ socket }: { socket: LiveSocket }) {
             checked={remember}
             onChange={(event) => setRemember(event.target.checked)}
           />
-          Remember logins I type here, so the assistant can log in by itself next time
+          {m.panels.browser.remember}
         </label>
         <button
           onClick={() => socket.send({ type: "done", remember })}
           disabled={!inControl}
           className="rounded bg-stone-800 px-3 py-1 text-sm text-white hover:bg-stone-700 disabled:opacity-40"
         >
-          Done
+          {m.panels.browser.done}
         </button>
         {state.saved !== undefined && (
           <span className="text-sm text-stone-600">
             {state.saved.length
-              ? `Saved the login for ${state.saved.join(", ")}.`
-              : "Nothing to save."}{" "}
-            Ask the assistant to try again.
+              ? m.panels.browser.savedFor(state.saved.join(", "))
+              : m.panels.browser.nothingToSave}{" "}
+            {m.panels.browser.askAgain}
           </span>
         )}
       </div>
@@ -204,9 +204,11 @@ function Live({ socket }: { socket: LiveSocket }) {
 function SavedLogins({ socket, logins }: { socket: LiveSocket; logins: SavedLogin[] }) {
   return (
     <div className="mt-2 flex flex-col gap-1">
-      <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">Saved logins</h3>
+      <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">
+        {m.panels.browser.savedLogins}
+      </h3>
       {logins.length === 0 ? (
-        <p className="text-sm text-stone-500">None yet. Logins you remember here show up here.</p>
+        <p className="text-sm text-stone-500">{m.panels.browser.noLogins}</p>
       ) : (
         <ul className="flex flex-col gap-1">
           {logins.map((login) => (
@@ -214,13 +216,13 @@ function SavedLogins({ socket, logins }: { socket: LiveSocket; logins: SavedLogi
               <span className="font-medium">{login.host}</span>
               {login.username && <span className="text-stone-600">{login.username}</span>}
               <span className="text-stone-500">
-                saved {new Date(login.savedAt).toLocaleDateString()}
+                {m.panels.browser.saved(new Date(login.savedAt).toLocaleDateString(dateLocale()))}
               </span>
               <button
                 onClick={() => socket.send({ type: "forget", host: login.host })}
                 className="rounded border border-stone-300 px-2 py-0.5 hover:bg-stone-100"
               >
-                Forget
+                {m.panels.browser.forget}
               </button>
             </li>
           ))}

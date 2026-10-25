@@ -31,6 +31,10 @@ It adds the Apple Rust targets that are missing, builds the Rust core for iOS, t
 
 To try it without a real model: `pnpm build` in the repository, then `node packages/server/scripts/faux-server.ts`. It prints the server's address and a pairing code for Bo; the simulator and the Mac reach it at that address.
 
+## Languages
+
+The app speaks English and Norwegian (bokmål), whichever comes first in the device's languages. The English text is in the Swift code itself (`Text("…")`, `Button("…")` and the like), and the Norwegian in the String Catalog `Nudge/Localizable.xcstrings`. Xcode adds new strings to the catalog on each build, marked as new, and marks ones the code no longer uses as stale: translate them in Xcode's catalog editor. Text passed on as a `String` (a variable, or text joined with `+`) is shown as it is, untranslated.
+
 ## Push
 
 The server sends to APNs itself, so it needs an APNs key: in the Apple Developer account, Keys → create a key with Apple Push Notifications service, download the `.p8`, and note its key id and your team id. Then in the settings of the server's push extension (see the repository's README):

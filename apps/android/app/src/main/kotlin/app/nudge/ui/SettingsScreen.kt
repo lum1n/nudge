@@ -58,6 +58,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
@@ -67,8 +68,10 @@ import app.nudge.avatar.Portrait
 import app.nudge.AppModel
 import app.nudge.BuildConfig
 import app.nudge.Dictation
+import app.nudge.R
 import app.nudge.Session
 import app.nudge.explain
+import app.nudge.text
 import java.text.NumberFormat
 import java.util.Currency
 import kotlinx.coroutines.launch
@@ -191,8 +194,8 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
         topBar = {
             MediumFlexibleTopAppBar(
                 colors = groupedTopBarColors(),
-                title = { Text("Settings") },
-                navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                title = { Text(stringResource(R.string.settings_title)) },
+                navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.settings_back)) } },
                 scrollBehavior = scrollBehavior,
             )
         },
@@ -207,15 +210,15 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
             ),
         ) {
             group(
-                "Account",
+                text(R.string.settings_account),
                 listOf(
                     { shapes ->
                         SegmentedListItem(
                             onClick = { profile = true },
                             shapes = shapes,
                             leadingContent = { Icon(Icons.Outlined.AccountCircle, null) },
-                            overlineContent = { Text("Signed in as") },
-                            supportingContent = { Text("Your name, picture, time zone and language") },
+                            overlineContent = { Text(stringResource(R.string.settings_signed_in_as)) },
+                            supportingContent = { Text(stringResource(R.string.settings_profile_summary)) },
                             trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) },
                         ) { Text(me?.player?.displayName ?: "…") }
                     },
@@ -223,21 +226,21 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                         SegmentedListItem(
                             shapes = shapes,
                             leadingContent = { Icon(Icons.Outlined.SmartToy, null) },
-                            overlineContent = { Text("Assistant") },
+                            overlineContent = { Text(stringResource(R.string.settings_assistant)) },
                         ) { Text(session.account.assistantName) }
                     },
                     { shapes ->
                         SegmentedListItem(
                             shapes = shapes,
                             leadingContent = { Icon(Icons.Outlined.Dns, null) },
-                            overlineContent = { Text("Server") },
+                            overlineContent = { Text(stringResource(R.string.settings_server)) },
                         ) { Text(session.account.server) }
                     },
                 ),
             )
 
             group(
-                "Servers",
+                text(R.string.settings_servers),
                 listOf { shapes ->
                     SegmentedListItem(
                         onClick = { servers = ServersPage.List },
@@ -245,25 +248,31 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                         leadingContent = { Icon(Icons.Outlined.Dns, null) },
                         supportingContent = {
                             Text(
-                                if (owned.isEmpty()) "Make your own on exe.dev, and assistants on it"
-                                else "Yours: their assistants, model keys and updates",
+                                stringResource(
+                                    if (owned.isEmpty()) R.string.settings_servers_none else R.string.settings_servers_some,
+                                ),
                             )
                         },
                         trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) },
-                    ) { Text(if (owned.isEmpty()) "Servers" else "Servers (${owned.size})") }
+                    ) {
+                        Text(
+                            if (owned.isEmpty()) stringResource(R.string.settings_servers)
+                            else stringResource(R.string.settings_servers_count, owned.size),
+                        )
+                    }
                 },
             )
 
             memberships?.let { joined ->
                 group(
-                    "Other assistants",
+                    text(R.string.settings_other_assistants),
                     buildList<GroupRow> {
                         add { shapes ->
                             SegmentedListItem(
                                 shapes = shapes,
                                 leadingContent = { Icon(Icons.Outlined.AlternateEmail, null) },
-                                overlineContent = { Text("Your address") },
-                                supportingContent = { Text("An admin of another assistant invites you by it; the invite opens here.") },
+                                overlineContent = { Text(stringResource(R.string.settings_your_address)) },
+                                supportingContent = { Text(stringResource(R.string.settings_your_address_summary)) },
                             ) { Text(joined.address) }
                         }
                         joined.memberships.forEach { membership ->
@@ -280,11 +289,11 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                                         }
                                     },
                                     onLongClick = { leaving = membership },
-                                    onLongClickLabel = "Leave",
+                                    onLongClickLabel = stringResource(R.string.settings_leave),
                                     shapes = shapes,
                                     leadingContent = { Icon(Icons.Outlined.SmartToy, null) },
                                     overlineContent = { Text(java.net.URI(membership.server).host ?: membership.server) },
-                                    supportingContent = { Text("Take my own memory there, but not what only I see. Long press to leave.") },
+                                    supportingContent = { Text(stringResource(R.string.settings_carry_memory)) },
                                     trailingContent = { Switch(checked = membership.carryMemory, onCheckedChange = null) },
                                 ) { Text(membership.assistant) }
                             }
@@ -296,7 +305,7 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
             val standalone = places.filter { it.account.standalone }
             if (standalone.isNotEmpty()) {
                 group(
-                    "On their own",
+                    text(R.string.settings_standalone),
                     standalone.map<Session, GroupRow> { place ->
                         { shapes ->
                             // Read so the row changes once the server says who the player is.
@@ -305,14 +314,15 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                             SegmentedListItem(
                                 onClick = { if (canJoin) joiningCluster = place },
                                 onLongClick = { signingOutOf = place },
-                                onLongClickLabel = "Sign out",
+                                onLongClickLabel = stringResource(R.string.settings_sign_out),
                                 shapes = shapes,
                                 leadingContent = { Icon(Icons.Outlined.SmartToy, null) },
                                 overlineContent = { Text(java.net.URI(place.account.server).host ?: place.account.server) },
                                 supportingContent = {
                                     Text(
-                                        if (canJoin) "Started from your home, without federation. Tap to join your cluster, keeping its rooms. Long press to sign out."
-                                        else "Outside your cluster, without federation: you are a person of its own. Long press to sign out.",
+                                        stringResource(
+                                            if (canJoin) R.string.settings_standalone_can_join else R.string.settings_standalone_outside,
+                                        ),
                                     )
                                 },
                             ) { Text(place.account.assistantName) }
@@ -326,34 +336,38 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
             admin.forEach { at ->
                 group(
                     // Titles key the list, and assistants on different servers may share a name.
-                    if (at === session) "Assistant" else "${at.account.assistantName} on ${java.net.URI(at.account.server).host ?: at.account.server}",
+                    if (at === session) {
+                        text(R.string.settings_assistant)
+                    } else {
+                        text(R.string.settings_assistant_on, at.account.assistantName, java.net.URI(at.account.server).host ?: at.account.server)
+                    },
                     buildList<GroupRow> {
                         add { shapes ->
                             SegmentedListItem(
                                 onClick = { robotOf = at },
                                 shapes = shapes,
                                 leadingContent = { Portrait(appearance = at.look(), size = 24.dp) },
-                                supportingContent = { Text("How it looks to everyone, in every app") },
+                                supportingContent = { Text(stringResource(R.string.settings_robot_summary)) },
                                 trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) },
-                            ) { Text("Robot") }
+                            ) { Text(stringResource(R.string.settings_robot)) }
                         }
                         add { shapes ->
                             SegmentedListItem(
                                 onClick = { extensionsOf = at },
                                 shapes = shapes,
                                 leadingContent = { Icon(Icons.Outlined.Extension, null) },
-                                supportingContent = { Text("Turn them on or off and change their settings, for every room") },
+                                supportingContent = { Text(stringResource(R.string.settings_extensions_summary)) },
                                 trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) },
-                            ) { Text("Extensions") }
+                            ) { Text(stringResource(R.string.settings_extensions)) }
                         }
                         add { shapes ->
                             SegmentedListItem(
                                 onClick = { peopleOf = at },
                                 shapes = shapes,
                                 leadingContent = { Icon(Icons.Outlined.QrCode2, null) },
-                                supportingContent = { Text("Invite someone, or sign in another device, with a pairing code and QR code") },
+                                supportingContent = { Text(stringResource(R.string.settings_people_summary)) },
                                 trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) },
-                            ) { Text("People and devices") }
+                            ) { Text(stringResource(R.string.settings_people)) }
                         }
                         // Without federation at home there are no memberships; joined ones have it.
                         if (if (at === session) memberships != null else !at.account.standalone) {
@@ -362,9 +376,9 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                                     onClick = { invitesOf = at },
                                     shapes = shapes,
                                     leadingContent = { Icon(Icons.Outlined.PersonAdd, null) },
-                                    supportingContent = { Text("Let someone from another assistant join, by their address") },
+                                    supportingContent = { Text(stringResource(R.string.settings_invites_summary)) },
                                     trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) },
-                                ) { Text("Invites") }
+                                ) { Text(stringResource(R.string.settings_invites)) }
                             }
                         }
                     },
@@ -373,7 +387,7 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
 
             val mine = memory
             group(
-                "My memory",
+                text(R.string.settings_memory),
                 buildList<GroupRow> {
                     if (mine == null) {
                         add { _ -> LoadingIndicator(Modifier.padding(16.dp)) }
@@ -385,9 +399,9 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                             onCheckedChange = { shared -> change { client.shareMyMemory(shared) } },
                             shapes = shapes,
                             leadingContent = { Icon(Icons.Outlined.Share, null) },
-                            supportingContent = { Text("Every room you're in sees these facts, and the assistant there too.") },
+                            supportingContent = { Text(stringResource(R.string.settings_memory_share_summary)) },
                             trailingContent = { Switch(checked = mine.shared, onCheckedChange = null) },
-                        ) { Text("Share with all my rooms") }
+                        ) { Text(stringResource(R.string.settings_memory_share)) }
                     }
                     mine.facts.forEach { fact ->
                         add { shapes ->
@@ -395,7 +409,7 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                                 shapes = shapes,
                                 trailingContent = {
                                     IconButton(onClick = { change { client.forgetForMe(fact.id) } }) {
-                                        Icon(Icons.Outlined.Close, "Forget")
+                                        Icon(Icons.Outlined.Close, stringResource(R.string.settings_forget))
                                     }
                                 },
                             ) { Text(fact.text) }
@@ -407,7 +421,7 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                 OutlinedTextField(
                     value = newFact,
                     onValueChange = { newFact = it },
-                    placeholder = { Text("Remember about me…") },
+                    placeholder = { Text(stringResource(R.string.settings_remember_placeholder)) },
                     singleLine = true,
                     shape = MaterialTheme.shapes.large,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -424,7 +438,7 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
 
             // Values only this player sees: everyone else, and the model, get a placeholder.
             group(
-                "Only you see",
+                text(R.string.settings_hidden),
                 buildList<GroupRow> {
                     val values = hidden
                     if (values == null) {
@@ -437,9 +451,9 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                                 shapes = shapes,
                                 leadingContent = { Icon(Icons.Outlined.Lock, null) },
                                 supportingContent = {
-                                    Text("Hide an address, a name or a number: the others and the assistant see it as hidden, in every room.")
+                                    Text(stringResource(R.string.settings_hidden_none_summary))
                                 },
-                            ) { Text("Nothing hidden yet") }
+                            ) { Text(stringResource(R.string.settings_hidden_none)) }
                         }
                     }
                     values.forEach { value ->
@@ -450,7 +464,7 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                                 trailingContent = {
                                     // Forgotten for good: from then on everyone sees only the placeholder.
                                     IconButton(onClick = { change { client.forgetValue(value.placeholder) } }) {
-                                        Icon(Icons.Outlined.Close, "Forget for good")
+                                        Icon(Icons.Outlined.Close, stringResource(R.string.settings_hidden_forget))
                                     }
                                 },
                             ) { Text(value.value) }
@@ -462,7 +476,7 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                 OutlinedTextField(
                     value = newHidden,
                     onValueChange = { newHidden = it },
-                    placeholder = { Text("Hide a value…") },
+                    placeholder = { Text(stringResource(R.string.settings_hidden_placeholder)) },
                     singleLine = true,
                     shape = MaterialTheme.shapes.large,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -479,7 +493,7 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
 
             usage?.let { spend ->
                 group(
-                    "This month",
+                    text(R.string.settings_spend),
                     buildList<GroupRow> {
                         fun row(label: String, value: Double) = add { shapes ->
                             SegmentedListItem(
@@ -488,16 +502,16 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                                 trailingContent = { Text(dollars(value), style = MaterialTheme.typography.titleMedium) },
                             ) { Text(label) }
                         }
-                        row("Your messages", spend.mine)
-                        row("Everyone", spend.total)
-                        spend.perPlayerUsd?.let { row("Your limit", it) }
-                        spend.monthlyUsd?.let { row("Monthly limit", it) }
+                        row(text(R.string.settings_spend_mine), spend.mine)
+                        row(text(R.string.settings_spend_everyone), spend.total)
+                        spend.perPlayerUsd?.let { row(text(R.string.settings_spend_your_limit), it) }
+                        spend.monthlyUsd?.let { row(text(R.string.settings_spend_monthly_limit), it) }
                     },
                 )
             }
 
             group(
-                "Speech",
+                text(R.string.settings_speech),
                 listOf { shapes ->
                     SegmentedListItem(
                         onClick = { speech = true },
@@ -505,28 +519,30 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                         leadingContent = { Icon(Icons.Outlined.Mic, null) },
                         supportingContent = { Text(speechLanguages.joinToString { Dictation.displayName(it) }) },
                         trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) },
-                    ) { Text("Languages you speak") }
+                    ) { Text(stringResource(R.string.settings_speech_languages)) }
                 },
             )
 
             group(
-                "Notifications",
+                text(R.string.settings_notifications),
                 listOf(
                     { shapes ->
                         SegmentedListItem(
                             shapes = shapes,
                             leadingContent = { Icon(Icons.Outlined.Notifications, null) },
                             supportingContent = {
-                                Text("When an answer is ready or an action waits for your approval, while the app is closed.")
+                                Text(stringResource(R.string.settings_notifications_summary))
                             },
                         ) {
                             Text(
-                                when {
-                                    !BuildConfig.FIREBASE -> "Not in this build"
-                                    !notificationsOn -> "Off in the phone's settings"
-                                    platforms?.fcm != true -> "Not sent by this server"
-                                    else -> "On"
-                                },
+                                stringResource(
+                                    when {
+                                        !BuildConfig.FIREBASE -> R.string.settings_notifications_no_build
+                                        !notificationsOn -> R.string.settings_notifications_off
+                                        platforms?.fcm != true -> R.string.settings_notifications_no_server
+                                        else -> R.string.settings_notifications_on
+                                    },
+                                ),
                             )
                         }
                     },
@@ -545,7 +561,7 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                     modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
                 ) {
                     Icon(Icons.AutoMirrored.Outlined.Logout, null, Modifier.padding(end = 8.dp))
-                    Text("Sign out")
+                    Text(stringResource(R.string.settings_sign_out))
                 }
             }
         }
@@ -554,9 +570,9 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
     leaving?.let { membership ->
         AlertDialog(
             onDismissRequest = { leaving = null },
-            title = { Text("Leave ${membership.assistant}?") },
+            title = { Text(stringResource(R.string.settings_leave_title, membership.assistant)) },
             text = {
-                Text("Your home stops sending it your profile and memory, and this device signs out of it. You stay a member there.")
+                Text(stringResource(R.string.settings_leave_text))
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -568,18 +584,18 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                             problem = explain(error)
                         }
                     }
-                }) { Text("Leave") }
+                }) { Text(stringResource(R.string.settings_leave)) }
             },
-            dismissButton = { TextButton(onClick = { leaving = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { leaving = null }) { Text(stringResource(R.string.settings_cancel)) } },
         )
     }
 
     joiningCluster?.let { place ->
         AlertDialog(
             onDismissRequest = { joiningCluster = null },
-            title = { Text("Join ${place.account.assistantName} to your cluster?") },
+            title = { Text(stringResource(R.string.settings_join_cluster_title, place.account.assistantName)) },
             text = {
-                Text("It gets federation, and you join it from home as the person you are there now: its rooms and history stay, and your other devices list it.")
+                Text(stringResource(R.string.settings_join_cluster_text))
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -592,24 +608,24 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
                             problem = explain(error)
                         }
                     }
-                }) { Text("Join my cluster") }
+                }) { Text(stringResource(R.string.settings_join_cluster)) }
             },
-            dismissButton = { TextButton(onClick = { joiningCluster = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { joiningCluster = null }) { Text(stringResource(R.string.settings_cancel)) } },
         )
     }
 
     signingOutOf?.let { place ->
         AlertDialog(
             onDismissRequest = { signingOutOf = null },
-            title = { Text("Sign out of ${place.account.assistantName}?") },
-            text = { Text("You'll need a new pairing code from it to sign in again.") },
+            title = { Text(stringResource(R.string.settings_sign_out_of_title, place.account.assistantName)) },
+            text = { Text(stringResource(R.string.settings_sign_out_of_text)) },
             confirmButton = {
                 TextButton(onClick = {
                     signingOutOf = null
                     scope.launch { model.signOutOf(place) }
-                }) { Text("Sign out") }
+                }) { Text(stringResource(R.string.settings_sign_out)) }
             },
-            dismissButton = { TextButton(onClick = { signingOutOf = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { signingOutOf = null }) { Text(stringResource(R.string.settings_cancel)) } },
         )
     }
 
@@ -617,15 +633,15 @@ fun SettingsScreen(model: AppModel, session: Session, close: () -> Unit) {
         AlertDialog(
             onDismissRequest = { confirmSignOut = false },
             icon = { Icon(Icons.AutoMirrored.Outlined.Logout, null) },
-            title = { Text("Sign out of ${session.account.assistantName}?") },
-            text = { Text("This device signs out of the assistants you joined from there too. You'll need a new pairing code to sign in again.") },
+            title = { Text(stringResource(R.string.settings_sign_out_of_title, session.account.assistantName)) },
+            text = { Text(stringResource(R.string.settings_sign_out_home_text)) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmSignOut = false
                     scope.launch { model.signOut() }
-                }) { Text("Sign out") }
+                }) { Text(stringResource(R.string.settings_sign_out)) }
             },
-            dismissButton = { TextButton(onClick = { confirmSignOut = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { confirmSignOut = false }) { Text(stringResource(R.string.settings_cancel)) } },
         )
     }
 }

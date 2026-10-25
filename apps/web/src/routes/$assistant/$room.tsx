@@ -51,6 +51,7 @@ import {
   toThreadMessageLike,
   transcript,
 } from "../../assistant-runtime.ts";
+import { dateLocale, m } from "../../i18n/index.ts";
 import { assistantsQuery, meQuery } from "../../queries.ts";
 
 export const Route = createFileRoute("/$assistant/$room")({ component: Room });
@@ -92,13 +93,13 @@ function Room() {
   if (held?.state.status === "gone")
     return (
       <p className="p-4 text-red-700">
-        {held.state.reason === "removed" ? "You were removed from this room." : "No such room."}
+        {held.state.reason === "removed" ? m.room.removed : m.room.noSuchRoom}
       </p>
     );
   if (held === undefined || view === undefined)
     return (
       <p className="p-4 text-stone-500">
-        {connection.kind === "closed" ? `Disconnected: ${connection.reason}.` : "Connecting…"}
+        {connection.kind === "closed" ? m.room.disconnected(connection.reason) : m.room.connecting}
       </p>
     );
 
@@ -109,16 +110,14 @@ function Room() {
         {drawer && (
           <button
             type="button"
-            aria-label="Close the room's details"
+            aria-label={m.room.closeDetails}
             tabIndex={-1}
             onClick={closeDrawer}
             className="fixed inset-0 z-20 bg-stone-900/30 md:hidden"
           />
         )}
         <aside
-          {...(drawer
-            ? { role: "dialog", "aria-modal": true, "aria-label": "The room's details" }
-            : {})}
+          {...(drawer ? { role: "dialog", "aria-modal": true, "aria-label": m.room.details } : {})}
           onKeyDown={(event) => {
             if (drawer && event.key === "Escape") closeDrawer();
           }}
@@ -137,7 +136,7 @@ function Room() {
                     {member.address !== undefined && (
                       <span className="text-stone-400">
                         {" "}
-                        (from {member.address.slice(member.address.indexOf("@") + 1)})
+                        {m.room.from(member.address.slice(member.address.indexOf("@") + 1))}
                       </span>
                     )}
                   </span>
@@ -150,69 +149,69 @@ function Room() {
               onClick={closeDrawer}
               className="shrink-0 rounded px-2 py-1 text-sm text-stone-600 hover:bg-stone-200 md:hidden"
             >
-              Close
+              {m.common.close}
             </button>
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
               to="/$assistant/$room/activity"
               params={{ assistant, room }}
-              title="Tool calls, nudges, watches and approvals behind the chat"
+              title={m.room.links.activityTitle}
               className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
             >
-              Activity
+              {m.room.links.activity}
             </Link>
             <Link
               to="/$assistant/$room/browser"
               params={{ assistant, room }}
               className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
             >
-              Browser
+              {m.room.links.browser}
             </Link>
             <Link
               to="/$assistant/$room/desktop"
               params={{ assistant, room }}
-              title="The room's desktop, where the assistant uses apps"
+              title={m.room.links.desktopTitle}
               className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
             >
-              Desktop
+              {m.room.links.desktop}
             </Link>
             <Link
               to="/$assistant/$room/connectors"
               params={{ assistant, room }}
               className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
             >
-              Connectors
+              {m.room.links.connectors}
             </Link>
             <Link
               to="/$assistant/$room/mcp"
               params={{ assistant, room }}
-              title="MCP servers the assistant uses in this room"
+              title={m.room.links.mcpTitle}
               className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
             >
-              MCP
+              {m.room.links.mcp}
             </Link>
             <Link
               to="/$assistant/$room/lists"
               params={{ assistant, room }}
               className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
             >
-              Lists
+              {m.room.links.lists}
             </Link>
             <Link
               to="/$assistant/$room/documents"
               params={{ assistant, room }}
               className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
             >
-              Documents
+              {m.room.links.documents}
             </Link>
             <Link
               to="/$assistant/$room/model"
               params={{ assistant, room }}
-              title="What the model sees of this room"
+              title={m.room.links.modelTitle}
               className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
             >
-              Model view
+              {m.room.links.model}
             </Link>
           </div>
           <ApprovalsPanel approvals={view.approvals} />
@@ -230,7 +229,7 @@ function Room() {
               params={{ assistant, room }}
               className="shrink-0 rounded border border-stone-300 bg-white px-3 py-1 text-sm"
             >
-              Activity
+              {m.room.links.activity}
             </Link>
             <button
               ref={opener}
@@ -240,19 +239,19 @@ function Room() {
               onClick={() => setDrawer(true)}
               className="flex shrink-0 items-center gap-1.5 rounded border border-stone-300 bg-white px-3 py-1 text-sm"
             >
-              Room
+              {m.room.open}
               {waiting > 0 && (
                 <span className="rounded-full bg-amber-600 px-1.5 text-xs text-white">
                   {waiting}
-                  <span className="sr-only"> waiting for approval</span>
+                  <span className="sr-only">{m.room.waitingForApproval}</span>
                 </span>
               )}
             </button>
           </div>
           {connection.kind === "waiting" ? (
-            <p className="text-sm text-stone-500">Reconnecting…</p>
+            <p className="text-sm text-stone-500">{m.room.reconnecting}</p>
           ) : connection.kind === "closed" ? (
-            <p className="text-sm text-red-700">Disconnected: {connection.reason}.</p>
+            <p className="text-sm text-red-700">{m.room.disconnected(connection.reason)}</p>
           ) : null}
           <SharingLocation view={view} />
           <Chat store={held.store} state={held.state} view={view} />
@@ -306,7 +305,7 @@ function RoomName({ view }: { view: RoomView }) {
             onClick={() => setDraft(view.room.name)}
             className="text-sm text-stone-500 hover:text-stone-800"
           >
-            Rename
+            {m.room.rename}
           </button>
         )}
       </div>
@@ -317,7 +316,7 @@ function RoomName({ view }: { view: RoomView }) {
         <input
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          aria-label="Room name"
+          aria-label={m.room.name}
           autoFocus
           onKeyDown={(event) => {
             if (event.key !== "Escape") return;
@@ -333,7 +332,7 @@ function RoomName({ view }: { view: RoomView }) {
           disabled={busy || draft.trim() === ""}
           className="rounded border px-2 py-1 text-sm disabled:opacity-50"
         >
-          Save
+          {m.common.save}
         </button>
         <button
           type="button"
@@ -343,7 +342,7 @@ function RoomName({ view }: { view: RoomView }) {
           }}
           className="rounded px-2 py-1 text-sm text-stone-600 hover:bg-stone-200"
         >
-          Cancel
+          {m.common.cancel}
         </button>
       </div>
       {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
@@ -421,7 +420,7 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
           <StatusLine status={view.live.status} />
           <ThreadPrimitive.Viewport className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto">
             <ThreadPrimitive.LoadEarlier className="self-center text-sm text-stone-500 underline disabled:text-stone-300 disabled:no-underline">
-              Load earlier
+              {m.room.chat.loadEarlier}
             </ThreadPrimitive.LoadEarlier>
             {state.earlierError !== undefined && (
               <p className="self-center text-sm text-red-700">{state.earlierError}</p>
@@ -429,7 +428,7 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
             <ThreadPrimitive.Empty>
               <div className="m-auto flex flex-col items-center gap-2 py-8 text-stone-500">
                 <Avatar mood={mood} appearance={look} size={160} title={name} />
-                <p>Say hello to {name}.</p>
+                <p>{m.room.chat.sayHello(name)}</p>
               </div>
             </ThreadPrimitive.Empty>
             <ThreadPrimitive.Messages>
@@ -447,7 +446,7 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
             <ComposerPrimitive.Queue>
               {({ queueItem }) => (
                 <p key={queueItem.id} className="text-sm [overflow-wrap:anywhere] text-stone-500">
-                  Waiting: {queueItem.prompt}
+                  {m.room.chat.waiting(queueItem.prompt)}
                 </p>
               )}
             </ComposerPrimitive.Queue>
@@ -457,31 +456,31 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
                   type="button"
                   aria-pressed={secret}
                   onClick={() => setSecret((on) => !on)}
-                  title="Only you see a private message and the answer to it; the others see that there was one"
+                  title={m.room.chat.privateTitle}
                   className={`shrink-0 rounded border px-2 text-sm ${
                     secret
                       ? "border-violet-700 bg-violet-700 text-white"
                       : "bg-white text-stone-600"
                   }`}
                 >
-                  Private
+                  {m.room.chat.private}
                 </button>
               )}
               <ComposerPrimitive.Input
                 ref={input}
-                aria-label={secret && shared ? "Private message" : "Message"}
+                aria-label={secret && shared ? m.room.chat.privateMessage : m.room.chat.message}
                 placeholder={
-                  secret && shared ? "Private message: only you see it and the answer" : "Message"
+                  secret && shared ? m.room.chat.privatePlaceholder : m.room.chat.message
                 }
                 className="max-h-40 min-w-0 flex-1 resize-none rounded border border-stone-300 bg-white px-2 py-1.5"
               />
               {view.live.running ? (
                 <ComposerPrimitive.Cancel className="shrink-0 rounded border bg-white px-3">
-                  Stop
+                  {m.room.chat.stop}
                 </ComposerPrimitive.Cancel>
               ) : (
                 <ComposerPrimitive.Send className="shrink-0 rounded border bg-white px-3">
-                  Send
+                  {m.room.chat.send}
                 </ComposerPrimitive.Send>
               )}
             </div>
@@ -541,20 +540,22 @@ function presenceLabel(mood: Mood, view: RoomView): string {
     case "working": {
       const answer = view.timeline.findLast((item) => item.type === "answer");
       const part = answer?.parts.at(-1);
-      return part?.type === "tool" ? `Using ${part.name}…` : "Working…";
+      return part?.type === "tool" ? m.room.presence.using(part.name) : m.room.presence.working;
     }
     case "thinking":
-      return view.live.status?.kind === "compacting" ? "Tidying up older messages…" : "Thinking…";
+      return view.live.status?.kind === "compacting"
+        ? m.room.presence.tidying
+        : m.room.presence.thinking;
     case "speaking":
-      return "Answering…";
+      return m.room.presence.answering;
     case "waiting":
-      return "Waiting for an approval";
+      return m.room.presence.waiting;
     case "puzzled":
-      return "Trying again…";
+      return m.room.presence.tryingAgain;
     case "sad":
-      return "That didn't work";
+      return m.room.presence.failed;
     case "asleep":
-      return "Dozing";
+      return m.room.presence.dozing;
     case "happy":
     case "idle":
     case "listening":
@@ -575,7 +576,8 @@ function FailedSends({ store, pending }: { store: RoomStore; pending: readonly P
           className="flex items-baseline justify-between gap-2 rounded border border-red-200 bg-red-50 px-3 py-1 text-sm"
         >
           <span className="min-w-0 [overflow-wrap:anywhere]">
-            Not sent: {message.text} <span className="text-red-700">({message.error})</span>
+            {m.room.chat.notSent(message.text)}{" "}
+            <span className="text-red-700">({message.error})</span>
           </span>
           <span className="flex shrink-0 gap-2">
             <button
@@ -587,14 +589,14 @@ function FailedSends({ store, pending }: { store: RoomStore; pending: readonly P
               }
               className="underline"
             >
-              Retry
+              {m.room.chat.retry}
             </button>
             <button
               type="button"
               onClick={() => store.dismiss(message.requestId)}
               className="text-stone-500 underline"
             >
-              Dismiss
+              {m.room.chat.dismiss}
             </button>
           </span>
         </li>
@@ -609,14 +611,14 @@ function StatusLine({ status }: { status?: Status }) {
     case "retrying":
       return (
         <p className="text-sm text-amber-700">
-          Retrying (attempt {status.attempt}): {status.error}
+          {m.room.status.retrying(status.attempt, status.error)}
         </p>
       );
     case "compacting":
-      return <p className="text-sm text-stone-500">Summarizing older messages…</p>;
+      return <p className="text-sm text-stone-500">{m.room.status.compacting}</p>;
     case "compaction-failed":
       return (
-        <p className="text-sm text-amber-700">Couldn't summarize older messages: {status.error}</p>
+        <p className="text-sm text-amber-700">{m.room.status.compactionFailed(status.error)}</p>
       );
   }
 }
@@ -664,7 +666,7 @@ function UserMessage({ message }: { message: MessageState }) {
         >
           {!mine && (
             <p className="mb-0.5 text-xs font-medium text-stone-600">
-              {custom?.author ?? "Someone"}
+              {custom?.author ?? m.room.chat.someone}
             </p>
           )}
           {custom?.private === true && <OnlyYou light={mine} />}
@@ -686,13 +688,11 @@ function UserMessage({ message }: { message: MessageState }) {
 /** How an answer to a fired nudge, or to what a watch found, looks. */
 const PROMPTS = {
   nudge: {
-    label: "Nudge",
     glyph: "🔔",
     card: "border-amber-200 border-l-amber-500 bg-amber-50",
     badge: "bg-amber-100 text-amber-800",
   },
   watch: {
-    label: "Watch",
     glyph: "👀",
     card: "border-indigo-200 border-l-indigo-500 bg-indigo-50",
     badge: "bg-indigo-100 text-indigo-800",
@@ -712,7 +712,10 @@ function AssistantMessage({
     | undefined;
   const secret = custom?.private === true;
   // An answer no one asked for just now stands out from the rest, by what prompted it.
-  const prompt = custom?.promptedBy === undefined ? undefined : PROMPTS[custom.promptedBy];
+  const prompt =
+    custom?.promptedBy === undefined
+      ? undefined
+      : { ...PROMPTS[custom.promptedBy], label: m.room.chat.promptedBy[custom.promptedBy] };
   const at = timeOfMessage(message);
   return (
     <MessagePrimitive.Root>
@@ -761,7 +764,7 @@ function AssistantMessage({
                     params={{ assistant, room }}
                     className="underline"
                   >
-                    what it's doing
+                    {m.room.chat.whatItsDoing}
                   </Link>
                 </>
               )}
@@ -792,7 +795,7 @@ function SystemMessage({ message }: { message: MessageState }) {
 function OnlyYou({ light = false }: { light?: boolean }) {
   return (
     <p className={`mb-0.5 text-xs font-medium ${light ? "text-sky-100" : "text-violet-700"}`}>
-      🔒 Only you
+      {m.room.chat.onlyYou}
     </p>
   );
 }
@@ -801,10 +804,10 @@ function OnlyYou({ light = false }: { light?: boolean }) {
 function Hidden({ placeholder }: { placeholder: string }) {
   return (
     <span
-      title={`Hidden from you (${placeholder})`}
+      title={m.room.chat.hiddenTitle(placeholder)}
       className="mx-0.5 inline-block rounded bg-stone-700 px-1.5 text-xs leading-5 text-white"
     >
-      hidden
+      {m.room.chat.hidden}
     </span>
   );
 }
@@ -866,7 +869,7 @@ function ToolCallPart({ toolName, artifact }: ToolCallMessagePartProps) {
           params={{ assistant, room }}
           className="inline-block rounded bg-sky-700 px-3 py-1 text-white hover:bg-sky-600"
         >
-          Open the room's browser to log in
+          {m.room.chat.openBrowser}
         </Link>
       </p>
     );
@@ -878,11 +881,11 @@ function ToolCallPart({ toolName, artifact }: ToolCallMessagePartProps) {
 function statusLabel(status: MessageStatus): string {
   switch (status.type) {
     case "running":
-      return "Working…";
+      return m.room.answer.working;
     case "requires-action":
       return status.reason;
     case "incomplete":
-      return status.reason === "cancelled" ? "stopped" : "failed";
+      return status.reason === "cancelled" ? m.room.answer.stopped : m.room.answer.failed;
     case "complete":
       return "";
   }
@@ -891,7 +894,8 @@ function statusLabel(status: MessageStatus): string {
 /** Approve and Deny for one approval, where the tool asked for it in the chat. */
 function ApprovalCard({ id }: { id: string }) {
   const approval = useContext(ViewContext)?.approvals.find((item) => item.id === id);
-  if (approval === undefined) return <p className="text-sm text-stone-500">Asked for approval</p>;
+  if (approval === undefined)
+    return <p className="text-sm text-stone-500">{m.room.chat.askedForApproval}</p>;
   return (
     <div className="my-1 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm">
       <ApprovalRow approval={approval} />
@@ -928,7 +932,7 @@ function ApprovalRow({ approval }: { approval: Approval }) {
               onClick={() => void decide(true)}
               className="rounded bg-emerald-700 px-2 py-0.5 text-white disabled:opacity-50"
             >
-              Approve
+              {m.room.approvals.approve}
             </button>
             <button
               type="button"
@@ -936,13 +940,13 @@ function ApprovalRow({ approval }: { approval: Approval }) {
               onClick={() => void decide(false)}
               className="rounded border border-stone-300 px-2 py-0.5 disabled:opacity-50"
             >
-              Deny
+              {m.room.approvals.deny}
             </button>
           </span>
         ) : (
           <span className="shrink-0 text-stone-500">
-            {approval.status}
-            {approval.decidedBy ? ` by ${approval.decidedBy.displayName}` : ""}
+            {m.room.approvals.status[approval.status]}
+            {approval.decidedBy ? m.room.approvals.by(approval.decidedBy.displayName) : ""}
           </span>
         )}
       </div>
@@ -958,7 +962,7 @@ function ApprovalsPanel({ approvals }: { approvals: readonly Approval[] }) {
   return (
     <section className="flex flex-col gap-2 rounded border border-amber-300 bg-amber-50 p-3">
       <h3 className="text-sm font-medium tracking-wide text-amber-800 uppercase">
-        Waiting for approval
+        {m.room.approvals.title}
       </h3>
       {pending.map((approval) => (
         <ApprovalRow key={approval.id} approval={approval} />
@@ -1017,10 +1021,10 @@ function MemoryPanel({ view }: { view: RoomView }) {
 
   return (
     <section className="flex flex-col gap-2 rounded border border-stone-200 bg-white p-3">
-      <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">Memory</h3>
-      {view.memory.length === 0 && (
-        <p className="text-sm text-stone-500">Nothing remembered yet.</p>
-      )}
+      <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">
+        {m.room.memory.title}
+      </h3>
+      {view.memory.length === 0 && <p className="text-sm text-stone-500">{m.room.memory.empty}</p>}
       <ul className="flex flex-col gap-1">
         {view.memory.map((fact) => (
           <li
@@ -1030,10 +1034,10 @@ function MemoryPanel({ view }: { view: RoomView }) {
             <span>
               {fact.text}
               {fact.owner !== undefined && (
-                <span className="text-stone-500"> · {fact.owner.displayName}'s own</span>
+                <span className="text-stone-500">{m.room.memory.own(fact.owner.displayName)}</span>
               )}
               {fact.privateTo !== undefined && (
-                <span className="text-violet-700"> · 🔒 only you</span>
+                <span className="text-violet-700">{m.room.memory.onlyYou}</span>
               )}
             </span>
             {(fact.owner === undefined || fact.owner.id === me) && (
@@ -1042,7 +1046,7 @@ function MemoryPanel({ view }: { view: RoomView }) {
                 onClick={() => void onForget(fact)}
                 className="shrink-0 text-stone-500 underline"
               >
-                Forget
+                {m.room.memory.forget}
               </button>
             )}
           </li>
@@ -1052,7 +1056,7 @@ function MemoryPanel({ view }: { view: RoomView }) {
         <input
           value={text}
           onChange={(event) => setText(event.target.value)}
-          placeholder="Remember something"
+          placeholder={m.room.memory.placeholder}
           className="min-w-0 flex-1 rounded border border-stone-300 px-2 py-1 text-sm"
         />
         <button
@@ -1060,7 +1064,7 @@ function MemoryPanel({ view }: { view: RoomView }) {
           disabled={busy || text.trim() === ""}
           className="shrink-0 rounded border px-2 text-sm disabled:opacity-50"
         >
-          Add
+          {m.room.memory.add}
         </button>
       </form>
       {mine.data !== undefined && (
@@ -1070,7 +1074,7 @@ function MemoryPanel({ view }: { view: RoomView }) {
             checked={mine.data.shared}
             onChange={(event) => void onShare(event.target.checked)}
           />
-          Share my own facts ({mine.data.facts.length}) with all my rooms
+          {m.room.memory.share(mine.data.facts.length)}
         </label>
       )}
       {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
@@ -1084,11 +1088,10 @@ function SharingLocation({ view }: { view: RoomView }) {
   const me = useQuery(meQuery(assistant)).data?.player.id;
   const sharing = view.sharingLocation ?? [];
   if (sharing.length === 0) return null;
-  const names = sharing.map((player) => (player.id === me ? "you" : player.displayName));
+  const names = sharing.map((player) => (player.id === me ? m.room.you : player.displayName));
   return (
     <p className="mb-2 rounded border border-sky-200 bg-sky-50 px-3 py-1 text-sm text-sky-900">
-      📍 The assistant knows where {names.join(" and ")}{" "}
-      {names.length === 1 && names[0] !== "you" ? "is" : "are"} here, as a hidden value.
+      📍 {m.room.sharingLocation(names, sharing.length === 1 && sharing[0]?.id !== me)}
     </p>
   );
 }
@@ -1129,12 +1132,12 @@ function LocationPanel({ view }: { view: RoomView }) {
 
   return (
     <section className="flex flex-col gap-2 rounded border border-stone-200 bg-white p-3">
-      <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">Location</h3>
+      <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">
+        {m.room.location.title}
+      </h3>
       {view.room.kind === "personal" ? (
         <p className="text-sm text-stone-600">
-          {known
-            ? "The assistant knows where you are here, for the weather, the way somewhere and what is near."
-            : "Not shared. Turn on Share where I am in the apps, or share it once from your profile."}
+          {known ? m.room.location.known : m.room.location.notShared}
         </p>
       ) : (
         <>
@@ -1145,12 +1148,11 @@ function LocationPanel({ view }: { view: RoomView }) {
               disabled={busy}
               onChange={(event) => void onShare(event.target.checked)}
             />
-            Let the assistant know where I am in this room
+            {m.room.location.share}
           </label>
           <p className="text-xs text-stone-500">
-            Anyone here can then ask it about what is near you. Everyone in the room sees that you
-            share it; the place itself stays hidden from them and the model.
-            {sharing && !known && " Your devices haven't shared where you are yet."}
+            {m.room.location.explain}
+            {sharing && !known && ` ${m.room.location.notYet}`}
           </p>
         </>
       )}
@@ -1194,11 +1196,11 @@ function PrivateValuesPanel() {
 
   return (
     <section className="flex flex-col gap-2 rounded border border-stone-200 bg-white p-3">
-      <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">Only you see</h3>
+      <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">
+        {m.room.privateValues.title}
+      </h3>
       {values.data?.length === 0 && (
-        <p className="text-sm text-stone-500">
-          Hide an address, a name or a number: others and the model see a placeholder.
-        </p>
+        <p className="text-sm text-stone-500">{m.room.privateValues.empty}</p>
       )}
       <ul className="flex flex-col gap-1">
         {values.data?.map((value) => (
@@ -1206,13 +1208,13 @@ function PrivateValuesPanel() {
             <span className="min-w-0 [overflow-wrap:anywhere]">{value.value}</span>
             <button
               type="button"
-              title="Forget it for good: from now on everyone sees only the placeholder"
+              title={m.room.privateValues.forgetTitle}
               onClick={() =>
                 void run(() => clientFor(assistant).api.forgetValue(value.placeholder))
               }
               className="shrink-0 text-stone-500 underline"
             >
-              Forget
+              {m.room.privateValues.forget}
             </button>
           </li>
         ))}
@@ -1221,7 +1223,7 @@ function PrivateValuesPanel() {
         <input
           value={text}
           onChange={(event) => setText(event.target.value)}
-          placeholder="Hide a value"
+          placeholder={m.room.privateValues.placeholder}
           className="min-w-0 flex-1 rounded border border-stone-300 px-2 py-1 text-sm"
         />
         <button
@@ -1229,7 +1231,7 @@ function PrivateValuesPanel() {
           disabled={text.trim().length < 2}
           className="shrink-0 rounded border px-2 text-sm disabled:opacity-50"
         >
-          Hide
+          {m.room.privateValues.hide}
         </button>
       </form>
       {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
@@ -1256,14 +1258,16 @@ function NudgesPanel({ view }: { view: RoomView }) {
 
   return (
     <section className="flex flex-col gap-2 rounded border border-stone-200 bg-white p-3">
-      <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">Nudges</h3>
+      <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">
+        {m.room.nudges.title}
+      </h3>
       <ul className="flex flex-col gap-1">
         {view.nudges.map((nudge) => (
           <li key={nudge.id} className="flex items-baseline justify-between gap-2 text-sm">
             <span>
-              {new Date(nudge.fireAt).toLocaleString()} — {nudge.message}
+              {new Date(nudge.fireAt).toLocaleString(dateLocale())} — {nudge.message}
               {nudge.privateTo !== undefined && (
-                <span className="text-violet-700"> · 🔒 only you</span>
+                <span className="text-violet-700">{m.room.nudges.onlyYou}</span>
               )}
             </span>
             <button
@@ -1271,7 +1275,7 @@ function NudgesPanel({ view }: { view: RoomView }) {
               onClick={() => void onCancel(nudge.id)}
               className="shrink-0 text-stone-500 underline"
             >
-              Cancel
+              {m.common.cancel}
             </button>
           </li>
         ))}
@@ -1305,7 +1309,9 @@ function ExtensionsPanel() {
   if (extensions.data === undefined || extensions.data.length === 0) return null;
   return (
     <section className="flex flex-col gap-2 rounded border border-stone-200 bg-white p-3">
-      <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">Extensions</h3>
+      <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">
+        {m.room.extensions.title}
+      </h3>
       <ul className="flex flex-col gap-1">
         {extensions.data.map((extension) => (
           <li key={extension.name} className="flex items-center justify-between gap-2 text-sm">
@@ -1314,7 +1320,7 @@ function ExtensionsPanel() {
               title={
                 extension.error === undefined
                   ? extension.description
-                  : `Failed to start: ${extension.error}`
+                  : m.room.extensions.failedTitle(extension.error)
               }
             >
               <input
@@ -1326,7 +1332,7 @@ function ExtensionsPanel() {
               />
               <span className="truncate">{extension.name}</span>
               {extension.error !== undefined && (
-                <span className="shrink-0 text-xs text-red-700">failed to start</span>
+                <span className="shrink-0 text-xs text-red-700">{m.room.extensions.failed}</span>
               )}
             </label>
             {extension.error === undefined && extension.enabled !== extension.byDefault && (
@@ -1335,7 +1341,7 @@ function ExtensionsPanel() {
                 onClick={() => void set(extension.name, null)}
                 className="shrink-0 text-xs text-stone-500 underline"
               >
-                Reset
+                {m.room.extensions.reset}
               </button>
             )}
           </li>

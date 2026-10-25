@@ -4,6 +4,7 @@ import { type Appearance, NUDGE, PRESETS } from "../avatar/appearance.ts";
 import { Avatar } from "../avatar/Avatar.tsx";
 import { LookPicker } from "../avatar/LookPicker.tsx";
 import { type Mood, MOODS } from "../avatar/pose.ts";
+import { m } from "../i18n/index.ts";
 
 // A playground for the robot: every mood, every choice of look, and the sizes the apps draw it at.
 export const Route = createFileRoute("/avatar")({
@@ -43,8 +44,8 @@ function Playground() {
     let step = 0;
     let timer: ReturnType<typeof setTimeout>;
     const next = () => {
-      const [m, seconds] = STORY[step % STORY.length]!;
-      setMood(m);
+      const [moodNow, seconds] = STORY[step % STORY.length]!;
+      setMood(moodNow);
       step += 1;
       timer = setTimeout(next, seconds * 1000);
     };
@@ -52,9 +53,9 @@ function Playground() {
     return () => clearTimeout(timer);
   }, [story]);
 
-  const pick = (m: Mood) => {
+  const pick = (chosen: Mood) => {
     setStory(false);
-    setMood(m);
+    setMood(chosen);
   };
   const button = (on: boolean) =>
     `rounded-full border px-3 py-1 text-sm capitalize ${
@@ -72,8 +73,8 @@ function Playground() {
         >
           <Avatar mood={mood} appearance={look} size={300} level={mic.on ? mic.level : undefined} />
           <p className={`text-sm capitalize ${dark ? "text-stone-400" : "text-stone-500"}`}>
-            {mood}
-            {story && " · playing a turn"}
+            {m.setup.avatar.moods[mood]}
+            {story && ` · ${m.setup.avatar.playingTurn}`}
           </p>
           <div className="flex items-end gap-5">
             {[20, 28, 40, 64].map((size) => (
@@ -83,36 +84,36 @@ function Playground() {
         </section>
 
         <aside className="flex flex-col gap-5">
-          <Group title="Mood">
+          <Group title={m.setup.avatar.mood}>
             <div className="flex flex-wrap gap-1.5">
               <button type="button" className={button(story)} onClick={() => setStory(true)}>
-                Play a turn
+                {m.setup.avatar.playTurn}
               </button>
-              {MOODS.map((m) => (
+              {MOODS.map((each) => (
                 <button
-                  key={m}
+                  key={each}
                   type="button"
-                  className={button(!story && m === mood)}
-                  onClick={() => pick(m)}
+                  className={button(!story && each === mood)}
+                  onClick={() => pick(each)}
                 >
-                  {m}
+                  {m.setup.avatar.moods[each]}
                 </button>
               ))}
             </div>
             <label className="flex items-center gap-2 text-sm text-stone-600">
               <input type="checkbox" checked={mic.on} onChange={() => void mic.toggle()} />
-              Follow my voice when listening or speaking
+              {m.setup.avatar.followVoice}
             </label>
             {mic.error && <p className="text-sm text-red-700">{mic.error}</p>}
           </Group>
 
-          <Group title="Look">
+          <Group title={m.setup.avatar.look}>
             <LookPicker look={look} onChange={setLook} />
           </Group>
 
           <label className="flex items-center gap-2 text-sm text-stone-600">
             <input type="checkbox" checked={dark} onChange={() => setDark(!dark)} />
-            Dark background
+            {m.setup.avatar.dark}
           </label>
           <pre className="overflow-x-auto rounded bg-stone-100 p-2 text-xs text-stone-600">
             {JSON.stringify(look, null, 1)}
@@ -164,7 +165,7 @@ function useMic() {
       setError(undefined);
       setOn(true);
     } catch {
-      setError("The browser didn't give the microphone.");
+      setError(m.setup.avatar.noMicrophone);
     }
   };
 

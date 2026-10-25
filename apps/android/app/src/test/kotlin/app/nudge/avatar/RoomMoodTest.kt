@@ -1,5 +1,6 @@
 package app.nudge.avatar
 
+import app.nudge.EnglishTexts
 import nudge.ffi.Approval
 import nudge.ffi.ApprovalStatus
 import nudge.ffi.AnswerStatus
@@ -14,6 +15,10 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class RoomMoodTest {
+    init {
+        EnglishTexts.install()
+    }
+
     private val now = 1_800_000_000_000.0
     private val said = listOf<TimelineItem>(TimelineItem.User("m1", "hi", null, now - 1000, null, null, null))
     private val quiet = Live(running = false, status = null)

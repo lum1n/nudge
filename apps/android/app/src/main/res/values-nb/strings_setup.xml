@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="setup_back">Tilbake</string>
+    <string name="setup_close">Lukk</string>
+    <string name="setup_send">Send</string>
+    <string name="setup_loading">Laster …</string>
+    <string name="setup_server">Server</string>
+
+    <!-- The setup wizard. -->
+    <string name="setup_title">Sett opp Nudge</string>
+    <string name="setup_code_wrong">Det er ikke oppsettskoden.</string>
+    <string name="setup_closed">Oppsettet er stengt: serveren er allerede satt opp, eller fikk for mange feil koder. Start den på nytt for å få en ny kode.</string>
+    <string name="setup_set_up_already">Den serveren er allerede satt opp: logg inn på den i stedet.</string>
+    <string name="setup_address_title">Hvor er serveren?</string>
+    <string name="setup_address_hint">En server som ikke er satt opp ennå, skriver ut adressen sin og en oppsettskode når den starter.</string>
+    <string name="setup_code_title">Oppsettskoden</string>
+    <string name="setup_code">Oppsettskode</string>
+    <string name="setup_code_hint">Serveren skrev den ut da den startet.</string>
+    <string name="setup_name_title">Gi assistenten et navn</string>
+    <string name="setup_name">Navnet</string>
+    <string name="setup_name_hint">Det den kaller seg selv. Du kan endre det senere.</string>
+    <string name="setup_slug">I adressen</string>
+    <string name="setup_slug_hint">Del av adressen til alle personene her, så denne blir stående.</string>
+    <string name="setup_model_title">Velg modell</string>
+    <string name="setup_own_key">Med din egen API-nøkkel</string>
+    <string name="setup_local">Kjører på serveren; ingen nøkkel</string>
+    <string name="setup_model">Modell</string>
+    <string name="setup_api_key">API-nøkkel for %1$s</string>
+    <string name="setup_key_hint">Lagres kryptert på serveren og vises aldri igjen.</string>
+    <string name="setup_get_key">Skaff en nøkkel</string>
+    <string name="setup_you_title">Og du?</string>
+    <string name="setup_your_name">Navnet ditt</string>
+    <string name="setup_your_name_hint">Du blir den første personen hos %1$s, administratoren og eieren av denne serveren.</string>
+    <string name="setup_the_assistant">assistenten</string>
+    <string name="setup_backups">Ta sikkerhetskopi hver natt, og behold to uker, ved siden av dataene</string>
+    <string name="setup_cluster">Del av klyngen min</string>
+    <string name="setup_cluster_none">Hjemmet ditt har ikke føderasjon, så denne serveren står alene: du logger inn på den som den første personen. Slå på føderasjon hjemme for å koble servere til det.</string>
+    <string name="setup_cluster_joined">Koblet til fra hjemmet ditt: rommene vises ved siden av rommene hjemme, og de andre enhetene dine viser serveren.</string>
+    <string name="setup_cluster_alone">Alene, uten føderasjon foreløpig: du er den første personen, som deg selv fra hjemmet, så du kan koble den til klyngen din senere. Til da snakker den aldri med de andre serverne dine.</string>
+    <string name="setup_set_up">Sett opp</string>
+    <string name="setup_continue">Fortsett</string>
+
+    <!-- Pairing. -->
+    <string name="setup_no_assistants">Den serveren har ingen assistenter.</string>
+    <string name="setup_pair_intro">Koble denne enheten til Nudge-serveren din.</string>
+    <string name="setup_assistant">Assistent</string>
+    <string name="setup_pairing_code">Koblingskode</string>
+    <string name="setup_pairing_hint">Be en administrator for assistenten om en, eller om QR-koden: de lager den under Personer og enheter i innstillingene sine, i appen eller på nettet. Den virker én gang, i ti minutter. Et token (nudge_…) virker her også.</string>
+    <string name="setup_sign_in">Logg inn</string>
+    <string name="setup_no_server">Ingen server ennå?</string>
+    <string name="setup_make_on_exe">Lag en på exe.dev</string>
+    <string name="setup_set_up_started">Sett opp en jeg har startet</string>
+
+    <!-- The home's federation. -->
+    <string name="setup_home_first">Hjemmet ditt først</string>
+    <string name="setup_federation_turning_on">Slår den på …</string>
+    <string name="setup_federation_turn_on">Slå på føderasjon hjemme</string>
+    <string name="setup_federation_reach">Andre servere når hjemmet ditt på %1$s.</string>
+
+    <!-- A server on exe.dev. -->
+    <string name="setup_exe_checking">Sjekker tokenet …</string>
+    <string name="setup_exe_making">Lager serveren og venter på at den starter. Dette tar et minutt eller to.</string>
+    <string name="setup_exe_title">En server på exe.dev</string>
+    <string name="setup_exe_intro">Nudge lager en liten server i exe.dev-kontoen din, fakturert dit, med en egen HTTPS-adresse.</string>
+    <string name="setup_exe_step_sign_in">1. Logg inn på exe.dev</string>
+    <string name="setup_exe_signed_in">Logget inn på exe.dev</string>
+    <string name="setup_exe_sign_in_again">Logg inn på nytt</string>
+    <string name="setup_exe_sign_in">Logg inn på exe.dev</string>
+    <string name="setup_exe_new">Ny på exe.dev? Når du logger inn, lages kontoen din: den spør om e-postadressen din og sender en lenke. Appen lagrer nøkkelen og tokenet sitt på denne enheten; de kan lage og fjerne servere, ikke noe annet.</string>
+    <string name="setup_exe_paste">Eller lim inn et token</string>
+    <string name="setup_exe_run_this">Kjør dette én gang på en datamaskin med exe.dev-nøkkelen din, og lim inn det den skriver ut:</string>
+    <string name="setup_exe_copy">Kopier kommandoen</string>
+    <string name="setup_exe_token">exe.dev-token</string>
+    <string name="setup_exe_step_name">2. Gi serveren et navn</string>
+    <string name="setup_exe_server_name">Servernavn</string>
+    <string name="setup_exe_address">Adressen blir https://%1$s.exe.xyz</string>
+    <string name="setup_exe_join_wired">Bli med i Wired-nettverket til %1$s</string>
+    <string name="setup_exe_join_wired_hint">Da når den og hjemmet ditt hverandre, uten noen åpen port hjemme.</string>
+    <string name="setup_exe_make">Lag serveren</string>
+
+    <!-- Signing in to exe.dev. -->
+    <string name="setup_exe_ended">exe.dev avsluttet økten.</string>
+    <string name="setup_exe_no_connect">Fikk ikke kontakt med exe.dev.</string>
+    <string name="setup_exe_connecting">Kobler til exe.dev …</string>
+    <string name="setup_exe_email">E-postadressen din, eller det exe.dev spør om</string>
+    <string name="setup_exe_login_hint">exe.dev spør om e-postadressen din og sender deg en lenke. Åpne den, og kom tilbake: appen er logget inn når exe.dev har nøkkelen din.</string>
+    <string name="setup_exe_start_again">Start på nytt</string>
+
+    <!-- Maps. -->
+    <string name="setup_maps">Kart</string>
+    <string name="setup_maps_follow_summary">Henter regionen noen er i, hvor som helst i verden</string>
+    <string name="setup_maps_off">Av</string>
+    <string name="setup_maps_getting_named_ready">Gjør klar %1$s …</string>
+    <string name="setup_maps_getting_named_ready_progress">Gjør klar %1$s (%2$d %%)</string>
+    <string name="setup_maps_getting_it_ready">Gjør den klar …</string>
+    <string name="setup_maps_getting_it_ready_progress">Gjør den klar (%1$d %%)</string>
+    <string name="setup_maps_getting_ready">Gjør klar …</string>
+    <string name="setup_maps_failed">Mislyktes</string>
+    <string name="setup_maps_waiting">Venter</string>
+    <string name="setup_maps_kept">beholdes</string>
+    <string name="setup_maps_fetched">fordi noen var der; fjernes først for å gi plass</string>
+    <string name="setup_maps_intro">Adresser, steder og ruter for påminnelser når noen kommer fram et sted, fra OpenStreetMap. Serveren laster ned kartet for hver region og beholder det, så hvor folk drar, blir her.</string>
+    <string name="setup_maps_follow">Følg personer</string>
+    <string name="setup_maps_follow_hint">Hent regionen telefonen til noen sier at de er i, hvor som helst i verden. En utenlandstur tar fra noen minutter til en time å gjøre klar.</string>
+    <string name="setup_maps_limit">Høyst %1$d GB på disk (%2$s nå)</string>
+    <string name="setup_maps_remove">Fjern</string>
+    <string name="setup_maps_keep">Behold</string>
+    <string name="setup_maps_add">Legg til en region</string>
+    <string name="setup_maps_search">Land, delstat eller provins</string>
+    <string name="setup_maps_loading_regions">Laster verdens regioner …</string>
+
+    <!-- The robot. -->
+    <string name="setup_robot">Robot</string>
+    <string name="setup_robot_unsaved">Endringer som ikke er lagret</string>
+    <string name="setup_robot_discard">Forkast</string>
+    <string name="setup_robot_saving">Lagrer …</string>
+    <string name="setup_robot_save">Lagre</string>
+    <string name="setup_robot_intro">Slik ser assistenten ut for alle som bruker den, i alle apper.</string>
+    <string name="setup_robot_start_from">Start fra</string>
+    <string name="setup_robot_colours">Farger</string>
+    <string name="setup_robot_ribbon">Bånd</string>
+    <string name="setup_robot_ribbon_end">Båndets ende</string>
+    <string name="setup_robot_eyes">Øyne</string>
+    <string name="setup_robot_sparks">Gnister</string>
+    <string name="setup_robot_wears">Har på seg</string>
+    <string name="setup_robot_reset">Tilbake til appikonets</string>
+    <string name="setup_robot_preset_nudge">Nudge</string>
+    <string name="setup_robot_preset_ember">Glød</string>
+    <string name="setup_robot_preset_moss">Mose</string>
+    <string name="setup_robot_preset_grape">Drue</string>
+    <string name="setup_robot_preset_graphite">Grafitt</string>
+    <string name="setup_robot_eyes_pill">Pille</string>
+    <string name="setup_robot_eyes_round">Runde</string>
+    <string name="setup_robot_eyes_square">Firkantede</string>
+    <string name="setup_robot_eyes_wide">Brede</string>
+    <string name="setup_robot_wears_none">Ingenting</string>
+    <string name="setup_robot_wears_antenna">Antenne</string>
+    <string name="setup_robot_wears_headphones">Hodetelefoner</string>
+    <string name="setup_robot_wears_sprout">Spire</string>
+    <string name="setup_robot_wears_crown">Krone</string>
+</resources>

@@ -158,6 +158,8 @@ Sign in at `/login` by scanning its QR code with your phone's camera: the Nudge 
 
 A room page shows the same conversation the CLI and the API see, live, for everyone in it: each message with who sent it, the assistant's answer streaming in with its tool calls, and fired nudges, rendered as markdown. Send a follow-up or steer while it's still answering — it queues the same way a second CLI client's would — or stop it; "Load earlier" fetches older history past what first loaded. A room's Memory, Nudges and approval panels list, add, forget, cancel and decide the same things `/memory`, `/nudges` and `/approve` do in the terminal, and update live whoever made the change. The web UI talks [protocol v1](docs/protocol/v1.md) through `@nudge/client`, like the native apps will. "Open my room" and "New shared room" on the room list open the same rooms `nudge chat me` and `nudge room` do.
 
+The web UI speaks English and Norwegian (bokmål), following the browser's languages: any Norwegian (nb, nn, no) gets bokmål, anything else English. Its strings are in `apps/web/src/i18n`, one file per area and language; TypeScript fails when the bokmål file misses a key the English one has.
+
 Notifications come from the extension `extensions/push`: Web Push in the browser, and APNs and FCM in the iOS, macOS and Android apps, either with your own credentials or through a push relay (`packages/relay`) that sees only sealed pushes. See [Notifications](docs/push.md).
 
 ## Spend

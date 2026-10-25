@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useEffect, useState } from "react";
 import { forgetToken } from "../../api.ts";
 import { type ConnectorsSocket, type PanelConnector, useConnectors } from "../../connectors.ts";
+import { m } from "../../i18n/index.ts";
 
 export const Route = createFileRoute("/$assistant/$room_/connectors")({ component: Connectors });
 
@@ -23,33 +24,29 @@ function Connectors() {
   return (
     <section className="mx-auto flex max-w-3xl flex-col gap-3 p-3 sm:p-4">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-        <h2 className="text-lg font-medium">Connectors</h2>
+        <h2 className="text-lg font-medium">{m.panels.connectors.title}</h2>
         <Link
           to="/$assistant/$room"
           params={{ assistant, room }}
           className="text-sm text-stone-600 hover:underline"
         >
-          Back to the room
+          {m.panels.backToRoom}
         </Link>
       </div>
-      <p className="text-sm text-stone-600">
-        APIs this room's assistant can call. Ask it in the chat to add one, and say what for. Tick
-        "Always use it first" to have it try one before anything else for those tasks. API keys go
-        here only: the assistant never sees them.
-      </p>
+      <p className="text-sm text-stone-600">{m.panels.connectors.intro}</p>
       {state.status === "closed" ? (
         <p className="text-red-700">
           {state.closeCode === NOT_FOUND
-            ? "This assistant has no connectors extension here, or you are not in this room."
-            : `Disconnected${state.error ? `: ${state.error}` : ""}.`}
+            ? m.panels.connectors.notFound
+            : m.panels.disconnected(state.error)}
         </p>
       ) : socket === undefined || state.view === undefined ? (
-        <p className="text-stone-500">Connecting…</p>
+        <p className="text-stone-500">{m.panels.connecting}</p>
       ) : (
         <>
           {state.error ? <p className="text-sm text-red-700">{state.error}</p> : null}
           {state.view.length === 0 ? (
-            <p className="text-stone-500">No connectors yet.</p>
+            <p className="text-stone-500">{m.panels.connectors.empty}</p>
           ) : (
             <ul className="flex flex-col gap-3">
               {state.view.map((connector) => (
@@ -105,33 +102,33 @@ function ConnectorCard({
           </span>
         </div>
         {connector.shared ? (
-          <span className="text-xs text-stone-500">Shared with every room</span>
+          <span className="text-xs text-stone-500">{m.panels.connectors.shared}</span>
         ) : (
           <button
             type="button"
             onClick={() => {
-              if (confirm(`Remove ${connector.name}?`))
+              if (confirm(m.panels.connectors.confirmRemove(connector.name)))
                 socket.send({ type: "remove", connector: id });
             }}
             className="text-sm text-stone-600 hover:text-red-700"
           >
-            Remove
+            {m.common.remove}
           </button>
         )}
       </div>
       {connector.shared ? (
         <p className="text-sm text-stone-700">
-          {connector.alwaysFirst ? "Used first for: " : null}
+          {connector.alwaysFirst ? m.panels.connectors.usedFirstFor : null}
           {connector.useFor}
         </p>
       ) : null}
       {connector.notes ? (
-        <p className="text-xs text-stone-500">Learned: {connector.notes}</p>
+        <p className="text-xs text-stone-500">{m.panels.connectors.learned(connector.notes)}</p>
       ) : null}
       {connector.shared ? null : (
         <>
           <form onSubmit={saveUseFor} className="flex flex-col gap-1 text-sm">
-            <span className="text-stone-600">Use it for</span>
+            <span className="text-stone-600">{m.panels.connectors.useFor}</span>
             <div className="flex flex-wrap items-center gap-2">
               <input
                 value={useFor}
@@ -143,7 +140,7 @@ function ConnectorCard({
                 disabled={useFor.trim() === "" || useFor.trim() === connector.useFor}
                 className="rounded border border-stone-300 px-3 py-1 hover:bg-stone-100 disabled:opacity-50"
               >
-                Save
+                {m.common.save}
               </button>
             </div>
           </form>
@@ -159,27 +156,34 @@ function ConnectorCard({
                 })
               }
             />
-            Always use it first for this, before browsing or answering from memory
+            {m.panels.connectors.alwaysFirst}
           </label>
           {connector.auth === undefined ? null : (
             <form onSubmit={saveKey} className="flex flex-wrap items-center gap-2 text-sm">
               <span className="text-stone-600">
-                API key ({connector.auth.in} <code>{connector.auth.name}</code>):{" "}
-                {connector.hasKey ? "set" : <span className="text-amber-700">not set</span>}
+                {m.panels.connectors.apiKey(connector.auth.in)}
+                <code>{connector.auth.name}</code>):{" "}
+                {connector.hasKey ? (
+                  m.panels.set
+                ) : (
+                  <span className="text-amber-700">{m.panels.notSet}</span>
+                )}
               </span>
               <input
                 type="password"
                 autoComplete="off"
                 value={key}
                 onChange={(event) => setKey(event.target.value)}
-                placeholder={connector.hasKey ? "Replace the key" : "Paste the key"}
+                placeholder={
+                  connector.hasKey ? m.panels.connectors.replaceKey : m.panels.connectors.pasteKey
+                }
                 className="min-w-0 flex-1 rounded border border-stone-300 px-2 py-1"
               />
               <button
                 type="submit"
                 className="rounded border border-stone-300 px-3 py-1 hover:bg-stone-100"
               >
-                Save
+                {m.common.save}
               </button>
               {connector.hasKey ? (
                 <button
@@ -187,7 +191,7 @@ function ConnectorCard({
                   onClick={() => socket.send({ type: "clearKey", connector: id })}
                   className="text-stone-600 hover:underline"
                 >
-                  Clear
+                  {m.panels.clear}
                 </button>
               ) : null}
             </form>
@@ -204,12 +208,15 @@ function ConnectorCard({
                 })
               }
             />
-            May reach this machine and the local network (Home Assistant, a NAS)
+            {m.panels.connectors.privateNetwork}
           </label>
           <form onSubmit={saveReadPaths} className="flex flex-col gap-1 text-sm">
             <span className="text-stone-600">
-              Calls that only read, though not GET: one <code>METHOD /path</code> per line, such as{" "}
-              <code>POST /graphql</code>. They run without asking.
+              {m.panels.connectors.readPathsBefore}
+              <code>METHOD /path</code>
+              {m.panels.connectors.readPathsBetween}
+              <code>POST /graphql</code>
+              {m.panels.connectors.readPathsAfter}
             </span>
             <textarea
               value={readPaths}
@@ -222,7 +229,7 @@ function ConnectorCard({
               disabled={readPaths === connector.readPaths.join("\n")}
               className="self-start rounded border border-stone-300 px-3 py-1 hover:bg-stone-100 disabled:opacity-50"
             >
-              Save read paths
+              {m.panels.connectors.saveReadPaths}
             </button>
           </form>
         </>

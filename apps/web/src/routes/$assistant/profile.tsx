@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { type FormEvent, useEffect, useState } from "react";
 import { ApiError, clientFor } from "../../api.ts";
+import { dateLocale, m } from "../../i18n/index.ts";
 import { meQuery } from "../../queries.ts";
 import { ObjectFields, type Schema, withoutDefaults } from "../../schema-form.tsx";
 
@@ -75,16 +76,16 @@ function ProfilePage() {
   }, [profile.data]);
 
   if (profile.error) return <Page>{profile.error.message}</Page>;
-  if (draft === undefined) return <Page>Loading…</Page>;
+  if (draft === undefined) return <Page>{m.common.loading}</Page>;
   // A guest's profile comes from their home, which sends it again whenever it changes there.
   const home = me.data?.player.address;
   if (home !== undefined)
     return (
       <Page>
         <p className="rounded border border-stone-200 bg-white p-3 text-sm text-stone-600">
-          You joined from your home assistant, as <span className="font-mono">{home}</span>. Your
-          name, picture, time zone, language and settings come from there: change them in your
-          home's app.
+          {m.profile.page.guestBefore}
+          <span className="font-mono">{home}</span>
+          {m.profile.page.guestAfter}
         </p>
       </Page>
     );
@@ -129,7 +130,7 @@ function ProfilePage() {
     try {
       change({ avatar: await shrink(file) });
     } catch {
-      setError("That image could not be read.");
+      setError(m.profile.page.unreadableImage);
     }
   }
 
@@ -148,7 +149,7 @@ function ProfilePage() {
             <img src={draft.avatar} alt="" className="size-16 rounded-full object-cover" />
           )}
           <label className="cursor-pointer text-sm underline">
-            Choose a picture
+            {m.profile.page.choosePicture}
             <input
               type="file"
               accept="image/*"
@@ -162,12 +163,12 @@ function ProfilePage() {
               onClick={() => change({ avatar: undefined })}
               className="text-sm text-stone-600 underline"
             >
-              Remove
+              {m.common.remove}
             </button>
           )}
         </div>
         <label className={label}>
-          Name
+          {m.profile.page.name}
           <input
             value={draft.displayName}
             onChange={(event) => change({ displayName: event.target.value })}
@@ -175,13 +176,13 @@ function ProfilePage() {
           />
         </label>
         <label className={label}>
-          Time zone
+          {m.profile.page.timeZone}
           <select
             value={draft.timeZone}
             onChange={(event) => change({ timeZone: event.target.value })}
             className={input}
           >
-            <option value="">The assistant's</option>
+            <option value="">{m.profile.page.assistantsTimeZone}</option>
             {TIME_ZONES.map((zone) => (
               <option key={zone} value={zone}>
                 {zone}
@@ -190,23 +191,23 @@ function ProfilePage() {
           </select>
         </label>
         <label className={label}>
-          Language
+          {m.profile.page.language}
           <input
             value={draft.language}
             onChange={(event) => change({ language: event.target.value })}
-            placeholder="Such as en, nb or de"
+            placeholder={m.profile.page.languageExample}
             className={input}
           />
         </label>
         <fieldset className="flex flex-col gap-1 text-sm">
-          <legend className="mb-1">Notifications</legend>
+          <legend className="mb-1">{m.profile.page.notifications}</legend>
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
               checked={draft.answers}
               onChange={(event) => change({ answers: event.target.checked })}
             />
-            Answers and nudges
+            {m.profile.page.answers}
           </label>
           <label className="flex items-center gap-2">
             <input
@@ -214,7 +215,7 @@ function ProfilePage() {
               checked={draft.approvals}
               onChange={(event) => change({ approvals: event.target.checked })}
             />
-            Actions waiting for approval
+            {m.profile.page.approvals}
           </label>
         </fieldset>
         {(extensions.data ?? []).map((extension) => (
@@ -233,9 +234,9 @@ function ProfilePage() {
             disabled={busy || draft.displayName.trim() === ""}
             className="rounded border px-3 py-1 text-sm disabled:opacity-50"
           >
-            Save
+            {m.common.save}
           </button>
-          {saved && <span className="text-sm text-stone-600">Saved.</span>}
+          {saved && <span className="text-sm text-stone-600">{m.profile.page.saved}</span>}
           {error !== undefined && <span className="text-sm text-red-700">{error}</span>}
         </div>
       </form>
@@ -247,10 +248,10 @@ function ProfilePage() {
 }
 
 const PERSONAL_FIELDS = [
-  { field: "fullName", label: "Full name", type: "text", autoComplete: "name" },
-  { field: "email", label: "E-mail", type: "email", autoComplete: "email" },
-  { field: "phone", label: "Phone", type: "tel", autoComplete: "tel" },
-  { field: "address", label: "Address", type: "text", autoComplete: "street-address" },
+  { field: "fullName", type: "text", autoComplete: "name" },
+  { field: "email", type: "email", autoComplete: "email" },
+  { field: "phone", type: "tel", autoComplete: "tel" },
+  { field: "address", type: "text", autoComplete: "street-address" },
 ] as const;
 
 type PersonalField = (typeof PERSONAL_FIELDS)[number]["field"];
@@ -302,7 +303,7 @@ function Personal({ assistant }: { assistant: string }) {
   };
   const locate = () => {
     setError(undefined);
-    if (!("geolocation" in navigator)) return setError("This browser can't tell where you are.");
+    if (!("geolocation" in navigator)) return setError(m.profile.personal.noGeolocation);
     navigator.geolocation.getCurrentPosition(
       ({ coords }) =>
         void update(() =>
@@ -321,17 +322,12 @@ function Personal({ assistant }: { assistant: string }) {
       className="flex flex-col gap-3 rounded border border-stone-200 bg-white p-3"
     >
       <div>
-        <h3 className="text-sm font-medium">Personal details</h3>
-        <p className="text-xs text-stone-500">
-          For filling in forms, writing mail and finding what is near you. Only you see them: the
-          model gets placeholders such as ⟦EMAIL1⟧, in your own room and your private messages only,
-          and tools get the real values when they act for you. Where you are also goes to shared
-          rooms where you turn it on, under Location in the room.
-        </p>
+        <h3 className="text-sm font-medium">{m.profile.personal.title}</h3>
+        <p className="text-xs text-stone-500">{m.profile.personal.intro}</p>
       </div>
-      {PERSONAL_FIELDS.map(({ field, label, type, autoComplete }) => (
+      {PERSONAL_FIELDS.map(({ field, type, autoComplete }) => (
         <label key={field} className="flex flex-col gap-1 text-sm">
-          {label}
+          {m.profile.personal.fields[field]}
           <input
             type={type}
             autoComplete={autoComplete}
@@ -345,11 +341,11 @@ function Personal({ assistant }: { assistant: string }) {
         </label>
       ))}
       <div className="flex flex-col gap-1 text-sm">
-        Where you are
+        {m.profile.personal.whereYouAre}
         <span className="text-stone-600">
           {location === undefined
-            ? "Not shared. The apps can share it as you move."
-            : `${location.text}, ${new Date(location.at).toLocaleString()}`}
+            ? m.profile.personal.notShared
+            : `${location.text}, ${new Date(location.at).toLocaleString(dateLocale())}`}
         </span>
         <span className="flex gap-3">
           <button
@@ -358,7 +354,7 @@ function Personal({ assistant }: { assistant: string }) {
             onClick={locate}
             className="underline disabled:opacity-50"
           >
-            Share where I am now
+            {m.profile.personal.shareNow}
           </button>
           {location !== undefined && (
             <button
@@ -367,7 +363,7 @@ function Personal({ assistant }: { assistant: string }) {
               onClick={() => void update(() => api.updatePersonal({ location: null }))}
               className="text-stone-600 underline disabled:opacity-50"
             >
-              Forget it
+              {m.profile.personal.forget}
             </button>
           )}
         </span>
@@ -378,9 +374,9 @@ function Personal({ assistant }: { assistant: string }) {
           disabled={busy}
           className="rounded border px-3 py-1 text-sm disabled:opacity-50"
         >
-          Save
+          {m.common.save}
         </button>
-        {saved && <span className="text-sm text-stone-600">Saved.</span>}
+        {saved && <span className="text-sm text-stone-600">{m.profile.page.saved}</span>}
         {error !== undefined && <span className="text-sm text-red-700">{error}</span>}
       </div>
     </form>
@@ -415,15 +411,11 @@ function Places({ assistant }: { assistant: string }) {
   return (
     <section className="flex flex-col gap-3 rounded border border-stone-200 bg-white p-3">
       <div>
-        <h3 className="text-sm font-medium">Places</h3>
-        <p className="text-xs text-stone-500">
-          Ask the assistant to save a place or remind you when you get somewhere. The model only
-          sees places as placeholders such as ⟦PLACE:home⟧. The Nudge app on your phone tells home
-          when you get there, with Reminders when I arrive on in your profile.
-        </p>
+        <h3 className="text-sm font-medium">{m.profile.places.title}</h3>
+        <p className="text-xs text-stone-500">{m.profile.places.intro}</p>
       </div>
       {saved.length === 0 && reminders.length === 0 && (
-        <p className="text-sm text-stone-500">No places or reminders yet.</p>
+        <p className="text-sm text-stone-500">{m.profile.places.none}</p>
       )}
       {saved.length > 0 && (
         <ul className="flex flex-col gap-1">
@@ -438,7 +430,7 @@ function Places({ assistant }: { assistant: string }) {
                 onClick={() => void act(() => api.forgetPlace(place.name))}
                 className="text-xs text-red-700 hover:underline"
               >
-                Forget
+                {m.profile.places.forget}
               </button>
             </li>
           ))}
@@ -449,16 +441,16 @@ function Places({ assistant }: { assistant: string }) {
           {reminders.map((reminder) => (
             <li key={reminder.id} className="flex items-center justify-between gap-2 text-sm">
               <span>
-                {reminder.on === "arrive" ? "Getting to" : "Leaving"}{" "}
-                {reminder.place ?? `any ${reminder.kind}`}
-                {reminder.repeat === "always" ? ", every time" : ""}: {reminder.message}
+                {reminder.on === "arrive" ? m.profile.places.arriving : m.profile.places.leaving}{" "}
+                {reminder.place ?? m.profile.places.anyKind(reminder.kind)}
+                {reminder.repeat === "always" ? m.profile.places.everyTime : ""}: {reminder.message}
               </span>
               <button
                 type="button"
                 onClick={() => void act(() => api.cancelArrivalReminder(reminder.id))}
                 className="text-xs text-red-700 hover:underline"
               >
-                Cancel
+                {m.common.cancel}
               </button>
             </li>
           ))}
@@ -503,14 +495,15 @@ function Memberships({ assistant }: { assistant: string }) {
   return (
     <div className="flex flex-col gap-3 rounded border border-stone-200 bg-white p-3">
       <div>
-        <h3 className="text-sm font-medium">Other assistants</h3>
+        <h3 className="text-sm font-medium">{m.profile.memberships.title}</h3>
         <p className="text-xs text-stone-500">
-          Your address is <span className="font-mono">{address}</span>. An admin of another
-          assistant can invite you by it, and you join from the Nudge app.
+          {m.profile.memberships.addressBefore}
+          <span className="font-mono">{address}</span>
+          {m.profile.memberships.addressAfter}
         </p>
       </div>
       {memberships.data.memberships.length === 0 ? (
-        <p className="text-sm text-stone-600">You haven't joined any yet.</p>
+        <p className="text-sm text-stone-600">{m.profile.memberships.none}</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {memberships.data.memberships.map((membership) => {
@@ -521,24 +514,22 @@ function Memberships({ assistant }: { assistant: string }) {
                   <span>
                     <span className="font-medium">{membership.assistant}</span>{" "}
                     <span className="text-stone-500">
-                      at {new URL(membership.server).host}, since{" "}
-                      {new Date(membership.since).toLocaleDateString()}
+                      {m.profile.memberships.where(
+                        new URL(membership.server).host,
+                        new Date(membership.since).toLocaleDateString(dateLocale()),
+                      )}
                     </span>
                   </span>
                   <button
                     type="button"
                     disabled={busy === id}
                     onClick={() => {
-                      if (
-                        confirm(
-                          `Stop sending your profile and memory to ${membership.assistant}? You stay a member there.`,
-                        )
-                      )
+                      if (confirm(m.profile.memberships.confirmLeave(membership.assistant)))
                         void change(membership, () => api.leave(membership));
                     }}
                     className="text-stone-600 underline disabled:opacity-50"
                   >
-                    Leave
+                    {m.profile.memberships.leave}
                   </button>
                 </div>
                 <label className="flex items-center gap-2">
@@ -552,7 +543,7 @@ function Memberships({ assistant }: { assistant: string }) {
                       )
                     }
                   />
-                  Take my own memory there (not what I made private)
+                  {m.profile.memberships.carryMemory}
                 </label>
               </li>
             );
@@ -589,11 +580,8 @@ function Page({ children }: { children: React.ReactNode }) {
   return (
     <section className="mx-auto flex max-w-xl flex-col gap-4 p-3 sm:p-4">
       <div>
-        <h2 className="text-lg font-medium">Profile</h2>
-        <p className="text-sm text-stone-600">
-          How the assistant knows you: it reads your nudges' times in your time zone and answers you
-          in your language.
-        </p>
+        <h2 className="text-lg font-medium">{m.profile.page.title}</h2>
+        <p className="text-sm text-stone-600">{m.profile.page.intro}</p>
       </div>
       {children}
     </section>

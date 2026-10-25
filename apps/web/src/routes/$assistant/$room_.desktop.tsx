@@ -8,6 +8,7 @@ import {
   useDesktopState,
   useDesktopView,
 } from "../../desktop-view.ts";
+import { m } from "../../i18n/index.ts";
 
 export const Route = createFileRoute("/$assistant/$room_/desktop")({ component: Desktop });
 
@@ -30,28 +31,24 @@ function Desktop() {
   return (
     <section className="mx-auto flex max-w-3xl flex-col gap-3 p-3 sm:p-4">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-        <h2 className="text-lg font-medium">Desktop</h2>
+        <h2 className="text-lg font-medium">{m.panels.desktop.title}</h2>
         <Link
           to="/$assistant/$room"
           params={{ assistant, room }}
           className="text-sm text-stone-600 hover:underline"
         >
-          Back to the room
+          {m.panels.backToRoom}
         </Link>
       </div>
-      <p className="text-sm text-stone-600">
-        This is the room's own desktop, where the assistant uses apps. Watch it work, or take
-        control and use the apps yourself. The assistant reads the apps as text and never sees this
-        picture.
-      </p>
+      <p className="text-sm text-stone-600">{m.panels.desktop.intro}</p>
       {state.status === "closed" ? (
         <p className="text-red-700">
           {state.closeCode === NOT_FOUND
-            ? "This assistant has no desktop extension, or you are not in this room."
-            : `Disconnected${state.error ? `: ${state.error}` : ""}.`}
+            ? m.panels.desktop.notFound
+            : m.panels.disconnected(state.error)}
         </p>
       ) : socket === undefined || state.status === "connecting" ? (
-        <p className="text-stone-500">Starting the desktop…</p>
+        <p className="text-stone-500">{m.panels.desktop.starting}</p>
       ) : (
         <Live socket={socket} />
       )}
@@ -151,10 +148,7 @@ function Live({ socket }: { socket: DesktopSocket }) {
 
   useEffect(() => {
     canvas.setAttribute("aria-disabled", String(!inControl));
-    canvas.setAttribute(
-      "aria-label",
-      "The room's desktop. Click to focus, then type; the window under the pointer gets the keys.",
-    );
+    canvas.setAttribute("aria-label", m.panels.desktop.canvas);
     canvas.style.cursor = inControl ? "default" : "not-allowed";
   }, [canvas, inControl]);
 
@@ -166,12 +160,12 @@ function Live({ socket }: { socket: DesktopSocket }) {
     >
       {state.control !== undefined && !inControl && (
         <div className="flex items-center gap-3 rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          {state.control.holder ?? "Someone else"} is using the desktop; you are watching.
+          {m.panels.desktop.watching(state.control.holder ?? m.panels.someoneElse)}
           <button
             onClick={() => socket.send({ type: "take" })}
             className="rounded border border-amber-700 px-2 py-0.5 hover:bg-amber-100"
           >
-            Take control
+            {m.panels.takeControl}
           </button>
         </div>
       )}
@@ -181,19 +175,21 @@ function Live({ socket }: { socket: DesktopSocket }) {
             key={app}
             onClick={() => drive({ type: "launch", app })}
             disabled={!inControl}
-            title={`Start ${app}`}
+            title={m.panels.desktop.start(app)}
             className="rounded border border-stone-300 px-2 py-0.5 hover:bg-stone-100 disabled:opacity-40"
           >
-            Start {app}
+            {m.panels.desktop.start(app)}
           </button>
         ))}
-        {(state.windows ?? []).length > 0 && <span className="ml-2 text-stone-500">Windows:</span>}
+        {(state.windows ?? []).length > 0 && (
+          <span className="ml-2 text-stone-500">{m.panels.desktop.windows}</span>
+        )}
         {(state.windows ?? []).map((window) => (
           <button
             key={window.ref}
             onClick={() => drive({ type: "raise", ref: window.ref })}
             disabled={!inControl}
-            title={`Bring ${window.title || window.app} to the front`}
+            title={m.panels.desktop.raise(window.title || window.app)}
             className="max-w-48 truncate rounded bg-stone-100 px-2 py-0.5 hover:bg-stone-200 disabled:opacity-40"
           >
             {window.title || window.app}
@@ -201,10 +197,10 @@ function Live({ socket }: { socket: DesktopSocket }) {
         ))}
       </div>
       <div ref={holder} />
-      {state.screen === undefined && <p className="text-stone-500">Waiting for the screen…</p>}
+      {state.screen === undefined && <p className="text-stone-500">{m.panels.desktop.waiting}</p>}
       {state.working && (
         <p className="text-sm text-stone-600">
-          <span className="font-medium">The assistant:</span> {state.working}
+          <span className="font-medium">{m.panels.desktop.assistant}</span> {state.working}
         </p>
       )}
       {state.error && <p className="text-sm text-red-700">{state.error}</p>}

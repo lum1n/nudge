@@ -44,13 +44,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import app.nudge.AppModel
+import app.nudge.R
 import app.nudge.explain
+import app.nudge.text
 import java.text.Normalizer
 import kotlinx.coroutines.launch
 import nudge.ffi.ModelChoice
@@ -125,8 +128,8 @@ fun SetupScreen(model: AppModel, start: SetupStart, close: () -> Unit) {
             work()
         } catch (error: NudgeException.Status) {
             problem = when (error.status.toInt()) {
-                401 -> "That isn't the setup code."
-                410 -> "Setup closed: the server is set up already, or took too many wrong codes. Restart it for a new code."
+                401 -> text(R.string.setup_code_wrong)
+                410 -> text(R.string.setup_closed)
                 else -> error.detail
             }
         } catch (error: Exception) {
@@ -138,7 +141,7 @@ fun SetupScreen(model: AppModel, start: SetupStart, close: () -> Unit) {
 
     suspend fun load() {
         val found = setupInfo(server)
-        if (!found.open) throw IllegalStateException("That server is set up already: sign in to it instead.")
+        if (!found.open) throw IllegalStateException(text(R.string.setup_set_up_already))
         info = found
         if (provider == null) {
             val first = found.providers.firstOrNull()
@@ -154,8 +157,8 @@ fun SetupScreen(model: AppModel, start: SetupStart, close: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Set up Nudge") },
-                navigationIcon = { IconButton(onClick = ::back) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                title = { Text(stringResource(R.string.setup_title)) },
+                navigationIcon = { IconButton(onClick = ::back) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.setup_back)) } },
             )
         },
     ) { padding ->
@@ -167,79 +170,82 @@ fun SetupScreen(model: AppModel, start: SetupStart, close: () -> Unit) {
                 HomeFederationCard(model)
                 when (step) {
                     Step.ADDRESS -> {
-                        Text("Where is the server?", style = MaterialTheme.typography.headlineSmall)
+                        Text(stringResource(R.string.setup_address_title), style = MaterialTheme.typography.headlineSmall)
                         Text(
-                            "A server that isn't set up yet prints its address and a setup code when it starts.",
+                            stringResource(R.string.setup_address_hint),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Field(server, { server = it }, "Server", "https://nudge.example", KeyboardType.Uri)
+                        Field(server, { server = it }, stringResource(R.string.setup_server), "https://nudge.example", KeyboardType.Uri)
                     }
                     Step.CODE -> {
-                        Text("Its setup code", style = MaterialTheme.typography.headlineSmall)
+                        Text(stringResource(R.string.setup_code_title), style = MaterialTheme.typography.headlineSmall)
                         OutlinedTextField(
                             value = code,
                             onValueChange = { code = it },
-                            label = { Text("Setup code") },
+                            label = { Text(stringResource(R.string.setup_code)) },
                             placeholder = { Text("XXXX-XXXX-XXXX") },
                             singleLine = true,
                             textStyle = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace),
                             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrectEnabled = false),
-                            supportingText = { Text("The server printed it when it started.") },
+                            supportingText = { Text(stringResource(R.string.setup_code_hint)) },
                             shape = MaterialTheme.shapes.large,
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
                     Step.NAME -> {
-                        Text("Name your assistant", style = MaterialTheme.typography.headlineSmall)
-                        Field(name, { name = it }, "Its name", "Robin", supporting = "What it calls itself. You can change it later.")
+                        Text(stringResource(R.string.setup_name_title), style = MaterialTheme.typography.headlineSmall)
+                        Field(name, { name = it }, stringResource(R.string.setup_name), "Robin", supporting = stringResource(R.string.setup_name_hint))
                         Field(
-                            assistant, { slug = slugOf(it) }, "In its address", null,
-                            supporting = "Part of every address of the people here, so this one stays.",
+                            assistant, { slug = slugOf(it) }, stringResource(R.string.setup_slug), null,
+                            supporting = stringResource(R.string.setup_slug_hint),
                         )
                     }
                     Step.MODEL -> {
-                        Text("Choose its model", style = MaterialTheme.typography.headlineSmall)
+                        Text(stringResource(R.string.setup_model_title), style = MaterialTheme.typography.headlineSmall)
                         info?.providers?.forEach { option ->
-                            Choice(option.id == provider, option.name, "With your own API key") {
+                            Choice(option.id == provider, option.name, stringResource(R.string.setup_own_key)) {
                                 provider = option.id
                                 modelId = option.recommended
                             }
                         }
                         info?.local?.forEach { option ->
-                            Choice(option.id == provider, option.name, "Running on the server; no key") {
+                            Choice(option.id == provider, option.name, stringResource(R.string.setup_local)) {
                                 provider = option.id
                                 modelId = option.models.firstOrNull()
                             }
                         }
                         val models = offered?.models?.map { it.id to it.name } ?: local?.models?.map { it to it } ?: emptyList()
                         if (models.size > 1) {
-                            Text("Model", style = MaterialTheme.typography.labelLarge)
+                            Text(stringResource(R.string.setup_model), style = MaterialTheme.typography.labelLarge)
                             models.forEach { (id, label) -> Choice(id == modelId, label, null) { modelId = id } }
                         }
                         if (offered != null) {
                             OutlinedTextField(
                                 value = key,
                                 onValueChange = { key = it },
-                                label = { Text("${offered.name} API key") },
+                                label = { Text(stringResource(R.string.setup_api_key, offered.name)) },
                                 singleLine = true,
                                 visualTransformation = PasswordVisualTransformation(),
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
-                                supportingText = { Text("Kept encrypted on the server, never shown again.") },
+                                supportingText = { Text(stringResource(R.string.setup_key_hint)) },
                                 shape = MaterialTheme.shapes.large,
                                 modifier = Modifier.fillMaxWidth(),
                             )
                             KEY_PAGES[offered.id]?.let { page ->
                                 TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(page))) }) {
-                                    Text("Get a key")
+                                    Text(stringResource(R.string.setup_get_key))
                                 }
                             }
                         }
                     }
                     Step.YOU -> {
-                        Text("And you?", style = MaterialTheme.typography.headlineSmall)
+                        Text(stringResource(R.string.setup_you_title), style = MaterialTheme.typography.headlineSmall)
                         Field(
-                            you, { you = it }, "Your name", null,
-                            supporting = "You will be ${name.trim().ifEmpty { "the assistant" }}'s first person, its admin, and this server's owner.",
+                            you, { you = it }, stringResource(R.string.setup_your_name), null,
+                            supporting = stringResource(
+                                R.string.setup_your_name_hint,
+                                name.trim().ifEmpty { stringResource(R.string.setup_the_assistant) },
+                            ),
                         )
                         Row(
                             Modifier.fillMaxWidth().selectable(selected = backups, onClick = { backups = !backups }),
@@ -247,7 +253,7 @@ fun SetupScreen(model: AppModel, start: SetupStart, close: () -> Unit) {
                         ) {
                             Checkbox(checked = backups, onCheckedChange = null)
                             Text(
-                                "Back up every night, keeping two weeks, beside the data",
+                                stringResource(R.string.setup_backups),
                                 Modifier.padding(start = 12.dp),
                             )
                         }
@@ -261,16 +267,13 @@ fun SetupScreen(model: AppModel, start: SetupStart, close: () -> Unit) {
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Checkbox(checked = cluster && !noCluster, onCheckedChange = null, enabled = !noCluster)
-                                Text("Part of my cluster", Modifier.padding(start = 12.dp))
+                                Text(stringResource(R.string.setup_cluster), Modifier.padding(start = 12.dp))
                             }
                             Text(
                                 when {
-                                    noCluster ->
-                                        "Your home has no federation, so this server stays on its own: you sign in to it as its first person. Turn federation on at home to join servers to it."
-                                    cluster ->
-                                        "Joined from your home: its rooms show beside your home's, and your other devices list the server."
-                                    else ->
-                                        "On its own, without federation for now: you are its first person, as yourself from home, so you can join it to your cluster later. Until then it never talks to your other servers."
+                                    noCluster -> stringResource(R.string.setup_cluster_none)
+                                    cluster -> stringResource(R.string.setup_cluster_joined)
+                                    else -> stringResource(R.string.setup_cluster_alone)
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -331,7 +334,7 @@ fun SetupScreen(model: AppModel, start: SetupStart, close: () -> Unit) {
                         shapes = ButtonDefaults.shapes(),
                         modifier = Modifier.fillMaxWidth().heightIn(min = ButtonDefaults.MediumContainerHeight),
                     ) {
-                        Text(if (step == Step.YOU) "Set up" else "Continue")
+                        Text(stringResource(if (step == Step.YOU) R.string.setup_set_up else R.string.setup_continue))
                     }
                 }
             }

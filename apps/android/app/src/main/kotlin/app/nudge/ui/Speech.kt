@@ -48,11 +48,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.nudge.Dictation
 import app.nudge.Dictation.Pack
+import app.nudge.R
+import app.nudge.text
 import kotlinx.coroutines.delay
 
 /**
@@ -89,13 +92,13 @@ fun DictationButton(
     }
 
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) begin() else problem("Nudge needs the microphone to hear you. Allow it in the phone's settings.")
+        if (granted) begin() else problem(text(R.string.room_speech_mic_needed))
     }
 
     fun tap() {
         when {
             dictating -> dictation.stop()
-            !dictation.available -> problem("This phone has no speech recognition.")
+            !dictation.available -> problem(text(R.string.room_speech_unavailable))
             dictation.needsOnline && !dictation.online.value -> askOnline = true
             ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED ->
                 permission.launch(Manifest.permission.RECORD_AUDIO)
@@ -136,9 +139,9 @@ fun DictationButton(
                 onClick = ::tap,
                 shapes = IconButtonDefaults.shapes(),
                 modifier = Modifier.scale(1f + 0.15f * (listening?.level ?: 0f)),
-            ) { Icon(Icons.Filled.Mic, "Stop dictating") }
+            ) { Icon(Icons.Filled.Mic, stringResource(R.string.room_speech_stop)) }
         } else {
-            IconButton(onClick = ::tap) { Icon(Icons.Outlined.Mic, "Dictate") }
+            IconButton(onClick = ::tap) { Icon(Icons.Outlined.Mic, stringResource(R.string.room_speech_dictate)) }
         }
     }
 
@@ -146,13 +149,11 @@ fun DictationButton(
         AlertDialog(
             onDismissRequest = { askOnline = false },
             icon = { Icon(Icons.Outlined.RecordVoiceOver, null) },
-            title = { Text("Use the phone's speech service?") },
+            title = { Text(stringResource(R.string.room_speech_online_title)) },
             text = {
                 Text(
-                    (if (dictation.onDevice) "This phone can't recognize ${Dictation.displayName(language)} on its own"
-                    else "This phone can't recognize speech on its own") +
-                        ", so your voice would go to its speech service (usually Google) to be written out. " +
-                        "Nudge hides personal details from the assistant's model, but can't do that for your voice.",
+                    if (dictation.onDevice) stringResource(R.string.room_speech_online_language, Dictation.displayName(language))
+                    else stringResource(R.string.room_speech_online),
                 )
             },
             confirmButton = {
@@ -160,9 +161,9 @@ fun DictationButton(
                     askOnline = false
                     dictation.allowOnline(true)
                     tap()
-                }) { Text("Use it") }
+                }) { Text(stringResource(R.string.room_speech_use_it)) }
             },
-            dismissButton = { TextButton(onClick = { askOnline = false }) { Text("Not now") } },
+            dismissButton = { TextButton(onClick = { askOnline = false }) { Text(stringResource(R.string.room_speech_not_now)) } },
         )
     }
 }
@@ -192,8 +193,8 @@ fun SpeechScreen(dictation: Dictation, close: () -> Unit) {
         topBar = {
             MediumFlexibleTopAppBar(
                 colors = groupedTopBarColors(),
-                title = { Text("Speech") },
-                navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                title = { Text(stringResource(R.string.room_speech_title)) },
+                navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.room_speech_back)) } },
                 scrollBehavior = scrollBehavior,
             )
         },
@@ -208,7 +209,7 @@ fun SpeechScreen(dictation: Dictation, close: () -> Unit) {
             ),
         ) {
             group(
-                "Languages you speak",
+                text(R.string.room_speech_languages),
                 buildList<GroupRow> {
                     languages.forEachIndexed { index, tag ->
                         add { shapes ->
@@ -218,16 +219,16 @@ fun SpeechScreen(dictation: Dictation, close: () -> Unit) {
                                 trailingContent = {
                                     Row {
                                         if (packs[tag] == Pack.DOWNLOADABLE) {
-                                            IconButton(onClick = { dictation.download(tag) }) { Icon(Icons.Outlined.Download, "Download") }
+                                            IconButton(onClick = { dictation.download(tag) }) { Icon(Icons.Outlined.Download, stringResource(R.string.room_download)) }
                                         }
                                         if (index > 0) {
                                             IconButton(onClick = {
                                                 dictation.setLanguages(languages.toMutableList().apply { add(index - 1, removeAt(index)) })
-                                            }) { Icon(Icons.Outlined.KeyboardArrowUp, "Move up") }
+                                            }) { Icon(Icons.Outlined.KeyboardArrowUp, stringResource(R.string.room_speech_move_up)) }
                                         }
                                         if (languages.size > 1) {
                                             IconButton(onClick = { dictation.setLanguages(languages - tag) }) {
-                                                Icon(Icons.Outlined.Close, "Remove")
+                                                Icon(Icons.Outlined.Close, stringResource(R.string.room_remove))
                                             }
                                         }
                                     }
@@ -240,14 +241,13 @@ fun SpeechScreen(dictation: Dictation, close: () -> Unit) {
                             onClick = { adding = true },
                             shapes = shapes,
                             leadingContent = { Icon(Icons.Outlined.Add, null) },
-                        ) { Text("Add a language") }
+                        ) { Text(stringResource(R.string.room_speech_add)) }
                     }
                 },
             )
             item {
                 Text(
-                    if (dictation.detectsLanguage) "The phone hears which of these you speak, and can switch between them as you talk."
-                    else "Tap the language next to the mic to switch between them.",
+                    stringResource(if (dictation.detectsLanguage) R.string.room_speech_detects else R.string.room_speech_tap),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(16.dp),
@@ -255,20 +255,17 @@ fun SpeechScreen(dictation: Dictation, close: () -> Unit) {
             }
             if (!dictation.onDevice || languages.any { packs[it] == Pack.MISSING }) {
                 group(
-                    "Off the phone",
+                    text(R.string.room_speech_off_phone),
                     listOf { shapes ->
                         SegmentedListItem(
                             checked = online,
                             onCheckedChange = dictation::allowOnline,
                             shapes = shapes,
                             supportingContent = {
-                                Text(
-                                    "For languages this phone can't recognize on its own, its speech service (usually Google) " +
-                                        "hears your voice instead.",
-                                )
+                                Text(stringResource(R.string.room_speech_online_explain))
                             },
                             trailingContent = { Switch(checked = online, onCheckedChange = null) },
-                        ) { Text("Use the phone's speech service") }
+                        ) { Text(stringResource(R.string.room_speech_use_service)) }
                     },
                 )
             }
@@ -278,7 +275,7 @@ fun SpeechScreen(dictation: Dictation, close: () -> Unit) {
     if (adding) {
         AlertDialog(
             onDismissRequest = { adding = false },
-            title = { Text("Add a language") },
+            title = { Text(stringResource(R.string.room_speech_add)) },
             text = {
                 LazyColumn {
                     candidates.filter { it !in languages }
@@ -298,16 +295,16 @@ fun SpeechScreen(dictation: Dictation, close: () -> Unit) {
                         }
                 }
             },
-            confirmButton = { TextButton(onClick = { adding = false }) { Text("Cancel") } },
+            confirmButton = { TextButton(onClick = { adding = false }) { Text(stringResource(R.string.room_cancel)) } },
         )
     }
 }
 
 private fun describe(pack: Pack?, onDevice: Boolean): String = when {
-    !onDevice -> "Through the phone's speech service"
-    pack == Pack.INSTALLED -> "On this phone"
-    pack == Pack.DOWNLOADING -> "Downloading…"
-    pack == Pack.DOWNLOADABLE -> "Not downloaded yet"
-    pack == Pack.MISSING -> "Not on this phone: only through its speech service"
-    else -> "On this phone, if the phone has it"
+    !onDevice -> text(R.string.room_speech_pack_service)
+    pack == Pack.INSTALLED -> text(R.string.room_speech_pack_installed)
+    pack == Pack.DOWNLOADING -> text(R.string.room_speech_pack_downloading)
+    pack == Pack.DOWNLOADABLE -> text(R.string.room_speech_pack_downloadable)
+    pack == Pack.MISSING -> text(R.string.room_speech_pack_missing)
+    else -> text(R.string.room_speech_pack_maybe)
 }

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What the robot is doing, beside it by the composer. -->
+<resources>
+    <string name="mood_using">Using %1$s…</string>
+    <string name="mood_working">Working…</string>
+    <string name="mood_compacting">Tidying up older messages…</string>
+    <string name="mood_thinking">Thinking…</string>
+    <string name="mood_speaking">Answering…</string>
+    <string name="mood_waiting">Waiting for an approval</string>
+    <string name="mood_puzzled">Trying again…</string>
+    <string name="mood_sad">That didn\'t work</string>
+    <string name="mood_asleep">Dozing</string>
+</resources>

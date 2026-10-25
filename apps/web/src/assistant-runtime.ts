@@ -13,6 +13,7 @@ import type {
   TimelineItem,
   ToolPart,
 } from "@nudge/client";
+import { dateLocale, m } from "./i18n/index.ts";
 
 type Answer = Extract<TimelineItem, { type: "answer" }>;
 
@@ -79,9 +80,9 @@ export function dayLabel(at: number, now: number = Date.now()): string {
   const day = new Date(at);
   const today = new Date(now);
   const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
-  if (day.toDateString() === today.toDateString()) return "Today";
-  if (day.toDateString() === yesterday.toDateString()) return "Yesterday";
-  return day.toLocaleDateString(undefined, {
+  if (day.toDateString() === today.toDateString()) return m.common.today;
+  if (day.toDateString() === yesterday.toDateString()) return m.common.yesterday;
+  return day.toLocaleDateString(dateLocale(), {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -91,7 +92,7 @@ export function dayLabel(at: number, now: number = Date.now()): string {
 
 /** A time of day, such as "14:32", the way the reader's locale writes it. */
 export function timeLabel(at: number): string {
-  return new Date(at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return new Date(at).toLocaleTimeString(dateLocale(), { hour: "numeric", minute: "2-digit" });
 }
 
 /** A tool the reader has to act on in the chat: the browser wants a login, or an approval. */
@@ -127,7 +128,7 @@ export function toThreadMessageLike(item: TimelineItem, me: string): ThreadMessa
     case "user":
       // Someone else's private message: the server sent it empty, so it is a line, not a bubble.
       if (item.privateTo !== undefined && item.text === "")
-        return privateLine(item.id, `${item.privateTo.displayName} sent a private message`);
+        return privateLine(item.id, m.room.runtime.sentPrivately(item.privateTo.displayName));
       return {
         id: item.id,
         role: "user",
@@ -150,7 +151,7 @@ export function toThreadMessageLike(item: TimelineItem, me: string): ThreadMessa
     // is and its data ride along in `metadata.custom`.
     case "nudge":
       if (item.privateTo !== undefined && item.text === "")
-        return privateLine(item.id, `A nudge for ${item.privateTo.displayName}`);
+        return privateLine(item.id, m.room.runtime.nudgeFor(item.privateTo.displayName));
       return {
         id: item.id,
         role: "system",
@@ -160,7 +161,7 @@ export function toThreadMessageLike(item: TimelineItem, me: string): ThreadMessa
       };
     case "approval":
       if (item.privateTo !== undefined && item.summary === "")
-        return privateLine(item.id, `An approval for ${item.privateTo.displayName} ended`);
+        return privateLine(item.id, m.room.runtime.approvalEnded(item.privateTo.displayName));
       return {
         id: item.id,
         role: "system",
@@ -187,8 +188,8 @@ export function toThreadMessageLike(item: TimelineItem, me: string): ThreadMessa
         return privateLine(
           item.id,
           item.status === "running"
-            ? `Answering ${item.privateTo.displayName} privately…`
-            : `Answered ${item.privateTo.displayName} privately`,
+            ? m.room.runtime.answeringPrivately(item.privateTo.displayName)
+            : m.room.runtime.answeredPrivately(item.privateTo.displayName),
         );
       return {
         id: item.id,
@@ -275,7 +276,7 @@ function toStatus(answer: Answer): MessageStatus {
 
 function queueItem(id: string | number, text: string): QueueItemState {
   // Someone else's private message waits as an empty one.
-  const shown = text === "" ? "A private message" : text;
+  const shown = text === "" ? m.room.runtime.privateMessage : text;
   return { id: String(id), prompt: shown, parts: [{ type: "text", text: shown }] };
 }
 
@@ -348,11 +349,9 @@ export function announcement(
     if (item.type !== "answer" || item.status === "running") return;
     const earlier = was.get(item.id);
     if (earlier?.type !== "answer" || earlier.status !== "running") return;
-    if (item.status === "stopped") lines.push(`${assistant} stopped.`);
+    if (item.status === "stopped") lines.push(m.room.runtime.stopped(assistant));
     else if (item.status === "failed")
-      lines.push(
-        `${assistant} couldn't answer${item.error === undefined ? "." : `: ${item.error}`}`,
-      );
+      lines.push(m.room.runtime.couldntAnswer(assistant, item.error));
     else {
       const text = item.parts.flatMap((part) => (part.type === "text" ? [part.text] : []));
       if (text.length > 0) lines.push(`${assistant}: ${spoken(text.join("\n"))}`);
@@ -361,14 +360,14 @@ export function announcement(
   const asked = new Set(before.approvals.filter((a) => a.status === "pending").map((a) => a.id));
   for (const approval of after.approvals)
     if (approval.status === "pending" && !asked.has(approval.id))
-      lines.push(`Waiting for approval: ${spoken(approval.summary)}`);
+      lines.push(m.room.runtime.waitingForApproval(spoken(approval.summary)));
   return lines.length === 0 ? undefined : lines.join("\n");
 }
 
 /** Text as it is read out: hidden values said as "hidden", without markdown's marks. */
 function spoken(text: string): string {
   return text
-    .replace(PLACEHOLDER, "hidden")
+    .replace(PLACEHOLDER, m.room.runtime.hidden)
     .replace(/^\s*(#+|>|[-*+])\s+/gm, "")
     .replace(/\*\*|__|`/g, "")
     .trim();
