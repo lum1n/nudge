@@ -1,6 +1,8 @@
 // What the robot shows for a room, from what is going on in it, as in the web app's mood.ts.
 package app.nudge.avatar
 
+import app.nudge.R
+import app.nudge.text
 import nudge.ffi.Approval
 import nudge.ffi.ApprovalStatus
 import nudge.ffi.AnswerStatus
@@ -72,14 +74,14 @@ val AFTERGLOW: Map<Mood, Long> = mapOf(Mood.HAPPY to 1600L, Mood.SAD to 4000L)
 /** A word on what the robot is doing, beside it by the composer; empty when there's nothing to say. */
 fun presenceLabel(mood: Mood, timeline: List<TimelineItem>, live: Live?): String = when (mood) {
     Mood.WORKING -> when (val part = timeline.lastAnswer()?.parts?.lastOrNull()) {
-        is Part.Tool -> "Using ${part.tool.name}…"
-        else -> "Working…"
+        is Part.Tool -> text(R.string.mood_using, part.tool.name)
+        else -> text(R.string.mood_working)
     }
-    Mood.THINKING -> if (live?.status is Status.Compacting) "Tidying up older messages…" else "Thinking…"
-    Mood.SPEAKING -> "Answering…"
-    Mood.WAITING -> "Waiting for an approval"
-    Mood.PUZZLED -> "Trying again…"
-    Mood.SAD -> "That didn't work"
-    Mood.ASLEEP -> "Dozing"
+    Mood.THINKING -> text(if (live?.status is Status.Compacting) R.string.mood_compacting else R.string.mood_thinking)
+    Mood.SPEAKING -> text(R.string.mood_speaking)
+    Mood.WAITING -> text(R.string.mood_waiting)
+    Mood.PUZZLED -> text(R.string.mood_puzzled)
+    Mood.SAD -> text(R.string.mood_sad)
+    Mood.ASLEEP -> text(R.string.mood_asleep)
     Mood.HAPPY, Mood.IDLE, Mood.LISTENING -> ""
 }

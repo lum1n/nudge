@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { joinHere } from "../api.ts";
+import { m } from "../i18n/index.ts";
 import { readJoinPage } from "../joining.ts";
 import { assistantsQuery } from "../queries.ts";
 
@@ -47,15 +48,13 @@ function Join() {
     <main className="mx-auto flex max-w-sm flex-col gap-4 px-4 pt-24">
       <h1 className="text-2xl font-semibold">Nudge</h1>
       {linked === undefined ? null : linked === null ? (
-        <p className="text-sm text-stone-700">
-          This page joins an assistant from your home's Other assistants, under Profile. Open it
-          from there again.
-        </p>
+        <p className="text-sm text-stone-700">{m.setup.join.noLink}</p>
       ) : (
         <>
           <p className="text-sm text-stone-700">
-            Your home assistant vouches for you to <span className="font-medium">{name}</span> on{" "}
-            {location.host}. You join with your name and picture from home.
+            {m.setup.join.vouchesBefore}
+            <span className="font-medium">{name}</span>
+            {m.setup.join.vouchesAfter(location.host)}
           </p>
           <label className="flex items-center gap-2 text-sm text-stone-700">
             <input
@@ -63,7 +62,7 @@ function Join() {
               checked={remember}
               onChange={(event) => setRemember(event.target.checked)}
             />
-            Remember this device
+            {m.setup.join.remember}
           </label>
           <button
             type="button"
@@ -71,17 +70,17 @@ function Join() {
             onClick={() => void join()}
             className="rounded bg-stone-900 px-3 py-2 text-white disabled:opacity-40"
           >
-            Join {name}
+            {m.setup.join.join(name ?? "")}
           </button>
         </>
       )}
       {error !== undefined && (
         <p className="text-sm text-red-700">
-          {error} Ask for the link again from your home, under Profile.
+          {error} {m.setup.join.askAgain}
         </p>
       )}
       <Link to="/login" className="text-center text-sm text-stone-500 underline">
-        Sign in another way
+        {m.setup.join.otherWay}
       </Link>
     </main>
   );

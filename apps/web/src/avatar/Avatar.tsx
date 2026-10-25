@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { m } from "../i18n/index.ts";
 import { type Appearance, type EyeShape, NUDGE } from "./appearance.ts";
 import { blend, type Mood, type Pose, pose, REST, settle } from "./pose.ts";
 
@@ -39,7 +40,7 @@ export function Avatar({
       appearance={appearance}
       size={size}
       className={className}
-      title={title ?? mood}
+      title={title ?? m.setup.avatar.moods[mood]}
     />
   );
 }

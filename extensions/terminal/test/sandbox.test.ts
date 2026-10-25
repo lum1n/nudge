@@ -8,7 +8,9 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+import { homedir, networkInterfaces, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
@@ -206,13 +208,18 @@ describe.skipIf(sandboxProblem() !== undefined)("runSandboxed", () => {
   });
 });
 
+/** Whether a program is on this machine's PATH. */
+const onPath = (program: string) =>
+  (process.env.PATH ?? "").split(":").some((dir) => dir && existsSync(join(dir, program)));
+
 // slirp4netns itself is left out: a stand-in that only says it's ready leaves the network bare,
 // which is enough to see the blocks and DNS that the terminal sets up around it.
 describe.skipIf(
   sandboxProblem() !== undefined ||
     ["nsenter", "ip"].some((program) =>
       (process.env.PATH ?? "").split(":").every((dir) => !existsSync(join(dir, program))),
-    ),
+    ) ||
+    !existsSync("/dev/net/tun"),
 )("runSandboxed with the internet", () => {
   const root = mkdtempSync(join(tmpdir(), "nudge-terminal-net-"));
   const path = process.env.PATH;
@@ -245,5 +252,48 @@ describe.skipIf(
     // Root of its own namespace, without the capabilities to lift the blocks.
     expect(result.output).toMatch(/^0$/m);
     expect(result.output).toMatch(/Operation not permitted/);
+  });
+});
+
+// With the real slirp4netns, where this machine has it and /dev/net/tun: the internet and its DNS
+// work, and a service of this machine's is out of reach, at 10.0.2.2, 127.0.0.1 or its own
+// addresses on the local network. networkProblem() isn't asked: it is checked once, and the stand-in
+// above changes what it would find.
+describe.skipIf(
+  sandboxProblem() !== undefined ||
+    !["slirp4netns", "nsenter", "ip"].every(onPath) ||
+    !existsSync("/dev/net/tun"),
+)("runSandboxed with slirp4netns", () => {
+  const root = mkdtempSync(join(tmpdir(), "nudge-terminal-slirp-"));
+  const server = createServer((_request, response) => response.end("reached"));
+  beforeAll(() => new Promise<void>((resolve) => server.listen(0, "0.0.0.0", resolve)));
+  afterAll(() => {
+    server.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("reaches the internet but not this machine", async () => {
+    const port = (server.address() as AddressInfo).port;
+    const own = Object.values(networkInterfaces())
+      .flat()
+      .filter((address) => address?.family === "IPv4" && !address.internal)
+      .map((address) => address!.address);
+    const hosts = ["10.0.2.2", "127.0.0.1", ...own];
+    const result = await runSandboxed(
+      [
+        "getent ahostsv4 example.com >/dev/null && echo resolved",
+        "(exec 3<>/dev/tcp/example.com/80) && echo connected",
+        ...hosts.map((host) => `(exec 3<>/dev/tcp/${host}/${port}) || echo blocked ${host}`),
+      ].join("\n"),
+      {
+        workspace: join(root, "workspace"),
+        network: "internet",
+        timeoutMs: 30_000,
+        maxOutput: 10_000,
+      },
+    );
+    expect(result.output).toMatch(/^resolved$/m);
+    expect(result.output).toMatch(/^connected$/m);
+    for (const host of hosts) expect(result.output).toContain(`blocked ${host}`);
   });
 });

@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The servers this device owns, their assistants and Wired; the models' own messages. -->
+<resources>
+    <!-- Servers -->
+    <string name="servers_title">Servers</string>
+    <string name="servers_back">Back</string>
+    <string name="servers_cancel">Cancel</string>
+    <string name="servers_save">Save</string>
+    <string name="servers_remove">Remove</string>
+    <string name="servers_name">Name</string>
+    <string name="servers_yours">Yours</string>
+    <string name="servers_new">New</string>
+    <string name="servers_exe_summary">A small server in your exe.dev account, with an HTTPS address</string>
+    <string name="servers_exe_make">Make a server on exe.dev</string>
+
+    <!-- One server -->
+    <string name="servers_key_title">%1$s key</string>
+    <string name="servers_key_supporting">For every assistant here. Tried once before it is kept.</string>
+    <string name="servers_trying">Trying…</string>
+    <string name="servers_kit_title">Recovery kit</string>
+    <string name="servers_kit_body">With it and a backup, everything on this server can be brought back. Keep it away from the server, and the passphrase in your password manager.</string>
+    <string name="servers_kit_passphrase">Passphrase, 8 characters or more</string>
+    <string name="servers_kit_subject">Nudge recovery kit for %1$s</string>
+    <string name="servers_kit_keep">Keep the recovery kit</string>
+    <string name="servers_kit_summary">The backup key, sealed with a passphrase</string>
+    <string name="servers_make_it">Make it</string>
+    <string name="servers_making">Making it…</string>
+    <string name="servers_remove_title">Remove %1$s?</string>
+    <string name="servers_remove_body">Everything on it goes for good, and nothing is kept: make a recovery kit and download a backup first if you need one. Type %1$s to remove it.</string>
+    <string name="servers_assistants">Assistants</string>
+    <string name="servers_not_running">Not running: check the server\'s log</string>
+    <string name="servers_not_joined">%1$s · Not joined from home</string>
+    <string name="servers_new_assistant">New assistant</string>
+    <string name="servers_model_keys">Model keys</string>
+    <string name="servers_key_env">From the server\'s environment (%1$s)</string>
+    <string name="servers_key_server">Set here, for every assistant. Tap to change it.</string>
+    <string name="servers_key_assistant">Set for one assistant</string>
+    <string name="servers_key_none">None yet. Tap to add your key.</string>
+    <string name="servers_server">Server</string>
+    <string name="servers_version">Version %1$s</string>
+    <string name="servers_update_out">%1$s is out</string>
+    <string name="servers_update_itself">Installs new releases itself</string>
+    <string name="servers_update_automatically">Update automatically</string>
+    <string name="servers_maps">Maps</string>
+    <string name="servers_forget_summary">Your devices stop managing it. You stay its owner, and nothing on the server changes.</string>
+    <string name="servers_forget">Remove from my servers</string>
+    <string name="servers_delete_summary">Deletes %1$s from your exe.dev account, with its assistants, their history and the backups on it.</string>
+    <string name="servers_delete">Remove this server</string>
+
+    <!-- A new assistant -->
+    <string name="servers_ready_for">%1$s is ready for %2$s</string>
+    <string name="servers_ready_send">Send them this link, or have them type the code %1$s in the Nudge app. It works once, for ten minutes.</string>
+    <string name="servers_send_link">Send the link</string>
+    <string name="servers_ready">%1$s is ready</string>
+    <string name="servers_ready_joined">You joined it from home: its rooms are beside your own.</string>
+    <string name="servers_done">Done</string>
+    <string name="servers_its_name">Its name</string>
+    <string name="servers_in_address">In its address: %1$s</string>
+    <string name="servers_model">Model</string>
+    <string name="servers_provider_needs_key">%1$s (add a key on the server first)</string>
+    <string name="servers_model_id">Model id</string>
+    <string name="servers_who_for">Who is it for?</string>
+    <string name="servers_for_me">Me: I join it from my home, and keep one sign-in</string>
+    <string name="servers_for_someone">Someone else: it is their home, and they are its admin</string>
+    <string name="servers_their_name">Their name</string>
+    <string name="servers_no_address">Your home has no address yet.</string>
+
+    <!-- An assistant -->
+    <string name="servers_delete_assistant_title">Delete %1$s?</string>
+    <string name="servers_delete_assistant_body">Its rooms, history and memory go. The server keeps a backup for 30 days. Type %1$s to delete it.</string>
+    <string name="servers_delete_assistant_confirm">Delete</string>
+    <string name="servers_model_provider">Model (%1$s)</string>
+    <string name="servers_instructions">Instructions</string>
+    <string name="servers_instructions_supporting">Said to the model before every conversation</string>
+    <string name="servers_joining">Joining…</string>
+    <string name="servers_join_from_home">Join it from home</string>
+    <string name="servers_join_explainer">Its rooms show beside your home\'s, and you are its admin and an owner of this server.</string>
+    <string name="servers_delete_assistant">Delete this assistant</string>
+
+    <!-- Wired -->
+    <string name="servers_wired">Wired</string>
+    <string name="servers_wired_older">This server\'s Nudge is older than Wired. It installs new releases itself; check for one now.</string>
+    <string name="servers_wired_off_title">Turn off Wired here?</string>
+    <string name="servers_wired_off_root">Your servers stop reaching each other through this network.</string>
+    <string name="servers_wired_off_member">This server leaves the network, and stops reaching your other servers through it.</string>
+    <string name="servers_wired_turn_off">Turn off</string>
+    <string name="servers_wired_turn_off_wired">Turn off Wired</string>
+    <string name="servers_wired_use_title">Use http://nudge.%1$s.wired as your home\'s address?</string>
+    <string name="servers_wired_use_body">Your other servers then reach your home over Wired. Your home\'s address is who it is to other assistants: the ones you joined from home have to be joined again.</string>
+    <string name="servers_wired_use_it">Use it</string>
+    <string name="servers_wired_use_address">Use as your home\'s address</string>
+    <string name="servers_wired_remove_title">Remove %1$s from the network?</string>
+    <string name="servers_wired_remove_body">It no longer reaches your servers over Wired, and can\'t join again with its key. A new server can then use the name.</string>
+    <string name="servers_wired_installing">Installing %1$s. The server restarts in a minute; come back then.</string>
+    <string name="servers_wired_no_newer">No newer release yet.</string>
+    <string name="servers_wired_checking">Checking…</string>
+    <string name="servers_wired_check_updates">Check for updates</string>
+    <string name="servers_wired_checking_wired">Checking Wired…</string>
+    <string name="servers_wired_stopped">Wired stopped.</string>
+    <string name="servers_wired_name_invalid">Lowercase letters, digits and dashes, such as box.</string>
+    <string name="servers_wired_reach_at">Others reach it at http://nudge.%1$s.wired</string>
+    <string name="servers_wired_join">Join %1$s\'s network</string>
+    <string name="servers_wired_hold">Hold a network here</string>
+    <string name="servers_wired_or_join">Or join one: hold a network on your home server first, then come back here.</string>
+    <string name="servers_wired_no_release">This server\'s release has no Wired.</string>
+    <string name="servers_wired_starting">Starting Wired…</string>
+    <string name="servers_wired_this_server">this server</string>
+    <string name="servers_wired_holds_as">Holds the network as %1$s</string>
+    <string name="servers_wired_in_as">In the network as %1$s</string>
+    <string name="servers_wired_member_holds">%1$s (holds it)</string>
+    <string name="servers_wired_remove_hint">Remove a server from the network when it\'s gone: a new server can then take its name.</string>
+    <string name="servers_wired_no_relays">No server with a public address has joined yet: open one of them here and join this network.</string>
+    <string name="servers_wired_explainer">Your servers reach each other over Wired, encrypted, with no port open at home: home holds the network, and servers with a public address join it.</string>
+
+    <!-- The app model -->
+    <string name="model_wired_not_joined">The server didn\'t join home\'s Wired network.</string>
+    <string name="model_wired_still_joining">The server is still joining home\'s Wired network. Try again in a minute.</string>
+    <string name="model_join_sign_in_first">Sign in at home first.</string>
+    <string name="model_join_is_home">That is your home.</string>
+    <string name="model_sign_in_expired">That code has expired or was used, or none of your assistants is on %1$s. Reload the sign-in page for a new one.</string>
+
+    <!-- Dictation -->
+    <string name="model_dictation_language_not_on_device">This phone can\'t recognize %1$s on its own.</string>
+    <string name="model_dictation_not_on_device">This phone can\'t recognize speech on its own.</string>
+    <string name="model_dictation_no_microphone">Nudge may not use the microphone. Allow it in the phone\'s settings.</string>
+    <string name="model_dictation_language_not_supported">This phone can\'t recognize %1$s.</string>
+    <string name="model_dictation_language_unavailable">%1$s isn\'t on this phone yet. Download it in Settings, under Speech.</string>
+    <string name="model_dictation_audio">The microphone didn\'t work.</string>
+    <string name="model_dictation_busy">Speech recognition is busy. Try again in a moment.</string>
+    <string name="model_dictation_unreachable">The speech service couldn\'t be reached.</string>
+    <string name="model_dictation_stopped">Speech recognition stopped (%1$s).</string>
+
+    <!-- Location -->
+    <string name="model_geofences_no_permission">Nudge may not use this phone\'s location all the time. Allow it in the system\'s settings.</string>
+    <string name="model_location_no_permission">Nudge may not use this phone\'s location. Allow it in the system\'s settings.</string>
+    <string name="model_location_off">Location is off on this phone.</string>
+</resources>

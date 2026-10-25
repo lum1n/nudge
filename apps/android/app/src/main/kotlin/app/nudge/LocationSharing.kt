@@ -103,7 +103,7 @@ class LocationSharing(
             return
         }
         if (!permitted()) {
-            mutableProblem.value = "Nudge may not use this phone's location. Allow it in the system's settings."
+            mutableProblem.value = text(R.string.model_location_no_permission)
             return
         }
         if (updating) return
@@ -113,7 +113,7 @@ class LocationSharing(
             LocationManager.GPS_PROVIDER,
         ).firstOrNull { it != null && manager.isProviderEnabled(it) }
         if (provider == null) {
-            mutableProblem.value = "Location is off on this phone."
+            mutableProblem.value = text(R.string.model_location_off)
             return
         }
         // A street's worth is enough to say what is near, and kind to the battery.

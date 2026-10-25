@@ -1,5 +1,6 @@
 package app.nudge.ui
 
+import app.nudge.EnglishTexts
 import com.google.zxing.BinaryBitmap
 import com.google.zxing.RGBLuminanceSource
 import com.google.zxing.common.HybridBinarizer
@@ -11,6 +12,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PairingTest {
+    init {
+        EnglishTexts.install()
+    }
+
     private val link = "nudge://pair?server=https%3A%2F%2Fnudge.example&assistant=robin&code=ABCD-1234"
     private val code = PairingCode("ABCD-1234", link, 1_800_000_000_000.0)
 

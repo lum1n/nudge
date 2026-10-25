@@ -39,8 +39,3 @@ export function speechLanguage(profile: string | undefined, browser: string): st
 export function dictationFor(language: string): WebSpeechDictationAdapter | undefined {
   return dictationSupported() ? new WebSpeechDictationAdapter({ language }) : undefined;
 }
-
-export const DICTATION_NOTICE =
-  "Dictation uses your browser's speech recognition, which may send what you say to its maker " +
-  "(Google in Chrome, Apple in Safari) to turn it into text. Nudge keeps personal details from " +
-  "the model in the text only, not in the audio. Dictate on this device?";

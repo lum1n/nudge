@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { Apns, Fcm, type ServiceAccount } from "@nudge/ext-push";
+import { Apns, Fcm, type ServiceAccount } from "@nudge/ext-push/senders";
 import { type Static, Type } from "typebox";
 import { Value } from "typebox/value";
 import type { RelayOptions } from "./relay.ts";

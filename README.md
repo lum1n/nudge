@@ -160,6 +160,8 @@ A room page shows the same conversation the CLI and the API see, live, for every
 
 **Dictate** in the composer types what you say, with the browser's own speech recognition (the Web Speech API, in Chrome, Edge and Safari), in your profile's language. That may send the audio to the browser's maker, so the first time on a device it asks. Profile shows this month's spend and your limits; admins see every month by person and room under Settings, and invite people from other assistants by their address there. Paste a join link into **Other assistants** in Profile to join from home: an assistant on the same server opens in the tab, one on another server's web UI gets the browser with your home's assertion in the address's fragment (`/join#…`).
 
+The web UI speaks English and Norwegian (bokmål), following the browser's languages: any Norwegian (nb, nn, no) gets bokmål, anything else English. Its strings are in `apps/web/src/i18n`, one file per area and language; TypeScript fails when the bokmål file misses a key the English one has.
+
 Notifications come from the extension `extensions/push`: Web Push in the browser, and APNs and FCM in the iOS, macOS and Android apps, either with your own credentials or through a push relay (`packages/relay`) that sees only sealed pushes. See [Notifications](docs/push.md).
 
 ## Spend

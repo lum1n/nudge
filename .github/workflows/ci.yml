@@ -1,6 +1,6 @@
 # The checks every change passes: on pushes to main, on pull requests, and (through
 # workflow_call) before release.yml bundles and signs a tag.
-#   - TypeScript: typecheck, lint and test (`pnpm check`),
+#   - TypeScript: typecheck, lint and test (`pnpm check`), and the push relay's bundle,
 #   - the Rust client: `cargo test`, its server tests against the built packages,
 #   - the Android app: a debug build, without the native libraries (cargo-ndk).
 name: ci
@@ -28,6 +28,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+      - run: pnpm -C packages/relay bundle
 
   rust:
     runs-on: ubuntu-24.04

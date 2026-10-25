@@ -39,10 +39,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.nudge.R
 import kotlinx.coroutines.flow.MutableStateFlow
 import nudge.client.ListsState
 import nudge.client.NudgeList
@@ -69,8 +71,8 @@ fun ListsScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
         topBar = {
             TopAppBar(
                 colors = groupedTopBarColors(),
-                title = { Text("Lists") },
-                navigationIcon = { IconButton(onClick = close) { Icon(Icons.Outlined.Close, "Close") } },
+                title = { Text(stringResource(R.string.room_lists)) },
+                navigationIcon = { IconButton(onClick = close) { Icon(Icons.Outlined.Close, stringResource(R.string.room_close)) } },
             )
         },
     ) { padding ->
@@ -79,7 +81,7 @@ fun ListsScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
             val all = state.lists
             when {
                 status is PanelStatus.Closed && status.code.toInt() == 4404 -> Text(
-                    "No lists here. Turn on the lists extension for this room under About this room.",
+                    stringResource(R.string.room_lists_off),
                     Modifier.align(Alignment.Center).padding(32.dp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -118,7 +120,7 @@ private fun ListsContent(all: List<NudgeList>, error: String?, lists: ObservedLi
                             leadingContent = { Checkbox(checked = item.done, onCheckedChange = null) },
                             supportingContent = { Text(item.by) },
                             trailingContent = {
-                                IconButton(onClick = { lists.remove(item, list.name) }) { Icon(Icons.Outlined.Close, "Remove") }
+                                IconButton(onClick = { lists.remove(item, list.name) }) { Icon(Icons.Outlined.Close, stringResource(R.string.room_remove)) }
                             },
                         ) {
                             Text(item.text, textDecoration = if (item.done) TextDecoration.LineThrough else null)
@@ -130,7 +132,7 @@ private fun ListsContent(all: List<NudgeList>, error: String?, lists: ObservedLi
                 OutlinedTextField(
                     value = drafts[list.name].orEmpty(),
                     onValueChange = { drafts[list.name] = it },
-                    placeholder = { Text("Add to ${list.name}…") },
+                    placeholder = { Text(stringResource(R.string.room_lists_add_to, list.name)) },
                     singleLine = true,
                     shape = MaterialTheme.shapes.large,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -140,11 +142,11 @@ private fun ListsContent(all: List<NudgeList>, error: String?, lists: ObservedLi
             }
         }
         item(key = "new") {
-            Section("New list")
+            Section(stringResource(R.string.room_lists_new))
             OutlinedTextField(
                 value = newList,
                 onValueChange = { newList = it },
-                placeholder = { Text("Name") },
+                placeholder = { Text(stringResource(R.string.room_name)) },
                 singleLine = true,
                 shape = MaterialTheme.shapes.large,
                 modifier = Modifier.fillMaxWidth(),
@@ -153,7 +155,7 @@ private fun ListsContent(all: List<NudgeList>, error: String?, lists: ObservedLi
                 OutlinedTextField(
                     value = drafts[newList].orEmpty(),
                     onValueChange = { drafts[newList] = it },
-                    placeholder = { Text("First item") },
+                    placeholder = { Text(stringResource(R.string.room_lists_first_item)) },
                     singleLine = true,
                     shape = MaterialTheme.shapes.large,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -174,13 +176,13 @@ private fun ListHeader(name: String, lists: ObservedLists) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.weight(1f)) { Section(name.replaceFirstChar { it.uppercase() }) }
         Box {
-            IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "List actions") }
+            IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, stringResource(R.string.room_lists_actions)) }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(text = { Text("Clear done") }, onClick = {
+                DropdownMenuItem(text = { Text(stringResource(R.string.room_lists_clear_done)) }, onClick = {
                     menu = false
                     lists.clearDone(name)
                 })
-                DropdownMenuItem(text = { Text("Delete list") }, onClick = {
+                DropdownMenuItem(text = { Text(stringResource(R.string.room_lists_delete)) }, onClick = {
                     menu = false
                     lists.delete(name)
                 })

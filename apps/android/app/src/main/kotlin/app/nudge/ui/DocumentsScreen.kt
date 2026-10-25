@@ -49,8 +49,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.nudge.R
+import app.nudge.text
 import java.text.DateFormat
 import java.util.Date
 import kotlinx.coroutines.Dispatchers
@@ -102,7 +106,7 @@ fun DocumentsScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
         scope.launch {
             problem = runCatching {
                 withContext(Dispatchers.IO) { context.contentResolver.openOutputStream(uri)?.use { it.write(file.bytes) } }
-            }.exceptionOrNull()?.let { "Couldn't save ${file.name}: ${it.message}" }
+            }.exceptionOrNull()?.let { text(R.string.room_documents_couldnt_save, file.name, "${it.message}") }
         }
     }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
@@ -114,7 +118,7 @@ fun DocumentsScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
                 problem = try {
                     val bytes = withContext(Dispatchers.IO) {
                         context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                    } ?: error("Couldn't read $name")
+                    } ?: error(text(R.string.room_documents_couldnt_read, name))
                     panel.upload(name, mime, bytes)
                     null
                 } catch (error: Exception) {
@@ -142,8 +146,8 @@ fun DocumentsScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
         topBar = {
             TopAppBar(
                 colors = groupedTopBarColors(),
-                title = { Text("Documents") },
-                navigationIcon = { IconButton(onClick = close) { Icon(Icons.Outlined.Close, "Close") } },
+                title = { Text(stringResource(R.string.room_documents_title)) },
+                navigationIcon = { IconButton(onClick = close) { Icon(Icons.Outlined.Close, stringResource(R.string.room_close)) } },
             )
         },
         floatingActionButton = {
@@ -153,7 +157,7 @@ fun DocumentsScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
                     icon = {
                         if (uploading == null) Icon(Icons.Outlined.UploadFile, null) else LoadingIndicator(Modifier.size(24.dp))
                     },
-                    text = { Text(uploading?.let { "Uploading $it…" } ?: "Upload") },
+                    text = { Text(uploading?.let { stringResource(R.string.room_documents_uploading, it) } ?: stringResource(R.string.room_documents_upload)) },
                 )
             }
         },
@@ -163,7 +167,7 @@ fun DocumentsScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
             val all = state.documents
             when {
                 status is PanelStatus.Closed && status.code.toInt() == 4404 -> Text(
-                    "No documents here. Turn on the documents extension for this room under About this room.",
+                    stringResource(R.string.room_documents_off),
                     Modifier.align(Alignment.Center).padding(32.dp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -177,15 +181,15 @@ fun DocumentsScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
         AlertDialog(
             onDismissRequest = { deleting = null },
             icon = { Icon(Icons.Outlined.Delete, null) },
-            title = { Text("Delete ${document.name}?") },
-            text = { Text("It goes for everyone in the room, and the assistant can't read it any more.") },
+            title = { Text(stringResource(R.string.room_documents_delete_title, document.name)) },
+            text = { Text(stringResource(R.string.room_documents_delete_body)) },
             confirmButton = {
                 TextButton(onClick = {
                     deleting = null
                     documents?.remove(document)
-                }) { Text("Delete") }
+                }) { Text(stringResource(R.string.room_delete)) }
             },
-            dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { deleting = null }) { Text(stringResource(R.string.room_cancel)) } },
         )
     }
 }
@@ -210,8 +214,7 @@ private fun DocumentList(
     ) {
         item {
             Text(
-                "Receipts, warranties, contracts and letters for this room. Their text is read on the server, so the " +
-                    "assistant can search them; the files are stored encrypted. Images are kept but not read.",
+                stringResource(R.string.room_documents_about),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -223,7 +226,7 @@ private fun DocumentList(
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
-                    placeholder = { Text("Find by name") },
+                    placeholder = { Text(stringResource(R.string.room_documents_find)) },
                     leadingIcon = { Icon(Icons.Outlined.Search, null) },
                     singleLine = true,
                     shape = MaterialTheme.shapes.large,
@@ -234,7 +237,7 @@ private fun DocumentList(
         if (all.isEmpty()) {
             item {
                 Text(
-                    "No documents yet.",
+                    stringResource(R.string.room_documents_none),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(16.dp),
                 )
@@ -250,7 +253,7 @@ private fun DocumentList(
                         supportingContent = {
                             Text(
                                 listOfNotNull(
-                                    document.pages?.let { "$it pages" },
+                                    document.pages?.let { pluralStringResource(R.plurals.room_documents_pages, it, it) },
                                     Formatter.formatShortFileSize(context, document.size),
                                     document.addedBy,
                                     DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(document.addedAt.toLong())),
@@ -260,8 +263,8 @@ private fun DocumentList(
                         },
                         trailingContent = {
                             Row {
-                                IconButton(onClick = { download(document) }) { Icon(Icons.Outlined.Download, "Download") }
-                                IconButton(onClick = { delete(document) }) { Icon(Icons.Outlined.Delete, "Delete") }
+                                IconButton(onClick = { download(document) }) { Icon(Icons.Outlined.Download, stringResource(R.string.room_download)) }
+                                IconButton(onClick = { delete(document) }) { Icon(Icons.Outlined.Delete, stringResource(R.string.room_delete)) }
                             }
                         },
                     ) { Text(document.name) }

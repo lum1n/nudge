@@ -1,17 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { clientFor } from "../../api.ts";
+import { m } from "../../i18n/index.ts";
 
 export const Route = createFileRoute("/$assistant/$room_/model")({ component: ModelView });
 
 type Message = Awaited<ReturnType<ReturnType<typeof clientFor>["api"]["modelView"]>>[number];
-
-const ROLE: Record<Message["role"], string> = {
-  system: "Instructions",
-  user: "In",
-  assistant: "Model",
-  toolResult: "Tool result",
-};
 
 /** The room as the model sees it: what its next request sends, personal values as placeholders. */
 function ModelView() {
@@ -37,40 +31,36 @@ function ModelView() {
   return (
     <section className="mx-auto flex max-w-3xl flex-col gap-3 p-3 sm:p-4">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-        <h2 className="text-lg font-medium">What the model sees</h2>
+        <h2 className="text-lg font-medium">{m.panels.model.title}</h2>
         <div className="flex gap-3 text-sm">
           <button
             type="button"
             onClick={() => setLoads((n) => n + 1)}
             className="text-stone-600 hover:underline"
           >
-            Refresh
+            {m.panels.model.refresh}
           </button>
           <Link
             to="/$assistant/$room"
             params={{ assistant, room }}
             className="text-stone-600 hover:underline"
           >
-            Back to the room
+            {m.panels.backToRoom}
           </Link>
         </div>
       </div>
-      <p className="text-sm text-stone-600">
-        This room's next request to the model, as the provider gets it. Names, addresses, numbers
-        and anything else marked private go out as placeholders such as ⟦NAME1⟧, and are put back
-        only here, on the host. The tools' descriptions go out too; they hold nothing personal.
-      </p>
+      <p className="text-sm text-stone-600">{m.panels.model.intro}</p>
       {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
       {messages === undefined ? (
-        error === undefined && <p className="text-stone-500">Loading…</p>
+        error === undefined && <p className="text-stone-500">{m.common.loading}</p>
       ) : messages.length === 0 ? (
-        <p className="text-stone-500">Nothing yet: the room has had no turn.</p>
+        <p className="text-stone-500">{m.panels.model.empty}</p>
       ) : (
         <ol className="flex flex-col gap-2">
           {messages.map((message, index) => (
             <li key={index} className="rounded border border-stone-200 bg-white p-3">
               <div className="mb-1 text-xs font-medium tracking-wide text-stone-500 uppercase">
-                {ROLE[message.role]}
+                {m.panels.model.role[message.role]}
               </div>
               <pre className="font-mono text-xs break-words whitespace-pre-wrap text-stone-800">
                 {message.text}

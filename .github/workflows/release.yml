@@ -4,7 +4,10 @@
 #   - an archive per architecture, each built on its own machine (the SQLite module is native),
 #   - the Chromium the browser extension runs, per architecture, which the archive names,
 #   - manifest.json, signed with the NUDGE_RELEASE_KEY secret, that servers update from,
-#   - the image ghcr.io/<owner>/nudge, tagged with the version and, for a release, stable.
+#   - the image ghcr.io/<owner>/nudge, tagged with the version and, for a release, stable,
+#   - the Android app, a signed APK (see the android job for its secrets and variable),
+#   - the push relay the published apps push through: one file for Node, and the image
+#     ghcr.io/<owner>/nudge-relay, tagged the same way (packages/relay/deploy runs it).
 name: release
 
 on:
@@ -45,8 +48,104 @@ jobs:
             dist/release/nudge-*-linux-${{ matrix.arch }}.tar.gz
             dist/release/chromium-*-linux-${{ matrix.arch }}.tar.gz
 
+  # The app, signed with the release key: the secret NUDGE_ANDROID_KEYSTORE (the keystore, base64),
+  # NUDGE_ANDROID_KEYSTORE_PASSWORD, NUDGE_ANDROID_KEY_ALIAS and NUDGE_ANDROID_KEY_PASSWORD (when
+  # the key's differs from the keystore's). Push needs the Firebase project's google-services.json
+  # in the secret NUDGE_GOOGLE_SERVICES_JSON, and the relay's address in the repository variable
+  # NUDGE_PUSH_RELAY (such as https://relay.example.org), through which servers without the
+  # project's Firebase account reach the app. Without the keystore the release goes out without it.
+  android:
+    needs: checks
+    runs-on: ubuntu-24.04
+    env:
+      NDK_VERSION: 28.2.13676358
+    steps:
+      - uses: actions/checkout@v7
+      - name: Write the keystore and Firebase config
+        id: secrets
+        env:
+          KEYSTORE: ${{ secrets.NUDGE_ANDROID_KEYSTORE }}
+          GOOGLE_SERVICES: ${{ secrets.NUDGE_GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -z "$KEYSTORE" ]; then
+            echo "::warning::No NUDGE_ANDROID_KEYSTORE secret: the release goes out without the app"
+            echo "sign=false" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          printf '%s' "$KEYSTORE" | base64 -d >"$RUNNER_TEMP/release.jks"
+          echo "NUDGE_KEYSTORE=$RUNNER_TEMP/release.jks" >>"$GITHUB_ENV"
+          echo "sign=true" >>"$GITHUB_OUTPUT"
+          if [ -n "$GOOGLE_SERVICES" ]; then
+            printf '%s' "$GOOGLE_SERVICES" >apps/android/app/google-services.json
+          else
+            echo "::warning::No NUDGE_GOOGLE_SERVICES_JSON secret: the app is built without notifications"
+          fi
+      - if: steps.secrets.outputs.sign == 'true'
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+      - if: steps.secrets.outputs.sign == 'true'
+        uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools platforms;android-37.0 ndk;${{ env.NDK_VERSION }}
+      - if: steps.secrets.outputs.sign == 'true'
+        uses: gradle/actions/setup-gradle@v6
+      # The bindings come from a host build of nudge-ffi, the native libraries from cargo-ndk.
+      - if: steps.secrets.outputs.sign == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+      - if: steps.secrets.outputs.sign == 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: clients/rust
+      - if: steps.secrets.outputs.sign == 'true'
+        run: cargo install cargo-ndk --locked
+      - name: Build the APK
+        if: steps.secrets.outputs.sign == 'true'
+        working-directory: apps/android
+        env:
+          NUDGE_KEYSTORE_PASSWORD: ${{ secrets.NUDGE_ANDROID_KEYSTORE_PASSWORD }}
+          NUDGE_KEY_ALIAS: ${{ secrets.NUDGE_ANDROID_KEY_ALIAS }}
+          NUDGE_KEY_PASSWORD: ${{ secrets.NUDGE_ANDROID_KEY_PASSWORD }}
+          NUDGE_PUSH_RELAY: ${{ vars.NUDGE_PUSH_RELAY }}
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$NDK_VERSION"
+          version="${GITHUB_REF_NAME#v}"
+          code=$(../../packages/release/scripts/android-version-code.sh "$version")
+          ./gradlew :app:assembleRelease -Pnudge.versionName="$version" -Pnudge.versionCode="$code" \
+            ${NUDGE_PUSH_RELAY:+-Pnudge.pushRelay="$NUDGE_PUSH_RELAY"}
+          mkdir -p ../../dist/release
+          cp app/build/outputs/apk/release/app-release.apk "../../dist/release/nudge-$version-android.apk"
+      - if: steps.secrets.outputs.sign == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: android
+          path: dist/release/nudge-*-android.apk
+
+  # The push relay as one file, with its dependencies, for Node 22 or later.
+  relay:
+    needs: checks
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: pnpm install --frozen-lockfile --filter @nudge/relay
+      - run: |
+          pnpm -C packages/relay bundle
+          mkdir -p dist/release
+          cp packages/relay/dist/bundle/nudge-relay.mjs "dist/release/nudge-relay-${GITHUB_REF_NAME#v}.mjs"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: relay
+          path: dist/release/nudge-relay-*.mjs
+
   publish:
-    needs: bundle
+    needs: [bundle, android, relay]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -68,7 +167,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           case "$GITHUB_REF_NAME" in *-*) pre=--prerelease ;; *) pre= ;; esac
-          gh release create "$GITHUB_REF_NAME" $pre --generate-notes out/*.tar.gz out/manifest.json
+          # The APK is there when the keystore secret is.
+          files=$(cd out && ls *.tar.gz *.mjs *.apk 2>/dev/null || true)
+          (cd out && sha256sum $files >SHA256SUMS)
+          gh release create "$GITHUB_REF_NAME" $pre --generate-notes out/manifest.json out/SHA256SUMS \
+            $(printf 'out/%s ' $files)
       - name: Lay out the image's build context
         run: |
           mkdir image
@@ -96,3 +199,11 @@ jobs:
           docker buildx build image --platform linux/amd64,linux/arm64 $tags --push
           # The same with the desktop extension's apps and services.
           docker buildx build image --platform linux/amd64,linux/arm64 --build-arg DESKTOP=true $desktop --push
+      - name: Build and push the relay's image
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER}/nudge-relay"
+          version="${GITHUB_REF_NAME#v}"
+          tags="--tag $image:$version"
+          case "$version" in *-*) ;; *) tags="$tags --tag $image:stable" ;; esac
+          docker buildx build . --file packages/relay/Dockerfile --platform linux/amd64,linux/arm64 \
+            $tags --push

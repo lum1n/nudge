@@ -88,6 +88,9 @@
               }
             }
           }
+        },
+        "imagesToModel": {
+          "type": "boolean"
         }
       }
     },
@@ -327,6 +330,46 @@
                 },
                 "address": {
                   "type": "string"
+                }
+              }
+            },
+            "attachments": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "name",
+                  "mime",
+                  "size",
+                  "kind"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "mime": {
+                    "type": "string"
+                  },
+                  "size": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "kind": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "image"
+                      },
+                      {
+                        "type": "string",
+                        "const": "file"
+                      }
+                    ]
+                  }
                 }
               }
             }
@@ -772,6 +815,46 @@
               "type": "string"
             }
           }
+        },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "mime",
+              "size",
+              "kind"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "mime": {
+                "type": "string"
+              },
+              "size": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "kind": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "image"
+                  },
+                  {
+                    "type": "string",
+                    "const": "file"
+                  }
+                ]
+              }
+            }
+          }
         }
       }
     },
@@ -1041,6 +1124,9 @@
                   }
                 }
               }
+            },
+            "imagesToModel": {
+              "type": "boolean"
             }
           }
         },
@@ -1108,6 +1194,46 @@
                       },
                       "address": {
                         "type": "string"
+                      }
+                    }
+                  },
+                  "attachments": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "name",
+                        "mime",
+                        "size",
+                        "kind"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "mime": {
+                          "type": "string"
+                        },
+                        "size": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "kind": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "const": "image"
+                            },
+                            {
+                              "type": "string",
+                              "const": "file"
+                            }
+                          ]
+                        }
                       }
                     }
                   }
@@ -1570,6 +1696,46 @@
                     "type": "string"
                   }
                 }
+              },
+              "attachments": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "name",
+                    "mime",
+                    "size",
+                    "kind"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "mime": {
+                      "type": "string"
+                    },
+                    "size": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "kind": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "const": "image"
+                        },
+                        {
+                          "type": "string",
+                          "const": "file"
+                        }
+                      ]
+                    }
+                  }
+                }
               }
             }
           }
@@ -1867,6 +2033,9 @@
                   }
                 }
               }
+            },
+            "imagesToModel": {
+              "type": "boolean"
             }
           }
         },
@@ -2085,6 +2254,9 @@
                         }
                       }
                     }
+                  },
+                  "imagesToModel": {
+                    "type": "boolean"
                   }
                 }
               },
@@ -2612,6 +2784,9 @@
                               }
                             }
                           }
+                        },
+                        "imagesToModel": {
+                          "type": "boolean"
                         }
                       }
                     },
@@ -2679,6 +2854,46 @@
                                   },
                                   "address": {
                                     "type": "string"
+                                  }
+                                }
+                              },
+                              "attachments": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "required": [
+                                    "id",
+                                    "name",
+                                    "mime",
+                                    "size",
+                                    "kind"
+                                  ],
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "mime": {
+                                      "type": "string"
+                                    },
+                                    "size": {
+                                      "type": "integer",
+                                      "minimum": 0
+                                    },
+                                    "kind": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "const": "image"
+                                        },
+                                        {
+                                          "type": "string",
+                                          "const": "file"
+                                        }
+                                      ]
+                                    }
                                   }
                                 }
                               }
@@ -3141,6 +3356,46 @@
                                 "type": "string"
                               }
                             }
+                          },
+                          "attachments": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "required": [
+                                "id",
+                                "name",
+                                "mime",
+                                "size",
+                                "kind"
+                              ],
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "mime": {
+                                  "type": "string"
+                                },
+                                "size": {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                "kind": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "const": "image"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "file"
+                                    }
+                                  ]
+                                }
+                              }
+                            }
                           }
                         }
                       }
@@ -3466,6 +3721,9 @@
                                     }
                                   }
                                 }
+                              },
+                              "imagesToModel": {
+                                "type": "boolean"
                               }
                             }
                           },
@@ -4183,6 +4441,14 @@
         },
         "private": {
           "type": "boolean"
+        },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "uniqueItems": true
         }
       }
     },
@@ -4267,6 +4533,46 @@
                       },
                       "address": {
                         "type": "string"
+                      }
+                    }
+                  },
+                  "attachments": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "name",
+                        "mime",
+                        "size",
+                        "kind"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "mime": {
+                          "type": "string"
+                        },
+                        "size": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "kind": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "const": "image"
+                            },
+                            {
+                              "type": "string",
+                              "const": "file"
+                            }
+                          ]
+                        }
                       }
                     }
                   }
@@ -6764,6 +7070,9 @@
                     }
                   }
                 }
+              },
+              "imagesToModel": {
+                "type": "boolean"
               }
             }
           }

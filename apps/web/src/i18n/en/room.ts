@@ -1,0 +1,151 @@
+/** The room page: the chat, the composer and the panels in the room's sidebar. */
+export const room = {
+  removed: "You were removed from this room.",
+  noSuchRoom: "No such room.",
+  disconnected: (reason: string) => `Disconnected: ${reason}.`,
+  connecting: "Connecting…",
+  reconnecting: "Reconnecting…",
+  closeDetails: "Close the room's details",
+  details: "The room's details",
+  /** After a member from another server: the server's name. */
+  from: (server: string) => `(from ${server})`,
+  /** The drawer's button on a phone. */
+  open: "Room",
+  waitingForApproval: " waiting for approval",
+  rename: "Rename",
+  name: "Room name",
+  links: {
+    activity: "Activity",
+    activityTitle: "Tool calls, nudges, watches and approvals behind the chat",
+    browser: "Browser",
+    desktop: "Desktop",
+    desktopTitle: "The room's desktop, where the assistant uses apps",
+    connectors: "Connectors",
+    mcp: "MCP",
+    mcpTitle: "MCP servers the assistant uses in this room",
+    lists: "Lists",
+    documents: "Documents",
+    model: "Model view",
+    modelTitle: "What the model sees of this room",
+  },
+  /** Whose location the assistant knows; `one` when that is one person other than the reader. */
+  sharingLocation: (names: readonly string[], one: boolean) =>
+    `The assistant knows where ${names.join(" and ")} ${one ? "is" : "are"} here, as a hidden value.`,
+  you: "you",
+  chat: {
+    dictate: "Dictate",
+    dictateTitle: "Say your message",
+    listening: "Listening",
+    stopDictating: "Stop dictating",
+    dictationNotice:
+      "Dictation uses your browser's speech recognition, which may send what you say to its maker (Google in Chrome, Apple in Safari) to turn it into text. Nudge keeps personal details from the model in the text only, not in the audio. Dictate on this device?",
+    loadEarlier: "Load earlier",
+    sayHello: (name: string) => `Say hello to ${name}.`,
+    waiting: (prompt: string) => `Waiting: ${prompt}`,
+    private: "Private",
+    privateTitle:
+      "Only you see a private message and the answer to it; the others see that there was one",
+    privateMessage: "Private message",
+    privatePlaceholder: "Private message: only you see it and the answer",
+    message: "Message",
+    stop: "Stop",
+    send: "Send",
+    notSent: (text: string) => `Not sent: ${text}`,
+    retry: "Retry",
+    dismiss: "Dismiss",
+    someone: "Someone",
+    onlyYou: "🔒 Only you",
+    hidden: "hidden",
+    hiddenTitle: (placeholder: string) => `Hidden from you (${placeholder})`,
+    whatItsDoing: "what it's doing",
+    openBrowser: "Open the room's browser to log in",
+    askedForApproval: "Asked for approval",
+    /** The badge on an answer to a fired nudge or to what a watch found. */
+    promptedBy: { nudge: "Nudge", watch: "Watch" },
+  },
+  /** Under the robot, what it is doing. */
+  presence: {
+    using: (tool: string) => `Using ${tool}…`,
+    working: "Working…",
+    tidying: "Tidying up older messages…",
+    thinking: "Thinking…",
+    answering: "Answering…",
+    waiting: "Waiting for an approval",
+    tryingAgain: "Trying again…",
+    failed: "That didn't work",
+    dozing: "Dozing",
+  },
+  /** Under an answer that isn't done. */
+  answer: { working: "Working…", stopped: "stopped", failed: "failed" },
+  status: {
+    retrying: (attempt: number, error: string) => `Retrying (attempt ${attempt}): ${error}`,
+    compacting: "Summarizing older messages…",
+    compactionFailed: (error: string) => `Couldn't summarize older messages: ${error}`,
+  },
+  approvals: {
+    title: "Waiting for approval",
+    approve: "Approve",
+    deny: "Deny",
+    status: {
+      pending: "pending",
+      approved: "approved",
+      denied: "denied",
+      done: "done",
+      failed: "failed",
+    },
+    by: (name: string) => ` by ${name}`,
+  },
+  memory: {
+    title: "Memory",
+    empty: "Nothing remembered yet.",
+    own: (name: string) => ` · ${name}'s own`,
+    onlyYou: " · 🔒 only you",
+    forget: "Forget",
+    placeholder: "Remember something",
+    add: "Add",
+    share: (facts: number) => `Share my own facts (${facts}) with all my rooms`,
+  },
+  location: {
+    title: "Location",
+    known:
+      "The assistant knows where you are here, for the weather, the way somewhere and what is near.",
+    notShared:
+      "Not shared. Turn on Share where I am in the apps, or share it once from your profile.",
+    share: "Let the assistant know where I am in this room",
+    explain:
+      "Anyone here can then ask it about what is near you. Everyone in the room sees that you share it; the place itself stays hidden from them and the model.",
+    notYet: "Your devices haven't shared where you are yet.",
+  },
+  privateValues: {
+    title: "Only you see",
+    empty: "Hide an address, a name or a number: others and the model see a placeholder.",
+    forget: "Forget",
+    forgetTitle: "Forget it for good: from now on everyone sees only the placeholder",
+    placeholder: "Hide a value",
+    hide: "Hide",
+  },
+  nudges: {
+    title: "Nudges",
+    onlyYou: " · 🔒 only you",
+  },
+  extensions: {
+    title: "Extensions",
+    failedTitle: (error: string) => `Failed to start: ${error}`,
+    failed: "failed to start",
+    reset: "Reset",
+  },
+  /** Lines in the chat and the queue for what is private to someone else, and the read-out. */
+  runtime: {
+    sentPrivately: (name: string) => `${name} sent a private message`,
+    nudgeFor: (name: string) => `A nudge for ${name}`,
+    approvalEnded: (name: string) => `An approval for ${name} ended`,
+    answeringPrivately: (name: string) => `Answering ${name} privately…`,
+    answeredPrivately: (name: string) => `Answered ${name} privately`,
+    privateMessage: "A private message",
+    stopped: (assistant: string) => `${assistant} stopped.`,
+    couldntAnswer: (assistant: string, error?: string) =>
+      `${assistant} couldn't answer${error === undefined ? "." : `: ${error}`}`,
+    waitingForApproval: (summary: string) => `Waiting for approval: ${summary}`,
+    hidden: "hidden",
+  },
+};

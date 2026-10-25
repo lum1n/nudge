@@ -4,6 +4,8 @@
 name: Nudge
 options:
   bundleIdPrefix: app.nudge
+  # English source strings; Nudge/Localizable.xcstrings adds Norwegian (bokmål).
+  developmentLanguage: en
   deploymentTarget:
     iOS: "26.0"
     macOS: "26.0"
@@ -48,6 +50,8 @@ targets:
       path: Support/Info-Nudge-iOS.plist
       properties:
         CFBundleDisplayName: Nudge
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [en, nb]
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleURLTypes:
@@ -111,6 +115,8 @@ targets:
       path: Support/Info-Nudge-macOS.plist
       properties:
         CFBundleDisplayName: Nudge
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [en, nb]
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleURLTypes:

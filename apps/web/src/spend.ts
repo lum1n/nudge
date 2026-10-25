@@ -1,4 +1,5 @@
 import type { MonthUsage } from "@nudge/client";
+import { dateLocale } from "./i18n/index.ts";
 
 const USD = new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" });
 
@@ -7,11 +8,11 @@ export function dollars(value: number): string {
   return value > 0 && value < 0.005 ? `< ${USD.format(0.01)}` : USD.format(value);
 }
 
-/** "2026-10" as "October 2026", in the browser's language. */
+/** "2026-10" as "October 2026", in the app's language. */
 export function monthLabel(month: string): string {
   const [year, number] = month.split("-").map(Number);
   if (year === undefined || number === undefined || !Number.isInteger(year + number)) return month;
-  return new Date(Date.UTC(year, number - 1, 1)).toLocaleDateString(undefined, {
+  return new Date(Date.UTC(year, number - 1, 1)).toLocaleDateString(dateLocale(), {
     month: "long",
     year: "numeric",
     timeZone: "UTC",

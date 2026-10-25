@@ -12,6 +12,7 @@ The Nudge app for Android 8 and later, in Jetpack Compose with Material 3 Expres
 - Lists, documents (upload, download, delete, find by name) and connectors (API keys, typed and never shown again, the local network, read paths), over the extensions' panels, and the room's members, memory, nudges, extensions and what the model saw.
 - The room's browser, live, from About this room or from "Open the room's browser to log in" when the assistant needs a login: tap to click, drag to scroll, type into the page, Take control from whoever has it, Done (and Remember, to save the login), and the saved logins.
 - Settings: for admins, the assistant's extensions (on or off, their settings as a form drawn from each one's schema, and the rooms they are on in), your own memory and whether it's shared, this month's spend, notifications, sign out (which revokes the device's token on the server).
+- In English and Norwegian (bokmål), following the phone's language, or the app's own under the system's app languages on Android 13 and later.
 - Notifications through FCM when an answer is ready or an action waits for approval in a room you don't have open. The app disconnects in the background so the server knows to push. Tapping one opens the room.
 
 ## Build
@@ -31,6 +32,8 @@ adb shell am start -a android.intent.action.VIEW -d '"nudge://pair?server=http%3
 
 The faux server also has a second assistant, "team", that invited Ann from robin. Its addresses say `127.0.0.1`, so for joining, forward the port (`adb reverse tcp:8799 tcp:8799`), sign in as Ann at `http://127.0.0.1:8799`, and open the `team.link` it prints the same way.
 
+Strings are resources: `res/values/strings_<area>.xml` in English and `res/values-nb/` in bokmål, with the same names and arguments (`StringsTest` checks). Composables read them with `stringResource`, models and errors with `text(R.string.…)` from `Texts.kt`.
+
 ## Push
 
 Notifications need a Firebase project:
@@ -39,3 +42,14 @@ Notifications need a Firebase project:
 2. Under Project settings → Service accounts, generate a private key, and give the JSON file to the server's push extension as `fcm.serviceAccountFile` (see the repository's README).
 
 A server without that service account can still reach the app through a push relay (`packages/relay`) that has it. Build with `-Pnudge.pushRelay=https://relay.example`: when a server lists that relay in its push extension's `relays`, the app registers its FCM token with the relay and gives the server the relay's handle and a key of its own, made once and kept in the app's private storage. Those pushes arrive sealed for that key, and `PushService` opens them before it makes the notification.
+
+## Releases
+
+A release tag (`release.yml`) builds a signed APK, `nudge-<version>-android.apk`, with the version from the tag and the native libraries, when the repository has these secrets: `NUDGE_ANDROID_KEYSTORE` (the keystore, base64), `NUDGE_ANDROID_KEYSTORE_PASSWORD`, `NUDGE_ANDROID_KEY_ALIAS` and, when the key's password differs, `NUDGE_ANDROID_KEY_PASSWORD`. Make the keystore once and keep a copy somewhere safe: an update signed with another key won't install over the app.
+
+```bash
+keytool -genkeypair -keystore nudge-release.jks -alias nudge -keyalg RSA -keysize 4096 -validity 10000
+base64 -w0 nudge-release.jks   # the NUDGE_ANDROID_KEYSTORE secret
+```
+
+For notifications it also needs the project's `google-services.json` in the secret `NUDGE_GOOGLE_SERVICES_JSON`, and the push relay's address in the repository variable `NUDGE_PUSH_RELAY`, so servers without the project's Firebase account reach the app through the relay. Locally, the same build is `./gradlew :app:assembleRelease` with `NUDGE_KEYSTORE` (the keystore's path), `NUDGE_KEYSTORE_PASSWORD`, `NUDGE_KEY_ALIAS` and `NUDGE_KEY_PASSWORD` in the environment; without `NUDGE_KEYSTORE` it is unsigned.
