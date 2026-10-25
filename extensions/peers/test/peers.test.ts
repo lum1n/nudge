@@ -416,6 +416,52 @@ describe("peers", { timeout: 30_000 }, () => {
     );
   });
 
+  it("answers from what its people told it in their own rooms, private values hidden", async () => {
+    let annsPhone = "";
+    await start(
+      (request, last) => {
+        if (asked(last, /Link with team/)) return linkScript(request, last);
+        if (asked(last, /cabin/))
+          return fauxAssistantMessage(
+            [fauxToolCall("talk_to_assistant", { assistant: "Team", goal: "Ask about the cabin" })],
+            { stopReason: "toolUse" },
+          );
+        if (last.includes("Send your first message with say"))
+          return fauxAssistantMessage([fauxToolCall("say", { text: "Which cabin is it?" })], {
+            stopReason: "toolUse",
+          });
+        if (last.includes("another assistant, says"))
+          return fauxAssistantMessage(
+            [fauxToolCall("finish_thread", { summary: last.split("\n").slice(2, -1).join("\n") })],
+            { stopReason: "toolUse" },
+          );
+        if (last.includes("has ended")) return fauxAssistantMessage([fauxText(`Heard: ${last}`)]);
+        return fauxAssistantMessage([fauxText("Okay.")]);
+      },
+      (request, last) => {
+        if (!last.includes("Which cabin")) return fauxAssistantMessage([fauxText("Noted.")]);
+        // What Ann told it in the lobby is in the link room's prompt.
+        const prompt = JSON.stringify(request);
+        const cabin = /the cabin is (\w+)/i.exec(prompt)?.[1] ?? "unknown";
+        const phone = /call (⟦[^⟧]+⟧|\+[\d ]+)/.exec(prompt)?.[1] ?? "nobody";
+        return fauxAssistantMessage([fauxText(`The cabin is ${cabin}. Call ${phone}.`)]);
+      },
+    );
+    annsPhone = await away.protect("+47 912 34 567", "PHONE", { owner: "ann" });
+    await link();
+    await say(away, `The cabin is Fjellstua. To book, call ${annsPhone}.`, ann);
+
+    await say(home, "Ask Team about the cabin");
+    await until(() =>
+      homeEvents.some(
+        (e) => e.type === "answer" && e.cause === "nudge" && e.text.includes("Fjellstua"),
+      ),
+    );
+    expect(wire.some((sent) => sent.body.includes("912 34 567"))).toBe(false);
+    for (const request of requests.get("robin")!)
+      expect(JSON.stringify(request)).not.toContain("912 34 567");
+  });
+
   it("ends a thread that gets no reply in time", async () => {
     await start(
       (request, last) => {
