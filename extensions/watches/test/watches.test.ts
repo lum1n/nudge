@@ -394,7 +394,8 @@ describe("watches that run a script", () => {
     }
   });
 
-  it("deletes all but its last runs when the assistant opens", async () => {
+  // Seven script runs on a file database, opened three times: slow on CI runners.
+  it("deletes all but its last runs when the assistant opens", { timeout: 30_000 }, async () => {
     const dir = mkdtempSync(join(tmpdir(), "nudge-watches-"));
     const file = join(dir, "nudge.db");
     const { DatabaseSync } = await import("node:sqlite");
