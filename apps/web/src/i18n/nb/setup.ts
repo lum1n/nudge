@@ -64,6 +64,16 @@ export const setup: Messages["setup"] = {
     newHere:
       "Ny her? Be en administrator om å invitere deg: Inviter noen, i assistentens innstillinger, gir dem en koblingskode til deg. En administrator logger inn en annen enhet av sine der også.",
   },
+  join: {
+    noLink:
+      "Denne siden blir med i en assistent fra Andre assistenter i hjemmet ditt, under Profil. Åpne den derfra igjen.",
+    vouchesBefore: "Hjemmeassistenten din går god for deg overfor ",
+    vouchesAfter: (host: string) => ` på ${host}. Du blir med med navnet og bildet ditt hjemmefra.`,
+    remember: "Husk denne enheten",
+    join: (name: string) => `Bli med i ${name}`,
+    askAgain: "Be om lenken igjen fra hjemmet ditt, under Profil.",
+    otherWay: "Logg inn på en annen måte",
+  },
   pairing: {
     noName: "Gi personen et navn først.",
     scanSelf: "Skann denne med Nudge-appen på den andre enheten din, eller skriv inn koden der.",

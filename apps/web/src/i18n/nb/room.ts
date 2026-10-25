@@ -31,6 +31,12 @@ export const room: Messages["room"] = {
     `Assistenten vet hvor ${names.join(" og ")} er her, som en skjult verdi.`,
   you: "du",
   chat: {
+    dictate: "Dikter",
+    dictateTitle: "Si meldingen din",
+    listening: "Lytter",
+    stopDictating: "Slutt å diktere",
+    dictationNotice:
+      "Diktering bruker nettleserens talegjenkjenning, som kan sende det du sier til produsenten (Google i Chrome, Apple i Safari) for å gjøre det om til tekst. Nudge holder personopplysninger unna modellen bare i teksten, ikke i lyden. Diktere på denne enheten?",
     loadEarlier: "Last inn eldre",
     sayHello: (name) => `Si hei til ${name}.`,
     waiting: (prompt) => `Venter: ${prompt}`,

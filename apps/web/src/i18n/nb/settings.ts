@@ -64,6 +64,30 @@ export const settings: Messages["settings"] = {
     invite: "Inviter noen",
     anotherDevice: "Logg inn på en annen enhet",
   },
+  guests: {
+    title: "Folk fra andre assistenter",
+    intro:
+      "Inviter noen med adressen deres egen assistent ga dem, under Profil der. De blir med via lenken, med hjemmet sitt som går god for dem, og beholder navn og bilde derfra. En invitasjon varer en uke.",
+    address: "Adressen deres",
+    invite: "Inviter",
+    sendBefore: "Send ",
+    sendAfter:
+      " denne lenken, til å lime inn under Profil i hjemmet sitt, eller åpne i Nudge-appen:",
+    copy: "Kopier",
+    copied: "Kopiert",
+    done: "Ferdig",
+    until: (date: string) => `til ${date}`,
+    cancel: "Avbryt",
+  },
+  spend: {
+    title: "Forbruk",
+    intro: "Hva modellbruken kostet, i amerikanske dollar, i måneder etter assistentens tidssone.",
+    month: "Måned",
+    none: "Ingenting brukt ennå.",
+    byPerson: "Per person",
+    byRoom: "Per rom",
+    nothing: "Ingenting.",
+  },
   budget: {
     title: "Budsjett",
     intro:

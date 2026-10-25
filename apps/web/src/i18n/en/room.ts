@@ -33,6 +33,12 @@ export const room = {
     `The assistant knows where ${names.join(" and ")} ${one ? "is" : "are"} here, as a hidden value.`,
   you: "you",
   chat: {
+    dictate: "Dictate",
+    dictateTitle: "Say your message",
+    listening: "Listening",
+    stopDictating: "Stop dictating",
+    dictationNotice:
+      "Dictation uses your browser's speech recognition, which may send what you say to its maker (Google in Chrome, Apple in Safari) to turn it into text. Nudge keeps personal details from the model in the text only, not in the audio. Dictate on this device?",
     loadEarlier: "Load earlier",
     sayHello: (name: string) => `Say hello to ${name}.`,
     waiting: (prompt: string) => `Waiting: ${prompt}`,

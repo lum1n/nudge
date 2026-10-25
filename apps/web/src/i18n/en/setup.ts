@@ -67,6 +67,17 @@ export const setup = {
     newHere:
       "New here? Ask an admin to invite you: Invite someone, in the assistant's settings, gives them a pairing code for you. An admin signs in another device of theirs there too.",
   },
+  join: {
+    noLink:
+      "This page joins an assistant from your home's Other assistants, under Profile. Open it from there again.",
+    /** Around the assistant's name, in bold. */
+    vouchesBefore: "Your home assistant vouches for you to ",
+    vouchesAfter: (host: string) => ` on ${host}. You join with your name and picture from home.`,
+    remember: "Remember this device",
+    join: (name: string) => `Join ${name}`,
+    askAgain: "Ask for the link again from your home, under Profile.",
+    otherWay: "Sign in another way",
+  },
   pairing: {
     noName: "Give them a name first.",
     scanSelf: "Scan this with the Nudge app on your other device, or type the code in it.",

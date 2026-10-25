@@ -71,12 +71,28 @@ export const profile = {
     anyKind: (kind: string | undefined) => `any ${kind}`,
     everyTime: ", every time",
   },
+  spend: {
+    intro:
+      "What answering cost in model use this month, in US dollars. Past a limit the assistant stops answering until the month is over.",
+    mine: "Your messages",
+    everyone: "Everyone",
+    /** After the amount spent. */
+    of: (limit: string) => ` of ${limit}`,
+    ofLimit: (label: string) => `${label}, of the limit`,
+  },
   memberships: {
     title: "Other assistants",
     /** Around the person's address, in a monospace font. */
     addressBefore: "Your address is ",
     addressAfter:
-      ". An admin of another assistant can invite you by it, and you join from the Nudge app.",
+      ". An admin of another assistant can invite you by it, and send you a join link to paste here.",
+    open: "Open",
+    join: "Join",
+    joinLink: "Join link",
+    notJoinLink: "That isn't a join link. It starts with nudge://join.",
+    notInvited: (assistant: string) =>
+      `${assistant} hasn't invited your address. Ask an admin there to.`,
+    thisAssistant: "That is this assistant.",
     none: "You haven't joined any yet.",
     /** `host` is the other server's, `since` a date. */
     where: (host: string, since: string) => `at ${host}, since ${since}`,

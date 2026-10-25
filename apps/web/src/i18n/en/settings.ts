@@ -65,6 +65,30 @@ export const settings = {
     invite: "Invite someone",
     anotherDevice: "Sign in another device",
   },
+  guests: {
+    title: "People from other assistants",
+    intro:
+      "Invite someone by the address their own assistant gave them, under Profile there. They join with the link, their home vouching for them, and keep their name and picture from there. An invite lasts a week.",
+    address: "Their address",
+    invite: "Invite",
+    /** Around the invited address, in a monospace font. */
+    sendBefore: "Send ",
+    sendAfter: " this link, to paste under Profile in their home, or open in the Nudge app:",
+    copy: "Copy",
+    copied: "Copied",
+    done: "Done",
+    until: (date: string) => `until ${date}`,
+    cancel: "Cancel",
+  },
+  spend: {
+    title: "Spend",
+    intro: "What model use cost, in US dollars, in the assistant's time zone's months.",
+    month: "Month",
+    none: "Nothing spent yet.",
+    byPerson: "By person",
+    byRoom: "By room",
+    nothing: "Nothing.",
+  },
   budget: {
     title: "Budget",
     intro:

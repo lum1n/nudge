@@ -70,11 +70,26 @@ export const profile: Messages["profile"] = {
     anyKind: (kind: string | undefined) => `hvilken som helst ${kind}`,
     everyTime: ", hver gang",
   },
+  spend: {
+    intro:
+      "Hva svarene kostet i modellbruk denne måneden, i amerikanske dollar. Over en grense slutter assistenten å svare til måneden er omme.",
+    mine: "Dine meldinger",
+    everyone: "Alle",
+    of: (limit: string) => ` av ${limit}`,
+    ofLimit: (label: string) => `${label}, av grensen`,
+  },
   memberships: {
     title: "Andre assistenter",
     addressBefore: "Adressen din er ",
     addressAfter:
-      ". En administrator for en annen assistent kan invitere deg med den, og du blir med fra Nudge-appen.",
+      ". En administrator for en annen assistent kan invitere deg med den, og sende deg en invitasjonslenke å lime inn her.",
+    open: "Åpne",
+    join: "Bli med",
+    joinLink: "Invitasjonslenke",
+    notJoinLink: "Det er ikke en invitasjonslenke. Den begynner med nudge://join.",
+    notInvited: (assistant: string) =>
+      `${assistant} har ikke invitert adressen din. Be en administrator der om å gjøre det.`,
+    thisAssistant: "Det er denne assistenten.",
     none: "Du har ikke blitt med i noen ennå.",
     where: (host: string, since: string) => `på ${host}, siden ${since}`,
     confirmLeave: (assistant: string) =>

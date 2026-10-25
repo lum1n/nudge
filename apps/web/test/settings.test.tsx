@@ -30,8 +30,13 @@ const robin: ServerAssistant = {
 };
 
 /** The settings page of robin, rendered once, as Ann; `admin` says whether she is one. */
-async function render({ admin = true, server = robin as ServerAssistant | undefined } = {}) {
+async function render({
+  admin = true,
+  server = robin as ServerAssistant | undefined,
+  seed = undefined as ((queries: QueryClient) => void) | undefined,
+} = {}) {
   const queryClient = new QueryClient();
+  seed?.(queryClient);
   queryClient.setQueryData(["robin", "me"], {
     player: { id: "ann", displayName: "Ann" },
     admin,
@@ -82,5 +87,64 @@ describe("assistant settings: budget", () => {
     });
     expect(budgetOf({ ...draft, warnAtPercent: "150" })).toHaveProperty("error");
     expect(budgetDraftOf({ warnAt: 0.7 }).warnAtPercent).toBe("70");
+  });
+});
+
+describe("assistant settings: spend and guests", () => {
+  it("shows an admin each month's spend by person and by room, most first", async () => {
+    const html = await render({
+      seed: (queries) => {
+        queries.setQueryData(["robin", "usage"], {
+          month: "2026-10",
+          total: 4.5,
+          mine: 1,
+          budget: {},
+          months: [
+            { month: "2026-09", total: 2, players: {}, rooms: {} },
+            {
+              month: "2026-10",
+              total: 4.5,
+              players: { ann: 1, kim: 3.5 },
+              rooms: { trip: 4.5 },
+            },
+          ],
+        });
+        queries.setQueryData(
+          ["robin", "players"],
+          [
+            { id: "ann", displayName: "Ann", admin: true },
+            { id: "kim", displayName: "Kim", admin: false },
+          ],
+        );
+        queries.setQueryData(
+          ["robin", "all-rooms"],
+          [{ id: "trip", kind: "shared", name: "Lofoten trip", members: [] }],
+        );
+      },
+    });
+    const shown = html.replace(/<[^>]+>/g, " ").replace(/<!-- -->|\s+/g, " ");
+    expect(shown).toContain("Spend");
+    expect(shown).toMatch(/By person Kim \$3\.50 Ann \$1\.00/);
+    expect(shown).toMatch(/By room Lofoten trip \$4\.50/);
+  });
+
+  it("lists the invites of people from other assistants", async () => {
+    const html = await render({
+      seed: (queries) =>
+        queries.setQueryData(
+          ["robin", "invites"],
+          [
+            {
+              id: "i1",
+              address: "kim@nudge.example.com/home",
+              by: "ann",
+              createdAt: 0,
+              expiresAt: Date.now() + 86_400_000,
+            },
+          ],
+        ),
+    });
+    expect(html).toContain("People from other assistants");
+    expect(html).toContain("kim@nudge.example.com/home");
   });
 });
