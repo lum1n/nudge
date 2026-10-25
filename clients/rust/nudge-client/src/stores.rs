@@ -654,6 +654,7 @@ mod tests {
             client_id: None,
             request_id: None,
             private_to: None,
+            attachments: None,
         })
     }
 
@@ -672,6 +673,7 @@ mod tests {
                 kind: RoomKind::Shared,
                 name: "Trip".into(),
                 members: vec![],
+                images_to_model: None,
             },
             timeline,
             has_earlier: true,

@@ -1,6 +1,29 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%@" : {
+
+    },
+    "%@ · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "%@ %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@"
+          }
+        }
+      }
+    },
     "%@ API key" : {
       "localizations" : {
         "nb" : {
@@ -81,6 +104,16 @@
         }
       }
     },
+    "%@, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, %2$@"
+          }
+        }
+      }
+    },
     "%u to approve" : {
       "localizations" : {
         "nb" : {
@@ -137,26 +170,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "En liten server i exe.dev-kontoen din, med en HTTPS-adresse."
-          }
-        }
-      }
-    },
-    "API key (%@ %@)" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "API-nøkkel (%1$@ %2$@)"
-          }
-        }
-      }
-    },
-    "APIs this room's assistant can call. Ask it in the chat to add one, and say what for. Turn on Always use first to have it try one before anything else for those tasks. API keys go here only: the assistant never sees them." : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "API-er assistenten i dette rommet kan kalle. Be den i chatten om å legge til et, og si hva det skal brukes til. Slå på Bruk alltid først for at den skal prøve det før noe annet for de oppgavene. API-nøkler legges bare inn her: assistenten ser dem aldri."
           }
         }
       }
@@ -311,6 +324,26 @@
         }
       }
     },
+    "API key (%@ %@)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API-nøkkel (%1$@ %2$@)"
+          }
+        }
+      }
+    },
+    "APIs this room's assistant can call. Ask it in the chat to add one, and say what for. Turn on Always use first to have it try one before anything else for those tasks. API keys go here only: the assistant never sees them." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API-er assistenten i dette rommet kan kalle. Be den i chatten om å legge til et, og si hva det skal brukes til. Slå på Bruk alltid først for at den skal prøve det før noe annet for de oppgavene. API-nøkler legges bare inn her: assistenten ser dem aldri."
+          }
+        }
+      }
+    },
     "Approval" : {
       "localizations" : {
         "nb" : {
@@ -401,6 +434,16 @@
         }
       }
     },
+    "At most %@ GB on disk (%@ now)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "At most %1$@ GB on disk (%2$@ now)"
+          }
+        }
+      }
+    },
     "At most %lld GB on disk (%@ now)" : {
       "localizations" : {
         "nb" : {
@@ -481,16 +524,6 @@
         }
       }
     },
-    "Can't open the MCP servers" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kan ikke åpne MCP-serverne"
-          }
-        }
-      }
-    },
     "Can't open the browser" : {
       "localizations" : {
         "nb" : {
@@ -537,6 +570,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Kan ikke åpne listene"
+          }
+        }
+      }
+    },
+    "Can't open the MCP servers" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kan ikke åpne MCP-serverne"
           }
         }
       }
@@ -1041,6 +1084,26 @@
         }
       }
     },
+    "exe.dev asks for your email and sends you a link. Open it, then come back: the app is signed in once exe.dev has your key." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "exe.dev spør om e-posten din og sender deg en lenke. Åpne den, og kom så tilbake: appen er logget inn når exe.dev har nøkkelen din."
+          }
+        }
+      }
+    },
+    "exe.dev token" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "exe.dev-token"
+          }
+        }
+      }
+    },
     "Extensions" : {
       "localizations" : {
         "nb" : {
@@ -1401,12 +1464,12 @@
         }
       }
     },
-    "Join %@'s Wired network" : {
+    "Join %@?" : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bli med i Wired-nettverket til %@"
+            "value" : "Bli med i %@?"
           }
         }
       }
@@ -1421,12 +1484,12 @@
         }
       }
     },
-    "Join %@?" : {
+    "Join %@'s Wired network" : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bli med i %@?"
+            "value" : "Bli med i Wired-nettverket til %@"
           }
         }
       }
@@ -1621,26 +1684,6 @@
         }
       }
     },
-    "MCP servers" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "MCP-servere"
-          }
-        }
-      }
-    },
-    "MCP servers this room's assistant can use. Ask it in the chat to add one. Keys and sign-ins go here only: the assistant never sees them." : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "MCP-servere assistenten i dette rommet kan bruke. Be den i chatten om å legge til en. Nøkler og innlogginger legges bare inn her: assistenten ser dem aldri."
-          }
-        }
-      }
-    },
     "Make a server on exe.dev" : {
       "localizations" : {
         "nb" : {
@@ -1707,6 +1750,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Kan nå denne maskinen og det lokale nettverket, for eksempel Home Assistant eller en NAS"
+          }
+        }
+      }
+    },
+    "MCP servers" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP-servere"
+          }
+        }
+      }
+    },
+    "MCP servers this room's assistant can use. Ask it in the chat to add one. Keys and sign-ins go here only: the assistant never sees them." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP-servere assistenten i dette rommet kan bruke. Be den i chatten om å legge til en. Nøkler og innlogginger legges bare inn her: assistenten ser dem aldri."
           }
         }
       }
@@ -1951,22 +2014,12 @@
         }
       }
     },
-    "No MCP servers here" : {
+    "next" : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ingen MCP-servere her"
-          }
-        }
-      }
-    },
-    "No MCP servers yet." : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ingen MCP-servere ennå."
+            "value" : "neste"
           }
         }
       }
@@ -2017,6 +2070,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ingen lister her"
+          }
+        }
+      }
+    },
+    "No MCP servers here" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen MCP-servere her"
+          }
+        }
+      }
+    },
+    "No MCP servers yet." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen MCP-servere ennå."
           }
         }
       }
@@ -2457,6 +2530,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Leverandør"
+          }
+        }
+      }
+    },
+    "queued" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "i kø"
           }
         }
       }
@@ -3151,16 +3234,6 @@
         }
       }
     },
-    "Starting Wired…" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Starter Wired …"
-          }
-        }
-      }
-    },
     "Starting the browser…" : {
       "localizations" : {
         "nb" : {
@@ -3177,6 +3250,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Starter skrivebordet …"
+          }
+        }
+      }
+    },
+    "Starting Wired…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Starter Wired …"
           }
         }
       }
@@ -3311,22 +3394,22 @@
         }
       }
     },
-    "The assistant's" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Assistentens"
-          }
-        }
-      }
-    },
     "The assistant: %@" : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Assistenten: %@"
+          }
+        }
+      }
+    },
+    "The assistant's" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Assistentens"
           }
         }
       }
@@ -3591,6 +3674,16 @@
         }
       }
     },
+    "Trying again (%@): %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Trying again (%1$@): %2$@"
+          }
+        }
+      }
+    },
     "Trying again (%lld): %@" : {
       "localizations" : {
         "nb" : {
@@ -3631,16 +3724,6 @@
         }
       }
     },
-    "Turn on Share where I am in your profile to change it." : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Slå på Del hvor jeg er i profilen din for å endre det."
-          }
-        }
-      }
-    },
     "Turn on federation at home" : {
       "localizations" : {
         "nb" : {
@@ -3657,6 +3740,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Slå på varsler"
+          }
+        }
+      }
+    },
+    "Turn on Share where I am in your profile to change it." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slå på Del hvor jeg er i profilen din for å endre det."
           }
         }
       }
@@ -4191,45 +4284,8 @@
         }
       }
     },
-    "exe.dev asks for your email and sends you a link. Open it, then come back: the app is signed in once exe.dev has your key." : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "exe.dev spør om e-posten din og sender deg en lenke. Åpne den, og kom så tilbake: appen er logget inn når exe.dev har nøkkelen din."
-          }
-        }
-      }
-    },
-    "exe.dev token" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "exe.dev-token"
-          }
-        }
-      }
-    },
-    "next" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "neste"
-          }
-        }
-      }
-    },
-    "queued" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "i kø"
-          }
-        }
-      }
+    "z" : {
+
     }
   },
   "version" : "1.0"

@@ -392,6 +392,7 @@ impl Inner {
             request_id: message.request_id.clone(),
             when_busy: message.when_busy,
             private: message.private.then_some(true),
+            attachments: None,
         };
         let result = self.api.send(&message.room, &body).await;
         self.posting.lock().unwrap().remove(&message.request_id);
