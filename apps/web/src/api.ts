@@ -5,6 +5,7 @@ import {
   checkSetupKey,
   type KeyValueStorage,
   type RoomListStore,
+  type Sealed,
   listAssistants,
   NudgeClient,
   outboxKey,
@@ -82,7 +83,7 @@ function signedInWith(assistant: string, token: string, remember: boolean): void
 }
 
 /** Whether the assistant's current token is kept on the device rather than in the tab. */
-function remembered(assistant: string): boolean {
+export function remembered(assistant: string): boolean {
   return readFrom(localStorage)[assistant] !== undefined;
 }
 
@@ -214,6 +215,18 @@ export async function pair(code: string, remember: boolean): Promise<string | un
       platform: CLIENT.platform,
     });
   });
+}
+
+/**
+ * Joins `assistant` on this server with an assertion the player's home sealed for it, and keeps
+ * the token, on the device with `remember`. An admin there must have invited the home's address.
+ */
+export async function joinHere(
+  assistant: string,
+  assertion: Sealed,
+  remember: boolean,
+): Promise<void> {
+  await new Api({ server: "", assistant, tokens: tokenStore(assistant, remember) }).join(assertion);
 }
 
 /** A QR code for the Nudge app to sign this browser in with. */

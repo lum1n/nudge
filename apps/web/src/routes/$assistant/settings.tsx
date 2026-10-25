@@ -16,6 +16,7 @@ import { LookPicker } from "../../avatar/LookPicker.tsx";
 import { invite, pairAnotherDevice, type Pairing, PairingCard } from "../../pairing.tsx";
 import { BUDGET_DEFAULTS, type BudgetDraft, budgetDraftOf, budgetOf } from "../../budget.ts";
 import { meQuery } from "../../queries.ts";
+import { dollars, monthLabel, type SpendRow, spendRows } from "../../spend.ts";
 import { ObjectFields, RoomsContext, type Schema, withoutDefaults } from "../../schema-form.tsx";
 
 export const Route = createFileRoute("/$assistant/settings")({ component: Settings });
@@ -56,7 +57,9 @@ function Settings() {
     <>
       <Robot />
       <People />
+      <Guests />
       <Budget />
+      <SpendByMonth />
       <Clients />
       <Backups />
       <Extensions />
@@ -499,6 +502,136 @@ function People() {
   );
 }
 
+/**
+ * Invites for people from other assistants, through the federation extension: by the address
+ * their home gave them, with a join link for them to paste into their home. Not shown on an
+ * assistant without the extension.
+ */
+function Guests() {
+  const { assistant } = Route.useParams();
+  const queryClient = useQueryClient();
+  const key = [assistant, "invites"];
+  // Made on use only: a client opens a socket.
+  const api = () => clientFor(assistant).api;
+  const invites = useQuery({ queryKey: key, queryFn: () => api().invites(), retry: false });
+  const [address, setAddress] = useState("");
+  const [link, setLink] = useState<{ address: string; link: string }>();
+  const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+
+  if (invites.error instanceof ApiError && invites.error.status === 404) return null;
+
+  async function run(work: () => Promise<unknown>) {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await work();
+      await queryClient.invalidateQueries({ queryKey: key });
+    } catch (caught) {
+      setError((caught as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onInvite(event: FormEvent) {
+    event.preventDefault();
+    const typed = address.trim();
+    void run(async () => {
+      const made = await api().invite(typed);
+      setAddress("");
+      setCopied(false);
+      setLink({ address: made.invite.address, link: made.link });
+    });
+  }
+
+  return (
+    <section className="mx-auto flex max-w-3xl flex-col gap-3 p-3 sm:p-4">
+      <div>
+        <h2 className="text-lg font-medium">People from other assistants</h2>
+        <p className="text-sm text-stone-600">
+          Invite someone by the address their own assistant gave them, under Profile there. They
+          join with the link, their home vouching for them, and keep their name and picture from
+          there. An invite lasts a week.
+        </p>
+      </div>
+      <form onSubmit={onInvite} className="flex flex-wrap gap-2">
+        <input
+          value={address}
+          onChange={(event) => setAddress(event.target.value)}
+          placeholder="robin@nudge.example.com/home"
+          aria-label="Their address"
+          autoComplete="off"
+          className="min-w-0 flex-1 rounded border border-stone-300 bg-white px-3 py-1.5 font-mono text-sm"
+        />
+        <button
+          type="submit"
+          disabled={busy || address.trim() === ""}
+          className="rounded bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-40"
+        >
+          Invite
+        </button>
+      </form>
+      {link !== undefined && (
+        <div className="flex flex-col gap-2 rounded border border-stone-200 bg-white p-3 text-sm">
+          <p>
+            Send <span className="font-mono">{link.address}</span> this link, to paste under
+            Profile in their home, or open in the Nudge app:
+          </p>
+          <code className="rounded bg-stone-100 px-2 py-1 text-xs [overflow-wrap:anywhere]">
+            {link.link}
+          </code>
+          <span className="flex gap-3">
+            <button
+              type="button"
+              onClick={() =>
+                void navigator.clipboard.writeText(link.link).then(() => setCopied(true))
+              }
+              className="underline"
+            >
+              {copied ? "Copied" : "Copy"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setLink(undefined)}
+              className="text-stone-600 underline"
+            >
+              Done
+            </button>
+          </span>
+        </div>
+      )}
+      {(invites.data ?? []).length > 0 && (
+        <ul className="flex flex-col gap-1 rounded border border-stone-200 bg-white p-3">
+          {invites.data!.map((invite) => (
+            <li key={invite.id} className="flex items-baseline justify-between gap-2 text-sm">
+              <span>
+                <span className="font-mono">{invite.address}</span>{" "}
+                <span className="text-stone-500">
+                  until {new Date(invite.expiresAt).toLocaleDateString()}
+                </span>
+              </span>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void run(() => api().cancelInvite(invite.id))}
+                className="text-xs text-red-700 hover:underline disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {invites.error && !(invites.error instanceof ApiError && invites.error.status === 404) && (
+        <p className="text-sm text-red-700">{invites.error.message}</p>
+      )}
+      {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
+    </section>
+  );
+}
+
 const BUDGET_FIELDS: { key: keyof BudgetDraft; label: string; hint: string; unit: string }[] = [
   {
     key: "monthlyUsd",
@@ -655,6 +788,90 @@ function Budget() {
         </div>
       )}
     </section>
+  );
+}
+
+/** What each month cost, by person and by room, as the server counted it; admins only. */
+function SpendByMonth() {
+  const { assistant } = Route.useParams();
+  const me = useQuery(meQuery(assistant));
+  const enabled = me.data?.admin === true;
+  const api = () => clientFor(assistant).api;
+  const usage = useQuery({ queryKey: [assistant, "usage"], queryFn: () => api().usage(), enabled });
+  const players = useQuery({
+    queryKey: [assistant, "players"],
+    queryFn: () => api().players(),
+    enabled,
+  });
+  const rooms = useQuery({
+    queryKey: [assistant, "all-rooms"],
+    queryFn: () => api().allRooms(),
+    enabled,
+  });
+  const months = [...(usage.data?.months ?? [])].sort((a, b) => b.month.localeCompare(a.month));
+  const [shown, setShown] = useState<string>();
+  if (usage.data === undefined) return null;
+  const month = months.find((item) => item.month === (shown ?? usage.data.month)) ?? months[0];
+  const playerNames = new Map(players.data?.map((player) => [player.id, player.displayName]));
+  const roomNames = new Map(rooms.data?.map((room) => [room.id, room.name]));
+
+  return (
+    <section className="mx-auto flex max-w-3xl flex-col gap-3 p-3 sm:p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h2 className="text-lg font-medium">Spend</h2>
+          <p className="text-sm text-stone-600">
+            What model use cost, in US dollars, in the assistant's time zone's months.
+          </p>
+        </div>
+        {months.length > 1 && (
+          <select
+            value={month?.month}
+            onChange={(event) => setShown(event.target.value)}
+            aria-label="Month"
+            className="rounded border border-stone-300 bg-white px-2 py-1 text-sm"
+          >
+            {months.map((item) => (
+              <option key={item.month} value={item.month}>
+                {monthLabel(item.month)}: {dollars(item.total)}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+      {month === undefined ? (
+        <p className="text-sm text-stone-600">Nothing spent yet.</p>
+      ) : (
+        <div className="grid gap-3 rounded border border-stone-200 bg-white p-4 sm:grid-cols-2">
+          <p className="text-sm sm:col-span-2">
+            {monthLabel(month.month)}:{" "}
+            <span className="font-medium tabular-nums">{dollars(month.total)}</span>
+          </p>
+          <SpendList title="By person" rows={spendRows(month.players, playerNames)} />
+          <SpendList title="By room" rows={spendRows(month.rooms, roomNames)} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SpendList({ title, rows }: { title: string; rows: SpendRow[] }) {
+  return (
+    <div className="flex flex-col gap-1 text-sm">
+      <h3 className="font-medium">{title}</h3>
+      {rows.length === 0 ? (
+        <p className="text-stone-500">Nothing.</p>
+      ) : (
+        <ul className="flex flex-col gap-1">
+          {rows.map((row) => (
+            <li key={row.id} className="flex justify-between gap-2">
+              <span className="truncate">{row.name}</span>
+              <span className="tabular-nums">{dollars(row.usd)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

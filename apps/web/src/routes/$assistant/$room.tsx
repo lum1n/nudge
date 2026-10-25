@@ -7,6 +7,8 @@ import {
   type MessageStatus,
   ThreadPrimitive,
   type ToolCallMessagePartProps,
+  useAui,
+  useAuiState,
   useExternalStoreRuntime,
   useMessagePartText,
 } from "@assistant-ui/react";
@@ -51,6 +53,13 @@ import {
   toThreadMessageLike,
   transcript,
 } from "../../assistant-runtime.ts";
+import {
+  allowDictation,
+  DICTATION_NOTICE,
+  dictationAllowed,
+  dictationFor,
+  speechLanguage,
+} from "../../dictation.ts";
 import { assistantsQuery, meQuery } from "../../queries.ts";
 
 export const Route = createFileRoute("/$assistant/$room")({ component: Room });
@@ -394,6 +403,15 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
     [state.timeline, view.approvals],
   );
   const days = useMemo(() => dayStarts(messages), [messages]);
+  // Listens in the language of the player's profile, the same query as the profile page's.
+  const language = useQuery({
+    queryKey: [assistant, "profile"],
+    queryFn: () => clientFor(assistant).api.profile(),
+  }).data?.language;
+  const dictation = useMemo(
+    () => dictationFor(speechLanguage(language, navigator.language)),
+    [language],
+  );
   const runtime = useExternalStoreRuntime({
     messages,
     convertMessage,
@@ -408,6 +426,7 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
       await clientFor(assistant).api.abort(room);
     },
     queue: buildQueueAdapter(view.queue, state.pending, dispatch),
+    ...(dictation === undefined ? {} : { adapters: { dictation } }),
   });
 
   return (
@@ -475,6 +494,7 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
                 }
                 className="max-h-40 min-w-0 flex-1 resize-none rounded border border-stone-300 bg-white px-2 py-1.5"
               />
+              {dictation !== undefined && <Dictate />}
               {view.live.running ? (
                 <ComposerPrimitive.Cancel className="shrink-0 rounded border bg-white px-3">
                   Stop
@@ -489,6 +509,45 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
         </div>
       </LookContext>
     </AssistantRuntimeProvider>
+  );
+}
+
+/**
+ * Starts or stops dictation into the composer; what is heard goes into the message, to read over
+ * before sending. The first time on a device, the player agrees to the browser hearing them.
+ */
+function Dictate() {
+  const aui = useAui();
+  const dictating = useAuiState((s) => s.composer.dictation != null);
+  const editing = useAuiState((s) => s.composer.isEditing);
+  const button = "shrink-0 rounded border px-2 text-sm";
+  if (dictating)
+    return (
+      <button
+        type="button"
+        onClick={() => aui.composer.stopDictation()}
+        aria-label="Stop dictating"
+        className={`${button} animate-pulse border-red-700 bg-red-700 text-white`}
+      >
+        Listening
+      </button>
+    );
+  return (
+    <button
+      type="button"
+      disabled={!editing}
+      onClick={() => {
+        if (!dictationAllowed()) {
+          if (!confirm(DICTATION_NOTICE)) return;
+          allowDictation();
+        }
+        aui.composer.startDictation();
+      }}
+      title="Say your message"
+      className={`${button} bg-white text-stone-600 disabled:opacity-40`}
+    >
+      Dictate
+    </button>
   );
 }
 

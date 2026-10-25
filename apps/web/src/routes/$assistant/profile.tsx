@@ -1,10 +1,18 @@
-import type { Membership, PersonalDetails, PlayerSettingsSchema, Profile } from "@nudge/client";
+import type {
+  Membership,
+  PersonalDetails,
+  PlaceRequest,
+  PlayerSettingsSchema,
+  Profile,
+} from "@nudge/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useEffect, useState } from "react";
-import { ApiError, clientFor } from "../../api.ts";
+import { ApiError, clientFor, joinHere, remembered, tokenFor } from "../../api.ts";
+import { isThisServer, joinPage, parseJoinLink } from "../../joining.ts";
 import { meQuery } from "../../queries.ts";
 import { ObjectFields, type Schema, withoutDefaults } from "../../schema-form.tsx";
+import { dollars, monthLabel, shareOf } from "../../spend.ts";
 
 export const Route = createFileRoute("/$assistant/profile")({ component: ProfilePage });
 
@@ -86,6 +94,7 @@ function ProfilePage() {
           name, picture, time zone, language and settings come from there: change them in your
           home's app.
         </p>
+        <Spend assistant={assistant} />
       </Page>
     );
   const change = (part: Partial<Draft>) => {
@@ -240,6 +249,7 @@ function ProfilePage() {
         </div>
       </form>
       <Personal assistant={assistant} />
+      <Spend assistant={assistant} />
       <Places assistant={assistant} />
       <Memberships assistant={assistant} />
     </Page>
@@ -471,6 +481,7 @@ function Places({ assistant }: { assistant: string }) {
 
 function Memberships({ assistant }: { assistant: string }) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const key = [assistant, "memberships"];
   const memberships = useQuery({
     queryKey: key,
@@ -499,6 +510,15 @@ function Memberships({ assistant }: { assistant: string }) {
     }
   }
 
+  // Signed in there already, it opens; else home vouches for the player again, as joining does.
+  async function open(membership: Membership) {
+    if (isThisServer(membership.server, location.origin) && tokenFor(membership.assistant)) {
+      await navigate({ to: "/$assistant", params: { assistant: membership.assistant } });
+      return;
+    }
+    await change(membership, () => joinFrom(assistant, membership, navigate));
+  }
+
   const api = clientFor(assistant).api;
   return (
     <div className="flex flex-col gap-3 rounded border border-stone-200 bg-white p-3">
@@ -506,9 +526,10 @@ function Memberships({ assistant }: { assistant: string }) {
         <h3 className="text-sm font-medium">Other assistants</h3>
         <p className="text-xs text-stone-500">
           Your address is <span className="font-mono">{address}</span>. An admin of another
-          assistant can invite you by it, and you join from the Nudge app.
+          assistant can invite you by it, and send you a join link to paste here.
         </p>
       </div>
+      <JoinForm assistant={assistant} />
       {memberships.data.memberships.length === 0 ? (
         <p className="text-sm text-stone-600">You haven't joined any yet.</p>
       ) : (
@@ -525,6 +546,15 @@ function Memberships({ assistant }: { assistant: string }) {
                       {new Date(membership.since).toLocaleDateString()}
                     </span>
                   </span>
+                  <span className="flex shrink-0 gap-3">
+                  <button
+                    type="button"
+                    disabled={busy === id}
+                    onClick={() => void open(membership)}
+                    className="underline disabled:opacity-50"
+                  >
+                    Open
+                  </button>
                   <button
                     type="button"
                     disabled={busy === id}
@@ -540,6 +570,7 @@ function Memberships({ assistant }: { assistant: string }) {
                   >
                     Leave
                   </button>
+                  </span>
                 </div>
                 <label className="flex items-center gap-2">
                   <input
@@ -561,6 +592,140 @@ function Memberships({ assistant }: { assistant: string }) {
       )}
       {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
     </div>
+  );
+}
+
+/**
+ * Joins `place` with `home` vouching for the player. On this server it joins from here, keeping
+ * the token where home's is, and opens it; elsewhere, only that server's page can join it, so the
+ * browser goes there with the assertion.
+ */
+async function joinFrom(
+  home: string,
+  place: PlaceRequest,
+  navigate: ReturnType<typeof useNavigate>,
+): Promise<void> {
+  const here = isThisServer(place.server, location.origin);
+  if (here && place.assistant === home) throw new Error("That is this assistant.");
+  const assertion = await clientFor(home).api.vouchFor(place);
+  if (!here) {
+    location.assign(joinPage(place, assertion));
+    return;
+  }
+  await joinHere(place.assistant, assertion, remembered(home));
+  await navigate({ to: "/$assistant", params: { assistant: place.assistant } });
+}
+
+/** A join link an admin elsewhere sent, pasted in: home vouches for the player there. */
+function JoinForm({ assistant }: { assistant: string }) {
+  const navigate = useNavigate();
+  const [link, setLink] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const place = parseJoinLink(link);
+    if (place === undefined) {
+      setError("That isn't a join link. It starts with nudge://join.");
+      return;
+    }
+    setBusy(true);
+    setError(undefined);
+    try {
+      await joinFrom(assistant, place, navigate);
+    } catch (caught) {
+      setError(
+        caught instanceof ApiError && caught.status === 403
+          ? `${place.assistant} hasn't invited your address. Ask an admin there to.`
+          : (caught as Error).message,
+      );
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-1 text-sm">
+      <span className="flex gap-2">
+        <input
+          value={link}
+          onChange={(event) => {
+            setError(undefined);
+            setLink(event.target.value);
+          }}
+          placeholder="nudge://join?server=…"
+          aria-label="Join link"
+          autoComplete="off"
+          className="min-w-0 flex-1 rounded border border-stone-300 px-2 py-1 font-mono text-xs"
+        />
+        <button
+          type="submit"
+          disabled={busy || link.trim() === ""}
+          className="rounded border px-3 py-1 text-sm disabled:opacity-50"
+        >
+          Join
+        </button>
+      </span>
+      {error !== undefined && <span className="text-red-700">{error}</span>}
+    </form>
+  );
+}
+
+/** This month's model spend: the player's, everyone's, and the limits on them. */
+function Spend({ assistant }: { assistant: string }) {
+  const usage = useQuery({
+    queryKey: [assistant, "usage"],
+    queryFn: () => clientFor(assistant).api.usage(),
+  });
+  if (usage.data === undefined) return null;
+  const { mine, total, budget, month } = usage.data;
+  const rows: [string, number, number | undefined][] = [
+    ["Your messages", mine, budget.perPlayerUsd],
+    ["Everyone", total, budget.monthlyUsd],
+  ];
+  return (
+    <section className="flex flex-col gap-3 rounded border border-stone-200 bg-white p-3">
+      <div>
+        <h3 className="text-sm font-medium">{monthLabel(month)}</h3>
+        <p className="text-xs text-stone-500">
+          What answering cost in model use this month, in US dollars. Past a limit the assistant
+          stops answering until the month is over.
+        </p>
+      </div>
+      <dl className="flex flex-col gap-2 text-sm">
+        {rows.map(([label, spent, limit]) => {
+          const share = shareOf(spent, limit);
+          return (
+            <div key={label} className="flex flex-col gap-1">
+              <div className="flex justify-between gap-2">
+                <dt>{label}</dt>
+                <dd className="tabular-nums">
+                  {dollars(spent)}
+                  {limit !== undefined && (
+                    <span className="text-stone-500"> of {dollars(limit)}</span>
+                  )}
+                </dd>
+              </div>
+              {share !== undefined && (
+                <div
+                  role="meter"
+                  aria-label={`${label}, of the limit`}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round(share * 100)}
+                  className="h-1.5 overflow-hidden rounded bg-stone-100"
+                >
+                  <div
+                    className={`h-full ${share >= 1 ? "bg-red-600" : share >= 0.8 ? "bg-amber-500" : "bg-stone-500"}`}
+                    style={{ width: `${share * 100}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </dl>
+    </section>
   );
 }
 
