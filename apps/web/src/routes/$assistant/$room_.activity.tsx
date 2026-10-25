@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { useRoom } from "../../api.ts";
 import { activity, progressLine } from "../../assistant-runtime.ts";
+import { dateLocale, m } from "../../i18n/index.ts";
 
 export const Route = createFileRoute("/$assistant/$room_/activity")({ component: Activity });
 
@@ -20,27 +21,25 @@ function Activity() {
   return (
     <section className="mx-auto flex max-w-3xl flex-col gap-3 p-3 sm:p-4">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-        <h2 className="text-lg font-medium">Activity</h2>
+        <h2 className="text-lg font-medium">{m.panels.activity.title}</h2>
         <Link
           to="/$assistant/$room"
           params={{ assistant, room }}
           className="text-sm text-stone-600 hover:underline"
         >
-          Back to the room
+          {m.panels.backToRoom}
         </Link>
       </div>
       {held?.state.status === "gone" ? (
         <p className="text-red-700">
-          {held.state.reason === "removed" ? "You were removed from this room." : "No such room."}
+          {held.state.reason === "removed" ? m.panels.activity.removed : m.panels.activity.noRoom}
         </p>
       ) : held?.state.view === undefined ? (
-        <p className="text-stone-500">Connecting…</p>
+        <p className="text-stone-500">{m.panels.connecting}</p>
       ) : (
         <>
           {items.length === 0 && (
-            <p className="text-sm text-stone-500">
-              Nothing yet: tool calls, nudges, watches and approvals show up here.
-            </p>
+            <p className="text-sm text-stone-500">{m.panels.activity.empty}</p>
           )}
           <ul className="flex flex-col gap-2">
             {items.map((item) => (
@@ -55,7 +54,7 @@ function Activity() {
               onClick={() => held.store.loadEarlier()}
               className="self-center text-sm text-stone-500 underline"
             >
-              Load earlier
+              {m.panels.activity.loadEarlier}
             </button>
           )}
           {held.state.earlierError !== undefined && (
@@ -72,9 +71,11 @@ function ActivityRow({ item }: { item: TimelineItem }) {
     case "nudge":
       return (
         <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm [overflow-wrap:anywhere]">
-          <span className="text-stone-500">{new Date(item.firedAt).toLocaleString()} · </span>
+          <span className="text-stone-500">
+            {new Date(item.firedAt).toLocaleString(dateLocale())} ·{" "}
+          </span>
           {item.privateTo !== undefined && item.text === ""
-            ? `A nudge for ${item.privateTo.displayName}`
+            ? m.panels.activity.nudgeFor(item.privateTo.displayName)
             : item.text}
         </p>
       );
@@ -82,8 +83,13 @@ function ActivityRow({ item }: { item: TimelineItem }) {
       return (
         <p className="rounded border border-stone-200 bg-white px-3 py-2 text-sm [overflow-wrap:anywhere]">
           {item.privateTo !== undefined && item.summary === ""
-            ? `An approval for ${item.privateTo.displayName} ended`
-            : `${item.decidedBy ?? "Someone"} ${item.status === "denied" ? "denied" : "approved"} ${item.summary}${item.status === "failed" ? " — it failed" : ""}`}
+            ? m.panels.activity.approvalFor(item.privateTo.displayName)
+            : m.panels.activity.decided(
+                item.decidedBy,
+                item.status === "denied",
+                item.summary,
+                item.status === "failed",
+              )}
         </p>
       );
     case "answer":
@@ -94,12 +100,14 @@ function ActivityRow({ item }: { item: TimelineItem }) {
               <ToolRow key={part.callId} part={part} />
             ) : part.type === "reasoning" ? (
               <details key={index} className="text-sm text-stone-500">
-                <summary className="cursor-pointer">Thinking</summary>
+                <summary className="cursor-pointer">{m.panels.activity.thinking}</summary>
                 <p className="whitespace-pre-wrap">{part.text}</p>
               </details>
             ) : null,
           )}
-          {item.status === "running" && <p className="text-xs text-stone-500">Working…</p>}
+          {item.status === "running" && (
+            <p className="text-xs text-stone-500">{m.panels.activity.working}</p>
+          )}
         </div>
       );
     default:
@@ -108,12 +116,13 @@ function ActivityRow({ item }: { item: TimelineItem }) {
 }
 
 function ToolRow({ part }: { part: ToolPart }) {
+  const tool = m.panels.activity.tool;
   const state =
     part.result !== undefined
       ? part.isError
-        ? "failed"
-        : "done"
-      : ((part.output === undefined ? undefined : progressLine(part.output)) ?? part.status);
+        ? tool.failed
+        : tool.done
+      : ((part.output === undefined ? undefined : progressLine(part.output)) ?? tool[part.status]);
   return (
     <details className="text-sm">
       <summary className="cursor-pointer [overflow-wrap:anywhere]">

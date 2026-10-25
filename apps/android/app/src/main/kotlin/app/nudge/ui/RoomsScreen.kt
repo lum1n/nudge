@@ -53,11 +53,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.nudge.R
 import app.nudge.RoomRef
 import app.nudge.Session
 import app.nudge.explain
+import app.nudge.text
 import kotlinx.coroutines.launch
 import nudge.ffi.ConnectionStatus
 import nudge.ffi.MeInfo
@@ -114,7 +117,7 @@ fun RoomsScreen(
                 title = { Text(session.account.assistantName) },
                 subtitle = connectionText(home.connection) ?: home.me?.player?.displayName?.let { name -> { Text(name) } },
                 actions = {
-                    IconButton(onClick = settings) { Icon(Icons.Outlined.Settings, "Settings") }
+                    IconButton(onClick = settings) { Icon(Icons.Outlined.Settings, stringResource(R.string.room_settings)) }
                 },
                 scrollBehavior = scrollBehavior,
             )
@@ -127,7 +130,7 @@ fun RoomsScreen(
                         val icon = if (checkedProgress > 0.5f) Icons.Filled.Close else Icons.Filled.Add
                         Icon(
                             rememberVectorPainter(icon),
-                            contentDescription = if (menu) "Close" else "New room",
+                            contentDescription = stringResource(if (menu) R.string.room_close else R.string.room_new_room),
                             modifier = Modifier.animateIcon({ checkedProgress }),
                         )
                     }
@@ -135,7 +138,7 @@ fun RoomsScreen(
             ) {
                 // At home, then at each assistant joined from there, named where there are others.
                 for (at in listOf(session) + places) {
-                    val where = if (places.isEmpty()) "" else " at ${at.account.assistantName}"
+                    val where = if (places.isEmpty()) null else at.account.assistantName
                     FloatingActionButtonMenuItem(
                         onClick = {
                             menu = false
@@ -147,7 +150,7 @@ fun RoomsScreen(
                                 }
                             }
                         },
-                        text = { Text("My room$where") },
+                        text = { Text(where?.let { stringResource(R.string.room_my_room_at, it) } ?: stringResource(R.string.room_my_room)) },
                         icon = { Icon(Icons.Outlined.Person, null) },
                     )
                     FloatingActionButtonMenuItem(
@@ -155,7 +158,7 @@ fun RoomsScreen(
                             menu = false
                             creating = at
                         },
-                        text = { Text("New shared room$where") },
+                        text = { Text(where?.let { stringResource(R.string.room_new_shared_room_at, it) } ?: stringResource(R.string.room_new_shared_room)) },
                         icon = { Icon(Icons.Outlined.Group, null) },
                     )
                 }
@@ -170,7 +173,7 @@ fun RoomsScreen(
                 Modifier.fillMaxSize().padding(padding),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("No rooms yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.room_no_rooms), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             else -> LazyColumn(
                 contentPadding = PaddingValues(
@@ -217,9 +220,9 @@ fun RoomsScreen(
     problem?.let { message ->
         AlertDialog(
             onDismissRequest = { problem = null },
-            title = { Text("Couldn't open the room") },
+            title = { Text(stringResource(R.string.room_couldnt_open)) },
             text = { Text(message) },
-            confirmButton = { TextButton(onClick = { problem = null }) { Text("OK") } },
+            confirmButton = { TextButton(onClick = { problem = null }) { Text(stringResource(R.string.room_ok)) } },
         )
     }
 }
@@ -236,7 +239,7 @@ private fun PlaceHeading(name: String, host: String?, connection: ConnectionStat
         ) {
             val signedOut = connection is ConnectionStatus.Closed && connection.code.toInt() == 4401
             when {
-                signedOut -> Text("Signed out here. Joining again from home…")
+                signedOut -> Text(stringResource(R.string.room_signed_out_here))
                 status != null -> status()
                 host != null -> Text(host)
             }
@@ -246,12 +249,12 @@ private fun PlaceHeading(name: String, host: String?, connection: ConnectionStat
 
 /** Shown under the title while the socket isn't open. */
 private fun connectionText(status: ConnectionStatus?): (@Composable () -> Unit)? {
-    val text = when (status) {
-        is ConnectionStatus.Waiting -> "Offline · reconnecting"
-        is ConnectionStatus.Connecting -> if (status.attempt > 0u) "Reconnecting…" else null
+    val label = when (status) {
+        is ConnectionStatus.Waiting -> text(R.string.room_offline)
+        is ConnectionStatus.Connecting -> if (status.attempt > 0u) text(R.string.room_reconnecting) else null
         is ConnectionStatus.Closed ->
             if (status.code.toInt() == 1000 || status.code.toInt() == 4401) null
-            else status.reason.ifEmpty { "Disconnected (${status.code})" }
+            else status.reason.ifEmpty { text(R.string.room_disconnected, "${status.code}") }
         else -> null
     } ?: return null
     return {
@@ -260,7 +263,7 @@ private fun connectionText(status: ConnectionStatus?): (@Composable () -> Unit)?
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Icon(Icons.Outlined.CloudOff, null, Modifier.size(16.dp))
-            Text(text)
+            Text(label)
         }
     }
 }
@@ -283,7 +286,7 @@ private fun RoomRow(
             selected = selected,
             onClick = onClick,
             onLongClick = rename?.let { { menu = true } },
-            onLongClickLabel = rename?.let { "Room actions" },
+            onLongClickLabel = rename?.let { stringResource(R.string.room_actions) },
             shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
             leadingContent = {
                 Icon(
@@ -294,9 +297,9 @@ private fun RoomRow(
                     },
                     // Nothing else in the row says what kind of room it is.
                     when (room.room.kind) {
-                        RoomKind.PERSONAL -> "Personal room"
-                        RoomKind.SHARED -> "Shared room"
-                        RoomKind.LOBBY -> "Lobby"
+                        RoomKind.PERSONAL -> stringResource(R.string.room_kind_personal)
+                        RoomKind.SHARED -> stringResource(R.string.room_kind_shared)
+                        RoomKind.LOBBY -> stringResource(R.string.room_kind_lobby)
                     },
                 )
             },
@@ -315,7 +318,7 @@ private fun RoomRow(
         if (rename != null) {
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(
-                    text = { Text("Rename") },
+                    text = { Text(stringResource(R.string.room_rename)) },
                     leadingIcon = { Icon(Icons.Outlined.Edit, null) },
                     onClick = {
                         menu = false
@@ -334,12 +337,12 @@ private fun NewRoomDialog(session: Session, close: () -> Unit, created: (String)
     var problem by remember { mutableStateOf<String?>(null) }
     AlertDialog(
         onDismissRequest = close,
-        title = { Text("New shared room") },
+        title = { Text(stringResource(R.string.room_new_shared_room)) },
         text = {
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Name") },
+                label = { Text(stringResource(R.string.room_name)) },
                 singleLine = true,
                 isError = problem != null,
                 supportingText = problem?.let { { Text(it) } },
@@ -358,9 +361,9 @@ private fun NewRoomDialog(session: Session, close: () -> Unit, created: (String)
                         }
                     }
                 },
-            ) { Text("Create") }
+            ) { Text(stringResource(R.string.room_create)) }
         },
-        dismissButton = { TextButton(onClick = close) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = close) { Text(stringResource(R.string.room_cancel)) } },
     )
 }
 
@@ -372,12 +375,12 @@ private fun RenameRoomDialog(session: Session, room: Room, close: () -> Unit) {
     var problem by remember { mutableStateOf<String?>(null) }
     AlertDialog(
         onDismissRequest = close,
-        title = { Text("Rename room") },
+        title = { Text(stringResource(R.string.room_rename_title)) },
         text = {
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Name") },
+                label = { Text(stringResource(R.string.room_name)) },
                 singleLine = true,
                 isError = problem != null,
                 supportingText = problem?.let { { Text(it) } },
@@ -396,15 +399,15 @@ private fun RenameRoomDialog(session: Session, room: Room, close: () -> Unit) {
                         }
                     }
                 },
-            ) { Text("Rename") }
+            ) { Text(stringResource(R.string.room_rename)) }
         },
-        dismissButton = { TextButton(onClick = close) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = close) { Text(stringResource(R.string.room_cancel)) } },
     )
 }
 
 @Composable
 fun EmptyRoom() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Icon(Icons.Outlined.Forum, "Pick a room", Modifier.size(48.dp), tint = MaterialTheme.colorScheme.outline)
+        Icon(Icons.Outlined.Forum, stringResource(R.string.room_pick), Modifier.size(48.dp), tint = MaterialTheme.colorScheme.outline)
     }
 }

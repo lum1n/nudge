@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="mood_using">Bruker %1$s …</string>
+    <string name="mood_working">Jobber …</string>
+    <string name="mood_compacting">Rydder i eldre meldinger …</string>
+    <string name="mood_thinking">Tenker …</string>
+    <string name="mood_speaking">Svarer …</string>
+    <string name="mood_waiting">Venter på en godkjenning</string>
+    <string name="mood_puzzled">Prøver igjen …</string>
+    <string name="mood_sad">Det gikk ikke</string>
+    <string name="mood_asleep">Døser</string>
+</resources>

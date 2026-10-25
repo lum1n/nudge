@@ -20,6 +20,7 @@ import {
   type TokenStore,
 } from "@nudge/client";
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { m } from "./i18n/index.ts";
 
 export { ApiError, checkSetupCode, checkSetupKey, listAssistants, setupInfo, type SignInResponse };
 
@@ -294,7 +295,7 @@ export async function asOwner<T>(
     }
   }
   const token = tokenFor(assistant);
-  if (token === undefined) throw new ApiError(401, "Not signed in");
+  if (token === undefined) throw new ApiError(401, m.panels.api.notSignedIn);
   await api.signIn(assistant, token, { name: CLIENT.name, platform: CLIENT.platform });
   return call(api);
 }
@@ -305,7 +306,7 @@ export async function asOwner<T>(
  */
 export async function signInToServer(assistant: string): Promise<void> {
   const token = tokenFor(assistant);
-  if (token === undefined) throw new Error(`Not signed in to ${assistant}`);
+  if (token === undefined) throw new Error(m.panels.api.notSignedInTo(assistant));
   await serverApi().signIn(assistant, token, { name: CLIENT.name, platform: CLIENT.platform });
 }
 

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Errors the app model explains to people. -->
+<resources>
+    <string name="problem_no_federation">Your home has no federation yet, so it can\'t join assistants on other servers.</string>
+    <string name="problem_no_federation_extension">Your home\'s server has no federation extension to turn on. Update it first.</string>
+    <string name="problem_private_home">This device reaches your home at a local address, which other servers can\'t reach. Sign in to your home at its public address, or hold a Wired network at home and use its address: under Settings → Servers, open your home\'s server.</string>
+    <string name="problem_needs_wired">Your home is on Wired, but none of your servers here holds its network. Open your home under Settings → Servers and hold a network there, then try again.</string>
+    <string name="problem_wired_elsewhere">This server is in another Wired network. Turn Wired off on it under Settings → Servers, then try again: it joins your home\'s.</string>
+    <string name="problem_not_joined">Joining the assistant from home didn\'t work.</string>
+    <string name="problem_not_on_exe">This server isn\'t one this device made on exe.dev.</string>
+    <string name="error_unauthorized">That didn\'t work. A pairing code works once, for ten minutes: ask an admin for a new one. A token works until it is revoked.</string>
+    <string name="error_network">Can\'t reach the server: %1$s</string>
+    <string name="error_decode">The server\'s answer made no sense: %1$s</string>
+</resources>

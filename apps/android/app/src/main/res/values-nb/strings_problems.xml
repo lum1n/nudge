@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="problem_no_federation">Hjemmet ditt har ikke føderasjon ennå, så det kan ikke bli med i assistenter på andre servere.</string>
+    <string name="problem_no_federation_extension">Serveren hjemmet ditt kjører på, har ingen føderasjonsutvidelse å slå på. Oppdater den først.</string>
+    <string name="problem_private_home">Denne enheten når hjemmet ditt på en lokal adresse, som andre servere ikke når. Logg inn på hjemmet ditt på den offentlige adressen, eller hold et Wired-nettverk hjemme og bruk adressen der: under Innstillinger → Servere, åpne serveren til hjemmet ditt.</string>
+    <string name="problem_needs_wired">Hjemmet ditt er på Wired, men ingen av serverne dine her holder nettverket. Åpne hjemmet ditt under Innstillinger → Servere og hold et nettverk der, og prøv igjen.</string>
+    <string name="problem_wired_elsewhere">Denne serveren er i et annet Wired-nettverk. Slå av Wired på den under Innstillinger → Servere, og prøv igjen: da blir den med i nettverket til hjemmet ditt.</string>
+    <string name="problem_not_joined">Det gikk ikke å bli med i assistenten fra hjemmet.</string>
+    <string name="problem_not_on_exe">Denne serveren er ikke en denne enheten har laget på exe.dev.</string>
+    <string name="error_unauthorized">Det gikk ikke. En koblingskode virker én gang, i ti minutter: be en administrator om en ny. Et token virker til det trekkes tilbake.</string>
+    <string name="error_network">Når ikke serveren: %1$s</string>
+    <string name="error_decode">Svaret fra serveren ga ingen mening: %1$s</string>
+</resources>

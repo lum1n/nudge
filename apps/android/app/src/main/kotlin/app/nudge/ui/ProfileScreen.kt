@@ -57,13 +57,17 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import app.nudge.AppModel
+import app.nudge.R
 import app.nudge.Session
 import app.nudge.explain
+import app.nudge.text
 import java.io.ByteArrayOutputStream
 import java.util.Locale
 import java.util.TimeZone
@@ -178,7 +182,7 @@ fun ProfileScreen(model: AppModel, session: Session, close: () -> Unit) {
         uri ?: return@rememberLauncherForActivityResult
         scope.launch {
             val avatar = withContext(Dispatchers.Default) { runCatching { avatarOf(context, uri) }.getOrNull() }
-            if (avatar == null) problem = "That picture could not be read." else change(current.copy(avatar = avatar))
+            if (avatar == null) problem = text(R.string.settings_profile_picture_unreadable) else change(current.copy(avatar = avatar))
         }
     }
 
@@ -188,8 +192,8 @@ fun ProfileScreen(model: AppModel, session: Session, close: () -> Unit) {
         topBar = {
             MediumFlexibleTopAppBar(
                 colors = groupedTopBarColors(),
-                title = { Text("Profile") },
-                navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                title = { Text(stringResource(R.string.settings_profile_title)) },
+                navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.settings_back)) } },
                 scrollBehavior = scrollBehavior,
             )
         },
@@ -213,8 +217,7 @@ fun ProfileScreen(model: AppModel, session: Session, close: () -> Unit) {
         ) {
             item {
                 Text(
-                    "The assistant reads your nudges' times in your time zone and answers you in your language. " +
-                        "Assistants you joined get this too.",
+                    stringResource(R.string.settings_profile_intro),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -223,10 +226,10 @@ fun ProfileScreen(model: AppModel, session: Session, close: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Avatar(form.avatar)
                     TextButton(onClick = { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
-                        Text("Choose a picture")
+                        Text(stringResource(R.string.settings_profile_choose_picture))
                     }
                     if (form.avatar != null) {
-                        TextButton(onClick = { change(form.copy(avatar = null)) }) { Text("Remove") }
+                        TextButton(onClick = { change(form.copy(avatar = null)) }) { Text(stringResource(R.string.settings_profile_remove)) }
                     }
                 }
             }
@@ -234,7 +237,7 @@ fun ProfileScreen(model: AppModel, session: Session, close: () -> Unit) {
                 OutlinedTextField(
                     value = form.displayName,
                     onValueChange = { change(form.copy(displayName = it)) },
-                    label = { Text("Name") },
+                    label = { Text(stringResource(R.string.settings_profile_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -244,10 +247,10 @@ fun ProfileScreen(model: AppModel, session: Session, close: () -> Unit) {
                 OutlinedTextField(
                     value = form.timeZone,
                     onValueChange = { change(form.copy(timeZone = it)) },
-                    label = { Text("Time zone") },
-                    placeholder = { Text("The assistant's") },
-                    supportingText = { Text("Such as Europe/Oslo") },
-                    trailingIcon = if (form.timeZone != phone) ({ TextButton(onClick = { change(form.copy(timeZone = phone)) }) { Text("This phone's") } }) else null,
+                    label = { Text(stringResource(R.string.settings_profile_time_zone)) },
+                    placeholder = { Text(stringResource(R.string.settings_profile_time_zone_placeholder)) },
+                    supportingText = { Text(stringResource(R.string.settings_profile_time_zone_example)) },
+                    trailingIcon = if (form.timeZone != phone) ({ TextButton(onClick = { change(form.copy(timeZone = phone)) }) { Text(stringResource(R.string.settings_profile_this_phone)) } }) else null,
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -257,9 +260,9 @@ fun ProfileScreen(model: AppModel, session: Session, close: () -> Unit) {
                 OutlinedTextField(
                     value = form.language,
                     onValueChange = { change(form.copy(language = it)) },
-                    label = { Text("Language") },
-                    supportingText = { Text("Such as en, nb or de") },
-                    trailingIcon = if (form.language != phone) ({ TextButton(onClick = { change(form.copy(language = phone)) }) { Text("This phone's") } }) else null,
+                    label = { Text(stringResource(R.string.settings_profile_language)) },
+                    supportingText = { Text(stringResource(R.string.settings_profile_language_example)) },
+                    trailingIcon = if (form.language != phone) ({ TextButton(onClick = { change(form.copy(language = phone)) }) { Text(stringResource(R.string.settings_profile_this_phone)) } }) else null,
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -267,25 +270,23 @@ fun ProfileScreen(model: AppModel, session: Session, close: () -> Unit) {
             personal?.let { details ->
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Personal details", style = MaterialTheme.typography.titleSmall)
+                        Text(stringResource(R.string.settings_profile_personal), style = MaterialTheme.typography.titleSmall)
                         Text(
-                            "For filling in forms, writing mail and finding what is near you. Only you see them, and " +
-                                "they stay at home: the model gets placeholders such as ⟦EMAIL1⟧, in your own room and " +
-                                "private messages, and tools get the real values. Your location is sent while the app is open.",
+                            stringResource(R.string.settings_profile_personal_summary),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         OutlinedTextField(
                             value = details.fullName,
                             onValueChange = { changePersonal(details.copy(fullName = it)) },
-                            label = { Text("Full name") },
+                            label = { Text(stringResource(R.string.settings_profile_full_name)) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                         )
                         OutlinedTextField(
                             value = details.email,
                             onValueChange = { changePersonal(details.copy(email = it)) },
-                            label = { Text("E-mail") },
+                            label = { Text(stringResource(R.string.settings_profile_email)) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
@@ -293,7 +294,7 @@ fun ProfileScreen(model: AppModel, session: Session, close: () -> Unit) {
                         OutlinedTextField(
                             value = details.phone,
                             onValueChange = { changePersonal(details.copy(phone = it)) },
-                            label = { Text("Phone") },
+                            label = { Text(stringResource(R.string.settings_profile_phone)) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
@@ -301,10 +302,10 @@ fun ProfileScreen(model: AppModel, session: Session, close: () -> Unit) {
                         OutlinedTextField(
                             value = details.address,
                             onValueChange = { changePersonal(details.copy(address = it)) },
-                            label = { Text("Address") },
+                            label = { Text(stringResource(R.string.settings_profile_address)) },
                             modifier = Modifier.fillMaxWidth(),
                         )
-                        SwitchRow("Share where I am", sharing) { on ->
+                        SwitchRow(stringResource(R.string.settings_profile_share_location), sharing) { on ->
                             if (on) {
                                 askLocation.launch(
                                     arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
@@ -313,7 +314,7 @@ fun ProfileScreen(model: AppModel, session: Session, close: () -> Unit) {
                                 scope.launch { model.location.setEnabled(false) }
                             }
                         }
-                        SwitchRow("Reminders when I arrive", arriving) { on ->
+                        SwitchRow(stringResource(R.string.settings_profile_arriving), arriving) { on ->
                             if (on) {
                                 askForeground.launch(
                                     arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
@@ -324,8 +325,8 @@ fun ProfileScreen(model: AppModel, session: Session, close: () -> Unit) {
                         }
                         Text(
                             arrivingProblem?.takeIf { arriving }
-                                ?: if (arriving) "Watching $watching places for your reminders. Allow location all the time for it to work with the app closed."
-                                else "For \"remind me when I get home\": the phone tells home when you get to a place you have a reminder for.",
+                                ?: if (arriving) pluralStringResource(R.plurals.settings_profile_arriving_watching, watching, watching)
+                                else stringResource(R.string.settings_profile_arriving_off),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -353,9 +354,9 @@ fun ProfileScreen(model: AppModel, session: Session, close: () -> Unit) {
                         }
                     }
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("Places", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 4.dp))
+                        Text(stringResource(R.string.settings_profile_places), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 4.dp))
                         Text(
-                            "Ask the assistant to save a place or remind you when you get somewhere. The model only sees places as placeholders such as ⟦PLACE:home⟧.",
+                            stringResource(R.string.settings_profile_places_summary),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -365,18 +366,26 @@ fun ProfileScreen(model: AppModel, session: Session, close: () -> Unit) {
                                     Text(place.name)
                                     Text(place.address, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                TextButton(onClick = { act { client.forgetPlace(place.name) } }) { Text("Forget") }
+                                TextButton(onClick = { act { client.forgetPlace(place.name) } }) { Text(stringResource(R.string.settings_profile_forget)) }
                             }
                         }
                         mine.reminders.forEach { reminder ->
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                val where = reminder.place ?: stringResource(R.string.settings_profile_reminder_any, reminder.kind.orEmpty())
                                 Text(
-                                    (if (reminder.arrive) "Getting to " else "Leaving ") +
-                                        (reminder.place ?: "any ${reminder.kind}") +
-                                        (if (reminder.always) ", every time" else "") + ": ${reminder.message}",
+                                    stringResource(
+                                        when {
+                                            reminder.arrive && reminder.always -> R.string.settings_profile_reminder_arrive_always
+                                            reminder.arrive -> R.string.settings_profile_reminder_arrive
+                                            reminder.always -> R.string.settings_profile_reminder_leave_always
+                                            else -> R.string.settings_profile_reminder_leave
+                                        },
+                                        where,
+                                        reminder.message,
+                                    ),
                                     Modifier.weight(1f),
                                 )
-                                TextButton(onClick = { act { client.cancelArrivalReminder(reminder.id) } }) { Text("Cancel") }
+                                TextButton(onClick = { act { client.cancelArrivalReminder(reminder.id) } }) { Text(stringResource(R.string.settings_cancel)) }
                             }
                         }
                     }
@@ -384,11 +393,11 @@ fun ProfileScreen(model: AppModel, session: Session, close: () -> Unit) {
             }
             item {
                 Column {
-                    Text("Notifications", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 4.dp))
-                    SwitchRow("Answers and nudges", form.notifications.answers) {
+                    Text(stringResource(R.string.settings_profile_notifications), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 4.dp))
+                    SwitchRow(stringResource(R.string.settings_profile_notify_answers), form.notifications.answers) {
                         change(form.copy(notifications = form.notifications.copy(answers = it)))
                     }
-                    SwitchRow("Actions waiting for approval", form.notifications.approvals) {
+                    SwitchRow(stringResource(R.string.settings_profile_notify_approvals), form.notifications.approvals) {
                         change(form.copy(notifications = form.notifications.copy(approvals = it)))
                     }
                 }
@@ -460,7 +469,7 @@ fun ProfileScreen(model: AppModel, session: Session, close: () -> Unit) {
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text(if (saved) "Saved" else "Save") }
+                ) { Text(stringResource(if (saved) R.string.settings_profile_saved else R.string.settings_profile_save)) }
             }
         }
     }
@@ -488,7 +497,7 @@ private fun Avatar(avatar: String?) {
     if (image == null) {
         Box(modifier.background(MaterialTheme.colorScheme.surfaceVariant))
     } else {
-        Image(image, contentDescription = "Your picture", modifier = modifier, contentScale = ContentScale.Crop)
+        Image(image, contentDescription = stringResource(R.string.settings_profile_your_picture), modifier = modifier, contentScale = ContentScale.Crop)
     }
 }
 

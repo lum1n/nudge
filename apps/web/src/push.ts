@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ApiError, clientFor, tokenFor } from "./api.ts";
+import { m } from "./i18n/index.ts";
 
 // Which assistants this browser's push subscription is registered with, by URL name. A browser
 // has one subscription per site, shared by every assistant on the server.
@@ -54,7 +55,7 @@ async function state(assistant: string): Promise<PushState> {
 async function enable(assistant: string): Promise<void> {
   const key = fromBase64Url(await clientFor(assistant).api.pushKey());
   if ((await Notification.requestPermission()) !== "granted")
-    throw new Error("Notifications are not allowed for this site");
+    throw new Error(m.setup.push.notAllowed);
   await register(assistant, key);
   setRegistered(assistant, true);
 }

@@ -43,13 +43,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.nudge.R
 import app.nudge.Session
 import app.nudge.explain
+import app.nudge.text
 import java.text.DateFormat
 import java.util.Date
 import kotlinx.coroutines.delay
@@ -65,16 +68,15 @@ data class Pairing(val code: PairingCode, val displayName: String, val self: Boo
     /** What to do with it, said to the admin. */
     val hint: String
         get() {
-            val who = if (self) "Scan this with the Nudge app on your other device" else "Have $displayName scan this with the Nudge app on their phone"
-            val where = server?.let { " The server is $it." } ?: ""
-            return "$who, or type the code in it.$where"
+            val who = if (self) text(R.string.settings_pairing_hint_self) else text(R.string.settings_pairing_hint_other, displayName)
+            return listOfNotNull(who, server?.let { text(R.string.settings_pairing_server, it) }).joinToString(" ")
         }
 
     /** What the share sheet sends: the link, which opens the app, and the code to type. */
     fun message(assistantName: String): String {
-        val where = server?.let { " at $it" } ?: ""
-        return "Sign in to $assistantName on Nudge as $displayName: ${code.link}\n" +
-            "Or type the pairing code ${code.code}$where in the Nudge app. It works once, for ten minutes."
+        val type = server?.let { text(R.string.settings_pairing_message_code_at, code.code, it) }
+            ?: text(R.string.settings_pairing_message_code, code.code)
+        return text(R.string.settings_pairing_message, assistantName, displayName, code.link) + "\n" + type
     }
 }
 
@@ -127,14 +129,14 @@ fun PeopleScreen(session: Session, close: () -> Unit) {
             type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, made.message(session.account.assistantName))
         }
-        context.startActivity(Intent.createChooser(send, "Send the link"))
+        context.startActivity(Intent.createChooser(send, text(R.string.settings_send_link)))
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("People and devices") },
-                navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                title = { Text(stringResource(R.string.settings_people)) },
+                navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.settings_back)) } },
             )
         },
     ) { padding ->
@@ -154,13 +156,13 @@ fun PeopleScreen(session: Session, close: () -> Unit) {
                     return@Column
                 }
                 Text(
-                    "Invite someone, or sign in another device of yours: either gets a pairing code and a QR code for the Nudge app.",
+                    stringResource(R.string.settings_pairing_intro),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Their name") },
+                    label = { Text(stringResource(R.string.settings_pairing_their_name)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { invite() }),
@@ -178,7 +180,7 @@ fun PeopleScreen(session: Session, close: () -> Unit) {
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Icon(Icons.Outlined.PersonAdd, null, Modifier.padding(end = 8.dp))
-                        Text("Invite someone")
+                        Text(stringResource(R.string.settings_pairing_invite))
                     }
                     OutlinedButton(
                         onClick = { anotherDevice() },
@@ -187,7 +189,7 @@ fun PeopleScreen(session: Session, close: () -> Unit) {
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Icon(Icons.Outlined.Devices, null, Modifier.padding(end = 8.dp))
-                        Text("Sign in another device")
+                        Text(stringResource(R.string.settings_pairing_another_device))
                     }
                 }
             }
@@ -205,7 +207,7 @@ private fun PairingCard(pairing: Pairing, share: () -> Unit, done: () -> Unit) {
     }
     Text(pairing.hint)
     if (expired) {
-        Text("This code expired. Make a new one.", color = MaterialTheme.colorScheme.error)
+        Text(stringResource(R.string.settings_pairing_expired), color = MaterialTheme.colorScheme.error)
     } else {
         Surface(
             shape = MaterialTheme.shapes.large,
@@ -215,7 +217,7 @@ private fun PairingCard(pairing: Pairing, share: () -> Unit, done: () -> Unit) {
             Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 QrCode(
                     pairing.code.link,
-                    "QR code that signs in as ${pairing.displayName}",
+                    stringResource(R.string.settings_pairing_qr, pairing.displayName),
                     Modifier.fillMaxWidth(0.8f),
                 )
                 Text(
@@ -226,7 +228,7 @@ private fun PairingCard(pairing: Pairing, share: () -> Unit, done: () -> Unit) {
             }
         }
         Text(
-            "It works once, until ${until(pairing.code.expiresAt)}. Whoever has it signs in as ${pairing.displayName}.",
+            stringResource(R.string.settings_pairing_works_until, until(pairing.code.expiresAt), pairing.displayName),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -235,10 +237,10 @@ private fun PairingCard(pairing: Pairing, share: () -> Unit, done: () -> Unit) {
         if (!expired) {
             Button(onClick = share, shapes = ButtonDefaults.shapes()) {
                 Icon(Icons.Outlined.Share, null, Modifier.padding(end = 8.dp))
-                Text("Send the link")
+                Text(stringResource(R.string.settings_send_link))
             }
         }
-        TextButton(onClick = done) { Text("Done") }
+        TextButton(onClick = done) { Text(stringResource(R.string.settings_pairing_done)) }
     }
 }
 

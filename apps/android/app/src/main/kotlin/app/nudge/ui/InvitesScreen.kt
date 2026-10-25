@@ -34,10 +34,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import app.nudge.R
 import app.nudge.explain
+import app.nudge.text
 import java.text.DateFormat
 import java.util.Date
 import kotlinx.coroutines.launch
@@ -63,9 +66,9 @@ fun InvitesScreen(client: NudgeClient, assistantName: String, close: () -> Unit)
     fun share(link: InviteLink) {
         val send = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, "Join $assistantName on Nudge: ${link.link}")
+            putExtra(Intent.EXTRA_TEXT, text(R.string.settings_invites_share, assistantName, link.link))
         }
-        context.startActivity(Intent.createChooser(send, "Send the invite"))
+        context.startActivity(Intent.createChooser(send, text(R.string.settings_invites_send)))
     }
 
     fun change(action: suspend () -> Unit) = scope.launch {
@@ -83,7 +86,7 @@ fun InvitesScreen(client: NudgeClient, assistantName: String, close: () -> Unit)
             invites = client.invites()
         } catch (error: Exception) {
             problem = if (error is NudgeException.Status && error.status.toInt() == 404) {
-                "This assistant doesn't let people from other assistants join."
+                text(R.string.settings_invites_not_open)
             } else {
                 explain(error)
             }
@@ -95,8 +98,8 @@ fun InvitesScreen(client: NudgeClient, assistantName: String, close: () -> Unit)
         topBar = {
             TopAppBar(
                 colors = groupedTopBarColors(),
-                title = { Text("Invites") },
-                navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                title = { Text(stringResource(R.string.settings_invites)) },
+                navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.settings_back)) } },
             )
         },
     ) { padding ->
@@ -113,10 +116,10 @@ fun InvitesScreen(client: NudgeClient, assistantName: String, close: () -> Unit)
                 OutlinedTextField(
                     value = address,
                     onValueChange = { address = it },
-                    label = { Text("Their address") },
+                    label = { Text(stringResource(R.string.settings_invites_their_address)) },
                     placeholder = { Text("ann@nudge.example.com/robin") },
                     supportingText = {
-                        Text("They find it in Settings of their app. The invite works for seven days; send them the link.")
+                        Text(stringResource(R.string.settings_invites_help))
                     },
                     singleLine = true,
                     shape = MaterialTheme.shapes.large,
@@ -139,7 +142,7 @@ fun InvitesScreen(client: NudgeClient, assistantName: String, close: () -> Unit)
 
             val open = invites
             group(
-                "Waiting to join",
+                text(R.string.settings_invites_waiting),
                 buildList<GroupRow> {
                     if (open == null) {
                         if (problem == null) add { _ -> LoadingIndicator(Modifier.padding(16.dp)) }
@@ -150,7 +153,7 @@ fun InvitesScreen(client: NudgeClient, assistantName: String, close: () -> Unit)
                             SegmentedListItem(
                                 shapes = shapes,
                                 leadingContent = { Icon(Icons.Outlined.AlternateEmail, null) },
-                            ) { Text("No open invites") }
+                            ) { Text(stringResource(R.string.settings_invites_none)) }
                         }
                     }
                     open.forEach { invite ->
@@ -158,15 +161,15 @@ fun InvitesScreen(client: NudgeClient, assistantName: String, close: () -> Unit)
                             SegmentedListItem(
                                 shapes = shapes,
                                 leadingContent = { Icon(Icons.Outlined.AlternateEmail, null) },
-                                supportingContent = { Text("Until ${until(invite.expiresAt)}") },
+                                supportingContent = { Text(stringResource(R.string.settings_invites_until, until(invite.expiresAt))) },
                                 trailingContent = {
                                     Row {
                                         // For the invite just made; its link only names this assistant.
                                         made?.takeIf { it.invite.id == invite.id }?.let { link ->
-                                            IconButton(onClick = { share(link) }) { Icon(Icons.Outlined.Share, "Send the link") }
+                                            IconButton(onClick = { share(link) }) { Icon(Icons.Outlined.Share, stringResource(R.string.settings_send_link)) }
                                         }
                                         IconButton(onClick = { change { client.cancelInvite(invite.id) } }) {
-                                            Icon(Icons.Outlined.Close, "Cancel the invite")
+                                            Icon(Icons.Outlined.Close, stringResource(R.string.settings_invites_cancel))
                                         }
                                     }
                                 },

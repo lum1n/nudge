@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, Outlet, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { ApiError, forgetToken, tokenFor, useConnection } from "../../api.ts";
+import { m } from "../../i18n/index.ts";
 import { assistantsQuery, meQuery } from "../../queries.ts";
 
 export const Route = createFileRoute("/$assistant")({
@@ -55,7 +56,7 @@ function Assistant() {
             activeProps={active}
             className={tab}
           >
-            Rooms
+            {m.profile.nav.rooms}
           </Link>
           <Link
             to="/$assistant/profile"
@@ -63,7 +64,7 @@ function Assistant() {
             activeProps={active}
             className={tab}
           >
-            Profile
+            {m.profile.nav.profile}
           </Link>
           {me.data?.admin && (
             <Link
@@ -72,14 +73,14 @@ function Assistant() {
               activeProps={active}
               className={tab}
             >
-              Settings
+              {m.profile.nav.settings}
             </Link>
           )}
         </nav>
         <div className="ml-auto flex shrink-0 items-center gap-3 text-sm text-stone-600">
           {me.data && <span className="hidden sm:inline">{me.data.player.displayName}</span>}
           <button type="button" onClick={signOut} className="underline">
-            Sign out
+            {m.profile.nav.signOut}
           </button>
         </div>
       </header>

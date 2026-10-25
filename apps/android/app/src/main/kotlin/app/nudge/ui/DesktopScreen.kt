@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -63,6 +64,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.nudge.R
 import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -114,8 +116,8 @@ fun DesktopScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
         topBar = {
             TopAppBar(
                 colors = groupedTopBarColors(),
-                title = { Text("Desktop") },
-                navigationIcon = { IconButton(onClick = close) { Icon(Icons.Outlined.Close, "Close") } },
+                title = { Text(stringResource(R.string.panels_desktop)) },
+                navigationIcon = { IconButton(onClick = close) { Icon(Icons.Outlined.Close, stringResource(R.string.panels_close)) } },
             )
         },
     ) { padding ->
@@ -125,9 +127,10 @@ fun DesktopScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
             when {
                 status is PanelStatus.Closed -> Text(
                     if (status.code.toInt() == 4404) {
-                        "This room has no desktop. Turn on the desktop extension for it under About this room."
+                        stringResource(R.string.panels_desktop_off)
                     } else {
-                        "Disconnected${status.reason.takeIf { it.isNotEmpty() }?.let { ": $it" } ?: ""}."
+                        status.reason.takeIf { it.isNotEmpty() }?.let { stringResource(R.string.panels_disconnected_because, it) }
+                            ?: stringResource(R.string.panels_disconnected)
                     },
                     Modifier.align(Alignment.Center).padding(32.dp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -137,7 +140,7 @@ fun DesktopScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     LoadingIndicator()
-                    Text("Starting the desktop…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.panels_desktop_starting), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 else -> Live(state, live, screen, drawn)
             }
@@ -158,8 +161,7 @@ private fun Live(state: DesktopState, desktop: ObservedDesktop, screen: Bitmap?,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            "This is the room's own desktop. Watch the assistant use its apps, or take over: tap to click, " +
-                "and type below into the window you tapped.",
+            stringResource(R.string.panels_desktop_intro),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -167,11 +169,11 @@ private fun Live(state: DesktopState, desktop: ObservedDesktop, screen: Bitmap?,
             Surface(color = MaterialTheme.colorScheme.tertiaryContainer, shape = MaterialTheme.shapes.large) {
                 Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "${control.holder ?: "Someone else"} is using the desktop; you are watching.",
+                        stringResource(R.string.panels_desktop_watching, control.holder ?: stringResource(R.string.panels_someone_else)),
                         Modifier.weight(1f),
                         style = MaterialTheme.typography.bodyMedium,
                     )
-                    TextButton(onClick = desktop::takeControl, shapes = ButtonDefaults.shapes()) { Text("Take control") }
+                    TextButton(onClick = desktop::takeControl, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.panels_take_control)) }
                 }
             }
         }
@@ -179,7 +181,7 @@ private fun Live(state: DesktopState, desktop: ObservedDesktop, screen: Bitmap?,
             // No window manager: windows come to the front from here, and apps start from here.
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 state.apps.forEach { app ->
-                    AssistChip(onClick = { desktop.launch(app) }, enabled = inControl, label = { Text("Start $app") })
+                    AssistChip(onClick = { desktop.launch(app) }, enabled = inControl, label = { Text(stringResource(R.string.panels_desktop_start_app, app)) })
                 }
                 state.windows.forEach { window ->
                     AssistChip(
@@ -194,15 +196,15 @@ private fun Live(state: DesktopState, desktop: ObservedDesktop, screen: Bitmap?,
         Screen(state, screen, drawn, inControl, selecting, desktop, tapped = { typed.value = "" })
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                if (selecting) "Dragging selects and moves things." else "Dragging scrolls.",
+                stringResource(if (selecting) R.string.panels_desktop_drag_selects else R.string.panels_desktop_drag_scrolls),
                 Modifier.weight(1f),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            FilterChip(selected = selecting, onClick = { selecting = !selecting }, label = { Text("Drag to select") })
+            FilterChip(selected = selecting, onClick = { selecting = !selecting }, label = { Text(stringResource(R.string.panels_desktop_drag_to_select)) })
         }
         state.working?.let {
-            Text("The assistant: $it", style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.panels_desktop_working, it), style = MaterialTheme.typography.bodyMedium)
         }
         Typing(typed, inControl, desktop)
         state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -225,11 +227,12 @@ private fun Screen(
 ) {
     if (screen == null || state.screenWidth == 0 || state.screenHeight == 0) {
         Box(Modifier.fillMaxWidth().height(240.dp), contentAlignment = Alignment.Center) {
-            Text("Waiting for the screen…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.panels_desktop_waiting), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         return
     }
     val image = remember(screen) { screen.asImageBitmap() }
+    val description = stringResource(R.string.panels_desktop_screen)
     val driving by rememberUpdatedState(inControl)
     val dragging by rememberUpdatedState(selecting)
     val pixels by rememberUpdatedState(IntSize(screen.width, screen.height))
@@ -244,7 +247,7 @@ private fun Screen(
             .aspectRatio(screen.width.toFloat() / screen.height)
             .clip(MaterialTheme.shapes.medium)
             .alpha(if (inControl) 1f else 0.85f)
-            .semantics { contentDescription = "The room's desktop" }
+            .semantics { contentDescription = description }
             .onSizeChanged { size = it }
             .pointerInput(Unit) {
                 detectTapGestures(
@@ -322,7 +325,7 @@ private fun Typing(typed: MutableState<String>, inControl: Boolean, desktop: Obs
             typed.value = next
         },
         enabled = inControl,
-        label = { Text("Type into the desktop") },
+        label = { Text(stringResource(R.string.panels_desktop_type)) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, autoCorrectEnabled = false, imeAction = ImeAction.Send),
         keyboardActions = KeyboardActions(onSend = {
