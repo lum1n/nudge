@@ -45,11 +45,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.nudge.R
 import app.nudge.explain
+import app.nudge.text
 import java.text.DateFormat
 import java.util.Date
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -113,9 +116,9 @@ fun RoomInfoScreen(
         topBar = {
             TopAppBar(
                 colors = groupedTopBarColors(),
-                title = { Text("About this room") },
+                title = { Text(stringResource(R.string.room_info_title)) },
                 subtitle = { Text(state?.room?.name ?: "") },
-                navigationIcon = { IconButton(onClick = close) { Icon(Icons.Outlined.Close, "Close") } },
+                navigationIcon = { IconButton(onClick = close) { Icon(Icons.Outlined.Close, stringResource(R.string.room_close)) } },
             )
         },
     ) { padding ->
@@ -135,12 +138,12 @@ fun RoomInfoScreen(
             // The panels of the extensions the room has on.
             val on = extensions.orEmpty().filter { it.enabled }.map { it.name }.toSet()
             val panels: List<GroupRow> = listOf(
-                Triple("documents", "Documents", Icons.Outlined.Description to documents),
-                Triple("connectors", "Connectors", Icons.Outlined.Api to connectors),
-                Triple("mcp", "MCP servers", Icons.Outlined.Hub to mcp),
-                Triple("browser", "Browser", Icons.Outlined.Language to browser),
-                Triple("desktop", "Desktop", Icons.Outlined.DesktopWindows to desktop),
-                Triple("terminal", "Terminal", Icons.Outlined.Terminal to terminal),
+                Triple("documents", text(R.string.room_info_documents), Icons.Outlined.Description to documents),
+                Triple("connectors", text(R.string.room_info_connectors), Icons.Outlined.Api to connectors),
+                Triple("mcp", text(R.string.room_info_mcp), Icons.Outlined.Hub to mcp),
+                Triple("browser", text(R.string.room_info_browser), Icons.Outlined.Language to browser),
+                Triple("desktop", text(R.string.room_info_desktop), Icons.Outlined.DesktopWindows to desktop),
+                Triple("terminal", text(R.string.room_info_terminal), Icons.Outlined.Terminal to terminal),
             ).filter { it.first in on }.map { (_, title, action) ->
                 { shapes ->
                     SegmentedListItem(
@@ -151,10 +154,10 @@ fun RoomInfoScreen(
                     ) { Text(title) }
                 }
             }
-            if (panels.isNotEmpty()) group("In this room", panels)
+            if (panels.isNotEmpty()) group(text(R.string.room_info_in_this_room), panels)
 
             group(
-                "Members",
+                text(R.string.room_info_members),
                 state?.room?.members.orEmpty().map { member ->
                     { shapes ->
                         SegmentedListItem(shapes = shapes, leadingContent = { Icon(Icons.Outlined.Person, null) }) {
@@ -165,17 +168,17 @@ fun RoomInfoScreen(
             )
 
             group(
-                "Memory",
+                text(R.string.room_info_memory),
                 state?.memory.orEmpty().map { fact ->
                     { shapes ->
                         SegmentedListItem(
                             shapes = shapes,
                             leadingContent = { Icon(Icons.Outlined.Psychology, null) },
-                            supportingContent = (fact.owner?.let { "${it.displayName}'s own" }
-                                ?: fact.by?.let { "Added by ${it.displayName}" })?.let { { Text(it) } },
+                            supportingContent = (fact.owner?.let { stringResource(R.string.room_info_fact_owner, it.displayName) }
+                                ?: fact.by?.let { stringResource(R.string.room_info_fact_by, it.displayName) })?.let { { Text(it) } },
                             trailingContent = {
                                 IconButton(onClick = { run { client.forget(roomId, fact.id) } }) {
-                                    Icon(Icons.Outlined.Close, "Forget")
+                                    Icon(Icons.Outlined.Close, stringResource(R.string.room_info_forget))
                                 }
                             },
                         ) { Text(fact.text) }
@@ -186,7 +189,7 @@ fun RoomInfoScreen(
                 OutlinedTextField(
                     value = newFact,
                     onValueChange = { newFact = it },
-                    placeholder = { Text("Remember in this room…") },
+                    placeholder = { Text(stringResource(R.string.room_info_remember)) },
                     singleLine = true,
                     shape = MaterialTheme.shapes.large,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -206,24 +209,26 @@ fun RoomInfoScreen(
             val details = personal
             when (state?.room?.kind) {
                 RoomKind.PERSONAL -> group(
-                    "Location",
+                    text(R.string.room_info_location),
                     listOf { shapes ->
                         SegmentedListItem(
                             shapes = shapes,
                             leadingContent = { Icon(Icons.Outlined.LocationOn, null) },
                             supportingContent = {
-                                Text("Turn on Share where I am in your profile to change it.")
+                                Text(stringResource(R.string.room_info_location_profile))
                             },
                         ) {
                             Text(
-                                if (details?.location != null) "The assistant knows where you are here"
-                                else "Not shared",
+                                stringResource(
+                                    if (details?.location != null) R.string.room_info_location_known
+                                    else R.string.room_info_location_not_shared,
+                                ),
                             )
                         }
                     },
                 )
                 RoomKind.SHARED -> if (details != null) group(
-                    "Location",
+                    text(R.string.room_info_location),
                     listOf { shapes ->
                         val on = roomId in details.locationRooms
                         SegmentedListItem(
@@ -235,13 +240,14 @@ fun RoomInfoScreen(
                             leadingContent = { Icon(Icons.Outlined.LocationOn, null) },
                             supportingContent = {
                                 Text(
-                                    "Anyone here can then ask about what is near you. Everyone sees " +
-                                        "that you share it; the place stays hidden from them and the model." +
-                                        if (on && details.location == null) " Your devices haven't shared where you are yet." else "",
+                                    stringResource(
+                                        if (on && details.location == null) R.string.room_info_location_explain_not_yet
+                                        else R.string.room_info_location_explain,
+                                    ),
                                 )
                             },
                             trailingContent = { Switch(checked = on, onCheckedChange = null) },
-                        ) { Text("Let the assistant know where I am here") }
+                        ) { Text(stringResource(R.string.room_info_location_share)) }
                     },
                 )
                 else -> {}
@@ -250,7 +256,7 @@ fun RoomInfoScreen(
             val nudges = state?.nudges.orEmpty()
             if (nudges.isNotEmpty()) {
                 group(
-                    "Nudges",
+                    text(R.string.room_info_nudges),
                     nudges.map { nudge ->
                         { shapes ->
                             SegmentedListItem(
@@ -260,7 +266,7 @@ fun RoomInfoScreen(
                                     Text(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(nudge.fireAt.toLong())))
                                 },
                                 trailingContent = {
-                                    TextButton(onClick = { run { client.cancelNudge(nudge.id) } }) { Text("Cancel") }
+                                    TextButton(onClick = { run { client.cancelNudge(nudge.id) } }) { Text(stringResource(R.string.room_cancel)) }
                                 },
                             ) { Text(nudge.message) }
                         }
@@ -269,7 +275,7 @@ fun RoomInfoScreen(
             }
 
             group(
-                "Extensions",
+                text(R.string.room_info_extensions),
                 extensions.orEmpty().map { ext ->
                     { shapes ->
                         SegmentedListItem(
@@ -291,19 +297,21 @@ fun RoomInfoScreen(
 
             val shown = modelView
             group(
-                "What the model saw",
+                text(R.string.room_info_model_saw),
                 shown?.map { message ->
                     { shapes ->
                         SegmentedListItem(
                             shapes = shapes,
                             overlineContent = {
                                 Text(
-                                    when (message.role) {
-                                        ModelRole.SYSTEM -> "System"
-                                        ModelRole.USER -> "Messages"
-                                        ModelRole.ASSISTANT -> "Assistant"
-                                        ModelRole.TOOL_RESULT -> "Tool result"
-                                    },
+                                    stringResource(
+                                        when (message.role) {
+                                            ModelRole.SYSTEM -> R.string.room_info_role_system
+                                            ModelRole.USER -> R.string.room_info_role_user
+                                            ModelRole.ASSISTANT -> R.string.room_info_role_assistant
+                                            ModelRole.TOOL_RESULT -> R.string.room_info_role_tool
+                                        },
+                                    ),
                                 )
                             },
                         ) { Text(message.text, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall) }
@@ -317,7 +325,7 @@ fun RoomInfoScreen(
                         shapes = ButtonDefaults.shapes(),
                     ) {
                         Icon(Icons.Outlined.Visibility, null, Modifier.padding(end = 8.dp))
-                        Text("Show")
+                        Text(stringResource(R.string.room_info_show))
                     }
                 }
             }

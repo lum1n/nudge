@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Nudge</string>
+    <string name="app_name" translatable="false">Nudge</string>
     <string name="channel_news">Answers and approvals</string>
     <string name="channel_news_description">When an answer is ready or an action waits for your approval</string>
 </resources>

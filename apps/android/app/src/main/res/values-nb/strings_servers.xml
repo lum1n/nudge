@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The servers this device owns, their assistants and Wired; the models' own messages. -->
+<resources>
+    <!-- Servers -->
+    <string name="servers_title">Servere</string>
+    <string name="servers_back">Tilbake</string>
+    <string name="servers_cancel">Avbryt</string>
+    <string name="servers_save">Lagre</string>
+    <string name="servers_remove">Fjern</string>
+    <string name="servers_name">Navn</string>
+    <string name="servers_yours">Dine</string>
+    <string name="servers_new">Ny</string>
+    <string name="servers_exe_summary">En liten server i exe.dev-kontoen din, med en HTTPS-adresse</string>
+    <string name="servers_exe_make">Lag en server på exe.dev</string>
+
+    <!-- One server -->
+    <string name="servers_key_title">%1$s-nøkkel</string>
+    <string name="servers_key_supporting">For alle assistentene her. Blir prøvd én gang før den lagres.</string>
+    <string name="servers_trying">Prøver …</string>
+    <string name="servers_kit_title">Gjenopprettingssett</string>
+    <string name="servers_kit_body">Med det og en sikkerhetskopi kan alt på denne serveren hentes tilbake. Hold det borte fra serveren, og passordfrasen i passordbehandleren din.</string>
+    <string name="servers_kit_passphrase">Passordfrase, minst 8 tegn</string>
+    <string name="servers_kit_subject">Nudge-gjenopprettingssett for %1$s</string>
+    <string name="servers_kit_keep">Ta vare på gjenopprettingssettet</string>
+    <string name="servers_kit_summary">Nøkkelen til sikkerhetskopiene, låst med en passordfrase</string>
+    <string name="servers_make_it">Lag det</string>
+    <string name="servers_making">Lager …</string>
+    <string name="servers_remove_title">Fjerne %1$s?</string>
+    <string name="servers_remove_body">Alt på den forsvinner for godt, og ingenting blir tatt vare på: lag et gjenopprettingssett og last ned en sikkerhetskopi først hvis du trenger det. Skriv %1$s for å fjerne den.</string>
+    <string name="servers_assistants">Assistenter</string>
+    <string name="servers_not_running">Kjører ikke: sjekk loggen til serveren</string>
+    <string name="servers_not_joined">%1$s · Ikke med fra hjemmet</string>
+    <string name="servers_new_assistant">Ny assistent</string>
+    <string name="servers_model_keys">Modellnøkler</string>
+    <string name="servers_key_env">Fra miljøet til serveren (%1$s)</string>
+    <string name="servers_key_server">Satt her, for alle assistentene. Trykk for å endre den.</string>
+    <string name="servers_key_assistant">Satt for én assistent</string>
+    <string name="servers_key_none">Ingen ennå. Trykk for å legge til nøkkelen din.</string>
+    <string name="servers_server">Server</string>
+    <string name="servers_version">Versjon %1$s</string>
+    <string name="servers_update_out">%1$s er ute</string>
+    <string name="servers_update_itself">Installerer nye versjoner selv</string>
+    <string name="servers_update_automatically">Oppdater automatisk</string>
+    <string name="servers_maps">Kart</string>
+    <string name="servers_forget_summary">Enhetene dine slutter å administrere den. Du er fortsatt eieren, og ingenting på serveren endres.</string>
+    <string name="servers_forget">Fjern fra serverne mine</string>
+    <string name="servers_delete_summary">Sletter %1$s fra exe.dev-kontoen din, med assistentene, historikken deres og sikkerhetskopiene på den.</string>
+    <string name="servers_delete">Fjern denne serveren</string>
+
+    <!-- A new assistant -->
+    <string name="servers_ready_for">%1$s er klar for %2$s</string>
+    <string name="servers_ready_send">Send denne lenken, eller be dem skrive koden %1$s i Nudge-appen. Den virker én gang, i ti minutter.</string>
+    <string name="servers_send_link">Send lenken</string>
+    <string name="servers_ready">%1$s er klar</string>
+    <string name="servers_ready_joined">Du ble med fra hjemmet: rommene står ved siden av dine egne.</string>
+    <string name="servers_done">Ferdig</string>
+    <string name="servers_its_name">Navnet</string>
+    <string name="servers_in_address">I adressen: %1$s</string>
+    <string name="servers_model">Modell</string>
+    <string name="servers_provider_needs_key">%1$s (legg til en nøkkel på serveren først)</string>
+    <string name="servers_model_id">Modell-ID</string>
+    <string name="servers_who_for">Hvem er den for?</string>
+    <string name="servers_for_me">Meg: jeg blir med fra hjemmet mitt, og har én innlogging</string>
+    <string name="servers_for_someone">Noen andre: det er hjemmet deres, og de er administrator</string>
+    <string name="servers_their_name">Navnet deres</string>
+    <string name="servers_no_address">Hjemmet ditt har ingen adresse ennå.</string>
+
+    <!-- An assistant -->
+    <string name="servers_delete_assistant_title">Slette %1$s?</string>
+    <string name="servers_delete_assistant_body">Rommene, historikken og minnet forsvinner. Serveren tar vare på en sikkerhetskopi i 30 dager. Skriv %1$s for å slette den.</string>
+    <string name="servers_delete_assistant_confirm">Slett</string>
+    <string name="servers_model_provider">Modell (%1$s)</string>
+    <string name="servers_instructions">Instruksjoner</string>
+    <string name="servers_instructions_supporting">Sagt til modellen før hver samtale</string>
+    <string name="servers_joining">Blir med …</string>
+    <string name="servers_join_from_home">Bli med fra hjemmet</string>
+    <string name="servers_join_explainer">Rommene vises ved siden av hjemmets, og du er administrator der og en eier av denne serveren.</string>
+    <string name="servers_delete_assistant">Slett denne assistenten</string>
+
+    <!-- Wired -->
+    <string name="servers_wired">Wired</string>
+    <string name="servers_wired_older">Nudge på denne serveren er eldre enn Wired. Den installerer nye versjoner selv; se etter en nå.</string>
+    <string name="servers_wired_off_title">Slå av Wired her?</string>
+    <string name="servers_wired_off_root">Serverne dine slutter å nå hverandre gjennom dette nettverket.</string>
+    <string name="servers_wired_off_member">Denne serveren forlater nettverket, og slutter å nå de andre serverne dine gjennom det.</string>
+    <string name="servers_wired_turn_off">Slå av</string>
+    <string name="servers_wired_turn_off_wired">Slå av Wired</string>
+    <string name="servers_wired_use_title">Bruke http://nudge.%1$s.wired som adressen til hjemmet ditt?</string>
+    <string name="servers_wired_use_body">Da når de andre serverne dine hjemmet ditt over Wired. Adressen til hjemmet ditt er hvem det er for andre assistenter: de du ble med i fra hjemmet, må du bli med i på nytt.</string>
+    <string name="servers_wired_use_it">Bruk den</string>
+    <string name="servers_wired_use_address">Bruk som adressen til hjemmet ditt</string>
+    <string name="servers_wired_remove_title">Fjerne %1$s fra nettverket?</string>
+    <string name="servers_wired_remove_body">Den når ikke lenger serverne dine over Wired, og kan ikke bli med igjen med nøkkelen sin. En ny server kan da bruke navnet.</string>
+    <string name="servers_wired_installing">Installerer %1$s. Serveren starter på nytt om et minutt; kom tilbake da.</string>
+    <string name="servers_wired_no_newer">Ingen nyere versjon ennå.</string>
+    <string name="servers_wired_checking">Sjekker …</string>
+    <string name="servers_wired_check_updates">Se etter oppdateringer</string>
+    <string name="servers_wired_checking_wired">Sjekker Wired …</string>
+    <string name="servers_wired_stopped">Wired stoppet.</string>
+    <string name="servers_wired_name_invalid">Små bokstaver, sifre og bindestreker, som box.</string>
+    <string name="servers_wired_reach_at">Andre når den på http://nudge.%1$s.wired</string>
+    <string name="servers_wired_join">Bli med i nettverket til %1$s</string>
+    <string name="servers_wired_hold">Driv et nettverk her</string>
+    <string name="servers_wired_or_join">Eller bli med i et: driv et nettverk på hjemmeserveren din først, og kom så tilbake hit.</string>
+    <string name="servers_wired_no_release">Versjonen på denne serveren har ikke Wired.</string>
+    <string name="servers_wired_starting">Starter Wired …</string>
+    <string name="servers_wired_this_server">denne serveren</string>
+    <string name="servers_wired_holds_as">Driver nettverket som %1$s</string>
+    <string name="servers_wired_in_as">I nettverket som %1$s</string>
+    <string name="servers_wired_member_holds">%1$s (driver det)</string>
+    <string name="servers_wired_remove_hint">Fjern en server fra nettverket når den er borte: en ny server kan da ta navnet.</string>
+    <string name="servers_wired_no_relays">Ingen server med offentlig adresse har blitt med ennå: åpne en av dem her og bli med i dette nettverket.</string>
+    <string name="servers_wired_explainer">Serverne dine når hverandre over Wired, kryptert, uten noen åpen port hjemme: hjemmet driver nettverket, og servere med offentlig adresse blir med i det.</string>
+
+    <!-- The app model -->
+    <string name="model_wired_not_joined">Serveren ble ikke med i Wired-nettverket til hjemmet.</string>
+    <string name="model_wired_still_joining">Serveren holder fortsatt på å bli med i Wired-nettverket til hjemmet. Prøv igjen om et minutt.</string>
+    <string name="model_join_sign_in_first">Logg inn hjemme først.</string>
+    <string name="model_join_is_home">Det er hjemmet ditt.</string>
+    <string name="model_sign_in_expired">Den koden har gått ut eller er brukt, eller ingen av assistentene dine er på %1$s. Last inn innloggingssiden på nytt for å få en ny.</string>
+
+    <!-- Dictation -->
+    <string name="model_dictation_language_not_on_device">Denne telefonen kan ikke gjenkjenne %1$s på egen hånd.</string>
+    <string name="model_dictation_not_on_device">Denne telefonen kan ikke gjenkjenne tale på egen hånd.</string>
+    <string name="model_dictation_no_microphone">Nudge har ikke lov til å bruke mikrofonen. Tillat det i innstillingene på telefonen.</string>
+    <string name="model_dictation_language_not_supported">Denne telefonen kan ikke gjenkjenne %1$s.</string>
+    <string name="model_dictation_language_unavailable">%1$s finnes ikke på denne telefonen ennå. Last det ned i Innstillinger, under Tale.</string>
+    <string name="model_dictation_audio">Mikrofonen virket ikke.</string>
+    <string name="model_dictation_busy">Talegjenkjenningen er opptatt. Prøv igjen om litt.</string>
+    <string name="model_dictation_unreachable">Fikk ikke kontakt med taletjenesten.</string>
+    <string name="model_dictation_stopped">Talegjenkjenningen stoppet (%1$s).</string>
+
+    <!-- Location -->
+    <string name="model_geofences_no_permission">Nudge har ikke lov til å bruke posisjonen til denne telefonen hele tiden. Tillat det i innstillingene på telefonen.</string>
+    <string name="model_location_no_permission">Nudge har ikke lov til å bruke posisjonen til denne telefonen. Tillat det i innstillingene på telefonen.</string>
+    <string name="model_location_off">Posisjon er slått av på denne telefonen.</string>
+</resources>

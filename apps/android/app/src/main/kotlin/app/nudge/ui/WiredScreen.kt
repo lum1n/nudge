@@ -26,11 +26,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.nudge.AppModel
+import app.nudge.R
 import app.nudge.explain
+import app.nudge.text
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -107,7 +110,7 @@ fun WiredCard(model: AppModel, server: String) {
             } catch (error: NudgeException.Status) {
                 if (error.status.toInt() == 404) {
                     state = null
-                    unsupported = "This server's Nudge is older than Wired. It installs new releases itself; check for one now."
+                    unsupported = text(R.string.servers_wired_older)
                 } else {
                     problem = explain(error)
                 }
@@ -128,35 +131,30 @@ fun WiredCard(model: AppModel, server: String) {
     if (turningOff) {
         AlertDialog(
             onDismissRequest = { turningOff = false },
-            title = { Text("Turn off Wired here?") },
+            title = { Text(stringResource(R.string.servers_wired_off_title)) },
             text = {
                 Text(
-                    if (state?.state == WiredStatus.ROOT) {
-                        "Your servers stop reaching each other through this network."
-                    } else {
-                        "This server leaves the network, and stops reaching your other servers through it."
-                    },
+                    stringResource(
+                        if (state?.state == WiredStatus.ROOT) R.string.servers_wired_off_root else R.string.servers_wired_off_member,
+                    ),
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     turningOff = false
                     act { client.disableWired() }
-                }) { Text("Turn off", color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.servers_wired_turn_off), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { turningOff = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { turningOff = false }) { Text(stringResource(R.string.servers_cancel)) } },
         )
     }
 
     usingAddress?.let { name ->
         AlertDialog(
             onDismissRequest = { usingAddress = null },
-            title = { Text("Use http://nudge.$name.wired as your home's address?") },
+            title = { Text(stringResource(R.string.servers_wired_use_title, name)) },
             text = {
-                Text(
-                    "Your other servers then reach your home over Wired. Your home's address is " +
-                        "who it is to other assistants: the ones you joined from home have to be joined again.",
-                )
+                Text(stringResource(R.string.servers_wired_use_body))
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -174,31 +172,31 @@ fun WiredCard(model: AppModel, server: String) {
                             busy = false
                         }
                     }
-                }) { Text("Use it") }
+                }) { Text(stringResource(R.string.servers_wired_use_it)) }
             },
-            dismissButton = { TextButton(onClick = { usingAddress = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { usingAddress = null }) { Text(stringResource(R.string.servers_cancel)) } },
         )
     }
 
     removing?.let { member ->
         AlertDialog(
             onDismissRequest = { removing = null },
-            title = { Text("Remove $member from the network?") },
+            title = { Text(stringResource(R.string.servers_wired_remove_title, member)) },
             text = {
-                Text("It no longer reaches your servers over Wired, and can't join again with its key. A new server can then use the name.")
+                Text(stringResource(R.string.servers_wired_remove_body))
             },
             confirmButton = {
                 TextButton(onClick = {
                     removing = null
                     act { client.removeWiredMember(member) }
-                }) { Text("Remove", color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.servers_remove), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { removing = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { removing = null }) { Text(stringResource(R.string.servers_cancel)) } },
         )
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Section("Wired")
+        Section(stringResource(R.string.servers_wired))
         Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.large) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 val current = state
@@ -215,8 +213,8 @@ fun WiredCard(model: AppModel, server: String) {
                                     try {
                                         val updates = client.checkUpdates()
                                         problem = updates.error
-                                            ?: updates.available?.let { "Installing $it. The server restarts in a minute; come back then." }
-                                            ?: "No newer release yet."
+                                            ?: updates.available?.let { text(R.string.servers_wired_installing, it) }
+                                            ?: text(R.string.servers_wired_no_newer)
                                     } catch (error: CancellationException) {
                                         throw error
                                     } catch (error: Exception) {
@@ -227,37 +225,37 @@ fun WiredCard(model: AppModel, server: String) {
                                 }
                             },
                             modifier = Modifier.fillMaxWidth(),
-                        ) { Text(if (busy) "Checking…" else "Check for updates") }
+                        ) { Text(stringResource(if (busy) R.string.servers_wired_checking else R.string.servers_wired_check_updates)) }
                     }
                     // Not read yet, or reading it failed: the problem below says why.
                     current == null -> if (problem == null) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             LoadingIndicator()
-                            Text("Checking Wired…", Modifier.padding(start = 12.dp))
+                            Text(stringResource(R.string.servers_wired_checking_wired), Modifier.padding(start = 12.dp))
                         }
                     }
                     else -> when (current.state) {
                         WiredStatus.OFF, WiredStatus.ERROR -> {
                             if (current.state == WiredStatus.ERROR) {
-                                Text(current.error ?: "Wired stopped.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(current.error ?: stringResource(R.string.servers_wired_stopped), color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 OutlinedButton(onClick = { turningOff = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-                                    Text("Turn off Wired", color = MaterialTheme.colorScheme.error)
+                                    Text(stringResource(R.string.servers_wired_turn_off_wired), color = MaterialTheme.colorScheme.error)
                                 }
                             }
                             val invalid = picked != null && !nameIsValid
                             OutlinedTextField(
                                 value = name,
                                 onValueChange = { name = it },
-                                label = { Text("Name") },
+                                label = { Text(stringResource(R.string.servers_name)) },
                                 placeholder = { Text(current.name ?: "box") },
                                 singleLine = true,
                                 isError = invalid,
                                 supportingText = {
                                     Text(
                                         if (invalid) {
-                                            "Lowercase letters, digits and dashes, such as box."
+                                            stringResource(R.string.servers_wired_name_invalid)
                                         } else {
-                                            "Others reach it at http://nudge.${picked ?: current.name ?: "box"}.wired"
+                                            stringResource(R.string.servers_wired_reach_at, picked ?: current.name ?: "box")
                                         },
                                     )
                                 },
@@ -272,55 +270,55 @@ fun WiredCard(model: AppModel, server: String) {
                                     onClick = { act { model.servers.client(holder).connectWired(client, server, picked) } },
                                     enabled = !busy && nameIsValid,
                                     modifier = Modifier.fillMaxWidth(),
-                                ) { Text("Join ${java.net.URI(holder).host ?: holder}'s network") }
+                                ) { Text(stringResource(R.string.servers_wired_join, java.net.URI(holder).host ?: holder)) }
                             }
                             OutlinedButton(
                                 onClick = { act { client.enableWired(picked) } },
                                 enabled = !busy && nameIsValid,
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
-                                Text("Hold a network here")
+                                Text(stringResource(R.string.servers_wired_hold))
                             }
                             if (holder == null && isPublic) {
                                 Text(
-                                    "Or join one: hold a network on your home server first, then come back here.",
+                                    stringResource(R.string.servers_wired_or_join),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
                         WiredStatus.UNAVAILABLE ->
-                            Text("This server's release has no Wired.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(stringResource(R.string.servers_wired_no_release), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         WiredStatus.STARTING -> Row(verticalAlignment = Alignment.CenterVertically) {
                             LoadingIndicator()
-                            Text("Starting Wired…", Modifier.padding(start = 12.dp))
+                            Text(stringResource(R.string.servers_wired_starting), Modifier.padding(start = 12.dp))
                         }
                         WiredStatus.ROOT, WiredStatus.MEMBER -> {
-                            val me = current.name ?: "this server"
+                            val me = current.name ?: stringResource(R.string.servers_wired_this_server)
                             Text(
-                                if (current.state == WiredStatus.ROOT) "Holds the network as $me" else "In the network as $me",
+                                stringResource(if (current.state == WiredStatus.ROOT) R.string.servers_wired_holds_as else R.string.servers_wired_in_as, me),
                                 color = MaterialTheme.colorScheme.primary,
                             )
                             current.members.filter { it.name != current.name }.forEach { member ->
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                    Text(if (member.anchor) "${member.name} (holds it)" else member.name, Modifier.weight(1f))
+                                    Text(if (member.anchor) stringResource(R.string.servers_wired_member_holds, member.name) else member.name, Modifier.weight(1f))
                                     if (current.state == WiredStatus.ROOT) {
                                         TextButton(onClick = { removing = member.name }, enabled = !busy) {
-                                            Text("Remove", color = MaterialTheme.colorScheme.error)
+                                            Text(stringResource(R.string.servers_remove), color = MaterialTheme.colorScheme.error)
                                         }
                                     }
                                 }
                             }
                             if (current.state == WiredStatus.ROOT && current.members.size > 1) {
                                 Text(
-                                    "Remove a server from the network when it's gone: a new server can then take its name.",
+                                    stringResource(R.string.servers_wired_remove_hint),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                             if (current.state == WiredStatus.ROOT && current.relays.isEmpty()) {
                                 Text(
-                                    "No server with a public address has joined yet: open one of them here and join this network.",
+                                    stringResource(R.string.servers_wired_no_relays),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -328,19 +326,19 @@ fun WiredCard(model: AppModel, server: String) {
                             current.name?.let { name ->
                                 SelectionContainer {
                                     Text(
-                                        "Others reach it at http://nudge.$name.wired",
+                                        stringResource(R.string.servers_wired_reach_at, name),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
                                 if (isHome && !homeOnWired) {
                                     OutlinedButton(onClick = { usingAddress = name }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-                                        Text("Use as your home's address")
+                                        Text(stringResource(R.string.servers_wired_use_address))
                                     }
                                 }
                             }
                             OutlinedButton(onClick = { turningOff = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-                                Text("Turn off Wired", color = MaterialTheme.colorScheme.error)
+                                Text(stringResource(R.string.servers_wired_turn_off_wired), color = MaterialTheme.colorScheme.error)
                             }
                         }
                     }
@@ -349,8 +347,7 @@ fun WiredCard(model: AppModel, server: String) {
                     Text(it, color = if (unsupported == null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Text(
-                    "Your servers reach each other over Wired, encrypted, with no port open at home: home holds the network, " +
-                        "and servers with a public address join it.",
+                    stringResource(R.string.servers_wired_explainer),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

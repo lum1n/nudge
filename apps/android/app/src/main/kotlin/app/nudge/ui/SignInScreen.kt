@@ -41,6 +41,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -48,7 +49,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.nudge.AppModel
+import app.nudge.R
 import app.nudge.explain
+import app.nudge.text
 import kotlinx.coroutines.launch
 import nudge.ffi.Assistant
 import nudge.ffi.listAssistants
@@ -78,7 +81,7 @@ fun SignInScreen(model: AppModel, askForNotifications: () -> Unit, setUp: () -> 
             val found = listAssistants(address)
             assistants = found
             if (found.none { it.name == assistant }) assistant = found.firstOrNull()?.name
-            problem = if (found.isEmpty()) "That server has no assistants." else null
+            problem = if (found.isEmpty()) text(R.string.setup_no_assistants) else null
             return found
         } catch (error: Exception) {
             problem = explain(error)
@@ -138,7 +141,7 @@ fun SignInScreen(model: AppModel, askForNotifications: () -> Unit, setUp: () -> 
                 }
                 Text("Nudge", style = MaterialTheme.typography.displayMediumEmphasized)
                 Text(
-                    "Pair this device with your Nudge server.",
+                    stringResource(R.string.setup_pair_intro),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -149,7 +152,7 @@ fun SignInScreen(model: AppModel, askForNotifications: () -> Unit, setUp: () -> 
                         server = it
                         assistants = emptyList()
                     },
-                    label = { Text("Server") },
+                    label = { Text(stringResource(R.string.setup_server)) },
                     placeholder = { Text("https://nudge.example") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
@@ -158,7 +161,7 @@ fun SignInScreen(model: AppModel, askForNotifications: () -> Unit, setUp: () -> 
                     modifier = Modifier.fillMaxWidth(),
                 )
                 if (assistants.size > 1) {
-                    Text("Assistant", style = MaterialTheme.typography.labelLarge)
+                    Text(stringResource(R.string.setup_assistant), style = MaterialTheme.typography.labelLarge)
                     assistants.forEach { option ->
                         Row(
                             Modifier
@@ -174,7 +177,7 @@ fun SignInScreen(model: AppModel, askForNotifications: () -> Unit, setUp: () -> 
                 OutlinedTextField(
                     value = code,
                     onValueChange = { code = it },
-                    label = { Text("Pairing code") },
+                    label = { Text(stringResource(R.string.setup_pairing_code)) },
                     placeholder = { Text("XXXX-XXXX") },
                     singleLine = true,
                     textStyle = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace),
@@ -185,7 +188,7 @@ fun SignInScreen(model: AppModel, askForNotifications: () -> Unit, setUp: () -> 
                     ),
                     keyboardActions = KeyboardActions(onDone = { signIn() }),
                     supportingText = {
-                        Text("Ask an admin of the assistant for one, or for its QR code: they make it under People and devices in their settings, in the app or on the web. It works once, for ten minutes. A token (nudge_…) works here too.")
+                        Text(stringResource(R.string.setup_pairing_hint))
                     },
                     shape = MaterialTheme.shapes.large,
                     modifier = Modifier.fillMaxWidth(),
@@ -201,16 +204,16 @@ fun SignInScreen(model: AppModel, askForNotifications: () -> Unit, setUp: () -> 
                         contentPadding = ButtonDefaults.contentPaddingFor(ButtonDefaults.MediumContainerHeight),
                         modifier = Modifier.fillMaxWidth().heightIn(min = ButtonDefaults.MediumContainerHeight),
                     ) {
-                        Text("Sign in", style = ButtonDefaults.textStyleFor(ButtonDefaults.MediumContainerHeight))
+                        Text(stringResource(R.string.setup_sign_in), style = ButtonDefaults.textStyleFor(ButtonDefaults.MediumContainerHeight))
                     }
                 }
                 Text(
-                    "No server yet?",
+                    stringResource(R.string.setup_no_server),
                     style = MaterialTheme.typography.titleSmall,
                     modifier = Modifier.padding(top = 16.dp),
                 )
-                OutlinedButton(onClick = exe, modifier = Modifier.fillMaxWidth()) { Text("Make one on exe.dev") }
-                OutlinedButton(onClick = setUp, modifier = Modifier.fillMaxWidth()) { Text("Set up one I started") }
+                OutlinedButton(onClick = exe, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.setup_make_on_exe)) }
+                OutlinedButton(onClick = setUp, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.setup_set_up_started)) }
             }
         }
     }

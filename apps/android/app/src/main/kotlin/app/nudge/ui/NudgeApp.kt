@@ -21,12 +21,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.nudge.AppModel
+import app.nudge.R
 import app.nudge.RoomRef
 import app.nudge.Session
 import app.nudge.explain
 import app.nudge.hostOf
+import app.nudge.text
 import kotlinx.coroutines.launch
 import nudge.ffi.ConnectionStatus
 
@@ -110,7 +113,7 @@ private fun SignedIn(model: AppModel, session: Session) {
     LaunchedEffect(connection) {
         val status = connection
         if (status is ConnectionStatus.Closed && status.code.toInt() == 4401) {
-            model.signOut("This device was signed out. Ask for a new pairing code.")
+            model.signOut(text(R.string.room_signed_out_device))
         }
     }
     // A tapped notification picks a room; the scaffold's own navigation tells the model which is open.
@@ -124,15 +127,14 @@ private fun SignedIn(model: AppModel, session: Session) {
     link?.let { pairing ->
         AlertDialog(
             onDismissRequest = { model.pendingLink.value = null },
-            title = { Text("Sign in with link?") },
+            title = { Text(stringResource(R.string.room_link_title)) },
             text = {
                 Text(
-                    "To use the link for ${pairing.assistant} on ${pairing.server}, this device signs out of " +
-                        "${session.account.assistantName} first.",
+                    stringResource(R.string.room_link_body, pairing.assistant, pairing.server, session.account.assistantName),
                 )
             },
-            confirmButton = { TextButton(onClick = { scope.launch { model.signOut() } }) { Text("Sign out") } },
-            dismissButton = { TextButton(onClick = { model.pendingLink.value = null }) { Text("Cancel") } },
+            confirmButton = { TextButton(onClick = { scope.launch { model.signOut() } }) { Text(stringResource(R.string.room_sign_out)) } },
+            dismissButton = { TextButton(onClick = { model.pendingLink.value = null }) { Text(stringResource(R.string.room_cancel)) } },
         )
     }
 
@@ -222,14 +224,13 @@ private fun JoinDialog(model: AppModel, session: Session, invite: nudge.client.J
     val close = { model.pendingJoin.value = null }
     AlertDialog(
         onDismissRequest = { if (!busy) close() },
-        title = { Text("Join ${invite.assistant}?") },
+        title = { Text(stringResource(R.string.room_join_title, invite.assistant)) },
         text = {
             Text(
-                problem ?: (
-                    "${session.account.assistantName}, your home, tells ${invite.assistant} on " +
-                        "${java.net.URI(invite.server).host} who you are: your name, picture, time zone and language. " +
-                        "Its rooms show up beside your own."
-                    ),
+                problem ?: stringResource(
+                    R.string.room_join_body,
+                    session.account.assistantName, invite.assistant, "${java.net.URI(invite.server).host}",
+                ),
             )
         },
         confirmButton = {
@@ -248,9 +249,9 @@ private fun JoinDialog(model: AppModel, session: Session, invite: nudge.client.J
                         }
                     }
                 },
-            ) { Text(if (problem == null) "Join" else "Try again") }
+            ) { Text(stringResource(if (problem == null) R.string.room_join else R.string.room_try_again)) }
         },
-        dismissButton = { TextButton(enabled = !busy, onClick = close) { Text("Cancel") } },
+        dismissButton = { TextButton(enabled = !busy, onClick = close) { Text(stringResource(R.string.room_cancel)) } },
     )
 }
 
@@ -264,20 +265,17 @@ private fun SignInDialog(model: AppModel, browser: nudge.client.SignInLink) {
     val close = { model.pendingSignIn.value = null }
     AlertDialog(
         onDismissRequest = { if (!busy) close() },
-        title = { Text(if (signedIn == null) "Sign in on the web?" else "Signed in") },
+        title = { Text(stringResource(if (signedIn == null) R.string.room_web_sign_in_title else R.string.room_web_signed_in)) },
         text = {
             Text(
-                signedIn?.let { "The browser is signed in to $it as you." }
+                signedIn?.let { stringResource(R.string.room_web_signed_in_body, it) }
                     ?: problem
-                    ?: (
-                        "The browser that shows this code on ${hostOf(browser.server)} gets signed in as you. " +
-                            "Only go on if you opened that page yourself."
-                        ),
+                    ?: stringResource(R.string.room_web_sign_in_body, "${hostOf(browser.server)}"),
             )
         },
         confirmButton = {
             if (signedIn != null) {
-                TextButton(onClick = close) { Text("Done") }
+                TextButton(onClick = close) { Text(stringResource(R.string.room_done)) }
             } else {
                 TextButton(
                     enabled = !busy,
@@ -293,11 +291,11 @@ private fun SignInDialog(model: AppModel, browser: nudge.client.SignInLink) {
                             }
                         }
                     },
-                ) { Text(if (problem == null) "Sign in" else "Try again") }
+                ) { Text(stringResource(if (problem == null) R.string.room_sign_in else R.string.room_try_again)) }
             }
         },
         dismissButton = {
-            if (signedIn == null) TextButton(enabled = !busy, onClick = close) { Text("Cancel") }
+            if (signedIn == null) TextButton(enabled = !busy, onClick = close) { Text(stringResource(R.string.room_cancel)) }
         },
     )
 }

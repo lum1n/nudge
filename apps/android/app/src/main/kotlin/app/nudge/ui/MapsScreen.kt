@@ -38,8 +38,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import app.nudge.R
 import app.nudge.explain
+import app.nudge.text
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import nudge.ffi.GeoRegion
@@ -52,24 +55,36 @@ import nudge.ffi.ServerClient
 /** One line on the map's state, for the server's screen. */
 fun mapsSummary(status: GeoStatus): String = when (status.state) {
     GeoState.OFF ->
-        if (status.follow) "Fetches the region someone is in, anywhere in the world" else "Off"
+        text(if (status.follow) R.string.setup_maps_follow_summary else R.string.setup_maps_off)
     GeoState.WORKING -> status.regions.firstOrNull { it.state != GeoRegionState.READY }
-        ?.let { "Getting ${it.name} ready" + (it.progress?.let { p -> " (${(p * 100).toInt()}%)" } ?: "…") }
-        ?: "Getting ready…"
+        ?.let { region ->
+            region.progress?.let { text(R.string.setup_maps_getting_named_ready_progress, region.name, (it * 100).toInt()) }
+                ?: text(R.string.setup_maps_getting_named_ready, region.name)
+        }
+        ?: text(R.string.setup_maps_getting_ready)
     GeoState.READY -> status.regions.filter { it.state == GeoRegionState.READY }.joinToString { it.name }
-    GeoState.FAILED -> status.error ?: status.regions.firstNotNullOfOrNull { it.error } ?: "Failed"
+    GeoState.FAILED -> status.error ?: status.regions.firstNotNullOfOrNull { it.error } ?: text(R.string.setup_maps_failed)
 }
 
 private fun gigabytes(bytes: Double) = "%.1f GB".format(bytes / (1 shl 30))
 
 private fun regionNote(region: GeoRegionStatus): String = when (region.state) {
-    GeoRegionState.WAITING -> "Waiting"
-    GeoRegionState.DOWNLOADING, GeoRegionState.IMPORTING ->
-        "Getting ${region.step ?: "it"} ready" + (region.progress?.let { " (${(it * 100).toInt()}%)" } ?: "…")
+    GeoRegionState.WAITING -> text(R.string.setup_maps_waiting)
+    // The step comes from the server, in its words.
+    GeoRegionState.DOWNLOADING, GeoRegionState.IMPORTING -> {
+        val percent = region.progress?.let { (it * 100).toInt() }
+        val step = region.step
+        when {
+            step != null && percent != null -> text(R.string.setup_maps_getting_named_ready_progress, step, percent)
+            step != null -> text(R.string.setup_maps_getting_named_ready, step)
+            percent != null -> text(R.string.setup_maps_getting_it_ready_progress, percent)
+            else -> text(R.string.setup_maps_getting_it_ready)
+        }
+    }
     GeoRegionState.READY ->
         (region.bytes?.let { gigabytes(it) + ", " } ?: "") +
-            if (region.byOwner) "kept" else "because someone was there; dropped first to make room"
-    GeoRegionState.FAILED -> region.error ?: "Failed"
+            text(if (region.byOwner) R.string.setup_maps_kept else R.string.setup_maps_fetched)
+    GeoRegionState.FAILED -> region.error ?: text(R.string.setup_maps_failed)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -114,8 +129,8 @@ fun MapsScreen(client: ServerClient, close: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Maps") },
-                navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                title = { Text(stringResource(R.string.setup_maps)) },
+                navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.setup_back)) } },
             )
         },
     ) { padding ->
@@ -125,21 +140,20 @@ fun MapsScreen(client: ServerClient, close: () -> Unit) {
         ) {
             item {
                 Text(
-                    "Addresses, places and routes for reminders when someone gets somewhere, from OpenStreetMap. " +
-                        "The server downloads the map of each region and keeps it, so where people go stays here.",
+                    stringResource(R.string.setup_maps_intro),
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
             if (current == null) {
-                item { Text(problem ?: "Loading…") }
+                item { Text(problem ?: stringResource(R.string.setup_loading)) }
                 return@LazyColumn
             }
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Follow people")
+                        Text(stringResource(R.string.setup_maps_follow))
                         Text(
-                            "Fetch the region someone's phone says they are in, anywhere in the world. A trip abroad takes a few minutes to an hour to be ready.",
+                            stringResource(R.string.setup_maps_follow_hint),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -150,7 +164,7 @@ fun MapsScreen(client: ServerClient, close: () -> Unit) {
             item {
                 var limit by remember(current.limitGb) { mutableFloatStateOf(current.limitGb.toFloat()) }
                 Column {
-                    Text("At most ${limit.toInt()} GB on disk (${gigabytes(current.usedBytes)} now)")
+                    Text(stringResource(R.string.setup_maps_limit, limit.toInt(), gigabytes(current.usedBytes)))
                     Slider(
                         value = limit,
                         onValueChange = { limit = it },
@@ -174,13 +188,13 @@ fun MapsScreen(client: ServerClient, close: () -> Unit) {
                         val owners = current.regions.filter { it.byOwner && it.id != region.id }.map { it.id }
                         // A region fetched for someone becomes one an owner keeps, or goes.
                         act { client.configureGeo(if (region.byOwner) owners else owners + region.id, null, null) }
-                    }) { Text(if (region.byOwner) "Remove" else "Keep") }
+                    }) { Text(stringResource(if (region.byOwner) R.string.setup_maps_remove else R.string.setup_maps_keep)) }
                 }
             }
             item {
                 TextButton(onClick = { adding = true }) {
                     Icon(Icons.Outlined.Add, null)
-                    Text("Add a region", Modifier.padding(start = 8.dp))
+                    Text(stringResource(R.string.setup_maps_add), Modifier.padding(start = 8.dp))
                 }
             }
             problem?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error) } }
@@ -204,13 +218,13 @@ private fun AddRegionDialog(client: ServerClient, have: Set<String>, pick: (GeoR
         .take(50)
     AlertDialog(
         onDismissRequest = close,
-        title = { Text("Add a region") },
+        title = { Text(stringResource(R.string.setup_maps_add)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Country, state or province") }, singleLine = true)
+                OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text(stringResource(R.string.setup_maps_search)) }, singleLine = true)
                 when {
                     problem != null -> Text(problem!!, color = MaterialTheme.colorScheme.error)
-                    regions == null -> Text("Loading the world's regions…")
+                    regions == null -> Text(stringResource(R.string.setup_maps_loading_regions))
                     else -> LazyColumn(Modifier.heightIn(max = 360.dp)) {
                         items(shown, key = { it.id }) { region ->
                             Column(Modifier.fillMaxWidth().clickable { pick(region) }.padding(vertical = 8.dp)) {
@@ -224,6 +238,6 @@ private fun AddRegionDialog(client: ServerClient, have: Set<String>, pick: (GeoR
                 }
             }
         },
-        confirmButton = { TextButton(onClick = close) { Text("Close") } },
+        confirmButton = { TextButton(onClick = close) { Text(stringResource(R.string.setup_close)) } },
     )
 }

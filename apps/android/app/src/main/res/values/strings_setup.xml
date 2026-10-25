@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Setting up a server, signing in, exe.dev, the home's federation, maps and the robot. -->
+<resources>
+    <string name="setup_back">Back</string>
+    <string name="setup_close">Close</string>
+    <string name="setup_send">Send</string>
+    <string name="setup_loading">Loading…</string>
+    <string name="setup_server">Server</string>
+
+    <!-- The setup wizard. -->
+    <string name="setup_title">Set up Nudge</string>
+    <string name="setup_code_wrong">That isn\'t the setup code.</string>
+    <string name="setup_closed">Setup closed: the server is set up already, or took too many wrong codes. Restart it for a new code.</string>
+    <string name="setup_set_up_already">That server is set up already: sign in to it instead.</string>
+    <string name="setup_address_title">Where is the server?</string>
+    <string name="setup_address_hint">A server that isn\'t set up yet prints its address and a setup code when it starts.</string>
+    <string name="setup_code_title">Its setup code</string>
+    <string name="setup_code">Setup code</string>
+    <string name="setup_code_hint">The server printed it when it started.</string>
+    <string name="setup_name_title">Name your assistant</string>
+    <string name="setup_name">Its name</string>
+    <string name="setup_name_hint">What it calls itself. You can change it later.</string>
+    <string name="setup_slug">In its address</string>
+    <string name="setup_slug_hint">Part of every address of the people here, so this one stays.</string>
+    <string name="setup_model_title">Choose its model</string>
+    <string name="setup_own_key">With your own API key</string>
+    <string name="setup_local">Running on the server; no key</string>
+    <string name="setup_model">Model</string>
+    <string name="setup_api_key">%1$s API key</string>
+    <string name="setup_key_hint">Kept encrypted on the server, never shown again.</string>
+    <string name="setup_get_key">Get a key</string>
+    <string name="setup_you_title">And you?</string>
+    <string name="setup_your_name">Your name</string>
+    <string name="setup_your_name_hint">You will be %1$s\'s first person, its admin, and this server\'s owner.</string>
+    <string name="setup_the_assistant">the assistant</string>
+    <string name="setup_backups">Back up every night, keeping two weeks, beside the data</string>
+    <string name="setup_cluster">Part of my cluster</string>
+    <string name="setup_cluster_none">Your home has no federation, so this server stays on its own: you sign in to it as its first person. Turn federation on at home to join servers to it.</string>
+    <string name="setup_cluster_joined">Joined from your home: its rooms show beside your home\'s, and your other devices list the server.</string>
+    <string name="setup_cluster_alone">On its own, without federation for now: you are its first person, as yourself from home, so you can join it to your cluster later. Until then it never talks to your other servers.</string>
+    <string name="setup_set_up">Set up</string>
+    <string name="setup_continue">Continue</string>
+
+    <!-- Pairing. -->
+    <string name="setup_no_assistants">That server has no assistants.</string>
+    <string name="setup_pair_intro">Pair this device with your Nudge server.</string>
+    <string name="setup_assistant">Assistant</string>
+    <string name="setup_pairing_code">Pairing code</string>
+    <string name="setup_pairing_hint">Ask an admin of the assistant for one, or for its QR code: they make it under People and devices in their settings, in the app or on the web. It works once, for ten minutes. A token (nudge_…) works here too.</string>
+    <string name="setup_sign_in">Sign in</string>
+    <string name="setup_no_server">No server yet?</string>
+    <string name="setup_make_on_exe">Make one on exe.dev</string>
+    <string name="setup_set_up_started">Set up one I started</string>
+
+    <!-- The home's federation. -->
+    <string name="setup_home_first">Your home first</string>
+    <string name="setup_federation_turning_on">Turning it on…</string>
+    <string name="setup_federation_turn_on">Turn on federation at home</string>
+    <string name="setup_federation_reach">Other servers will reach your home at %1$s.</string>
+
+    <!-- A server on exe.dev. -->
+    <string name="setup_exe_checking">Checking the token…</string>
+    <string name="setup_exe_making">Making the server, then waiting for it to start. This takes a minute or two.</string>
+    <string name="setup_exe_title">A server on exe.dev</string>
+    <string name="setup_exe_intro">Nudge makes a small server in your exe.dev account, billed to it, with an HTTPS address of its own.</string>
+    <string name="setup_exe_step_sign_in">1. Sign in to exe.dev</string>
+    <string name="setup_exe_signed_in">Signed in to exe.dev</string>
+    <string name="setup_exe_sign_in_again">Sign in again</string>
+    <string name="setup_exe_sign_in">Sign in to exe.dev</string>
+    <string name="setup_exe_new">New to exe.dev? Signing in makes your account: it asks for your email and sends a link. The app keeps its key and token on this device; they can make and remove servers, nothing else.</string>
+    <string name="setup_exe_paste">Or paste a token</string>
+    <string name="setup_exe_run_this">Run this once on a computer with your exe.dev key, and paste what it prints:</string>
+    <string name="setup_exe_copy">Copy the command</string>
+    <string name="setup_exe_token">exe.dev token</string>
+    <string name="setup_exe_step_name">2. Name the server</string>
+    <string name="setup_exe_server_name">Server name</string>
+    <string name="setup_exe_address">Its address will be https://%1$s.exe.xyz</string>
+    <string name="setup_exe_join_wired">Join %1$s\'s Wired network</string>
+    <string name="setup_exe_join_wired_hint">Then it and your home reach each other, with no port open at home.</string>
+    <string name="setup_exe_make">Make the server</string>
+
+    <!-- Signing in to exe.dev. -->
+    <string name="setup_exe_ended">exe.dev ended the session.</string>
+    <string name="setup_exe_no_connect">Couldn\'t connect to exe.dev.</string>
+    <string name="setup_exe_connecting">Connecting to exe.dev…</string>
+    <string name="setup_exe_email">Your email, or what exe.dev asks</string>
+    <string name="setup_exe_login_hint">exe.dev asks for your email and sends you a link. Open it, then come back: the app is signed in once exe.dev has your key.</string>
+    <string name="setup_exe_start_again">Start again</string>
+
+    <!-- Maps. -->
+    <string name="setup_maps">Maps</string>
+    <string name="setup_maps_follow_summary">Fetches the region someone is in, anywhere in the world</string>
+    <string name="setup_maps_off">Off</string>
+    <string name="setup_maps_getting_named_ready">Getting %1$s ready…</string>
+    <string name="setup_maps_getting_named_ready_progress">Getting %1$s ready (%2$d%%)</string>
+    <string name="setup_maps_getting_it_ready">Getting it ready…</string>
+    <string name="setup_maps_getting_it_ready_progress">Getting it ready (%1$d%%)</string>
+    <string name="setup_maps_getting_ready">Getting ready…</string>
+    <string name="setup_maps_failed">Failed</string>
+    <string name="setup_maps_waiting">Waiting</string>
+    <string name="setup_maps_kept">kept</string>
+    <string name="setup_maps_fetched">because someone was there; dropped first to make room</string>
+    <string name="setup_maps_intro">Addresses, places and routes for reminders when someone gets somewhere, from OpenStreetMap. The server downloads the map of each region and keeps it, so where people go stays here.</string>
+    <string name="setup_maps_follow">Follow people</string>
+    <string name="setup_maps_follow_hint">Fetch the region someone\'s phone says they are in, anywhere in the world. A trip abroad takes a few minutes to an hour to be ready.</string>
+    <string name="setup_maps_limit">At most %1$d GB on disk (%2$s now)</string>
+    <string name="setup_maps_remove">Remove</string>
+    <string name="setup_maps_keep">Keep</string>
+    <string name="setup_maps_add">Add a region</string>
+    <string name="setup_maps_search">Country, state or province</string>
+    <string name="setup_maps_loading_regions">Loading the world\'s regions…</string>
+
+    <!-- The robot. -->
+    <string name="setup_robot">Robot</string>
+    <string name="setup_robot_unsaved">Unsaved changes</string>
+    <string name="setup_robot_discard">Discard</string>
+    <string name="setup_robot_saving">Saving…</string>
+    <string name="setup_robot_save">Save</string>
+    <string name="setup_robot_intro">How the assistant looks to everyone who uses it, in every app.</string>
+    <string name="setup_robot_start_from">Start from</string>
+    <string name="setup_robot_colours">Colours</string>
+    <string name="setup_robot_ribbon">Ribbon</string>
+    <string name="setup_robot_ribbon_end">Ribbon end</string>
+    <string name="setup_robot_eyes">Eyes</string>
+    <string name="setup_robot_sparks">Sparks</string>
+    <string name="setup_robot_wears">Wears</string>
+    <string name="setup_robot_reset">Back to the app icon\'s</string>
+    <string name="setup_robot_preset_nudge">Nudge</string>
+    <string name="setup_robot_preset_ember">Ember</string>
+    <string name="setup_robot_preset_moss">Moss</string>
+    <string name="setup_robot_preset_grape">Grape</string>
+    <string name="setup_robot_preset_graphite">Graphite</string>
+    <string name="setup_robot_eyes_pill">Pill</string>
+    <string name="setup_robot_eyes_round">Round</string>
+    <string name="setup_robot_eyes_square">Square</string>
+    <string name="setup_robot_eyes_wide">Wide</string>
+    <string name="setup_robot_wears_none">None</string>
+    <string name="setup_robot_wears_antenna">Antenna</string>
+    <string name="setup_robot_wears_headphones">Headphones</string>
+    <string name="setup_robot_wears_sprout">Sprout</string>
+    <string name="setup_robot_wears_crown">Crown</string>
+</resources>

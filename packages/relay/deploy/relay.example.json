@@ -1,0 +1,10 @@
+{
+  "apns": {
+    "keyFile": "AuthKey.p8",
+    "keyId": "ABC123DEFG",
+    "teamId": "XYZ987TEAM",
+    "bundleId": "app.nudge"
+  },
+  "fcm": { "serviceAccountFile": "firebase-service-account.json" },
+  "trustProxy": true
+}

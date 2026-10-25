@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useEffect, useState } from "react";
 import { forgetToken } from "../../api.ts";
 import { type ListsSocket, type PanelList, useLists } from "../../lists.ts";
+import { m } from "../../i18n/index.ts";
 
 export const Route = createFileRoute("/$assistant/$room_/lists")({ component: Lists });
 
@@ -35,31 +36,30 @@ function Lists() {
   return (
     <section className="mx-auto flex max-w-3xl flex-col gap-3 p-3 sm:p-4">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-        <h2 className="text-lg font-medium">Lists</h2>
+        <h2 className="text-lg font-medium">{m.panels.lists.title}</h2>
         <Link
           to="/$assistant/$room"
           params={{ assistant, room }}
           className="text-sm text-stone-600 hover:underline"
         >
-          Back to the room
+          {m.panels.backToRoom}
         </Link>
       </div>
-      <p className="text-sm text-stone-600">
-        Shared with everyone in the room, and with the assistant: ask it to add to a list, or tick
-        things off here.
-      </p>
+      <p className="text-sm text-stone-600">{m.panels.lists.intro}</p>
       {state.status === "closed" ? (
         <p className="text-red-700">
           {state.closeCode === NOT_FOUND
-            ? "This assistant has no lists extension here, or you are not in this room."
-            : `Disconnected${state.error ? `: ${state.error}` : ""}.`}
+            ? m.panels.lists.notFound
+            : m.panels.disconnected(state.error)}
         </p>
       ) : socket === undefined || state.view === undefined ? (
-        <p className="text-stone-500">Connecting…</p>
+        <p className="text-stone-500">{m.panels.connecting}</p>
       ) : (
         <>
           {state.error ? <p className="text-sm text-red-700">{state.error}</p> : null}
-          {lists.length === 0 && !pending && <p className="text-stone-500">No lists yet.</p>}
+          {lists.length === 0 && !pending && (
+            <p className="text-stone-500">{m.panels.lists.empty}</p>
+          )}
           {lists.map((list) => (
             <ListCard key={list.name} list={list} socket={socket} />
           ))}
@@ -68,11 +68,11 @@ function Lists() {
             <input
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              placeholder="New list, like shopping"
+              placeholder={m.panels.lists.newList}
               className="flex-1 rounded border border-stone-300 px-2 py-1 text-sm"
             />
             <button type="submit" className="rounded border px-3 py-1 text-sm">
-              Start list
+              {m.panels.lists.start}
             </button>
           </form>
         </>
@@ -103,19 +103,19 @@ function ListCard({ list, socket }: { list: PanelList; socket: ListsSocket }) {
               onClick={() => socket.send({ type: "clearDone", list: list.name })}
               className="hover:underline"
             >
-              Clear {done} done
+              {m.panels.lists.clearDone(done)}
             </button>
           )}
           {list.items.length > 0 && (
             <button
               type="button"
               onClick={() => {
-                if (confirm(`Delete the list "${list.name}"?`))
+                if (confirm(m.panels.lists.confirmDelete(list.name)))
                   socket.send({ type: "deleteList", list: list.name });
               }}
               className="hover:underline"
             >
-              Delete list
+              {m.panels.lists.deleteList}
             </button>
           )}
         </div>
@@ -134,9 +134,9 @@ function ListCard({ list, socket }: { list: PanelList; socket: ListsSocket }) {
               type="button"
               onClick={() => socket.send({ type: "remove", list: list.name, id: item.id })}
               className="ml-auto text-xs text-stone-400 opacity-0 group-hover:opacity-100 hover:text-red-700"
-              aria-label={`Remove ${item.text}`}
+              aria-label={m.panels.lists.removeItem(item.text)}
             >
-              Remove
+              {m.common.remove}
             </button>
           </li>
         ))}
@@ -145,7 +145,7 @@ function ListCard({ list, socket }: { list: PanelList; socket: ListsSocket }) {
         <input
           value={text}
           onChange={(event) => setText(event.target.value)}
-          placeholder="Add an item"
+          placeholder={m.panels.lists.addItem}
           className="flex-1 rounded border border-stone-300 px-2 py-1 text-sm"
         />
         <button
@@ -153,7 +153,7 @@ function ListCard({ list, socket }: { list: PanelList; socket: ListsSocket }) {
           disabled={text.trim() === ""}
           className="rounded bg-stone-900 px-3 py-1 text-sm text-white disabled:opacity-50"
         >
-          Add
+          {m.panels.lists.add}
         </button>
       </form>
     </div>

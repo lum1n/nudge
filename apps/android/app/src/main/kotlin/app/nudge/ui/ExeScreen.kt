@@ -45,12 +45,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import app.nudge.AppModel
+import app.nudge.R
 import app.nudge.explain
+import app.nudge.text
 import kotlinx.coroutines.launch
 import nudge.ffi.ExeClient
 import nudge.ffi.exeTokenCommand
@@ -86,10 +89,10 @@ fun ExeScreen(model: AppModel, close: () -> Unit, ready: (SetupStart) -> Unit) {
         problem = null
         try {
             val exe = ExeClient(token.trim())
-            progress = "Checking the token…"
+            progress = text(R.string.setup_exe_checking)
             exe.whoami()
             model.servers.exeToken = token.trim()
-            progress = "Making the server, then waiting for it to start. This takes a minute or two."
+            progress = text(R.string.setup_exe_making)
             val vmName = slugOf(name).ifEmpty { "nudge" }
             val home = wiredHome
             val launched = if (joinWired && home != null) {
@@ -123,8 +126,8 @@ fun ExeScreen(model: AppModel, close: () -> Unit, ready: (SetupStart) -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("A server on exe.dev") },
-                navigationIcon = { IconButton(onClick = close, enabled = !busy) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                title = { Text(stringResource(R.string.setup_exe_title)) },
+                navigationIcon = { IconButton(onClick = close, enabled = !busy) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.setup_back)) } },
             )
         },
     ) { padding ->
@@ -134,34 +137,34 @@ fun ExeScreen(model: AppModel, close: () -> Unit, ready: (SetupStart) -> Unit) {
         ) {
             Column(Modifier.widthIn(max = 480.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text(
-                    "Nudge makes a small server in your exe.dev account, billed to it, with an HTTPS address of its own.",
+                    stringResource(R.string.setup_exe_intro),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 // Before anything is made: its first assistant is joined from home.
                 HomeFederationCard(model)
-                Text("1. Sign in to exe.dev", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.setup_exe_step_sign_in), style = MaterialTheme.typography.titleMedium)
                 if (signedIn) {
-                    Text("Signed in to exe.dev", color = MaterialTheme.colorScheme.primary)
+                    Text(stringResource(R.string.setup_exe_signed_in), color = MaterialTheme.colorScheme.primary)
                 }
                 OutlinedButton(onClick = { signingIn = true }, modifier = Modifier.fillMaxWidth()) {
-                    Text(if (signedIn) "Sign in again" else "Sign in to exe.dev")
+                    Text(stringResource(if (signedIn) R.string.setup_exe_sign_in_again else R.string.setup_exe_sign_in))
                 }
                 Text(
-                    "New to exe.dev? Signing in makes your account: it asks for your email and sends a link. The app keeps its key and token on this device; they can make and remove servers, nothing else.",
+                    stringResource(R.string.setup_exe_new),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                TextButton(onClick = { pasting = !pasting }) { Text("Or paste a token") }
+                TextButton(onClick = { pasting = !pasting }) { Text(stringResource(R.string.setup_exe_paste)) }
                 if (pasting) {
-                    Text("Run this once on a computer with your exe.dev key, and paste what it prints:")
+                    Text(stringResource(R.string.setup_exe_run_this))
                     Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = MaterialTheme.shapes.medium) {
                         Text(command, Modifier.padding(12.dp), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
                     }
-                    TextButton(onClick = { copy(context, command) }) { Text("Copy the command") }
+                    TextButton(onClick = { copy(context, command) }) { Text(stringResource(R.string.setup_exe_copy)) }
                     OutlinedTextField(
                         value = token,
                         onValueChange = { token = it },
-                        label = { Text("exe.dev token") },
+                        label = { Text(stringResource(R.string.setup_exe_token)) },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
@@ -169,13 +172,13 @@ fun ExeScreen(model: AppModel, close: () -> Unit, ready: (SetupStart) -> Unit) {
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
-                Text("2. Name the server", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.setup_exe_step_name), style = MaterialTheme.typography.titleMedium)
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Server name") },
+                    label = { Text(stringResource(R.string.setup_exe_server_name)) },
                     singleLine = true,
-                    supportingText = { Text("Its address will be https://${slugOf(name).ifEmpty { "nudge" }}.exe.xyz") },
+                    supportingText = { Text(stringResource(R.string.setup_exe_address, slugOf(name).ifEmpty { "nudge" })) },
                     shape = MaterialTheme.shapes.large,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -185,9 +188,9 @@ fun ExeScreen(model: AppModel, close: () -> Unit, ready: (SetupStart) -> Unit) {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text("Join ${java.net.URI(home).host ?: home}'s Wired network")
+                            Text(stringResource(R.string.setup_exe_join_wired, java.net.URI(home).host ?: home))
                             Text(
-                                "Then it and your home reach each other, with no port open at home.",
+                                stringResource(R.string.setup_exe_join_wired_hint),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -205,7 +208,7 @@ fun ExeScreen(model: AppModel, close: () -> Unit, ready: (SetupStart) -> Unit) {
                         enabled = token.isNotBlank() && slugOf(name).isNotEmpty() && missing == null,
                         shapes = ButtonDefaults.shapes(),
                         modifier = Modifier.fillMaxWidth().heightIn(min = ButtonDefaults.MediumContainerHeight),
-                    ) { Text("Make the server") }
+                    ) { Text(stringResource(R.string.setup_exe_make)) }
                 }
             }
         }

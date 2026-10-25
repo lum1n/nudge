@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AssistantRouteRouteImport } from './routes/$assistant/route'
 import { Route as AvatarRouteImport } from './routes/avatar'
+import { Route as JoinRouteImport } from './routes/join'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as AssistantIndexRouteImport } from './routes/$assistant/index'
@@ -41,6 +42,11 @@ const AssistantRouteRoute = AssistantRouteRouteImport.update({
 const AvatarRoute = AvatarRouteImport.update({
   id: '/avatar',
   path: '/avatar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const JoinRoute = JoinRouteImport.update({
+  id: '/join',
+  path: '/join',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -123,6 +129,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$assistant': typeof AssistantRouteRouteWithChildren
   '/avatar': typeof AvatarRoute
+  '/join': typeof JoinRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/$assistant/$room': typeof AssistantRoomRoute
@@ -142,6 +149,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/avatar': typeof AvatarRoute
+  '/join': typeof JoinRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/$assistant/$room': typeof AssistantRoomRoute
@@ -163,6 +171,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/$assistant': typeof AssistantRouteRouteWithChildren
   '/avatar': typeof AvatarRoute
+  '/join': typeof JoinRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/$assistant/$room': typeof AssistantRoomRoute
@@ -185,6 +194,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$assistant'
     | '/avatar'
+    | '/join'
     | '/login'
     | '/setup'
     | '/$assistant/$room'
@@ -204,6 +214,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/avatar'
+    | '/join'
     | '/login'
     | '/setup'
     | '/$assistant/$room'
@@ -224,6 +235,7 @@ export interface FileRouteTypes {
     | '/'
     | '/$assistant'
     | '/avatar'
+    | '/join'
     | '/login'
     | '/setup'
     | '/$assistant/$room'
@@ -245,6 +257,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AssistantRouteRoute: typeof AssistantRouteRouteWithChildren
   AvatarRoute: typeof AvatarRoute
+  JoinRoute: typeof JoinRoute
   LoginRoute: typeof LoginRoute
   SetupRoute: typeof SetupRoute
 }
@@ -270,6 +283,13 @@ declare module '@tanstack/react-router' {
       path: '/avatar'
       fullPath: '/avatar'
       preLoaderRoute: typeof AvatarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/join': {
+      id: '/join'
+      path: '/join'
+      fullPath: '/join'
+      preLoaderRoute: typeof JoinRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -420,6 +440,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AssistantRouteRoute: AssistantRouteRouteWithChildren,
   AvatarRoute: AvatarRoute,
+  JoinRoute: JoinRoute,
   LoginRoute: LoginRoute,
   SetupRoute: SetupRoute,
 }

@@ -40,12 +40,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import app.nudge.AppModel
+import app.nudge.R
 import app.nudge.explain
+import app.nudge.text
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -75,7 +78,7 @@ fun ExeLoginScreen(model: AppModel, close: () -> Unit, signedIn: (String) -> Uni
     var session by remember { mutableStateOf<ExeLogin?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
     fun failed(text: String?) {
-        ended = "exe.dev ended the session."
+        ended = text(R.string.setup_exe_ended)
         if (text != null) problem = text
     }
     // The library calls back on its own threads.
@@ -99,7 +102,7 @@ fun ExeLoginScreen(model: AppModel, close: () -> Unit, signedIn: (String) -> Uni
             try {
                 session = ExeLogin.start(model.servers.exeKey(), COLUMNS, ROWS, listener)
             } catch (error: Exception) {
-                ended = "Couldn't connect to exe.dev."
+                ended = text(R.string.setup_exe_no_connect)
                 problem = explain(error)
             }
         }
@@ -142,8 +145,8 @@ fun ExeLoginScreen(model: AppModel, close: () -> Unit, signedIn: (String) -> Uni
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Sign in to exe.dev") },
-                navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                title = { Text(stringResource(R.string.setup_exe_sign_in)) },
+                navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.setup_back)) } },
             )
         },
     ) { padding ->
@@ -156,7 +159,7 @@ fun ExeLoginScreen(model: AppModel, close: () -> Unit, signedIn: (String) -> Uni
                     BoxWithConstraints(Modifier.fillMaxWidth().padding(8.dp)) {
                         val size = with(LocalDensity.current) { (maxWidth / (COLUMNS.toInt() * 0.61f)).toSp() }
                         Text(
-                            screen.ifEmpty { "Connecting to exe.dev…" },
+                            screen.ifEmpty { stringResource(R.string.setup_exe_connecting) },
                             fontFamily = FontFamily.Monospace,
                             fontSize = size,
                             lineHeight = size * 1.2f,
@@ -169,23 +172,23 @@ fun ExeLoginScreen(model: AppModel, close: () -> Unit, signedIn: (String) -> Uni
                     OutlinedTextField(
                         value = typed,
                         onValueChange = { typed = it },
-                        label = { Text("Your email, or what exe.dev asks") },
+                        label = { Text(stringResource(R.string.setup_exe_email)) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Send, autoCorrectEnabled = false),
                         keyboardActions = KeyboardActions(onSend = { send() }),
                         shape = MaterialTheme.shapes.large,
                         modifier = Modifier.weight(1f),
                     )
-                    IconButton(onClick = ::send, enabled = ended == null) { Icon(Icons.AutoMirrored.Filled.Send, "Send") }
+                    IconButton(onClick = ::send, enabled = ended == null) { Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.setup_send)) }
                 }
                 Text(
-                    "exe.dev asks for your email and sends you a link. Open it, then come back: the app is signed in once exe.dev has your key.",
+                    stringResource(R.string.setup_exe_login_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 ended?.let { reason ->
                     Text(reason, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    TextButton(onClick = { attempt++ }, modifier = Modifier.heightIn(min = 40.dp)) { Text("Start again") }
+                    TextButton(onClick = { attempt++ }, modifier = Modifier.heightIn(min = 40.dp)) { Text(stringResource(R.string.setup_exe_start_again)) }
                 }
                 problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }

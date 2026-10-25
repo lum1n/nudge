@@ -42,10 +42,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.nudge.R
 import app.nudge.explain
+import app.nudge.text
 import java.text.DateFormat
 import java.util.Date
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -88,8 +91,8 @@ fun TerminalScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
         topBar = {
             TopAppBar(
                 colors = groupedTopBarColors(),
-                title = { Text("Terminal") },
-                navigationIcon = { IconButton(onClick = close) { Icon(Icons.Outlined.Close, "Close") } },
+                title = { Text(stringResource(R.string.panels_terminal)) },
+                navigationIcon = { IconButton(onClick = close) { Icon(Icons.Outlined.Close, stringResource(R.string.panels_close)) } },
             )
         },
     ) { padding ->
@@ -98,13 +101,13 @@ fun TerminalScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
             val commands = state.commands
             when {
                 status is PanelStatus.Closed && status.code.toInt() == 4404 -> Text(
-                    "No terminal here. Turn on the terminal extension for this room under About this room.",
+                    stringResource(R.string.panels_terminal_off),
                     Modifier.align(Alignment.Center).padding(32.dp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 commands == null -> LoadingIndicator(Modifier.align(Alignment.Center))
                 commands.isEmpty() -> Text(
-                    "No commands yet. The ones the assistant runs here show up as they run.",
+                    stringResource(R.string.panels_terminal_empty),
                     Modifier.align(Alignment.Center).padding(32.dp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -147,8 +150,8 @@ private fun CommandCard(command: TerminalCommand, decide: (Boolean) -> Unit) {
             )
             if (command.status == "waiting" && command.approval != null) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { decide(true) }, shapes = ButtonDefaults.shapes()) { Text("Approve") }
-                    OutlinedButton(onClick = { decide(false) }, shapes = ButtonDefaults.shapes()) { Text("Deny") }
+                    Button(onClick = { decide(true) }, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.room_approve)) }
+                    OutlinedButton(onClick = { decide(false) }, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.room_deny)) }
                 }
             }
             if (command.output.isNotEmpty()) Output(command.output, follow = command.status == "running")
@@ -175,15 +178,17 @@ private fun Output(text: String, follow: Boolean) {
 
 private fun statusLine(command: TerminalCommand): String {
     val state = when (command.status) {
-        "waiting" -> "Waiting for approval"
-        "running" -> "Running…"
-        "done" -> "Exit 0"
-        "failed" -> command.exitCode?.let { "Exit $it" } ?: "Failed"
-        "stopped" -> "Stopped"
-        "denied" -> "Denied"
+        "waiting" -> text(R.string.panels_terminal_waiting)
+        "running" -> text(R.string.panels_terminal_running)
+        "done" -> text(R.string.panels_terminal_exit, 0)
+        "failed" -> command.exitCode?.let { text(R.string.panels_terminal_exit, it) } ?: text(R.string.panels_terminal_failed)
+        "stopped" -> text(R.string.panels_terminal_stopped)
+        "denied" -> text(R.string.panels_terminal_denied)
         else -> command.status
     }
-    val decided = command.decidedBy?.let { if (command.status == "denied") " by $it" else " · approved by $it" } ?: ""
+    val decided = command.decidedBy?.let {
+        if (command.status == "denied") " " + text(R.string.panels_terminal_denied_by, it) else " · " + text(R.string.panels_terminal_approved_by, it)
+    } ?: ""
     val ending = command.ending?.let { ": $it" } ?: ""
     val time = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(command.startedAt.toLong()))
     return "$state$ending$decided · $time"

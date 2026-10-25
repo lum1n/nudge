@@ -3,6 +3,7 @@ import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { ApiError } from "./api.ts";
+import { locale, setLocale } from "./i18n/index.ts";
 import { registerServiceWorker } from "./push.ts";
 import { routeTree } from "./routeTree.gen.ts";
 import "./styles.css";
@@ -28,6 +29,8 @@ declare module "@tanstack/react-router" {
   }
 }
 
+// <html lang> says the language the page is in, for screen readers and hyphenation.
+setLocale(locale);
 registerServiceWorker();
 
 createRoot(document.getElementById("app")!).render(

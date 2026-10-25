@@ -225,6 +225,8 @@ describe("DeepScanner", () => {
 
   it.each([
     ["IKEA Slependen", "ORG", "Slependen"],
+    ["Kiwi Sørumsand", "ORG", "Sørumsand"],
+    ["Vipps", "ORG", ""],
     ["Vethjem", "ORG", "Vethjem"],
     ["The New York", "PLACE", ""],
     ["IKEA London", "PLACE", ""],

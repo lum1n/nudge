@@ -1,0 +1,14 @@
+# The build needs the workspace's manifests and lockfile, and the relay's sources and those it
+# builds on; leave out what is large and local.
+.git
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+**/build
+**/.gradle
+**/target
+apps/android
+apps/apple
+clients
+nudge_app_icons
+nudge-icon.icon

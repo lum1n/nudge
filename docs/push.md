@@ -24,7 +24,7 @@ The APNs key comes from the Apple Developer account (Keys, with Apple Push Notif
 
 The published apps' APNs key and Firebase project are the project's, not yours, so a server reaches those apps through a push relay instead: list it in the extension's `"relays"`. An app registers its device with the relay and gets a handle, an encrypted form of its device token that only the relay can read. It gives each server it signs in to that handle and an X25519 key it made for itself. The server seals every push for that key (X25519, HKDF-SHA256, AES-256-GCM) and sends it to the relay with the handle. The relay opens the handle and passes the sealed push on, so the relay, Apple and Google see ciphertext and a hash of the room as the collapse id. The app decrypts it on the device: in a notification service extension on iOS and macOS, and as it arrives on Android. A relay keeps no list of devices and limits pushes per sender and per device.
 
-`packages/relay` is the relay, run as `nudge-relay --config relay.json --port 8790` behind a TLS proxy:
+`packages/relay` is the relay, run as `nudge-relay --config relay.json --port 8790` behind a TLS proxy. Each release has it as one file for Node 22 or later (`node nudge-relay-<version>.mjs --config relay.json`; `pnpm -C packages/relay bundle` makes it from a checkout) and as the image `ghcr.io/lum1n/nudge-relay` (`stable`, or the version). [`packages/relay/deploy`](../packages/relay/deploy/compose.yaml) runs that image behind Caddy, which gets the TLS certificate: put `relay.json`, the APNs key and the Firebase service account in its `data/`, point a name at the machine, and `RELAY_DOMAIN=relay.example.org docker compose up -d`. The config:
 
 ```json
 {

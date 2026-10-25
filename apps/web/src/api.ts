@@ -5,6 +5,7 @@ import {
   checkSetupKey,
   type KeyValueStorage,
   type RoomListStore,
+  type Sealed,
   listAssistants,
   NudgeClient,
   outboxKey,
@@ -20,6 +21,7 @@ import {
   type TokenStore,
 } from "@nudge/client";
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { m } from "./i18n/index.ts";
 
 export { ApiError, checkSetupCode, checkSetupKey, listAssistants, setupInfo, type SignInResponse };
 
@@ -82,7 +84,7 @@ function signedInWith(assistant: string, token: string, remember: boolean): void
 }
 
 /** Whether the assistant's current token is kept on the device rather than in the tab. */
-function remembered(assistant: string): boolean {
+export function remembered(assistant: string): boolean {
   return readFrom(localStorage)[assistant] !== undefined;
 }
 
@@ -216,6 +218,18 @@ export async function pair(code: string, remember: boolean): Promise<string | un
   });
 }
 
+/**
+ * Joins `assistant` on this server with an assertion the player's home sealed for it, and keeps
+ * the token, on the device with `remember`. An admin there must have invited the home's address.
+ */
+export async function joinHere(
+  assistant: string,
+  assertion: Sealed,
+  remember: boolean,
+): Promise<void> {
+  await new Api({ server: "", assistant, tokens: tokenStore(assistant, remember) }).join(assertion);
+}
+
 /** A QR code for the Nudge app to sign this browser in with. */
 export function startQrSignIn(): Promise<SignInResponse> {
   return startSignIn("");
@@ -294,7 +308,7 @@ export async function asOwner<T>(
     }
   }
   const token = tokenFor(assistant);
-  if (token === undefined) throw new ApiError(401, "Not signed in");
+  if (token === undefined) throw new ApiError(401, m.panels.api.notSignedIn);
   await api.signIn(assistant, token, { name: CLIENT.name, platform: CLIENT.platform });
   return call(api);
 }
@@ -305,7 +319,7 @@ export async function asOwner<T>(
  */
 export async function signInToServer(assistant: string): Promise<void> {
   const token = tokenFor(assistant);
-  if (token === undefined) throw new Error(`Not signed in to ${assistant}`);
+  if (token === undefined) throw new Error(m.panels.api.notSignedInTo(assistant));
   await serverApi().signIn(assistant, token, { name: CLIENT.name, platform: CLIENT.platform });
 }
 

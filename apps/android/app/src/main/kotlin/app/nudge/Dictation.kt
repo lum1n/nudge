@@ -127,11 +127,11 @@ class Dictation(private val context: Context, private val preferences: SharedPre
             !needsOnline -> SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
             mutableOnline.value && SpeechRecognizer.isRecognitionAvailable(context) -> SpeechRecognizer.createSpeechRecognizer(context)
             onDevice -> {
-                mutableState.value = State.Failed("This phone can't recognize ${displayName(mutableLanguage.value)} on its own.")
+                mutableState.value = State.Failed(text(R.string.model_dictation_language_not_on_device, displayName(mutableLanguage.value)))
                 return
             }
             else -> {
-                mutableState.value = State.Failed("This phone can't recognize speech on its own.")
+                mutableState.value = State.Failed(text(R.string.model_dictation_not_on_device))
                 return
             }
         }
@@ -257,14 +257,14 @@ class Dictation(private val context: Context, private val preferences: SharedPre
     }
 
     private fun explain(error: Int): String = when (error) {
-        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Nudge may not use the microphone. Allow it in the phone's settings."
-        SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED -> "This phone can't recognize ${displayName(mutableLanguage.value)}."
-        SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE -> "${displayName(mutableLanguage.value)} isn't on this phone yet. Download it in Settings, under Speech."
-        SpeechRecognizer.ERROR_AUDIO -> "The microphone didn't work."
-        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Speech recognition is busy. Try again in a moment."
+        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> text(R.string.model_dictation_no_microphone)
+        SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED -> text(R.string.model_dictation_language_not_supported, displayName(mutableLanguage.value))
+        SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE -> text(R.string.model_dictation_language_unavailable, displayName(mutableLanguage.value))
+        SpeechRecognizer.ERROR_AUDIO -> text(R.string.model_dictation_audio)
+        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> text(R.string.model_dictation_busy)
         SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT, SpeechRecognizer.ERROR_SERVER, SpeechRecognizer.ERROR_SERVER_DISCONNECTED ->
-            "The speech service couldn't be reached."
-        else -> "Speech recognition stopped ($error)."
+            text(R.string.model_dictation_unreachable)
+        else -> text(R.string.model_dictation_stopped, error.toString())
     }
 
     private fun savedLanguages(): List<String> =

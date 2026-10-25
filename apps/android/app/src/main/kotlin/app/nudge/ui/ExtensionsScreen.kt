@@ -41,8 +41,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import app.nudge.R
 import app.nudge.explain
+import app.nudge.text
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import nudge.client.saved
@@ -59,7 +62,11 @@ private data class Draft(val enabled: Boolean, val settings: JsonObject, val roo
 
 private fun draftOf(setup: ExtensionSetup) = Draft(setup.enabled, setup.settings, setup.rooms)
 
-private val KINDS = listOf(RoomKind.LOBBY to "Everyone", RoomKind.PERSONAL to "Personal", RoomKind.SHARED to "Shared")
+private val KINDS = listOf(
+    RoomKind.LOBBY to R.string.panels_extensions_kind_lobby,
+    RoomKind.PERSONAL to R.string.panels_extensions_kind_personal,
+    RoomKind.SHARED to R.string.panels_extensions_kind_shared,
+)
 
 /**
  * The assistant's extensions, set up by an admin: on or off, their settings and the rooms they
@@ -90,7 +97,7 @@ fun ExtensionsScreen(client: NudgeClient, close: () -> Unit) {
             rooms = runCatching { client.allRooms() }.getOrDefault(emptyList())
         } catch (error: Exception) {
             loadProblem = if (error is NudgeException.Status && error.status.toInt() == 404) {
-                "This server can't set up extensions from the app. Run it with nudge serve."
+                text(R.string.panels_extensions_no_setup)
             } else {
                 explain(error)
             }
@@ -130,8 +137,8 @@ fun ExtensionsScreen(client: NudgeClient, close: () -> Unit) {
         topBar = {
             TopAppBar(
                 colors = groupedTopBarColors(),
-                title = { Text("Extensions") },
-                navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                title = { Text(stringResource(R.string.panels_extensions)) },
+                navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.panels_back)) } },
             )
         },
         bottomBar = {
@@ -143,7 +150,7 @@ fun ExtensionsScreen(client: NudgeClient, close: () -> Unit) {
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Text(
-                            problem ?: if (dirty) "Unsaved changes" else "Saved and installed.",
+                            problem ?: stringResource(if (dirty) R.string.panels_unsaved else R.string.panels_extensions_saved),
                             Modifier.weight(1f),
                             color = if (problem != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                         )
@@ -155,9 +162,9 @@ fun ExtensionsScreen(client: NudgeClient, close: () -> Unit) {
                                 },
                                 enabled = !saving,
                                 shapes = ButtonDefaults.shapes(),
-                            ) { Text("Discard") }
+                            ) { Text(stringResource(R.string.panels_discard)) }
                             Button(onClick = ::save, enabled = !saving, shapes = ButtonDefaults.shapes()) {
-                                Text(if (saving) "Saving…" else "Save")
+                                Text(stringResource(if (saving) R.string.panels_saving else R.string.panels_save))
                             }
                         }
                     }
@@ -180,23 +187,21 @@ fun ExtensionsScreen(client: NudgeClient, close: () -> Unit) {
                 ) {
                     item {
                         Text(
-                            "What the assistant can do beyond talking. Saving installs them again right away and writes " +
-                                "them to the server's nudge.json; if one fails to start, nothing changes. Each room can " +
-                                "still turn them on or off for itself.",
+                            stringResource(R.string.panels_extensions_intro),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                         )
                     }
                     val (added, available) = all.partition { it.configured }
-                    if (added.isNotEmpty()) item { Section("Added") }
+                    if (added.isNotEmpty()) item { Section(stringResource(R.string.panels_extensions_added)) }
                     items(added, key = { it.from }) { setup ->
                         ExtensionCard(setup, drafts.getValue(setup.from)) { change ->
                             saved = false
                             drafts = drafts + (setup.from to change)
                         }
                     }
-                    if (available.isNotEmpty()) item { Section("Not added yet") }
+                    if (available.isNotEmpty()) item { Section(stringResource(R.string.panels_extensions_available)) }
                     items(available, key = { it.from }) { setup ->
                         ExtensionCard(setup, drafts.getValue(setup.from)) { change ->
                             saved = false
@@ -234,25 +239,30 @@ private fun ExtensionCard(setup: ExtensionSetup, draft: Draft, onChange: (Draft)
                     enabled = setup.error == null,
                 )
             }
-            setup.error?.let { Text("Couldn't load it: $it", color = MaterialTheme.colorScheme.error) }
+            setup.error?.let { Text(stringResource(R.string.panels_extensions_failed, it), color = MaterialTheme.colorScheme.error) }
             if (setup.missingEnv.isNotEmpty()) {
                 Text(
-                    "Needs ${setup.missingEnv.joinToString { "\$$it" }} in the server's environment, or the value in its " +
-                        "settings, before it can start.",
+                    stringResource(R.string.panels_extensions_needs_env, setup.missingEnv.joinToString { "\$$it" }),
                     color = MaterialTheme.colorScheme.tertiary,
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
             if (fields.isNotEmpty() || setup.error == null) {
                 TextButton(onClick = { open = !open }) {
-                    Text(if (open) "Hide settings" else if (fields.isNotEmpty()) "Settings" else "Rooms")
+                    Text(
+                        stringResource(
+                            if (open) R.string.panels_extensions_hide_settings
+                            else if (fields.isNotEmpty()) R.string.panels_extensions_settings
+                            else R.string.panels_extensions_rooms,
+                        ),
+                    )
                 }
             }
             if (open) {
                 if (fields.isNotEmpty()) {
                     SettingFields(fields, draft.settings) { onChange(draft.copy(settings = it)) }
                 }
-                Text("On by default in", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
+                Text(stringResource(R.string.panels_extensions_on_by_default), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     val rooms = draft.rooms ?: KINDS.map { it.first }
                     KINDS.forEach { (kind, label) ->
@@ -262,12 +272,12 @@ private fun ExtensionCard(setup: ExtensionSetup, draft: Draft, onChange: (Draft)
                                 val next = if (kind in rooms) rooms - kind else KINDS.map { it.first }.filter { it == kind || it in rooms }
                                 onChange(draft.copy(rooms = if (next.size == KINDS.size) null else next))
                             },
-                            label = { Text(label) },
+                            label = { Text(stringResource(label)) },
                         )
                     }
                 }
                 Text(
-                    "People in a room can still turn it on or off there.",
+                    stringResource(R.string.panels_extensions_rooms_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

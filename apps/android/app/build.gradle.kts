@@ -10,6 +10,13 @@ val firebase = file("google-services.json").exists()
 if (firebase) apply(plugin = libs.plugins.google.services.get().pluginId)
 // The push relay for servers without this app's Firebase credentials: -Pnudge.pushRelay=https://…
 val pushRelay = (findProperty("nudge.pushRelay") as String?)?.trimEnd('/') ?: ""
+// A release's version, from its tag (release.yml): -Pnudge.versionName=0.9.0 -Pnudge.versionCode=…
+val versionNameProperty = findProperty("nudge.versionName") as String?
+val versionCodeProperty = (findProperty("nudge.versionCode") as String?)?.toInt()
+// The release signing key, as release.yml passes it: a keystore and its passwords in the
+// environment. Without NUDGE_KEYSTORE the release build is unsigned.
+fun env(name: String): String? = System.getenv(name)?.takeIf { it.isNotEmpty() }
+val keystore = env("NUDGE_KEYSTORE")?.let(::file)
 
 android {
     namespace = "app.nudge"
@@ -19,8 +26,8 @@ android {
         applicationId = "app.nudge.dev"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = versionCodeProperty ?: 1
+        versionName = versionNameProperty ?: "0.1.0"
         buildConfigField("boolean", "FIREBASE", firebase.toString())
         buildConfigField("String", "PUSH_RELAY", "\"$pushRelay\"")
     }
@@ -30,8 +37,20 @@ android {
         buildConfig = true
     }
 
+    signingConfigs {
+        if (keystore != null) {
+            create("release") {
+                storeFile = keystore
+                storePassword = env("NUDGE_KEYSTORE_PASSWORD")
+                keyAlias = env("NUDGE_KEY_ALIAS")
+                keyPassword = env("NUDGE_KEY_PASSWORD") ?: env("NUDGE_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (keystore != null) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
@@ -62,6 +81,7 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.compose.material.icons)
     implementation(libs.activity.compose)
+    implementation(libs.fragment)
     implementation(libs.lifecycle.viewmodel.compose)
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.lifecycle.process)

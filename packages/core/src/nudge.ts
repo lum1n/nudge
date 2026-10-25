@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import type { Context } from "@earendil-works/chord";
 import type { TSchema } from "typebox";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { JsonValue, Message, Models } from "@earendil-works/pi-ai";
+import type { ImageContent, JsonValue, Message, Models, TextContent } from "@earendil-works/pi-ai";
 import {
   type AgentChange,
   type AgentEventStream,
@@ -26,6 +26,14 @@ import {
   ApprovalsDoc,
   type ApprovalsState,
 } from "./approvals/approvals.ts";
+import {
+  AttachmentRefused,
+  type AttachmentInfo,
+  Attachments,
+  type AttachmentUpload,
+  formatSize,
+  MODEL_IMAGE_MAX_BYTES,
+} from "./attachments/attachments.ts";
 import { type Change, Changes } from "./changes.ts";
 import { createBuiltinExtension } from "./extensions/builtin.ts";
 import {
@@ -211,6 +219,8 @@ export class Nudge {
   readonly nudges: Nudges;
   readonly memory: Memory;
   readonly approvals: Approvals;
+  /** The files people attach to messages (ADR 24). */
+  readonly attachments: Attachments;
   /** Changes to rooms, memory, nudges and approvals made through the members above. */
   readonly changes = new Changes();
   /** Finished answers and new approvals in every room, for hosts that pass them on. */
@@ -329,6 +339,8 @@ export class Nudge {
         this.installed.find((installed) => installed.extension.name === extension)?.denials?.[kind],
       parts.report,
     );
+    this.attachments = new Attachments(harness, now);
+    this.models.attachments = (roomId, id) => this.imageForModel(roomId, id);
   }
 
   static async open(options: NudgeOptions, context: Context): Promise<Nudge> {
@@ -859,6 +871,22 @@ export class Nudge {
       quiet: true,
     });
     const text = vault.redact(draft.text, this.models.detectors, owner);
+    const ids = draft.attachments ?? [];
+    if (ids.length > 0 && draft.author === undefined)
+      throw new AttachmentRefused("Only a player's message has attachments");
+    const attachments = await this.attachments.claim(
+      roomId,
+      ids,
+      {
+        by: draft.author?.playerId ?? "",
+        ...(draft.private === true ? { private: true } : {}),
+        ...(draft.requestId === undefined
+          ? {}
+          : { key: `${draft.author?.clientId ?? ""}:${draft.requestId}` }),
+        redactName: (name) => vault.redact(name, this.models.detectors, owner),
+      },
+      context,
+    );
     await this.models.flush();
     if (owner !== undefined && vault.version !== before) this.changes.emit({ kind: "vault" });
     return submitMessage(
@@ -868,7 +896,52 @@ export class Nudge {
       this.now(),
       this.timeZone,
       context,
+      { roomId, attachments },
     );
+  }
+
+  /**
+   * Keeps a file a player uploaded to a room, for them to send with a message (ADR 24). Checking
+   * that they may use the room is the host's job.
+   */
+  async addAttachment(
+    roomId: string,
+    upload: AttachmentUpload,
+    context: Context,
+  ): Promise<AttachmentInfo> {
+    await this.room(roomId, context);
+    return this.attachments.add(roomId, upload, context);
+  }
+
+  /**
+   * Lets the model see the images attached in a room as they are, or stops it, from its next
+   * request (ADR 24). People decide it, never the model; checking that `by` may use the room is
+   * the host's job.
+   */
+  async setImagesToModel(roomId: string, allowed: boolean, context: Context): Promise<Room> {
+    await this.room(roomId, context);
+    return this.rooms.setImagesToModel(roomId, allowed, context);
+  }
+
+  /** What an attachment's image part becomes in a request: the image, where the room lets it. */
+  private async imageForModel(roomId: string, id: string): Promise<ImageContent | TextContent> {
+    const context = BACKGROUND_CONTEXT;
+    const notShown = (why: string): TextContent => ({
+      type: "text",
+      text: `[${id} is not shown to you: ${why}]`,
+    });
+    const room = await this.rooms.get(roomId, context);
+    if (room?.imagesToModel !== true) return notShown("this room doesn't send images to the model");
+    const info = (await this.attachments.list(roomId, context)).find((item) => item.id === id);
+    if (info === undefined || info.kind !== "image") return notShown("there is no such image");
+    if (info.removed) return { type: "text", text: `[${id} was removed]` };
+    if (info.size > MODEL_IMAGE_MAX_BYTES)
+      return notShown(`it is over ${formatSize(MODEL_IMAGE_MAX_BYTES)}`);
+    return {
+      type: "image",
+      data: await this.attachments.base64(roomId, info, context),
+      mimeType: info.mime,
+    };
   }
 
   /** Stops the answer in progress in a room, and drops its queued messages. */

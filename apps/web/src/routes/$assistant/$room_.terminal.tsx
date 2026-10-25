@@ -2,6 +2,7 @@ import type { Approval } from "@nudge/client";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { clientFor, forgetToken, useRoom } from "../../api.ts";
+import { dateLocale, m } from "../../i18n/index.ts";
 import { type TerminalCommand, useTerminal } from "../../terminal.ts";
 
 export const Route = createFileRoute("/$assistant/$room_/terminal")({ component: Terminal });
@@ -28,29 +29,26 @@ function Terminal() {
   return (
     <section className="mx-auto flex max-w-4xl flex-col gap-3 p-3 sm:p-4">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-        <h2 className="text-lg font-medium">Terminal</h2>
+        <h2 className="text-lg font-medium">{m.panels.terminal.title}</h2>
         <Link
           to="/$assistant/$room"
           params={{ assistant, room }}
           className="text-sm text-stone-600 hover:underline"
         >
-          Back to the room
+          {m.panels.backToRoom}
         </Link>
       </div>
-      <p className="text-sm text-stone-600">
-        The commands the assistant runs in this room's sandboxed workspace, as they run. Those that
-        delete or send something wait for someone here to approve them.
-      </p>
+      <p className="text-sm text-stone-600">{m.panels.terminal.intro}</p>
       {state.status === "closed" ? (
         <p className="text-red-700">
           {state.closeCode === NOT_FOUND
-            ? "This room has no terminal: the terminal extension isn't on here, or you are not in this room."
-            : `Disconnected${state.error ? `: ${state.error}` : ""}.`}
+            ? m.panels.terminal.notFound
+            : m.panels.disconnected(state.error)}
         </p>
       ) : state.view === undefined ? (
-        <p className="text-stone-500">Connecting…</p>
+        <p className="text-stone-500">{m.panels.connecting}</p>
       ) : commands.length === 0 ? (
-        <p className="text-stone-500">No commands yet.</p>
+        <p className="text-stone-500">{m.panels.terminal.empty}</p>
       ) : (
         <ul className="flex flex-col gap-3">
           {commands.map((command) => (
@@ -67,21 +65,21 @@ function Terminal() {
   );
 }
 
-const STATUS: Record<TerminalCommand["status"], { label: string; className: string }> = {
-  waiting: { label: "waiting for approval", className: "text-amber-700" },
-  running: { label: "running…", className: "text-sky-700" },
-  done: { label: "exit 0", className: "text-emerald-700" },
-  failed: { label: "failed", className: "text-red-700" },
-  stopped: { label: "stopped", className: "text-red-700" },
-  denied: { label: "denied", className: "text-stone-500" },
+const STATUS_CLASS: Record<TerminalCommand["status"], string> = {
+  waiting: "text-amber-700",
+  running: "text-sky-700",
+  done: "text-emerald-700",
+  failed: "text-red-700",
+  stopped: "text-red-700",
+  denied: "text-stone-500",
 };
 
 function CommandCard({ command, approval }: { command: TerminalCommand; approval?: Approval }) {
-  const status = STATUS[command.status];
+  const words = m.panels.terminal;
   const label =
     command.status === "failed" && command.exitCode !== undefined
-      ? `exit ${command.exitCode}`
-      : status.label;
+      ? words.exit(command.exitCode)
+      : words.status[command.status];
   return (
     <div className="overflow-hidden rounded border border-stone-300">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 bg-stone-100 px-3 py-2 text-sm">
@@ -90,12 +88,12 @@ function CommandCard({ command, approval }: { command: TerminalCommand; approval
           {command.command}
         </code>
         <span className="shrink-0 text-xs text-stone-500">
-          <span className={status.className}>{label}</span>
+          <span className={STATUS_CLASS[command.status]}>{label}</span>
           {command.decidedBy
-            ? ` · ${command.status === "denied" ? "denied" : "approved"} by ${command.decidedBy}`
+            ? ` · ${(command.status === "denied" ? words.deniedBy : words.approvedBy)(command.decidedBy)}`
             : ""}
           {" · "}
-          {new Date(command.startedAt).toLocaleTimeString()}
+          {new Date(command.startedAt).toLocaleTimeString(dateLocale())}
         </span>
       </div>
       {command.ending && <p className="px-3 pt-2 text-xs text-red-700">{command.ending}</p>}
@@ -159,7 +157,7 @@ function Decide({ approval }: { approval: Approval }) {
             onClick={() => void decide(true)}
             className="rounded bg-emerald-700 px-2 py-0.5 text-white disabled:opacity-50"
           >
-            Approve
+            {m.room.approvals.approve}
           </button>
           <button
             type="button"
@@ -167,7 +165,7 @@ function Decide({ approval }: { approval: Approval }) {
             onClick={() => void decide(false)}
             className="rounded border border-stone-300 px-2 py-0.5 disabled:opacity-50"
           >
-            Deny
+            {m.room.approvals.deny}
           </button>
         </span>
       </div>

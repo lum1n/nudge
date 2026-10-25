@@ -55,13 +55,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.nudge.AppModel
+import app.nudge.R
 import app.nudge.exeVmName
 import app.nudge.explain
+import app.nudge.hostOf
+import app.nudge.text
 import kotlinx.coroutines.launch
 import nudge.ffi.AssistantFor
 import nudge.ffi.AssistantSettings
@@ -93,21 +97,23 @@ fun ServersScreen(model: AppModel, address: String?, exe: () -> Unit, close: () 
         return
     }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val yours = stringResource(R.string.servers_yours)
+    val newTitle = stringResource(R.string.servers_new)
     Scaffold(
         containerColor = groupedBackground(),
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             MediumFlexibleTopAppBar(
                 colors = groupedTopBarColors(),
-                title = { Text("Servers") },
-                navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                title = { Text(stringResource(R.string.servers_title)) },
+                navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.servers_back)) } },
                 scrollBehavior = scrollBehavior,
             )
         },
     ) { padding ->
         LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding(), bottom = 24.dp)) {
             group(
-                "Yours",
+                yours,
                 owned.map { server ->
                     { shapes ->
                         SegmentedListItem(
@@ -120,14 +126,14 @@ fun ServersScreen(model: AppModel, address: String?, exe: () -> Unit, close: () 
                 },
             )
             group(
-                "New",
+                newTitle,
                 listOf { shapes ->
                     SegmentedListItem(
                         onClick = exe,
                         shapes = shapes,
                         leadingContent = { Icon(Icons.Outlined.Cloud, null) },
-                        supportingContent = { Text("A small server in your exe.dev account, with an HTTPS address") },
-                    ) { Text("Make a server on exe.dev") }
+                        supportingContent = { Text(stringResource(R.string.servers_exe_summary)) },
+                    ) { Text(stringResource(R.string.servers_exe_make)) }
                 },
             )
         }
@@ -209,7 +215,7 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
         var keyProblem by remember { mutableStateOf<String?>(null) }
         AlertDialog(
             onDismissRequest = { if (!busy) settingKey = null },
-            title = { Text("${providerName(provider)} key") },
+            title = { Text(stringResource(R.string.servers_key_title, providerName(provider))) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
@@ -218,7 +224,7 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        supportingText = { Text("For every assistant here. Tried once before it is kept.") },
+                        supportingText = { Text(stringResource(R.string.servers_key_supporting)) },
                     )
                     keyProblem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
@@ -237,24 +243,26 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
                             busy = false
                         }
                     }
-                }) { Text(if (busy) "Trying…" else "Save") }
+                }) { Text(stringResource(if (busy) R.string.servers_trying else R.string.servers_save)) }
             },
-            dismissButton = { TextButton(enabled = !busy, onClick = { settingKey = null }) { Text("Cancel") } },
+            dismissButton = { TextButton(enabled = !busy, onClick = { settingKey = null }) { Text(stringResource(R.string.servers_cancel)) } },
         )
     }
 
     if (kit) {
         var passphrase by remember { mutableStateOf("") }
+        val kitSubject = stringResource(R.string.servers_kit_subject, hostOf(server))
+        val kitKeep = stringResource(R.string.servers_kit_keep)
         AlertDialog(
             onDismissRequest = { kit = false },
-            title = { Text("Recovery kit") },
+            title = { Text(stringResource(R.string.servers_kit_title)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("With it and a backup, everything on this server can be brought back. Keep it away from the server, and the passphrase in your password manager.")
+                    Text(stringResource(R.string.servers_kit_body))
                     OutlinedTextField(
                         value = passphrase,
                         onValueChange = { passphrase = it },
-                        label = { Text("Passphrase, 8 characters or more") },
+                        label = { Text(stringResource(R.string.servers_kit_passphrase)) },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
                     )
@@ -268,15 +276,15 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
                         context.startActivity(
                             Intent.createChooser(
                                 Intent(Intent.ACTION_SEND).setType("application/json")
-                                    .putExtra(Intent.EXTRA_SUBJECT, "Nudge recovery kit for ${java.net.URI(server).host}")
+                                    .putExtra(Intent.EXTRA_SUBJECT, kitSubject)
                                     .putExtra(Intent.EXTRA_TEXT, text),
-                                "Keep the recovery kit",
+                                kitKeep,
                             ),
                         )
                     }
-                }) { Text("Make it") }
+                }) { Text(stringResource(R.string.servers_make_it)) }
             },
-            dismissButton = { TextButton(onClick = { kit = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { kit = false }) { Text(stringResource(R.string.servers_cancel)) } },
         )
     }
 
@@ -285,13 +293,10 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
         var confirm by remember { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { removing = false },
-            title = { Text("Remove ${java.net.URI(server).host}?") },
+            title = { Text(stringResource(R.string.servers_remove_title, hostOf(server))) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        "Everything on it goes for good, and nothing is kept: make a recovery kit and download a backup " +
-                            "first if you need one. Type $vm to remove it.",
-                    )
+                    Text(stringResource(R.string.servers_remove_body, vm))
                     OutlinedTextField(value = confirm, onValueChange = { confirm = it }, singleLine = true)
                 }
             },
@@ -306,13 +311,16 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
                             problem = explain(error)
                         }
                     }
-                }) { Text("Remove", color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.servers_remove), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { removing = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { removing = false }) { Text(stringResource(R.string.servers_cancel)) } },
         )
     }
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val assistantsTitle = stringResource(R.string.servers_assistants)
+    val modelKeysTitle = stringResource(R.string.servers_model_keys)
+    val serverTitle = stringResource(R.string.servers_server)
     Scaffold(
         containerColor = groupedBackground(),
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -320,7 +328,7 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
             MediumFlexibleTopAppBar(
                 colors = groupedTopBarColors(),
                 title = { Text(java.net.URI(server).host ?: server) },
-                navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.servers_back)) } },
                 scrollBehavior = scrollBehavior,
             )
         },
@@ -329,7 +337,7 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
             problem?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp)) } }
             val current = info ?: return@LazyColumn
             group(
-                "Assistants",
+                assistantsTitle,
                 current.assistants.map<ServerAssistant, GroupRow> { assistant ->
                     { shapes ->
                         SegmentedListItem(
@@ -340,9 +348,9 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
                                 val joined = home == null || (listOfNotNull(home) + places).any { it.account.isAt(server, assistant.name) }
                                 Text(
                                     when {
-                                        !assistant.running -> "Not running: check the server's log"
+                                        !assistant.running -> stringResource(R.string.servers_not_running)
                                         joined -> assistant.settings.model.modelId
-                                        else -> "${assistant.settings.model.modelId} · Not joined from home"
+                                        else -> stringResource(R.string.servers_not_joined, assistant.settings.model.modelId)
                                     },
                                 )
                             },
@@ -354,12 +362,12 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
                         onClick = { creating = true },
                         shapes = shapes,
                         leadingContent = { Icon(Icons.Outlined.Add, null) },
-                    ) { Text("New assistant") }
+                    ) { Text(stringResource(R.string.servers_new_assistant)) }
                 },
             )
             item(key = "wired") { WiredCard(model, server) }
             group(
-                "Model keys",
+                modelKeysTitle,
                 keys.map<ProviderKey, GroupRow> { key ->
                     { shapes ->
                         SegmentedListItem(
@@ -369,10 +377,10 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
                             supportingContent = {
                                 Text(
                                     when (key.source) {
-                                        KeySource.ENV -> "From the server's environment (${key.variables.joinToString()})"
-                                        KeySource.SERVER -> "Set here, for every assistant. Tap to change it."
-                                        KeySource.ASSISTANT -> "Set for one assistant"
-                                        KeySource.NONE -> "None yet. Tap to add your key."
+                                        KeySource.ENV -> stringResource(R.string.servers_key_env, key.variables.joinToString())
+                                        KeySource.SERVER -> stringResource(R.string.servers_key_server)
+                                        KeySource.ASSISTANT -> stringResource(R.string.servers_key_assistant)
+                                        KeySource.NONE -> stringResource(R.string.servers_key_none)
                                     },
                                 )
                             },
@@ -381,7 +389,7 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
                 },
             )
             group(
-                "Server",
+                serverTitle,
                 buildList<GroupRow> {
                     current.updates?.let { updates ->
                         add { shapes ->
@@ -390,12 +398,12 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
                                 onCheckedChange = { on -> act { client.setUpdates(on) } },
                                 shapes = shapes,
                                 leadingContent = { Icon(Icons.Outlined.SystemUpdate, null) },
-                                overlineContent = { Text("Version ${updates.current}") },
+                                overlineContent = { Text(stringResource(R.string.servers_version, updates.current)) },
                                 supportingContent = {
-                                    Text(updates.error ?: updates.available?.let { "$it is out" } ?: "Installs new releases itself")
+                                    Text(updates.error ?: updates.available?.let { stringResource(R.string.servers_update_out, it) } ?: stringResource(R.string.servers_update_itself))
                                 },
                                 trailingContent = { Switch(checked = updates.automatic, onCheckedChange = null) },
-                            ) { Text("Update automatically") }
+                            ) { Text(stringResource(R.string.servers_update_automatically)) }
                         }
                     }
                     geo?.let { status ->
@@ -405,7 +413,7 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
                                 shapes = shapes,
                                 leadingContent = { Icon(Icons.Outlined.Map, null) },
                                 supportingContent = { Text(mapsSummary(status)) },
-                            ) { Text("Maps") }
+                            ) { Text(stringResource(R.string.servers_maps)) }
                         }
                     }
                     add { shapes ->
@@ -413,8 +421,8 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
                             onClick = { kit = true },
                             shapes = shapes,
                             leadingContent = { Icon(Icons.Outlined.Lock, null) },
-                            supportingContent = { Text("The backup key, sealed with a passphrase") },
-                        ) { Text("Recovery kit") }
+                            supportingContent = { Text(stringResource(R.string.servers_kit_summary)) },
+                        ) { Text(stringResource(R.string.servers_kit_title)) }
                     }
                     add { shapes ->
                         SegmentedListItem(
@@ -430,9 +438,9 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
                             },
                             shapes = shapes,
                             supportingContent = {
-                                Text("Your devices stop managing it. You stay its owner, and nothing on the server changes.")
+                                Text(stringResource(R.string.servers_forget_summary))
                             },
-                        ) { Text("Remove from my servers") }
+                        ) { Text(stringResource(R.string.servers_forget)) }
                     }
                     if (vm != null && model.servers.exeToken != null) {
                         add { shapes ->
@@ -440,9 +448,9 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
                                 onClick = { removing = true },
                                 shapes = shapes,
                                 supportingContent = {
-                                    Text("Deletes $vm from your exe.dev account, with its assistants, their history and the backups on it.")
+                                    Text(stringResource(R.string.servers_delete_summary, vm))
                                 },
-                            ) { Text("Remove this server", color = MaterialTheme.colorScheme.error) }
+                            ) { Text(stringResource(R.string.servers_delete), color = MaterialTheme.colorScheme.error) }
                         }
                     }
                 },
@@ -481,8 +489,8 @@ private fun NewAssistantScreen(
     Scaffold(
         topBar = {
             androidx.compose.material3.TopAppBar(
-                title = { Text("New assistant") },
-                navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                title = { Text(stringResource(R.string.servers_new_assistant)) },
+                navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.servers_back)) } },
             )
         },
     ) { padding ->
@@ -495,29 +503,29 @@ private fun NewAssistantScreen(
                 if (done != null) {
                     val pairing = done.pairing
                     if (pairing != null) {
-                        Text("${done.assistant.settings.displayName} is ready for $person", style = MaterialTheme.typography.headlineSmall)
-                        Text("Send them this link, or have them type the code ${pairing.code} in the Nudge app. It works once, for ten minutes.")
+                        Text(stringResource(R.string.servers_ready_for, done.assistant.settings.displayName, person), style = MaterialTheme.typography.headlineSmall)
+                        Text(stringResource(R.string.servers_ready_send, pairing.code))
                         Button(onClick = {
                             context.startActivity(
                                 Intent.createChooser(
                                     Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, pairing.link),
-                                    "Send the link",
+                                    text(R.string.servers_send_link),
                                 ),
                             )
-                        }) { Text("Send the link") }
+                        }) { Text(stringResource(R.string.servers_send_link)) }
                     } else {
-                        Text("${done.assistant.settings.displayName} is ready", style = MaterialTheme.typography.headlineSmall)
-                        Text("You joined it from home: its rooms are beside your own.")
+                        Text(stringResource(R.string.servers_ready, done.assistant.settings.displayName), style = MaterialTheme.typography.headlineSmall)
+                        Text(stringResource(R.string.servers_ready_joined))
                     }
-                    TextButton(onClick = close) { Text("Done") }
+                    TextButton(onClick = close) { Text(stringResource(R.string.servers_done)) }
                     return@Column
                 }
                 OutlinedTextField(
-                    value = name, onValueChange = { name = it }, label = { Text("Its name") },
-                    supportingText = { Text("In its address: ${slugOf(name).ifEmpty { "…" }}") },
+                    value = name, onValueChange = { name = it }, label = { Text(stringResource(R.string.servers_its_name)) },
+                    supportingText = { Text(stringResource(R.string.servers_in_address, slugOf(name).ifEmpty { "…" })) },
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                 )
-                Text("Model", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.servers_model), style = MaterialTheme.typography.labelLarge)
                 listOf("anthropic", "openai").forEach { option ->
                     Row(
                         Modifier.fillMaxWidth().selectable(selected = provider == option, onClick = {
@@ -528,25 +536,25 @@ private fun NewAssistantScreen(
                     ) {
                         RadioButton(selected = provider == option, onClick = null)
                         Text(
-                            providerName(option) + if (option in ready) "" else " (add a key on the server first)",
+                            if (option in ready) providerName(option) else stringResource(R.string.servers_provider_needs_key, providerName(option)),
                             Modifier.padding(start = 12.dp),
                         )
                     }
                 }
-                OutlinedTextField(value = modelId, onValueChange = { modelId = it }, label = { Text("Model id") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                Text("Who is it for?", style = MaterialTheme.typography.labelLarge)
+                OutlinedTextField(value = modelId, onValueChange = { modelId = it }, label = { Text(stringResource(R.string.servers_model_id)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Text(stringResource(R.string.servers_who_for), style = MaterialTheme.typography.labelLarge)
                 if (home != null) {
                     Row(Modifier.fillMaxWidth().selectable(selected = forMe, onClick = { forMe = true }), verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(selected = forMe, onClick = null)
-                        Text("Me: I join it from my home, and keep one sign-in", Modifier.padding(start = 12.dp))
+                        Text(stringResource(R.string.servers_for_me), Modifier.padding(start = 12.dp))
                     }
                 }
                 Row(Modifier.fillMaxWidth().selectable(selected = !forMe, onClick = { forMe = false }), verticalAlignment = Alignment.CenterVertically) {
                     RadioButton(selected = !forMe, onClick = null)
-                    Text("Someone else: it is their home, and they are its admin", Modifier.padding(start = 12.dp))
+                    Text(stringResource(R.string.servers_for_someone), Modifier.padding(start = 12.dp))
                 }
                 if (!forMe) {
-                    OutlinedTextField(value = person, onValueChange = { person = it }, label = { Text("Their name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = person, onValueChange = { person = it }, label = { Text(stringResource(R.string.servers_their_name)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 } else {
                     HomeFederationCard(model)
                 }
@@ -562,7 +570,7 @@ private fun NewAssistantScreen(
                                         name = slugOf(name),
                                         settings = AssistantSettings(name.trim(), ModelChoice(provider, modelId.trim()), null, null, null),
                                         madeFor = if (forMe) {
-                                            AssistantFor.Me(memberships?.address ?: address ?: error("Your home has no address yet."))
+                                            AssistantFor.Me(memberships?.address ?: address ?: error(text(R.string.servers_no_address)))
                                         } else {
                                             AssistantFor.SomeonesHome(person.trim())
                                         },
@@ -576,7 +584,7 @@ private fun NewAssistantScreen(
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text(if (busy) "Making it…" else "Make it") }
+                ) { Text(stringResource(if (busy) R.string.servers_making else R.string.servers_make_it)) }
             }
         }
     }
@@ -618,17 +626,17 @@ private fun AssistantScreen(
     if (deleting) {
         AlertDialog(
             onDismissRequest = { deleting = false },
-            title = { Text("Delete ${assistant.settings.displayName}?") },
+            title = { Text(stringResource(R.string.servers_delete_assistant_title, assistant.settings.displayName)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Its rooms, history and memory go. The server keeps a backup for 30 days. Type ${assistant.name} to delete it.")
+                    Text(stringResource(R.string.servers_delete_assistant_body, assistant.name))
                     OutlinedTextField(value = confirm, onValueChange = { confirm = it }, singleLine = true)
                 }
             },
             confirmButton = {
-                TextButton(enabled = confirm.trim() == assistant.name, onClick = { deleting = false; act(delete) }) { Text("Delete") }
+                TextButton(enabled = confirm.trim() == assistant.name, onClick = { deleting = false; act(delete) }) { Text(stringResource(R.string.servers_delete_assistant_confirm)) }
             },
-            dismissButton = { TextButton(onClick = { deleting = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { deleting = false }) { Text(stringResource(R.string.servers_cancel)) } },
         )
     }
 
@@ -636,7 +644,7 @@ private fun AssistantScreen(
         topBar = {
             androidx.compose.material3.TopAppBar(
                 title = { Text(assistant.settings.displayName) },
-                navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.servers_back)) } },
             )
         },
     ) { padding ->
@@ -644,16 +652,16 @@ private fun AssistantScreen(
             Modifier.fillMaxSize().padding(padding).imePadding().verticalScroll(rememberScrollState()).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            OutlinedTextField(value = displayName, onValueChange = { displayName = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = displayName, onValueChange = { displayName = it }, label = { Text(stringResource(R.string.servers_name)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(
                 value = modelId, onValueChange = { modelId = it },
-                label = { Text("Model (${assistant.settings.model.provider})") },
+                label = { Text(stringResource(R.string.servers_model_provider, assistant.settings.model.provider)) },
                 singleLine = true, modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
                 value = instructions, onValueChange = { instructions = it },
-                label = { Text("Instructions") },
-                supportingText = { Text("Said to the model before every conversation") },
+                label = { Text(stringResource(R.string.servers_instructions)) },
+                supportingText = { Text(stringResource(R.string.servers_instructions_supporting)) },
                 minLines = 3, modifier = Modifier.fillMaxWidth(),
             )
             problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -675,9 +683,9 @@ private fun AssistantScreen(
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text(if (joining) "Joining…" else "Join it from home") }
+                ) { Text(stringResource(if (joining) R.string.servers_joining else R.string.servers_join_from_home)) }
                 Text(
-                    "Its rooms show beside your home's, and you are its admin and an owner of this server.",
+                    stringResource(R.string.servers_join_explainer),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -696,8 +704,8 @@ private fun AssistantScreen(
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Save") }
-            TextButton(onClick = { deleting = true }) { Text("Delete this assistant", color = MaterialTheme.colorScheme.error) }
+            ) { Text(stringResource(R.string.servers_save)) }
+            TextButton(onClick = { deleting = true }) { Text(stringResource(R.string.servers_delete_assistant), color = MaterialTheme.colorScheme.error) }
         }
     }
 }

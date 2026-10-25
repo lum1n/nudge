@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useId, useState } from "react";
+import { m } from "./i18n/index.ts";
 
 /** The parts of JSON Schema that TypeBox writes for extensions' settings. */
 export type Schema = {
@@ -110,7 +111,7 @@ function Field({
       >
         {(value === undefined || !required || schema.default !== undefined) && (
           <option value="">
-            {schema.default === undefined ? "—" : `Default (${String(schema.default)})`}
+            {schema.default === undefined ? "—" : m.settings.form.default(String(schema.default))}
           </option>
         )}
         {choices.map((choice, index) => (
@@ -201,8 +202,8 @@ function Help({ schema, secret = false }: { schema: Schema; secret?: boolean }) 
   const range =
     schema.minimum !== undefined || schema.maximum !== undefined
       ? [
-          schema.minimum !== undefined ? `at least ${schema.minimum}` : undefined,
-          schema.maximum !== undefined ? `at most ${schema.maximum}` : undefined,
+          schema.minimum !== undefined ? m.settings.form.atLeast(schema.minimum) : undefined,
+          schema.maximum !== undefined ? m.settings.form.atMost(schema.maximum) : undefined,
         ]
           .filter(Boolean)
           .join(", ")
@@ -215,8 +216,9 @@ function Help({ schema, secret = false }: { schema: Schema; secret?: boolean }) 
       {secret && (
         <>
           {" "}
-          Write <code className="rounded bg-stone-200 px-1">{"${NAME}"}</code> to take it from the
-          server's environment; anything else is saved in nudge.json as written.
+          {m.settings.form.secretBefore}{" "}
+          <code className="rounded bg-stone-200 px-1">{"${NAME}"}</code>{" "}
+          {m.settings.form.secretAfter}
         </>
       )}
     </p>
@@ -291,7 +293,7 @@ function RoomsInput({
           checked={every}
           onChange={(event) => onChange(event.target.checked ? ["*"] : undefined)}
         />
-        Every room
+        {m.settings.form.everyRoom}
       </label>
       {!every &&
         [
@@ -333,7 +335,7 @@ function LinesInput({
       id={id}
       rows={Math.min(8, Math.max(2, (value?.length ?? 0) + 1))}
       value={text}
-      placeholder={defaults.length > 0 ? defaults.join("\n") : "One per line"}
+      placeholder={defaults.length > 0 ? defaults.join("\n") : m.settings.form.onePerLine}
       onChange={(event) => {
         setText(event.target.value);
         const next = lines(event.target.value);
@@ -379,7 +381,7 @@ function ObjectList({
               onClick={() => onChange(items.filter((_, other) => other !== index))}
               className="text-sm text-red-700 underline"
             >
-              Remove
+              {m.common.remove}
             </button>
           </div>
           <ObjectFields
@@ -394,7 +396,7 @@ function ObjectList({
         onClick={() => onChange([...items, {}])}
         className="self-start rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
       >
-        Add
+        {m.settings.form.add}
       </button>
     </div>
   );
@@ -437,7 +439,7 @@ function RecordInput({
               }}
               className="text-sm text-red-700 underline"
             >
-              Remove
+              {m.common.remove}
             </button>
           </div>
           {typeOf(schema) === "object" && schema.properties !== undefined ? (
@@ -469,7 +471,7 @@ function RecordInput({
               add();
             }
           }}
-          placeholder={`New ${label.toLowerCase()} name`}
+          placeholder={m.settings.form.newName(label)}
           autoComplete="off"
           className={`${INPUT} min-w-0 flex-1 font-mono`}
         />
@@ -479,7 +481,7 @@ function RecordInput({
           disabled={name.trim() === "" || name.trim() in value}
           className="shrink-0 rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100 disabled:opacity-50"
         >
-          Add
+          {m.settings.form.add}
         </button>
       </div>
     </div>
@@ -515,7 +517,7 @@ function JsonInput({
             onChange(JSON.parse(event.target.value));
             setError(undefined);
           } catch {
-            setError("Not valid JSON yet");
+            setError(m.settings.form.notJson);
           }
         }}
         spellCheck={false}

@@ -55,12 +55,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.nudge.Dictation
+import app.nudge.R
 import app.nudge.avatar.Avatar
 import app.nudge.avatar.LocalRobotLook
 import app.nudge.avatar.Mood
@@ -198,24 +200,29 @@ fun RoomScreen(
                 subtitle = {
                     val others = state?.room?.members.orEmpty().filter { it.id != me?.player?.id }
                     // Whose location the assistant knows here, for everyone in the room to see.
+                    val you = stringResource(R.string.room_location_you)
                     val located = state?.sharingLocation.orEmpty()
-                        .map { if (it.id == me?.player?.id) "you" else it.displayName }
+                        .map { if (it.id == me?.player?.id) you else it.displayName }
+                    val names = located.joinToString(stringResource(R.string.room_location_and))
                     Text(
                         when {
-                            state?.live?.running == true -> "Answering…"
-                            others.isEmpty() -> "Just you"
+                            state?.live?.running == true -> stringResource(R.string.room_answering)
+                            others.isEmpty() -> stringResource(R.string.room_just_you)
                             else -> others.joinToString { it.displayName }
-                        } + if (located.isEmpty()) "" else " · 📍 knows where ${located.joinToString(" and ")} ${if (located == listOf("you") || located.size > 1) "are" else "is"}",
+                        } + if (located.isEmpty()) "" else stringResource(
+                            if (located == listOf(you) || located.size > 1) R.string.room_location_are else R.string.room_location_is,
+                            names,
+                        ),
                         maxLines = 1,
                     )
                 },
                 navigationIcon = {
-                    back?.let { IconButton(onClick = it) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Rooms") } }
+                    back?.let { IconButton(onClick = it) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.room_rooms)) } }
                 },
                 actions = {
-                    IconButton(onClick = { showActivity = true }) { Icon(Icons.Outlined.History, "Activity") }
-                    IconButton(onClick = lists) { Icon(Icons.Outlined.Checklist, "Lists") }
-                    IconButton(onClick = info) { Icon(Icons.Outlined.Info, "Room") }
+                    IconButton(onClick = { showActivity = true }) { Icon(Icons.Outlined.History, stringResource(R.string.room_activity)) }
+                    IconButton(onClick = lists) { Icon(Icons.Outlined.Checklist, stringResource(R.string.room_lists)) }
+                    IconButton(onClick = info) { Icon(Icons.Outlined.Info, stringResource(R.string.room_room)) }
                 },
             )
         },
@@ -223,7 +230,7 @@ fun RoomScreen(
         Box(Modifier.fillMaxSize().padding(padding)) {
             when {
                 state?.status == SyncStatus.GONE -> Text(
-                    if (state.reason == GoneReason.REMOVED) "You left this room" else "No such room",
+                    stringResource(if (state.reason == GoneReason.REMOVED) R.string.room_left else R.string.room_no_such_room),
                     Modifier.align(Alignment.Center),
                 )
                 state == null || (state.room == null && state.status == SyncStatus.SYNCING) ->
@@ -249,9 +256,9 @@ fun RoomScreen(
     problem?.let { message ->
         AlertDialog(
             onDismissRequest = { problem = null },
-            title = { Text("Something went wrong") },
+            title = { Text(stringResource(R.string.room_problem_title)) },
             text = { Text(message) },
-            confirmButton = { TextButton(onClick = { problem = null }) { Text("OK") } },
+            confirmButton = { TextButton(onClick = { problem = null }) { Text(stringResource(R.string.room_ok)) } },
         )
     }
 }
@@ -285,7 +292,7 @@ private fun Timeline(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Avatar(mood, appearance = LocalRobotLook.current, size = 160.dp, level = level, title = assistant)
-            Text("Say hello to $assistant.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.room_say_hello, assistant), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         return
     }
@@ -307,7 +314,7 @@ private fun Timeline(
             ) {
                 Bubble(message.text, mine, if (mine) null else message.author?.displayName, faded = true)
                 Text(
-                    if (message.mode == QueueMode.STEER) "next" else "queued",
+                    stringResource(if (message.mode == QueueMode.STEER) R.string.room_queued_next else R.string.room_queued),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -326,7 +333,7 @@ private fun Timeline(
                     if (state.loadingEarlier) {
                         LoadingIndicator(Modifier.size(32.dp))
                     } else {
-                        FilledTonalButton(onClick = loadEarlier, shapes = ButtonDefaults.shapes()) { Text("Load earlier") }
+                        FilledTonalButton(onClick = loadEarlier, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.room_load_earlier)) }
                     }
                 }
             }
@@ -346,11 +353,11 @@ private fun Activity(state: RoomState, loadEarlier: () -> Unit, openBrowser: () 
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
     ) {
-        item(key = "title") { Text("Activity", style = MaterialTheme.typography.titleLarge) }
+        item(key = "title") { Text(stringResource(R.string.room_activity), style = MaterialTheme.typography.titleLarge) }
         if (items.isEmpty()) {
             item(key = "empty") {
                 Text(
-                    "Nothing yet: tool calls, nudges, watches and approvals show up here.",
+                    stringResource(R.string.room_activity_empty),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -362,7 +369,7 @@ private fun Activity(state: RoomState, loadEarlier: () -> Unit, openBrowser: () 
                     if (state.loadingEarlier) {
                         LoadingIndicator(Modifier.size(32.dp))
                     } else {
-                        FilledTonalButton(onClick = loadEarlier, shapes = ButtonDefaults.shapes()) { Text("Load earlier") }
+                        FilledTonalButton(onClick = loadEarlier, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.room_load_earlier)) }
                     }
                 }
             }
@@ -402,14 +409,14 @@ private fun Composer(
                 ) {
                     Icon(
                         if (secret) Icons.Outlined.Lock else Icons.Outlined.LockOpen,
-                        if (secret) "Private: only you see it and the answer" else "Send privately",
+                        stringResource(if (secret) R.string.room_private_on else R.string.room_send_privately),
                     )
                 }
             }
             TextField(
                 value = draft,
                 onValueChange = onDraft,
-                placeholder = { Text(if (secret == true) "Private message" else "Message") },
+                placeholder = { Text(stringResource(if (secret == true) R.string.room_private_message else R.string.room_message)) },
                 trailingIcon = mic,
                 maxLines = 6,
                 shape = MaterialTheme.shapes.extraLarge,
@@ -431,14 +438,14 @@ private fun Composer(
                         contentColor = MaterialTheme.colorScheme.onErrorContainer,
                     ),
                     modifier = size,
-                ) { Icon(Icons.Filled.Stop, "Stop") }
+                ) { Icon(Icons.Filled.Stop, stringResource(R.string.room_stop)) }
             } else {
                 FilledIconButton(
                     onClick = send,
                     enabled = draft.isNotBlank(),
                     shapes = IconButtonDefaults.shapes(),
                     modifier = size,
-                ) { Icon(Icons.AutoMirrored.Filled.Send, "Send") }
+                ) { Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.room_send)) }
             }
         }
     }
@@ -468,9 +475,9 @@ private fun Presence(mood: Mood, label: String, assistant: String, level: () -> 
 @Composable
 private fun LiveStatus(status: Status) {
     val text = when (status) {
-        is Status.Retrying -> "Trying again (${status.attempt}): ${status.error}"
-        is Status.Compacting -> "Summarizing the conversation so far…"
-        is Status.CompactionFailed -> "Couldn't summarize: ${status.error}"
+        is Status.Retrying -> stringResource(R.string.room_retrying, "${status.attempt}", status.error)
+        is Status.Compacting -> stringResource(R.string.room_compacting)
+        is Status.CompactionFailed -> stringResource(R.string.room_compaction_failed, status.error)
     }
     Surface(
         color = MaterialTheme.colorScheme.secondaryContainer,

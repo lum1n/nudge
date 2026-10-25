@@ -60,12 +60,14 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.nudge.R
 import java.text.DateFormat
 import java.util.Date
 import kotlinx.coroutines.Dispatchers
@@ -99,8 +101,8 @@ fun BrowserScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
         topBar = {
             TopAppBar(
                 colors = groupedTopBarColors(),
-                title = { Text("Browser") },
-                navigationIcon = { IconButton(onClick = close) { Icon(Icons.Outlined.Close, "Close") } },
+                title = { Text(stringResource(R.string.panels_browser)) },
+                navigationIcon = { IconButton(onClick = close) { Icon(Icons.Outlined.Close, stringResource(R.string.panels_close)) } },
             )
         },
     ) { padding ->
@@ -110,9 +112,10 @@ fun BrowserScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
             when {
                 status is PanelStatus.Closed -> Text(
                     if (status.code.toInt() == 4404) {
-                        "This room has no browser. Turn on the browser extension for it under About this room."
+                        stringResource(R.string.panels_browser_off)
                     } else {
-                        "Disconnected${status.reason.takeIf { it.isNotEmpty() }?.let { ": $it" } ?: ""}."
+                        status.reason.takeIf { it.isNotEmpty() }?.let { stringResource(R.string.panels_disconnected_because, it) }
+                            ?: stringResource(R.string.panels_disconnected)
                     },
                     Modifier.align(Alignment.Center).padding(32.dp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -122,7 +125,7 @@ fun BrowserScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     LoadingIndicator()
-                    Text("Starting the browser…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.panels_browser_starting), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 else -> Live(state, live)
             }
@@ -146,8 +149,7 @@ private fun Live(state: BrowserState, browser: ObservedBrowser) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            "This is the room's own browser. Log in to a site here when the assistant asks you to. What you type " +
-                "goes to this browser only; the assistant never sees passwords.",
+            stringResource(R.string.panels_browser_intro),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -155,16 +157,16 @@ private fun Live(state: BrowserState, browser: ObservedBrowser) {
             Surface(color = MaterialTheme.colorScheme.tertiaryContainer, shape = MaterialTheme.shapes.large) {
                 Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "${control.holder ?: "Someone else"} is using the browser; you are watching.",
+                        stringResource(R.string.panels_browser_watching, control.holder ?: stringResource(R.string.panels_someone_else)),
                         Modifier.weight(1f),
                         style = MaterialTheme.typography.bodyMedium,
                     )
-                    TextButton(onClick = browser::takeControl, shapes = ButtonDefaults.shapes()) { Text("Take control") }
+                    TextButton(onClick = browser::takeControl, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.panels_take_control)) }
                 }
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = browser::back, enabled = inControl) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
+            IconButton(onClick = browser::back, enabled = inControl) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.panels_back)) }
             OutlinedTextField(
                 value = address,
                 onValueChange = { address = it },
@@ -181,7 +183,7 @@ private fun Live(state: BrowserState, browser: ObservedBrowser) {
         Typing(typed, inControl, browser)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "Remember logins I type here, so the assistant can log in by itself next time",
+                stringResource(R.string.panels_browser_remember),
                 Modifier.weight(1f),
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -192,11 +194,11 @@ private fun Live(state: BrowserState, browser: ObservedBrowser) {
             enabled = inControl,
             shapes = ButtonDefaults.shapes(),
             modifier = Modifier.fillMaxWidth(),
-        ) { Text("Done") }
+        ) { Text(stringResource(R.string.panels_browser_done)) }
         state.saved?.let { saved ->
             Text(
-                (if (saved.isEmpty()) "Nothing to save." else "Saved the login for ${saved.joinToString()}.") +
-                    " Ask the assistant to try again.",
+                if (saved.isEmpty()) stringResource(R.string.panels_browser_nothing_saved)
+                else stringResource(R.string.panels_browser_saved, saved.joinToString()),
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
@@ -210,7 +212,7 @@ private fun Live(state: BrowserState, browser: ObservedBrowser) {
 private fun Page(frame: BrowserFrame?, inControl: Boolean, browser: ObservedBrowser, tapped: () -> Unit) {
     if (frame == null || frame.width == 0 || frame.height == 0) {
         Box(Modifier.fillMaxWidth().height(240.dp), contentAlignment = Alignment.Center) {
-            Text("Waiting for the page…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.panels_browser_waiting), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         return
     }
@@ -262,7 +264,7 @@ private fun Page(frame: BrowserFrame?, inControl: Boolean, browser: ObservedBrow
         image?.let {
             Image(
                 it,
-                contentDescription = "The room's browser, at ${frame.url}",
+                contentDescription = stringResource(R.string.panels_browser_page, frame.url),
                 contentScale = ContentScale.FillBounds,
                 modifier = Modifier.fillMaxSize(),
                 alpha = if (inControl) 1f else 0.85f,
@@ -288,7 +290,7 @@ private fun Typing(typed: MutableState<String>, inControl: Boolean, browser: Obs
             typed.value = next
         },
         enabled = inControl,
-        label = { Text("Type into the page") },
+        label = { Text(stringResource(R.string.panels_browser_type)) },
         singleLine = true,
         visualTransformation = PasswordVisualTransformation(),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false, imeAction = ImeAction.Send),
@@ -312,10 +314,10 @@ private fun Typing(typed: MutableState<String>, inControl: Boolean, browser: Obs
 private fun SavedLogins(state: BrowserState, browser: ObservedBrowser) {
     val logins = state.logins.orEmpty()
     Column(Modifier.padding(bottom = 24.dp)) {
-        Section("Saved logins")
+        Section(stringResource(R.string.panels_browser_logins))
         if (logins.isEmpty()) {
             Text(
-                "None yet. Logins you remember here show up here.",
+                stringResource(R.string.panels_browser_no_logins),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
@@ -329,12 +331,15 @@ private fun SavedLogins(state: BrowserState, browser: ObservedBrowser) {
                         Text(
                             listOfNotNull(
                                 login.username,
-                                "saved ${DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(login.savedAt.toLong()))}",
+                                stringResource(
+                                    R.string.panels_browser_saved_on,
+                                    DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(login.savedAt.toLong())),
+                                ),
                             ).joinToString(" · "),
                         )
                     },
                     trailingContent = {
-                        FilledTonalButton(onClick = { browser.forget(login) }, shapes = ButtonDefaults.shapes()) { Text("Forget") }
+                        FilledTonalButton(onClick = { browser.forget(login) }, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.panels_browser_forget)) }
                     },
                 ) { Text(login.host) }
             }

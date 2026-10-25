@@ -37,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
@@ -44,6 +45,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import app.nudge.R
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -100,7 +102,10 @@ private fun SettingControl(field: SettingField, value: JsonElement?, onChange: (
                 trailingIcon = if (kind.secret) {
                     {
                         IconButton(onClick = { shown = !shown }) {
-                            Icon(if (shown) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, if (shown) "Hide" else "Show")
+                            Icon(
+                                if (shown) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                                stringResource(if (shown) R.string.settings_form_hide else R.string.settings_form_show),
+                            )
                         }
                     }
                 } else {
@@ -131,8 +136,8 @@ private fun SettingControl(field: SettingField, value: JsonElement?, onChange: (
                 modifier = Modifier.fillMaxWidth(),
             )
             Help(field, range = listOfNotNull(
-                kind.minimum?.let { "at least ${shown(JsonPrimitive(it))}" },
-                kind.maximum?.let { "at most ${shown(JsonPrimitive(it))}" },
+                kind.minimum?.let { stringResource(R.string.settings_form_at_least, shown(JsonPrimitive(it))) },
+                kind.maximum?.let { stringResource(R.string.settings_form_at_most, shown(JsonPrimitive(it))) },
             ).joinToString(", ").takeIf { it.isNotEmpty() })
         }
         is SettingKind.Choice -> Column {
@@ -140,13 +145,13 @@ private fun SettingControl(field: SettingField, value: JsonElement?, onChange: (
             Text(label, style = MaterialTheme.typography.bodyLarge)
             Box {
                 OutlinedButton(onClick = { open = true }, shapes = ButtonDefaults.shapes()) {
-                    Text(value?.let(::shown) ?: field.default?.let { "Default (${shown(it)})" } ?: "—")
+                    Text(value?.let(::shown) ?: field.default?.let { stringResource(R.string.settings_form_default_choice, shown(it)) } ?: "—")
                     Icon(Icons.Outlined.ArrowDropDown, null)
                 }
                 DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
                     if (!field.required || field.default != null) {
                         DropdownMenuItem(
-                            text = { Text(field.default?.let { "Default (${shown(it)})" } ?: "—") },
+                            text = { Text(field.default?.let { stringResource(R.string.settings_form_default_choice, shown(it)) } ?: "—") },
                             onClick = {
                                 open = false
                                 onChange(null)
@@ -176,7 +181,7 @@ private fun SettingControl(field: SettingField, value: JsonElement?, onChange: (
                     onChange(if (next.isEmpty()) null else JsonArray(next.map(::JsonPrimitive)))
                 },
                 label = { Text(label) },
-                placeholder = { Text("One per line") },
+                placeholder = { Text(stringResource(R.string.settings_form_one_per_line)) },
                 minLines = 2,
                 textStyle = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace),
                 shape = MaterialTheme.shapes.large,
@@ -194,7 +199,7 @@ private fun SettingControl(field: SettingField, value: JsonElement?, onChange: (
             Help(field)
             Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
                 Column(Modifier.padding(vertical = 4.dp)) {
-                    CheckRow("Every room", every) { on -> set(if (on) listOf("*") else emptyList()) }
+                    CheckRow(stringResource(R.string.settings_form_every_room), every) { on -> set(if (on) listOf("*") else emptyList()) }
                     if (!every) {
                         val unknown = chosen.filter { id -> rooms.none { it.id == id } }
                         (rooms.map { it.id to it.name } + unknown.map { it to it }).forEach { (id, name) ->
@@ -230,7 +235,7 @@ private fun SettingControl(field: SettingField, value: JsonElement?, onChange: (
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            TextButton(onClick = { set(items.filterIndexed { at, _ -> at != index }) }) { Text("Remove") }
+                            TextButton(onClick = { set(items.filterIndexed { at, _ -> at != index }) }) { Text(stringResource(R.string.settings_form_remove)) }
                         }
                         SettingFields(kind.fields, item) { next -> set(items.mapIndexed { at, other -> if (at == index) next else other }) }
                     }
@@ -238,7 +243,7 @@ private fun SettingControl(field: SettingField, value: JsonElement?, onChange: (
             }
             OutlinedButton(onClick = { set(items + JsonObject(emptyMap())) }, shapes = ButtonDefaults.shapes()) {
                 Icon(Icons.Outlined.Add, null, Modifier.padding(end = 8.dp))
-                Text("Add")
+                Text(stringResource(R.string.settings_form_add))
             }
         }
         SettingKind.Json -> Column {
@@ -260,7 +265,7 @@ private fun SettingControl(field: SettingField, value: JsonElement?, onChange: (
                 },
                 label = { Text(label) },
                 isError = wrong,
-                supportingText = if (wrong) ({ Text("Not valid JSON yet") }) else null,
+                supportingText = if (wrong) ({ Text(stringResource(R.string.settings_form_not_json)) }) else null,
                 minLines = 3,
                 textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                 shape = MaterialTheme.shapes.large,
@@ -278,8 +283,8 @@ private fun Help(field: SettingField, secret: Boolean = false, range: String? = 
     val text = listOfNotNull(
         field.description,
         range?.let { "($it)" },
-        default?.let { "Default ${shown(it)}." },
-        if (secret && field.description?.contains("\${") != true) "Write \${NAME} to take it from the server's environment; anything else is saved in nudge.json as written." else null,
+        default?.let { stringResource(R.string.settings_form_default, shown(it)) },
+        if (secret && field.description?.contains("\${") != true) stringResource(R.string.settings_form_secret_help) else null,
     ).joinToString(" ")
     if (text.isEmpty()) return
     Text(

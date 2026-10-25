@@ -13,6 +13,7 @@ class NudgeApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        Texts.use(this)
         model = AppModel(this)
         getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel(PushService.CHANNEL, getString(R.string.channel_news), NotificationManager.IMPORTANCE_HIGH)
