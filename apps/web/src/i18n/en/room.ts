@@ -20,6 +20,8 @@ export const room = {
     browser: "Browser",
     desktop: "Desktop",
     desktopTitle: "The room's desktop, where the assistant uses apps",
+    terminal: "Terminal",
+    terminalTitle: "The commands the assistant runs in the room's terminal",
     connectors: "Connectors",
     mcp: "MCP",
     mcpTitle: "MCP servers the assistant uses in this room",

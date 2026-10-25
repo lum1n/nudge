@@ -180,6 +180,14 @@ function Room() {
               {m.room.links.desktop}
             </Link>
             <Link
+              to="/$assistant/$room/terminal"
+              params={{ assistant, room }}
+              title={m.room.links.terminalTitle}
+              className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
+            >
+              {m.room.links.terminal}
+            </Link>
+            <Link
               to="/$assistant/$room/connectors"
               params={{ assistant, room }}
               className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"

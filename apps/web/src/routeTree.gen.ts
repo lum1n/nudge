@@ -27,6 +27,7 @@ import { Route as AssistantRoomDocumentsRouteImport } from './routes/$assistant/
 import { Route as AssistantRoomListsRouteImport } from './routes/$assistant/$room_.lists'
 import { Route as AssistantRoomMcpRouteImport } from './routes/$assistant/$room_.mcp'
 import { Route as AssistantRoomModelRouteImport } from './routes/$assistant/$room_.model'
+import { Route as AssistantRoomTerminalRouteImport } from './routes/$assistant/$room_.terminal'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -118,6 +119,11 @@ const AssistantRoomModelRoute = AssistantRoomModelRouteImport.update({
   path: '/$room/model',
   getParentRoute: () => AssistantRouteRoute,
 } as any)
+const AssistantRoomTerminalRoute = AssistantRoomTerminalRouteImport.update({
+  id: '/$room_/terminal',
+  path: '/$room/terminal',
+  getParentRoute: () => AssistantRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -138,6 +144,7 @@ export interface FileRoutesByFullPath {
   '/$assistant/$room/lists': typeof AssistantRoomListsRoute
   '/$assistant/$room/mcp': typeof AssistantRoomMcpRoute
   '/$assistant/$room/model': typeof AssistantRoomModelRoute
+  '/$assistant/$room/terminal': typeof AssistantRoomTerminalRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -157,6 +164,7 @@ export interface FileRoutesByTo {
   '/$assistant/$room/lists': typeof AssistantRoomListsRoute
   '/$assistant/$room/mcp': typeof AssistantRoomMcpRoute
   '/$assistant/$room/model': typeof AssistantRoomModelRoute
+  '/$assistant/$room/terminal': typeof AssistantRoomTerminalRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -178,6 +186,7 @@ export interface FileRoutesById {
   '/$assistant/$room_/lists': typeof AssistantRoomListsRoute
   '/$assistant/$room_/mcp': typeof AssistantRoomMcpRoute
   '/$assistant/$room_/model': typeof AssistantRoomModelRoute
+  '/$assistant/$room_/terminal': typeof AssistantRoomTerminalRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -200,6 +209,7 @@ export interface FileRouteTypes {
     | '/$assistant/$room/lists'
     | '/$assistant/$room/mcp'
     | '/$assistant/$room/model'
+    | '/$assistant/$room/terminal'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -219,6 +229,7 @@ export interface FileRouteTypes {
     | '/$assistant/$room/lists'
     | '/$assistant/$room/mcp'
     | '/$assistant/$room/model'
+    | '/$assistant/$room/terminal'
   id:
     | '__root__'
     | '/'
@@ -239,6 +250,7 @@ export interface FileRouteTypes {
     | '/$assistant/$room_/lists'
     | '/$assistant/$room_/mcp'
     | '/$assistant/$room_/model'
+    | '/$assistant/$room_/terminal'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -378,6 +390,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AssistantRoomModelRouteImport
       parentRoute: typeof AssistantRouteRoute
     }
+    '/$assistant/$room_/terminal': {
+      id: '/$assistant/$room_/terminal'
+      path: '/$room/terminal'
+      fullPath: '/$assistant/$room/terminal'
+      preLoaderRoute: typeof AssistantRoomTerminalRouteImport
+      parentRoute: typeof AssistantRouteRoute
+    }
   }
 }
 
@@ -394,6 +413,7 @@ interface AssistantRouteRouteChildren {
   AssistantRoomListsRoute: typeof AssistantRoomListsRoute
   AssistantRoomMcpRoute: typeof AssistantRoomMcpRoute
   AssistantRoomModelRoute: typeof AssistantRoomModelRoute
+  AssistantRoomTerminalRoute: typeof AssistantRoomTerminalRoute
 }
 
 const AssistantRouteRouteChildren: AssistantRouteRouteChildren = {
@@ -409,6 +429,7 @@ const AssistantRouteRouteChildren: AssistantRouteRouteChildren = {
   AssistantRoomListsRoute: AssistantRoomListsRoute,
   AssistantRoomMcpRoute: AssistantRoomMcpRoute,
   AssistantRoomModelRoute: AssistantRoomModelRoute,
+  AssistantRoomTerminalRoute: AssistantRoomTerminalRoute,
 }
 
 const AssistantRouteRouteWithChildren = AssistantRouteRoute._addFileChildren(

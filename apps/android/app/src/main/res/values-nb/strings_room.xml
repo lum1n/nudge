@@ -107,6 +107,7 @@
     <string name="room_info_mcp">MCP-servere</string>
     <string name="room_info_browser">Nettleser</string>
     <string name="room_info_desktop">Skrivebord</string>
+    <string name="room_info_terminal">Terminal</string>
     <string name="room_info_in_this_room">I dette rommet</string>
     <string name="room_info_members">Medlemmer</string>
     <string name="room_info_memory">Minne</string>

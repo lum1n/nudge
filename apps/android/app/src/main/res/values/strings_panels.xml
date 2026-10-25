@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A room's browser, desktop, connectors and MCP servers, and the assistant's extensions. -->
+<!-- A room's browser, desktop, terminal, connectors and MCP servers, and the assistant's extensions. -->
 <resources>
     <string name="panels_back">Back</string>
     <string name="panels_close">Close</string>
@@ -48,6 +48,19 @@
     <string name="panels_desktop_waiting">Waiting for the screen…</string>
     <string name="panels_desktop_screen">The room\'s desktop</string>
     <string name="panels_desktop_type">Type into the desktop</string>
+
+    <!-- The terminal. -->
+    <string name="panels_terminal">Terminal</string>
+    <string name="panels_terminal_off">No terminal here. Turn on the terminal extension for this room under About this room.</string>
+    <string name="panels_terminal_empty">No commands yet. The ones the assistant runs here show up as they run.</string>
+    <string name="panels_terminal_waiting">Waiting for approval</string>
+    <string name="panels_terminal_running">Running…</string>
+    <string name="panels_terminal_exit">Exit %1$d</string>
+    <string name="panels_terminal_failed">Failed</string>
+    <string name="panels_terminal_stopped">Stopped</string>
+    <string name="panels_terminal_denied">Denied</string>
+    <string name="panels_terminal_denied_by">by %1$s</string>
+    <string name="panels_terminal_approved_by">approved by %1$s</string>
 
     <!-- Connectors. -->
     <string name="panels_connectors">Connectors</string>

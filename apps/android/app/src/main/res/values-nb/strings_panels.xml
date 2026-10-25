@@ -48,6 +48,19 @@
     <string name="panels_desktop_screen">Rommets skrivebord</string>
     <string name="panels_desktop_type">Skriv på skrivebordet</string>
 
+    <!-- Terminalen. -->
+    <string name="panels_terminal">Terminal</string>
+    <string name="panels_terminal_off">Ingen terminal her. Slå på terminalutvidelsen for dette rommet under Om dette rommet.</string>
+    <string name="panels_terminal_empty">Ingen kommandoer ennå. De assistenten kjører her, vises mens de kjører.</string>
+    <string name="panels_terminal_waiting">Venter på godkjenning</string>
+    <string name="panels_terminal_running">Kjører…</string>
+    <string name="panels_terminal_exit">Avslutningskode %1$d</string>
+    <string name="panels_terminal_failed">Feilet</string>
+    <string name="panels_terminal_stopped">Stoppet</string>
+    <string name="panels_terminal_denied">Avslått</string>
+    <string name="panels_terminal_denied_by">av %1$s</string>
+    <string name="panels_terminal_approved_by">godkjent av %1$s</string>
+
     <!-- Connectors. -->
     <string name="panels_connectors">Koblinger</string>
     <string name="panels_connectors_off">Ingen koblinger her. Slå på koblingsutvidelsen for dette rommet under Om dette rommet.</string>

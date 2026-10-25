@@ -1,6 +1,9 @@
 import { plural } from "../plural.ts";
 
-/** The room's side pages: model, documents, activity, lists, desktop, connectors, MCP, browser. */
+/**
+ * The room's side pages: model, documents, activity, lists, desktop, terminal, connectors, MCP,
+ * browser.
+ */
 export const panels = {
   backToRoom: "Back to the room",
   connecting: "Connecting…",
@@ -82,6 +85,25 @@ export const panels = {
     raise: (window: string) => `Bring ${window} to the front`,
     waiting: "Waiting for the screen…",
     assistant: "The assistant:",
+  },
+  terminal: {
+    title: "Terminal",
+    intro:
+      "The commands the assistant runs in this room's sandboxed workspace, as they run. Those that delete or send something wait for someone here to approve them.",
+    notFound:
+      "This room has no terminal: the terminal extension isn't on here, or you are not in this room.",
+    empty: "No commands yet.",
+    status: {
+      waiting: "waiting for approval",
+      running: "running…",
+      done: "exit 0",
+      failed: "failed",
+      stopped: "stopped",
+      denied: "denied",
+    },
+    exit: (code: number) => `exit ${code}`,
+    approvedBy: (name: string) => `approved by ${name}`,
+    deniedBy: (name: string) => `denied by ${name}`,
   },
   connectors: {
     title: "Connectors",

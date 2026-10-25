@@ -19,6 +19,8 @@ export const room: Messages["room"] = {
     browser: "Nettleser",
     desktop: "Skrivebord",
     desktopTitle: "Rommets skrivebord, der assistenten bruker apper",
+    terminal: "Terminal",
+    terminalTitle: "Kommandoene assistenten kjører i rommets terminal",
     connectors: "Koblinger",
     mcp: "MCP",
     mcpTitle: "MCP-servere assistenten bruker i dette rommet",

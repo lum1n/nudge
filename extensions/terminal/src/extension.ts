@@ -30,6 +30,7 @@ import {
   WORKSPACE,
   writeToSandbox,
 } from "./sandbox.ts";
+import { type Draft, type TerminalFrame, terminalLog } from "./sessions.ts";
 
 /** What a `run` approval holds: the command to run once approved, and where. */
 type RunPayload = { command: string; cwd?: string };
@@ -89,7 +90,7 @@ const MIME_TYPES: Record<string, string> = {
  * Every command is read first: what deletes or sends waits for the room's approval, what changes
  * the machine never runs, and the rest runs at once. Output goes to the model redacted, like any
  * tool's. Files move between the workspace and the room's documents, and the room's desktop's
- * files can be shared with it.
+ * files can be shared with it. People in the room watch its commands on the terminal's panel.
  */
 export default defineNudgeExtension({
   name: "terminal",
@@ -165,6 +166,8 @@ export default defineNudgeExtension({
       readable: settings.readable,
       maxWorkspaceBytes: settings.workspaceMB * 1024 ** 2,
     });
+    // What ran in each room's terminal, for its panel; next to the workspaces.
+    const log = terminalLog(dataDir && join(dataDir, "commands"), now);
     const lists: PolicyLists = {
       allow: settings.allow,
       ask: settings.ask,
@@ -256,6 +259,7 @@ export default defineNudgeExtension({
                 ],
                 isError: true,
               };
+            const draft: Draft = { ...payload, ...privately(currentTurn().privateTo) };
             if (verdict.kind === "ask") {
               const room = await roomOf(api, api.conversationId, context);
               const approval = await askToRun(
@@ -264,6 +268,7 @@ export default defineNudgeExtension({
                 payload,
                 verdict.reasons,
               );
+              log.wait(api.conversationId, draft, approval.id);
               return {
                 output: [
                   {
@@ -279,12 +284,23 @@ export default defineNudgeExtension({
               timeoutSeconds ?? settings.timeoutSeconds,
               settings.timeoutSeconds,
             );
+            const entry = log.start(api.conversationId, draft);
             try {
               const result = await run(api.conversationId, payload, limit, {
                 ...(context.abortSignal ? { signal: context.abortSignal } : {}),
-                // People in the room see the output while it runs (`ToolPart.output`).
-                onOutput: (chunk) => api.output(chunk),
+                // People in the room see the output while it runs (`ToolPart.output`), in the
+                // chat and on the terminal's panel.
+                onOutput: (chunk) => {
+                  api.output(chunk);
+                  log.output(api.conversationId, entry.id, chunk);
+                },
               });
+              log.finish(
+                api.conversationId,
+                entry.id,
+                result,
+                stoppedBecause(result, limit, settings.workspaceMB),
+              );
               return {
                 output: [{ type: "text", text: describe(result, limit, settings.workspaceMB) }],
                 isError: result.exitCode !== 0,
@@ -295,6 +311,7 @@ export default defineNudgeExtension({
                 } as Details,
               };
             } catch (error) {
+              log.fail(api.conversationId, entry.id, (error as Error).message);
               return {
                 output: [{ type: "text", text: `Could not run it: ${(error as Error).message}` }],
                 isError: true,
@@ -380,16 +397,45 @@ export default defineNudgeExtension({
         // A command the room approved: run as it was asked, unless the settings now refuse it.
         run: async (payload, approved) => {
           const { command, cwd } = payload as RunPayload;
+          const { conversationId } = approved.room;
+          const entry = log.approved(
+            conversationId,
+            approved.approval.id,
+            {
+              command,
+              ...(cwd ? { cwd } : {}),
+              ...privately(approved.approval.privateTo),
+            },
+            approved.approval.decidedBy?.displayName ?? "someone",
+          );
+          const refuse = (text: string) => {
+            log.fail(conversationId, entry.id, text);
+            return { text, isError: true };
+          };
           const problem = sandboxProblem();
-          if (problem) return { text: problem, isError: true };
+          if (problem) return refuse(problem);
           const verdict = judge(command, lists);
-          if (verdict.kind === "deny")
-            return { text: `Not run: ${verdict.reasons.join("; ")}.`, isError: true };
-          const result = await run(
-            approved.room.conversationId,
-            { command, ...(cwd ? { cwd } : {}) },
-            settings.timeoutSeconds,
-            approved.context.abortSignal ? { signal: approved.context.abortSignal } : {},
+          if (verdict.kind === "deny") return refuse(`Not run: ${verdict.reasons.join("; ")}.`);
+          let result: CommandResult;
+          try {
+            result = await run(
+              conversationId,
+              { command, ...(cwd ? { cwd } : {}) },
+              settings.timeoutSeconds,
+              {
+                ...(approved.context.abortSignal ? { signal: approved.context.abortSignal } : {}),
+                onOutput: (chunk) => log.output(conversationId, entry.id, chunk),
+              },
+            );
+          } catch (error) {
+            log.fail(conversationId, entry.id, (error as Error).message);
+            throw error;
+          }
+          log.finish(
+            conversationId,
+            entry.id,
+            result,
+            stoppedBecause(result, settings.timeoutSeconds, settings.workspaceMB),
           );
           return {
             text: `Ran \`${command}\`:\n${describe(result, settings.timeoutSeconds, settings.workspaceMB)}`,
@@ -397,22 +443,62 @@ export default defineNudgeExtension({
           };
         },
       },
+      denials: {
+        run: async (_payload, denied) =>
+          log.denied(
+            denied.room.conversationId,
+            denied.approval.id,
+            denied.approval.decidedBy?.displayName ?? "someone",
+          ),
+      },
+      // The room's terminal, for the people in the room: the commands the assistant ran, their
+      // output as it comes, and those waiting for approval. Approve and deny with the room's API.
+      roomSocket: ({ room, player }, socket) => {
+        const send = (frame: TerminalFrame) => socket.send(JSON.stringify(frame));
+        const stop = log.watch(room.conversationId, player.id, send);
+        return {
+          receive: () =>
+            socket.send(JSON.stringify({ type: "error", message: "The terminal is only watched" })),
+          close: stop,
+        };
+      },
     };
   },
 });
 
+/** Who alone sees a command asked for in answer to something private. */
+const privately = (owner: { playerId: string } | undefined) =>
+  owner ? { privateTo: owner.playerId } : {};
+
 const text = (value: string) => ({ output: [{ type: "text" as const, text: value }] });
 const failure = (value: string) => ({ ...text(value), isError: true });
 
+/** Why a command was stopped, or undefined when it ended on its own. */
+function stoppedBecause(
+  result: CommandResult,
+  timeoutSeconds: number,
+  workspaceMB: number,
+): string | undefined {
+  return result.timedOut
+    ? `it ran longer than ${timeoutSeconds} seconds`
+    : result.workspaceFull
+      ? `it filled the workspace past its ${workspaceMB} MB; delete files from it`
+      : result.aborted
+        ? STOPPED
+        : undefined;
+}
+
+const STOPPED = "it was stopped";
+
 /** A command's output and how it ended, for the model. */
 function describe(result: CommandResult, timeoutSeconds: number, workspaceMB: number): string {
-  const ending = result.timedOut
-    ? `stopped: it ran longer than ${timeoutSeconds} seconds`
-    : result.workspaceFull
-      ? `stopped: it filled the workspace past its ${workspaceMB} MB; delete files from it`
-      : result.aborted
+  const stopped = stoppedBecause(result, timeoutSeconds, workspaceMB);
+  const ending =
+    stopped === undefined
+      ? `exit code ${result.exitCode}`
+      : stopped === STOPPED
         ? "stopped"
-        : `exit code ${result.exitCode}`;
+        : `stopped: ${stopped}`;
   return `${result.output.trimEnd() || "(no output)"}\n\n(${ending})`;
 }
 

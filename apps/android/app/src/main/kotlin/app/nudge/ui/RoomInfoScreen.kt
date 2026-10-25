@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Psychology
+import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -66,7 +67,7 @@ import nudge.ffi.RoomExtension
 import nudge.ffi.RoomKind
 
 /**
- * About a room: its documents, connectors, MCP servers, browser and desktop, who is in it, what the
+ * About a room: its documents, connectors, MCP servers, browser, desktop and terminal, who is in it, what the
  * assistant remembers here, its nudges, which extensions it uses, and what the model saw. Opens in
  * the third pane, or full screen on a phone.
  */
@@ -81,6 +82,7 @@ fun RoomInfoScreen(
     mcp: () -> Unit,
     browser: () -> Unit,
     desktop: () -> Unit,
+    terminal: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val observed = remember(client, roomId) { MutableStateFlow<ObservedRoom?>(null) }
@@ -141,6 +143,7 @@ fun RoomInfoScreen(
                 Triple("mcp", text(R.string.room_info_mcp), Icons.Outlined.Hub to mcp),
                 Triple("browser", text(R.string.room_info_browser), Icons.Outlined.Language to browser),
                 Triple("desktop", text(R.string.room_info_desktop), Icons.Outlined.DesktopWindows to desktop),
+                Triple("terminal", text(R.string.room_info_terminal), Icons.Outlined.Terminal to terminal),
             ).filter { it.first in on }.map { (_, title, action) ->
                 { shapes ->
                     SegmentedListItem(

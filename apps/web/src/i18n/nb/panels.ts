@@ -86,6 +86,25 @@ export const panels: Messages["panels"] = {
     waiting: "Venter på skjermen …",
     assistant: "Assistenten:",
   },
+  terminal: {
+    title: "Terminal",
+    intro:
+      "Kommandoene assistenten kjører i rommets avskjermede arbeidsområde, mens de kjører. De som sletter eller sender noe, venter på at noen her godkjenner dem.",
+    notFound:
+      "Dette rommet har ingen terminal: terminalutvidelsen er ikke på her, eller du er ikke i dette rommet.",
+    empty: "Ingen kommandoer ennå.",
+    status: {
+      waiting: "venter på godkjenning",
+      running: "kjører…",
+      done: "avslutningskode 0",
+      failed: "feilet",
+      stopped: "stoppet",
+      denied: "avslått",
+    },
+    exit: (code: number) => `avslutningskode ${code}`,
+    approvedBy: (name: string) => `godkjent av ${name}`,
+    deniedBy: (name: string) => `avslått av ${name}`,
+  },
   connectors: {
     title: "Koblinger",
     intro:

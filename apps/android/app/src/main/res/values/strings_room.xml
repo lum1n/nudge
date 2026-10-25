@@ -114,6 +114,7 @@
     <string name="room_info_mcp">MCP servers</string>
     <string name="room_info_browser">Browser</string>
     <string name="room_info_desktop">Desktop</string>
+    <string name="room_info_terminal">Terminal</string>
     <string name="room_info_in_this_room">In this room</string>
     <string name="room_info_members">Members</string>
     <string name="room_info_memory">Memory</string>
