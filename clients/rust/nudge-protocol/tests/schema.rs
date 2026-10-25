@@ -109,6 +109,7 @@ fn room() -> Room {
         kind: RoomKind::Shared,
         name: "Trip".into(),
         members: vec![ann()],
+        images_to_model: Some(true),
     }
 }
 
@@ -138,6 +139,13 @@ fn items() -> Vec<TimelineItem> {
             client_id: Some("client-1".into()),
             request_id: Some("r1".into()),
             private_to: Some(ann()),
+            attachments: Some(vec![Attachment {
+                id: "a1".into(),
+                name: "photo.jpg".into(),
+                mime: "image/jpeg".into(),
+                size: 1024,
+                kind: AttachmentKind::Image,
+            }]),
         }),
         TimelineItem::Nudge(NudgeItem {
             id: "nudge:2".into(),
@@ -195,6 +203,13 @@ fn room_view() -> RoomView {
             request_id: Some("r2".into()),
             nudge: false,
             private_to: Some(ann()),
+            attachments: Some(vec![Attachment {
+                id: "a2".into(),
+                name: "notes.pdf".into(),
+                mime: "application/pdf".into(),
+                size: 2048,
+                kind: AttachmentKind::File,
+            }]),
         }],
         approvals: vec![Approval {
             id: "a1".into(),
@@ -443,6 +458,7 @@ fn http_bodies_match_the_schema() {
                 request_id: "r1".into(),
                 when_busy: Some(when_busy),
                 private: Some(true),
+                attachments: Some(vec!["a1".into()]),
             },
         );
     }

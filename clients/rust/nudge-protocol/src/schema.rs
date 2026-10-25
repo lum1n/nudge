@@ -35,6 +35,13 @@ pub struct Room {
     pub kind: RoomKind,
     pub name: String,
     pub members: Vec<Player>,
+    /// The model gets the images people attach here as they are (ADR 24); off when absent.
+    #[serde(
+        rename = "imagesToModel",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub images_to_model: Option<bool>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -112,6 +119,30 @@ pub struct UserItem {
     /// Only this player sees it; everyone else gets it emptied, so they know there was one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub private_to: Option<Player>,
+    /// What it was sent with; left out for those a private message isn't for.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attachments: Option<Vec<Attachment>>,
+}
+
+/// A file sent with a message (ADR 24).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Attachment {
+    /// `a1`, `a2`, … within its room.
+    pub id: String,
+    pub name: String,
+    /// Its media type, such as `image/jpeg`.
+    pub mime: String,
+    /// In bytes.
+    pub size: u64,
+    pub kind: AttachmentKind,
+}
+
+/// `image` for PNG, JPEG, GIF and WebP, which can reach the model; `file` for the rest.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AttachmentKind {
+    Image,
+    File,
 }
 
 /// A scheduled nudge that fired; the assistant answers it like a message.
@@ -269,6 +300,9 @@ pub struct QueuedMessage {
     /// Only this player sees it; everyone else gets it emptied, so they know there was one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub private_to: Option<Player>,
+    /// What it was sent with, as on a user item.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attachments: Option<Vec<Attachment>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -669,6 +703,9 @@ pub struct MessageRequest {
     /// Only the sender sees the message and the answer to it; the room sees that there was one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub private: Option<bool>,
+    /// Ids of attachments the sender uploaded to the room and hasn't sent yet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attachments: Option<Vec<String>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
