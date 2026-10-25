@@ -81,6 +81,12 @@ const Settings = Type.Object({
     description:
       "Extensions on in a new link's room besides this one, such as calendar: what the other assistant can use here. Each room's own switches change it later.",
   }),
+  context: Type.Integer({
+    default: 8000,
+    minimum: 0,
+    description:
+      "Characters of the lobby and its people's own rooms, newest first, that a link's room answers from, so the other assistant can ask what they told this one. Private values stay hidden; 0 turns it off.",
+  }),
   onlyAdmins: Type.Boolean({
     default: false,
     description: "Only admins may have the assistant start a thread with a linked one.",
@@ -229,14 +235,19 @@ class Peers {
           );
           if (room === undefined) return undefined;
           const here = Object.values(state.links).find((link) => link.roomId === room.id);
-          if (here !== undefined)
-            return (
+          if (here !== undefined) {
+            const known = await this.primaryContext(here, context);
+            return [
               `This room is the link with ${here.displayName} (${assistantAddressOf(here.place)}), ` +
-              "the assistant of other people on another server. Its messages here come from it, " +
-              "not from your people: answer what you would answer a guest, keep what your people " +
-              "keep private, and ask for approval as usual before changing anything. Your answer " +
-              "to each of its messages is sent back to it."
-            );
+                "the assistant of other people on another server, which your people linked so " +
+                "the two of you can help each other. Its messages here come from it, not from " +
+                "your people: answer from what you know, also what your people told you in " +
+                "their own rooms below, but values shown as placeholders stay hidden, and ask " +
+                "for approval as usual before changing anything. Your answer to each of its " +
+                "messages is sent back to it.",
+              ...(known === undefined ? [] : [known]),
+            ].join("\n\n");
+          }
           const linked = Object.values(state.links).filter((link) => link.status === "linked");
           if (linked.length === 0) return undefined;
           return (
@@ -1456,6 +1467,52 @@ class Peers {
 
   private nudge(): ExtensionAssistant {
     return this.host.assistant();
+  }
+
+  /**
+   * What a link's room knows from the lobby and the own rooms of its people, as its guest may
+   * see it: their remembered facts, then their latest messages, newest kept, within `context`
+   * characters. A turn private to someone shows only who it was for.
+   */
+  private async primaryContext(link: Link, context: Context): Promise<string | undefined> {
+    const budget = this.host.settings.context;
+    if (budget === 0 || link.roomId === undefined || link.playerId === undefined) return undefined;
+    const nudge = this.nudge();
+    const linkRoom = await nudge.rooms.get(link.roomId, context);
+    if (linkRoom === undefined) return undefined;
+    const rooms = [await nudge.rooms.get(LOBBY, context)];
+    for (const member of linkRoom.members)
+      if (member !== link.playerId)
+        rooms.push(await nudge.rooms.get(`personal-${member}`, context));
+    const found = rooms.filter((room) => room !== undefined);
+    const each = Math.floor(budget / Math.max(found.length, 1));
+    const parts: string[] = [];
+    for (const room of found) {
+      const facts = (await nudge.memory.visible(room.id, context))
+        .filter((fact) => fact.privateTo === undefined)
+        .map((fact) => `- ${fact.text}`);
+      const lines: string[] = [];
+      let left = each - facts.join("\n").length;
+      const messages = await nudge.modelView(room.id, context, link.playerId);
+      for (const message of messages.toReversed()) {
+        if (message.role !== "user" && message.role !== "assistant") continue;
+        const line = `${message.role === "user" ? "" : "You: "}${cut(message.text.trim(), 1000)}`;
+        if (line.trim() === "" || line.length > left) break;
+        lines.unshift(line);
+        left -= line.length;
+      }
+      if (facts.length === 0 && lines.length === 0) continue;
+      parts.push(
+        [
+          `From ${room.name}:`,
+          ...(facts.length === 0 ? [] : ["Remembered:", ...facts]),
+          ...(lines.length === 0 ? [] : ["Latest messages:", ...lines]),
+        ].join("\n"),
+      );
+    }
+    return parts.length === 0
+      ? undefined
+      : `What your people said in their own rooms:\n\n${parts.join("\n\n")}`;
   }
 
   private async state(context: Context): Promise<PeersState> {

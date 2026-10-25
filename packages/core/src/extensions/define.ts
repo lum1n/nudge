@@ -86,6 +86,7 @@ export type ExtensionAssistant = Pick<
   | "conversation"
   | "submit"
   | "abort"
+  | "modelView"
   // Private values (ADR 2, 9).
   | "protect"
   | "protectNamed"
