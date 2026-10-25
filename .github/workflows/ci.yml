@@ -27,6 +27,11 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # MCP servers' programs run in bubblewrap, which needs the user namespaces Ubuntu 24.04
+      # keeps from unprivileged programs by default.
+      - run: |
+          sudo apt-get update -q && sudo apt-get install -yq bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - run: pnpm check
       - run: pnpm -C packages/relay bundle
 
