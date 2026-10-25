@@ -1,7 +1,7 @@
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
-  DatabaseInUse,
+  BACKGROUND_CONTEXT,
   databaseHolder,
+  DatabaseInUse,
   findAssistant,
   loadConfig,
   type Nudge,

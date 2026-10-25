@@ -1,8 +1,12 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { McpAuthRequiredError, type CallToolResult, type Tool } from "@earendil-works/pi-mcp";
-import { McpOAuthAuthorizationRequiredError } from "@earendil-works/pi-mcp/oauth";
 import { scrubSecrets, type SecretStore } from "@nudge/core";
+import {
+  type CallToolResult,
+  McpAuthRequiredError,
+  McpOAuthAuthorizationRequiredError,
+  type Tool,
+} from "@nudge/core/mcp";
 import type { OAuthLogins } from "./oauth.ts";
 import type { McpPool, ServerConfig } from "./pool.ts";
 import type { RoomServer, ServerKey } from "./rooms.ts";

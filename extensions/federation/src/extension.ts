@@ -1,21 +1,21 @@
 import { randomUUID } from "node:crypto";
-import type { Context } from "@earendil-works/chord";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
   addressOf,
   ASSERTION_TTL_MS,
+  BACKGROUND_CONTEXT,
   type Change,
   checkSigned,
+  type Context,
   defineNudgeExtension,
+  type ExtensionAssistant,
   type ExtensionHost,
+  type ExtensionRoute,
   federationEndpoint,
   fetchKeys,
-  type ExtensionRoute,
   InvalidProfile,
   isWiredHost,
   MAX_FACTS,
   newKey,
-  type ExtensionAssistant,
   open,
   parseAddress,
   peek,

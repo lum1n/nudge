@@ -1,10 +1,15 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { createModels } from "@earendil-works/pi-ai/models";
-import { fauxProvider } from "@earendil-works/pi-ai/providers/faux";
-import { Assistants, openAssistant, ServerIdentity, ServerKeys, ServerOwners } from "@nudge/core";
+import {
+  Assistants,
+  BACKGROUND_CONTEXT,
+  openAssistant,
+  ServerIdentity,
+  ServerKeys,
+  ServerOwners,
+} from "@nudge/core";
+import { createModels, fauxProvider } from "@nudge/core/testing";
 import { createApp } from "@nudge/server";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { Api, ApiError, memoryTokens, ServerApi } from "../src/index.ts";

@@ -1,14 +1,15 @@
-import type { Cursor, EntryId } from "@earendil-works/pi-durable";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
   addressOf,
   AdminOnly,
   AlreadyDecided,
   ApprovalNotFound,
+  BACKGROUND_CONTEXT,
   BudgetReached,
   canUse,
   ConfigError,
   type Credential,
+  type Cursor,
+  type EntryId,
   ExtensionBroken,
   ExtensionNotFound,
   InvalidAppearance,
@@ -20,8 +21,8 @@ import {
   AttachmentRemoved,
   NotAllowed,
   type Nudge,
-  type Player as CorePlayer,
   type PersonalUpdate,
+  type Player as CorePlayer,
   type ProfileUpdate,
   type Room as CoreRoom,
   type TokenRecord,

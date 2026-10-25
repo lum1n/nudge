@@ -1,9 +1,7 @@
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { createModels } from "@earendil-works/pi-ai/models";
-import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
 import {
   ATTACHMENT_MAX_BYTES as CORE_ATTACHMENT_MAX_BYTES,
   ATTACHMENTS_PER_MESSAGE as CORE_ATTACHMENTS_PER_MESSAGE,
+  BACKGROUND_CONTEXT,
   ConfigError,
   createNudge,
   defineNudgeExtension,
@@ -11,6 +9,7 @@ import {
   requestApproval,
   Type,
 } from "@nudge/core";
+import { createModels, fauxAssistantMessage, fauxProvider } from "@nudge/core/testing";
 import {
   AdminPlayer,
   AppearanceResponse,

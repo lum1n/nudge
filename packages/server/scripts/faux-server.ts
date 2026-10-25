@@ -26,15 +26,8 @@ import { mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { createModels } from "@earendil-works/pi-ai/models";
 import {
-  type FauxResponseFactory,
-  fauxAssistantMessage,
-  fauxProvider,
-  fauxToolCall,
-} from "@earendil-works/pi-ai/providers/faux";
-import {
+  BACKGROUND_CONTEXT,
   ConfigError,
   createNudge,
   defineNudgeExtension,
@@ -42,10 +35,17 @@ import {
   type ExtensionUse,
   type NudgeExtension,
   requestApproval,
-  roomOf,
   type RoomKind,
+  roomOf,
   Type,
 } from "@nudge/core";
+import {
+  createModels,
+  fauxAssistantMessage,
+  fauxProvider,
+  type FauxResponseFactory,
+  fauxToolCall,
+} from "@nudge/core/testing";
 import browserExtension, { closeAllBrowsers } from "@nudge/ext-browser";
 import desktopExtension, { closeAllDesktops } from "@nudge/ext-desktop";
 import connectorsExtension from "@nudge/ext-connectors";

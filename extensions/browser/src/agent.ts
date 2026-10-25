@@ -1,14 +1,14 @@
 import type {
   Api,
   AssistantMessage,
-  Context,
   Message,
   Model,
+  ModelContext as Context,
   Models,
   ThinkingLevel,
   ToolResultMessage,
   Usage,
-} from "@earendil-works/pi-ai";
+} from "@nudge/core";
 import type { Approval, PinnedAction } from "./gate.ts";
 import { browserTools, type Browser, progressLine, runBatch } from "./tools.ts";
 

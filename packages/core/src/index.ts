@@ -244,9 +244,65 @@ export {
   listExtensionSetups,
   saveExtensionSetups,
 } from "./extensions/settings.ts";
-// What an extension needs to build tools and sections, so it can depend on @nudge/core alone.
-export { Type } from "@earendil-works/pi-ai";
-export { defineTool, hook, section } from "@earendil-works/pi-durable";
+// What extensions and hosts need from Pi, so they depend on @nudge/core alone and a Pi upgrade
+// touches only this package (ADR 1). Tests take the faux provider from @nudge/core/testing.
+export type { Context } from "@earendil-works/chord";
+export { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+export {
+  type Api,
+  type AssistantMessage,
+  type Context as ModelContext,
+  type Message,
+  type Model,
+  type Models,
+  type ThinkingLevel,
+  type ToolResultMessage,
+  Type,
+  type Usage,
+} from "@earendil-works/pi-ai";
+export { builtinModels } from "@earendil-works/pi-ai/providers/all";
+export {
+  type Conversation,
+  type ConversationId,
+  type ConversationView,
+  type ConversationWatch,
+  type Cursor,
+  defineDoc,
+  defineDocFamily,
+  defineTask,
+  defineTool,
+  type DocumentReader,
+  type DocumentWatch,
+  type EntryId,
+  type EntryRecord,
+  hook,
+  type InboxItem,
+  type InboxState,
+  type JsonObject,
+  LiveDoc,
+  type LiveState,
+  NestedCallDoc,
+  type NestedToolExecutionResult,
+  section,
+  type SessionDocFamilyToken,
+  type SessionDocToken,
+  type Task,
+  type TaskId,
+  type TaskRuntime,
+  type ToolExecutionApi,
+  type ToolRegistration,
+  type ToolSlot,
+  ToolTask,
+  type ToolTaskResult,
+  type Tx,
+  UsageDoc,
+} from "@earendil-works/pi-durable";
+export {
+  CODEMODE_TOOL_NAME,
+  createCodemodeExtension,
+  createCodemodeTool,
+} from "@earendil-works/pi-durable/codemode";
+export { createToolSearchTool } from "@earendil-works/pi-durable/tool-search";
 export {
   type Author,
   MESSAGE_ENTRY,

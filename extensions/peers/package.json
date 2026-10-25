@@ -18,14 +18,11 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@earendil-works/chord": "1.2.0",
-    "@earendil-works/pi-durable": "1.2.0",
     "@nudge/core": "workspace:*",
     "@nudge/ext-federation": "workspace:*",
     "typebox": "1.3.27"
   },
   "devDependencies": {
-    "@earendil-works/pi-ai": "1.2.0",
     "@nudge/server": "workspace:*",
     "hono": "4.13.13"
   }

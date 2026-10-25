@@ -22,9 +22,5 @@
     "@nudge/core": "workspace:*",
     "ical.js": "2.2.1",
     "tsdav": "2.4.0"
-  },
-  "devDependencies": {
-    "@earendil-works/chord": "1.2.0",
-    "@earendil-works/pi-ai": "1.2.0"
   }
 }

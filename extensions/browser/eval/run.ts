@@ -8,8 +8,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
-import type { Api, Model, ThinkingLevel } from "@earendil-works/pi-ai";
-import { builtinModels } from "@earendil-works/pi-ai/providers/all";
+import { type Api, builtinModels, type Model, type ThinkingLevel } from "@nudge/core";
 // Not ../src/index.ts: that pulls in @nudge/core's source, which plain Node cannot strip.
 import { DEFAULT_BROWSER_MODEL, runBrowserAgent } from "../src/agent.ts";
 import { BrowserSession } from "../src/browser.ts";

@@ -26,7 +26,6 @@
     "schema": "node scripts/schema.ts"
   },
   "dependencies": {
-    "@earendil-works/pi-durable": "1.2.0",
     "@nudge/core": "workspace:*",
     "typebox": "1.3.27"
   }

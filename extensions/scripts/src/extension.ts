@@ -1,31 +1,30 @@
-import type { Context } from "@earendil-works/chord";
 import {
+  canRead,
+  type Context,
+  createCodemodeTool,
+  currentTurn,
+  defineNudgeExtension,
   defineTask,
+  defineTool,
   type JsonObject,
+  keepsPlaceholders,
   NestedCallDoc,
   type NestedToolExecutionResult,
+  onlyReads,
+  type Owner,
+  roomOf,
+  section,
+  type SetsTurn,
+  type Task,
   type TaskId,
   type TaskRuntime,
   type ToolExecutionApi,
   type ToolRegistration,
   ToolTask,
   type ToolTaskResult,
-} from "@earendil-works/pi-durable";
-import { createCodemodeTool } from "@earendil-works/pi-durable/codemode";
-import { CappedSandbox } from "@nudge/ext-codemode";
-import {
-  canRead,
-  currentTurn,
-  defineNudgeExtension,
-  defineTool,
-  keepsPlaceholders,
-  onlyReads,
-  type Owner,
-  roomOf,
-  section,
-  type SetsTurn,
   Type,
 } from "@nudge/core";
+import { CappedSandbox } from "@nudge/ext-codemode";
 import { MAX_CODE, NAME, type Script, ScriptsDoc, withArgs } from "./model.ts";
 
 const VERSION = "0.1.0";
@@ -154,7 +153,9 @@ export type ScriptRunResult = { ok: boolean; output: string };
  * never what the room happens to be in. Only a script that turn sees runs. Reruns after a restart
  * reattach to the script's call, which code mode resumes.
  */
-function createScriptRun(now: () => number) {
+function createScriptRun(
+  now: () => number,
+): Task<ScriptRunInput, { phase: "run" }, ScriptRunResult, object> {
   return defineTask<ScriptRunInput, { phase: "run" }, ScriptRunResult>({
     name: "scripts.run",
     version: 1,

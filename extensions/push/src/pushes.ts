@@ -1,7 +1,12 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { defineDocFamily } from "@earendil-works/pi-durable";
-import { DirectoryDoc, type ExtensionAssistant, type RoomEvent } from "@nudge/core";
+import {
+  BACKGROUND_CONTEXT,
+  defineDocFamily,
+  DirectoryDoc,
+  type ExtensionAssistant,
+  type RoomEvent,
+  type SessionDocFamilyToken,
+} from "@nudge/core";
 import type { Apns, ApnsEnvironment } from "./apns.ts";
 import { isDeviceKey, sealForDevice } from "./device-seal.ts";
 import type { Fcm } from "./fcm.ts";
@@ -38,15 +43,16 @@ type Device = {
 };
 
 /** Each player's browsers and devices that take pushes, keyed by player id. */
-export const PushDoc = defineDocFamily<{ subscriptions: Subscription[]; devices?: Device[] }, null>(
-  {
-    kind: "nudge.push",
-    version: 1,
-    scope: "session",
-    family: true,
-    initial: () => ({ subscriptions: [] }),
-  },
-);
+export const PushDoc: SessionDocFamilyToken<
+  { subscriptions: Subscription[]; devices?: Device[] },
+  null
+> = defineDocFamily({
+  kind: "nudge.push",
+  version: 1,
+  scope: "session",
+  family: true,
+  initial: () => ({ subscriptions: [] }),
+});
 
 /** Subscriptions kept per player; a new one beyond this pushes out the oldest. */
 const MAX_PER_PLAYER = 10;

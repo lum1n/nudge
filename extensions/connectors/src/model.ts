@@ -1,10 +1,12 @@
-import type { Context } from "@earendil-works/chord";
 import {
-  type DocumentReader,
+  type Context,
   defineDoc,
   defineDocFamily,
+  type DocumentReader,
+  type SessionDocFamilyToken,
+  type SessionDocToken,
   type Tx,
-} from "@earendil-works/pi-durable";
+} from "@nudge/core";
 
 /** Where a connector's secret (its API key) goes on the wire, once a person has set one. */
 export type ConnectorAuth = {
@@ -47,7 +49,7 @@ export type ConnectorsState = {
 };
 
 /** A room's own connectors, keyed by room id. */
-export const ConnectorsDoc = defineDocFamily<ConnectorsState, null>({
+export const ConnectorsDoc: SessionDocFamilyToken<ConnectorsState, null> = defineDocFamily({
   kind: "nudge.connectors.room",
   version: 1,
   scope: "session",
@@ -56,7 +58,7 @@ export const ConnectorsDoc = defineDocFamily<ConnectorsState, null>({
 });
 
 /** Connectors shared with every room. Owner-only to change (CLI); every room may read and call them. */
-export const SharedConnectorsDoc = defineDoc<ConnectorsState>({
+export const SharedConnectorsDoc: SessionDocToken<ConnectorsState> = defineDoc({
   kind: "nudge.connectors.shared",
   version: 1,
   scope: "session",

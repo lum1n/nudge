@@ -3,11 +3,9 @@ import { existsSync, readFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { createModels } from "@earendil-works/pi-ai/models";
-import { fauxProvider } from "@earendil-works/pi-ai/providers/faux";
 import {
   Assistants,
+  BACKGROUND_CONTEXT,
   completeSetup,
   federationEndpoint,
   newKey,
@@ -15,11 +13,12 @@ import {
   openRecoveryKit,
   publicKeyOf,
   seal,
-  ServerKeys,
   ServerIdentity,
+  ServerKeys,
   ServerOwners,
   SetupCodes,
 } from "@nudge/core";
+import { createModels, fauxProvider } from "@nudge/core/testing";
 import type { Hono } from "hono";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/index.ts";

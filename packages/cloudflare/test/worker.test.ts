@@ -1,5 +1,4 @@
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { Nudge } from "@nudge/core";
+import { BACKGROUND_CONTEXT, type Nudge } from "@nudge/core";
 import { type HealthResponse, PROTOCOL_VERSION } from "@nudge/protocol";
 import {
   env,

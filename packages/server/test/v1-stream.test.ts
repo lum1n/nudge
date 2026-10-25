@@ -1,14 +1,13 @@
 import { writeFile } from "node:fs/promises";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { createModels } from "@earendil-works/pi-ai/models";
+import { BACKGROUND_CONTEXT, createNudge, type Nudge, requestApproval } from "@nudge/core";
 import {
+  createModels,
   fauxAssistantMessage,
   fauxProvider,
   fauxText,
   fauxThinking,
   fauxToolCall,
-} from "@earendil-works/pi-ai/providers/faux";
-import { createNudge, type Nudge, requestApproval } from "@nudge/core";
+} from "@nudge/core/testing";
 import {
   apply,
   CLOSE,

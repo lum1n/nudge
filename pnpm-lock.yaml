@@ -74,12 +74,6 @@ importers:
 
   extensions/acc:
     dependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-durable':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@nudge/bridge':
         specifier: workspace:*
         version: link:../../packages/bridge
@@ -87,21 +81,12 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
     devDependencies:
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@nudge/ext-scripts':
         specifier: workspace:*
         version: link:../scripts
 
   extensions/browser:
     dependencies:
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
-      '@earendil-works/pi-durable':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@nudge/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -111,10 +96,6 @@ importers:
       typebox:
         specifier: 1.3.27
         version: 1.3.27
-    devDependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
 
   extensions/calendar:
     dependencies:
@@ -130,54 +111,21 @@ importers:
       tsdav:
         specifier: 2.4.0
         version: 2.4.0
-    devDependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
 
   extensions/codemode:
     dependencies:
-      '@earendil-works/pi-codemode':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-durable':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@nudge/core':
         specifier: workspace:*
         version: link:../../packages/core
-    devDependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
 
   extensions/connectors:
     dependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-durable':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@nudge/core':
         specifier: workspace:*
         version: link:../../packages/core
-    devDependencies:
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
 
   extensions/contacts:
     dependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
       '@nudge/bridge':
         specifier: workspace:*
         version: link:../../packages/bridge
@@ -190,19 +138,9 @@ importers:
       tsdav:
         specifier: 2.4.0
         version: 2.4.0
-    devDependencies:
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
 
   extensions/desktop:
     dependencies:
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
-      '@earendil-works/pi-durable':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@nudge/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -212,38 +150,18 @@ importers:
       typebox:
         specifier: 1.3.27
         version: 1.3.27
-    devDependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
 
   extensions/documents:
     dependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-durable':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@nudge/core':
         specifier: workspace:*
         version: link:../../packages/core
       pdfjs-dist:
         specifier: 6.4.299
         version: 6.4.299
-    devDependencies:
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
 
   extensions/federation:
     dependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-durable':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@nudge/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -254,9 +172,6 @@ importers:
         specifier: 1.3.27
         version: 1.3.27
     devDependencies:
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@nudge/client':
         specifier: workspace:*
         version: link:../../packages/client
@@ -275,19 +190,9 @@ importers:
 
   extensions/lists:
     dependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-durable':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@nudge/core':
         specifier: workspace:*
         version: link:../../packages/core
-    devDependencies:
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
 
   extensions/mail:
     dependencies:
@@ -307,12 +212,6 @@ importers:
         specifier: 10.1.0
         version: 10.1.0
     devDependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@types/mailparser':
         specifier: 3.9.0
         version: 3.9.0
@@ -334,54 +233,21 @@ importers:
       '@nudge/core':
         specifier: workspace:*
         version: link:../../packages/core
-    devDependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
 
   extensions/mcp:
     dependencies:
-      '@earendil-works/pi-durable':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
-      '@earendil-works/pi-mcp':
-        specifier: 1.2.0
-        version: 1.2.0
       '@nudge/core':
         specifier: workspace:*
         version: link:../../packages/core
-    devDependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
 
   extensions/ner:
     dependencies:
       '@nudge/core':
         specifier: workspace:*
         version: link:../../packages/core
-    devDependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
 
   extensions/peers:
     dependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-durable':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@nudge/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -392,9 +258,6 @@ importers:
         specifier: 1.3.27
         version: 1.3.27
     devDependencies:
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@nudge/server':
         specifier: workspace:*
         version: link:../../packages/server
@@ -404,28 +267,12 @@ importers:
 
   extensions/places:
     dependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-durable':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@nudge/core':
         specifier: workspace:*
         version: link:../../packages/core
-    devDependencies:
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
 
   extensions/push:
     dependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-durable':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@nudge/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -436,21 +283,12 @@ importers:
         specifier: 1.3.27
         version: 1.3.27
     devDependencies:
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@nudge/server':
         specifier: workspace:*
         version: link:../../packages/server
 
   extensions/rss:
     dependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-durable':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@nudge/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -460,29 +298,15 @@ importers:
       '@nudge/ext-search':
         specifier: workspace:*
         version: link:../search
-    devDependencies:
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
 
   extensions/scripts:
     dependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-durable':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@nudge/core':
         specifier: workspace:*
         version: link:../../packages/core
       '@nudge/ext-codemode':
         specifier: workspace:*
         version: link:../codemode
-    devDependencies:
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
 
   extensions/search:
     dependencies:
@@ -492,13 +316,6 @@ importers:
       '@nudge/ext-connectors':
         specifier: workspace:*
         version: link:../connectors
-    devDependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
 
   extensions/signal:
     dependencies:
@@ -508,13 +325,6 @@ importers:
       '@nudge/core':
         specifier: workspace:*
         version: link:../../packages/core
-    devDependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
 
   extensions/telegram:
     dependencies:
@@ -524,89 +334,39 @@ importers:
       '@nudge/core':
         specifier: workspace:*
         version: link:../../packages/core
-    devDependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
 
   extensions/terminal:
     dependencies:
-      '@earendil-works/pi-durable':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@nudge/core':
         specifier: workspace:*
         version: link:../../packages/core
       '@nudge/ext-documents':
         specifier: workspace:*
         version: link:../documents
-    devDependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
 
   extensions/triggers:
     dependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-durable':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@nudge/core':
         specifier: workspace:*
         version: link:../../packages/core
-    devDependencies:
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
 
   extensions/watches:
     dependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-durable':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@nudge/core':
         specifier: workspace:*
         version: link:../../packages/core
       '@nudge/ext-scripts':
         specifier: workspace:*
         version: link:../scripts
-    devDependencies:
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
 
   packages/bridge:
     dependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-durable':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@nudge/core':
         specifier: workspace:*
         version: link:../core
-    devDependencies:
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
 
   packages/cli:
     dependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
       '@nudge/client':
         specifier: workspace:*
         version: link:../client
@@ -625,10 +385,6 @@ importers:
       uqr:
         specifier: 0.1.3
         version: 0.1.3
-    devDependencies:
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
 
   packages/client:
     dependencies:
@@ -636,12 +392,6 @@ importers:
         specifier: workspace:*
         version: link:../protocol
     devDependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@nudge/core':
         specifier: workspace:*
         version: link:../core
@@ -654,12 +404,6 @@ importers:
 
   packages/cloudflare:
     dependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-durable':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@nudge/core':
         specifier: workspace:*
         version: link:../core
@@ -679,9 +423,6 @@ importers:
       '@cloudflare/workers-types':
         specifier: 5.20261019.1
         version: 5.20261019.1
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       wrangler:
         specifier: 4.151.3
         version: 4.151.3(@cloudflare/workers-types@5.20261019.1)(@types/node@22.20.5)
@@ -694,9 +435,15 @@ importers:
       '@earendil-works/pi-ai':
         specifier: 1.2.0
         version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
+      '@earendil-works/pi-codemode':
+        specifier: 1.2.0
+        version: 1.2.0
       '@earendil-works/pi-durable':
         specifier: 1.2.0
         version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
+      '@earendil-works/pi-mcp':
+        specifier: 1.2.0
+        version: 1.2.0
       '@huggingface/tokenizers':
         specifier: 0.2.0
         version: 0.2.0
@@ -715,9 +462,6 @@ importers:
 
   packages/protocol:
     dependencies:
-      '@earendil-works/pi-durable':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@nudge/core':
         specifier: workspace:*
         version: link:../core
@@ -740,12 +484,6 @@ importers:
         specifier: 1.3.27
         version: 1.3.27
     devDependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@nudge/core':
         specifier: workspace:*
         version: link:../core
@@ -839,12 +577,6 @@ importers:
 
   packages/server:
     dependencies:
-      '@earendil-works/chord':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@earendil-works/pi-durable':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@hono/node-server':
         specifier: 2.1.5
         version: 2.1.5(hono@4.13.13)
@@ -864,9 +596,6 @@ importers:
         specifier: 8.22.0
         version: 8.22.0
     devDependencies:
-      '@earendil-works/pi-ai':
-        specifier: 1.2.0
-        version: 1.2.0(@aws-sdk/credential-provider-node@3.972.85)(@smithy/signature-v4@5.7.4)(undici@7.30.1)(ws@8.22.0)(zod@4.6.6)
       '@nudge/ext-browser':
         specifier: workspace:*
         version: link:../../extensions/browser

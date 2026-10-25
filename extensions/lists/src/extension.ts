@@ -1,9 +1,9 @@
-import type { Context } from "@earendil-works/chord";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { DocumentReader } from "@earendil-works/pi-durable";
 import {
+  BACKGROUND_CONTEXT,
+  type Context,
   defineNudgeExtension,
   defineTool,
+  type DocumentReader,
   type ExtensionDocuments,
   keepsPlaceholders,
   readsOnly,

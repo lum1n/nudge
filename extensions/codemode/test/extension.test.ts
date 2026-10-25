@@ -1,18 +1,11 @@
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { Context as ModelContext } from "@earendil-works/pi-ai";
-import { createModels } from "@earendil-works/pi-ai/models";
 import {
-  fauxAssistantMessage,
-  fauxProvider,
-  fauxText,
-  fauxToolCall,
-} from "@earendil-works/pi-ai/providers/faux";
-import {
+  BACKGROUND_CONTEXT,
   createNudge,
   currentTurn,
   defineNudgeExtension,
   defineTool,
   LOBBY,
+  type ModelContext,
   type Nudge,
   requestApproval,
   returnsUntrusted,
@@ -20,6 +13,13 @@ import {
   type Turn,
   Type,
 } from "@nudge/core";
+import {
+  createModels,
+  fauxAssistantMessage,
+  fauxProvider,
+  fauxText,
+  fauxToolCall,
+} from "@nudge/core/testing";
 import { afterEach, describe, expect, it } from "vitest";
 import { waitingNote, waitingValue } from "../src/extension.ts";
 import codemode from "../src/index.ts";

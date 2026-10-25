@@ -2,12 +2,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { createModels } from "@earendil-works/pi-ai/models";
-import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
-import { Api, ApiError, memoryTokens, ServerApi, setUp } from "@nudge/client";
 import {
   Assistants,
+  BACKGROUND_CONTEXT,
   completeSetup,
   createNudge,
   type Nudge,
@@ -16,6 +13,8 @@ import {
   ServerOwners,
   SetupCodes,
 } from "@nudge/core";
+import { createModels, fauxAssistantMessage, fauxProvider } from "@nudge/core/testing";
+import { Api, ApiError, memoryTokens, ServerApi, setUp } from "@nudge/client";
 import { type RunningServer, type ServerControl, serveNudge } from "@nudge/server";
 import { afterEach, describe, expect, it } from "vitest";
 import { federationExtension } from "../src/index.ts";

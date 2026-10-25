@@ -1,4 +1,4 @@
-import { defineDocFamily } from "@earendil-works/pi-durable";
+import { defineDocFamily, type SessionDocFamilyToken } from "@nudge/core";
 
 // Stored in a document, so plain JSON.
 export type Script = {
@@ -21,7 +21,7 @@ export type Script = {
 export type ScriptsState = { items: Script[] };
 
 /** A room's saved scripts, keyed by room id. */
-export const ScriptsDoc = defineDocFamily<ScriptsState, null>({
+export const ScriptsDoc: SessionDocFamilyToken<ScriptsState, null> = defineDocFamily({
   kind: "scripts.list",
   version: 1,
   scope: "session",

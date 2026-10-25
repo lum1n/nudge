@@ -1,8 +1,6 @@
 import { generateKeyPairSync, randomBytes } from "node:crypto";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { createModels } from "@earendil-works/pi-ai/models";
-import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
-import { createNudge, type Nudge } from "@nudge/core";
+import { BACKGROUND_CONTEXT, createNudge, type Nudge } from "@nudge/core";
+import { createModels, fauxAssistantMessage, fauxProvider } from "@nudge/core/testing";
 import {
   type Apns,
   Fcm,

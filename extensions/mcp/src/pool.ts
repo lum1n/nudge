@@ -6,7 +6,7 @@ import {
   StdioTransport,
   StreamableHttpTransport,
   type Tool,
-} from "@earendil-works/pi-mcp";
+} from "@nudge/core/mcp";
 import { type Sandbox, sandboxed } from "./sandbox.ts";
 
 /** One MCP server as the settings give it, with `${VAR}`s already filled in. */

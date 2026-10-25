@@ -3,17 +3,16 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { createModels } from "@earendil-works/pi-ai/models";
-import { fauxProvider } from "@earendil-works/pi-ai/providers/faux";
 import {
   Assistants,
+  BACKGROUND_CONTEXT,
   BackupError,
   openAssistant,
   ServerIdentity,
   ServerKeys,
   ServerOwners,
 } from "@nudge/core";
+import { createModels, fauxProvider } from "@nudge/core/testing";
 import { type BackupState, ServerAssistant } from "@nudge/protocol";
 import type { Hono } from "hono";
 import { Value } from "typebox/value";

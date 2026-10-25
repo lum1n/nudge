@@ -1,5 +1,4 @@
-import { defineDoc } from "@earendil-works/pi-durable";
-import type { PlayerHome } from "@nudge/core";
+import { defineDoc, type PlayerHome, type SessionDocToken } from "@nudge/core";
 
 /** An assistant other people may join from: its server and its name there. */
 export type Place = { server: string; assistant: string };
@@ -66,7 +65,7 @@ export type FederationState = {
   servers?: Record<string, OwnedServer[]>;
 };
 
-export const FederationDoc = defineDoc<FederationState>({
+export const FederationDoc: SessionDocToken<FederationState> = defineDoc({
   kind: "nudge.federation",
   version: 1,
   scope: "session",

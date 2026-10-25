@@ -3,9 +3,9 @@ import { writeFile } from "node:fs/promises";
 import { stdin, stdout } from "node:process";
 import { createInterface, type Interface } from "node:readline/promises";
 import { Writable } from "node:stream";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
   Assistants,
+  BACKGROUND_CONTEXT,
   backupKey,
   buildModels,
   completeSetup,

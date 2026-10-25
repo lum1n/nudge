@@ -1,4 +1,5 @@
 import {
+  BACKGROUND_CONTEXT,
   databaseEncryption,
   databaseKey,
   decryptDatabase,
@@ -8,7 +9,6 @@ import {
   lockDatabase,
   redactStoredHistory,
 } from "@nudge/core";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { AdminOptions } from "./admin.ts";
 
 /**

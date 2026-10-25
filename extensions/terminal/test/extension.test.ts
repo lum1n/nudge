@@ -1,16 +1,14 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { Context as ModelContext } from "@earendil-works/pi-ai";
-import { createModels } from "@earendil-works/pi-ai/models";
+import { BACKGROUND_CONTEXT, createNudge, LOBBY, type ModelContext, type Nudge } from "@nudge/core";
 import {
+  createModels,
   fauxAssistantMessage,
   fauxProvider,
   fauxText,
   fauxToolCall,
-} from "@earendil-works/pi-ai/providers/faux";
-import { createNudge, LOBBY, type Nudge } from "@nudge/core";
+} from "@nudge/core/testing";
 import { documentsExtension, roomDocuments } from "@nudge/ext-documents";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import terminal from "../src/extension.ts";

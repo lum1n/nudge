@@ -1,8 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { DurableObject } from "cloudflare:workers";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { openDurableObjectSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/cloudflare";
 import {
+  BACKGROUND_CONTEXT,
   errorFields,
   findAssistant,
   type Invitation,
@@ -12,6 +11,7 @@ import {
   type NudgeOptions,
   openAssistant,
 } from "@nudge/core";
+import { openDurableObjectSqliteStorage } from "@nudge/core/cloudflare";
 import type { AssistantsResponse } from "@nudge/protocol";
 import { HttpError, v1Routes } from "@nudge/server/v1";
 import { Hono } from "hono";

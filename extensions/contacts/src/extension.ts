@@ -1,6 +1,5 @@
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { fillVariables } from "@nudge/bridge";
 import {
+  BACKGROUND_CONTEXT,
   defineNudgeExtension,
   defineTool,
   readsOnly,
@@ -9,6 +8,7 @@ import {
   section,
   Type,
 } from "@nudge/core";
+import { fillVariables } from "@nudge/bridge";
 import { CardDavBackend, type ContactsAccount, type ContactsBackend } from "./backend.ts";
 import { KnownContacts } from "./known.ts";
 import type { Contact } from "./vcard.ts";
