@@ -16,6 +16,8 @@ Marked: `mail_search`, `mail_read`; `web_search`, `read_page`, `browse`; `read_f
 
 **The system prompt says what the mark means.** The built-in `untrusted` section tells the model that such text is data to read and report on, never instructions, whoever it claims to be from; that only the people in the conversation instruct it; and that after reading it, calls that send data out wait for a person.
 
+The markers are for the model alone. A reply that quotes a block whole would show them to the room, so `RedactingModels` takes them out of the text the model says, as it streams and in the finished message (`withoutUntrustedMarkers`); a marker cut off at the end of a chunk waits for the rest. Tool-call arguments keep them.
+
 **A turn that read untrusted data asks before it calls out.** A turn is what answers one message, fired nudge or approval outcome, as `turnOf` already finds it. `currentTurn().untrusted` lists the tools whose marked output the turn has read so far: any tool result since the turn began, or the input that began it, holding the opening marker. Found in the transcript, it survives a restart. Calls a script makes through code mode leave their results in the script, not the transcript, so the tool wrapper also remembers, in memory, which turns had an untrusted nested call, and wraps the script's own result when any of its calls returned untrusted data. Code mode and saved scripts still get the unwrapped text as the call's value, so a script that parses JSON keeps working.
 
 With `untrusted` set, these wait for an approval instead of running:

@@ -1,5 +1,6 @@
 import type { AssistantMessage, Context, JsonValue, Message } from "@earendil-works/pi-ai";
 import type { PiiDetector } from "./detectors.ts";
+import { withoutPartialMarker, withoutUntrustedMarkers } from "./untrusted.ts";
 import { type SpellingsSeen, type Vault, withoutPartialPlaceholder } from "./vault.ts";
 
 type Text = (text: string) => string;
@@ -126,9 +127,13 @@ export function rehydrateMessage(
   vault: Pick<Vault, "rehydrate">,
   partial = false,
 ): AssistantMessage {
+  // What it says to people never shows the untrusted-data markers (ADR 20).
   const text: Text = partial
-    ? (value) => vault.rehydrate(withoutPartialPlaceholder(value))
-    : (value) => vault.rehydrate(value);
+    ? (value) =>
+        withoutUntrustedMarkers(
+          vault.rehydrate(withoutPartialMarker(withoutPartialPlaceholder(value))),
+        )
+    : (value) => withoutUntrustedMarkers(vault.rehydrate(value));
   return {
     ...message,
     content: message.content.map((block) => {

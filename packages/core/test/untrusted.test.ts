@@ -21,6 +21,8 @@ import {
   UNTRUSTED_RULE,
   untrustedData,
   untrustedSources,
+  withoutPartialMarker,
+  withoutUntrustedMarkers,
 } from "../src/index.ts";
 
 const context = BACKGROUND_CONTEXT;
@@ -108,6 +110,51 @@ describe("untrusted data", () => {
     );
     expect(untrustedSources(wrapped)).toEqual(["mail_read"]);
     expect(untrustedData('a"><b', "x")).toMatch(/^<untrusted-data source="a___b">\n/);
+  });
+
+  it("takes the markers out of what the model says", () => {
+    const quoted = `Found:\n${untrustedData("watch", "Claude Code 2.1.310")}\nNew.`;
+    expect(withoutUntrustedMarkers(quoted)).toBe("Found:\n\nClaude Code 2.1.310\n\nNew.");
+    expect(withoutUntrustedMarkers("a <UNTRUSTED-DATA> b </untrusted-data>")).toBe("a  b ");
+    // The escaped ones inside data are text, not markers.
+    expect(withoutUntrustedMarkers("＜/untrusted-data>")).toBe("＜/untrusted-data>");
+    // A marker cut off at the end of streamed text waits for the rest.
+    expect(withoutPartialMarker("Found: <untrusted-da")).toBe("Found: ");
+    expect(withoutPartialMarker('Found: <untrusted-data source="wat')).toBe("Found: ");
+    expect(withoutPartialMarker("text\n</untr")).toBe("text\n");
+    expect(withoutPartialMarker("1 <")).toBe("1 ");
+    expect(withoutPartialMarker("1 < 2")).toBe("1 < 2");
+    expect(withoutPartialMarker("<b>bold")).toBe("<b>bold");
+  });
+
+  it("never shows the markers when a reply quotes a block whole", async () => {
+    const { faux, reply, open } = setup([]);
+    const nudge = await open();
+    const quoted = `Watch says:\n${untrustedData("watch", "Claude Code 2.1.310")}\nNothing else.`;
+    faux.setResponses([reply(fauxAssistantMessage(quoted))]);
+    const stream = await nudge.attach(LOBBY, context);
+    let shown = "";
+    stream.start(async (events) => {
+      for (const event of events) {
+        if (event.type === "message_start" && event.message.role === "assistant")
+          for (const block of event.message.content) if (block.type === "text") shown += block.text;
+        if (event.type === "message_update")
+          for (const change of event.changes)
+            if (change.type === "text_delta") shown += change.delta;
+            else if (change.type === "text_start" && change.block.type === "text")
+              shown += change.block.text;
+        expect(shown).not.toContain("<untrusted");
+        expect(shown).not.toContain("</untr");
+      }
+    });
+    await say(nudge, "Anything new?");
+    await nudge.harness.waitForIdle(context);
+    await stream.stop();
+    const answer = "Watch says:\n\nClaude Code 2.1.310\n\nNothing else.";
+    expect(answer.startsWith(shown)).toBe(true);
+    const view = await nudge.modelView(LOBBY, context);
+    expect(view.find((m) => m.role === "assistant")?.text).toBe(answer);
+    await nudge.close(context);
   });
 
   it("finds the hosts a message names", () => {
