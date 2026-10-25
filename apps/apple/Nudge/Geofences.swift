@@ -22,12 +22,14 @@ final class Geofences {
     }
     @ObservationIgnored private let manager = CLLocationManager()
     @ObservationIgnored private var monitor: CLMonitor?
+    @ObservationIgnored private var opening: Task<CLMonitor, Never>?
     @ObservationIgnored private var listening: Task<Void, Never>?
     @ObservationIgnored private var syncing = false
     @ObservationIgnored private let defaults = UserDefaults.standard
     private static let enabledKey = "location.arrive"
-    /// The monitor's name: the same at every launch, so events that woke the app reach it.
-    private static let monitorName = "nudge.arrival"
+    /// The monitor's name: the same at every launch, so events that woke the app reach it. Core
+    /// Location takes only letters and digits here and throws on anything else.
+    private static let monitorName = "NudgeArrival"
     private static let refresh = "refresh"
 
     init() {
@@ -49,9 +51,18 @@ final class Geofences {
     }
 
     private func start() async {
+        // Launch and the first sync both start it: the second waits for the first instead of
+        // opening the same monitor again.
+        if let opening {
+            _ = await opening.value
+            return
+        }
         guard monitor == nil else { return }
-        let monitor = await CLMonitor(Self.monitorName)
+        let opening = Task { await CLMonitor(Self.monitorName) }
+        self.opening = opening
+        let monitor = await opening.value
         self.monitor = monitor
+        self.opening = nil
         listening = Task { [weak self] in
             do {
                 for try await event in await monitor.events {
