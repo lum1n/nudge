@@ -684,6 +684,86 @@ async fn keeps_a_private_message_and_a_private_value_from_the_others() {
 }
 
 #[tokio::test]
+async fn sends_an_attachment_and_lets_the_room_send_images_to_the_model() {
+    let Some(server) = faux_server().await else {
+        return;
+    };
+    let ann = client(&server.url, Some(&server.ann));
+    let bo = client(&server.url, Some(&server.bo));
+    let (ann_room, bo_room) = (ann.room("trip"), bo.room("trip"));
+    ann.open();
+    bo.open();
+    let (mut ann_states, mut bo_states) = (ann_room.states(), bo_room.states());
+    until(&mut ann_states, |s| s.status == SyncStatus::Live).await;
+    until(&mut bo_states, |s| s.status == SyncStatus::Live).await;
+
+    let png = b"\x89PNG\r\n\x1a\n not really a picture".to_vec();
+    let attachment = ann
+        .api()
+        .upload_attachment("trip", "receipt.png", "image/png", png.clone())
+        .await
+        .unwrap();
+    assert_eq!(attachment.kind, AttachmentKind::Image);
+    assert_eq!(attachment.size, png.len() as u64);
+    // Nobody else sees it before it is sent.
+    assert_eq!(
+        bo.api()
+            .attachment("trip", &attachment.id)
+            .await
+            .unwrap_err()
+            .status(),
+        Some(404)
+    );
+
+    let options = SendOptions {
+        attachments: vec![attachment.clone()],
+        ..SendOptions::default()
+    };
+    ann.send("trip", "", options).await.unwrap();
+    let theirs = until(&mut bo_states, |s| {
+        s.timeline
+            .iter()
+            .any(|item| matches!(item, TimelineItem::User(user) if user.attachments.is_some()))
+    })
+    .await;
+    let sent = theirs
+        .timeline
+        .iter()
+        .find_map(|item| match item {
+            TimelineItem::User(user) => user.attachments.clone(),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(sent, std::slice::from_ref(&attachment));
+    assert_eq!(
+        bo.api().attachment("trip", &attachment.id).await.unwrap(),
+        png
+    );
+
+    let room = bo.api().set_room_images("trip", true).await.unwrap();
+    assert_eq!(room.images_to_model, Some(true));
+    until(&mut ann_states, |s| {
+        s.view.as_ref().and_then(|v| v.room.images_to_model) == Some(true)
+    })
+    .await;
+    let room = ann.api().set_room_images("trip", false).await.unwrap();
+    assert_eq!(room.images_to_model, None);
+
+    ann.api()
+        .remove_attachment("trip", &attachment.id)
+        .await
+        .unwrap();
+    assert_eq!(
+        bo.api()
+            .attachment("trip", &attachment.id)
+            .await
+            .unwrap_err()
+            .status(),
+        Some(410)
+    );
+}
+
+#[tokio::test]
 async fn sets_up_extensions_for_admins() {
     let Some(server) = faux_server().await else {
         return;

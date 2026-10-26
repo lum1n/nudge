@@ -359,6 +359,24 @@ pub struct TokenInfo {
     pub expires_at: Option<f64>,
 }
 
+/// The largest attachment the server takes, in bytes (ADR 24).
+#[uniffi::export]
+pub fn attachment_max_bytes() -> u64 {
+    p::ATTACHMENT_MAX_BYTES
+}
+
+/// The most attachments one message may name.
+#[uniffi::export]
+pub fn attachments_per_message() -> u32 {
+    p::ATTACHMENTS_PER_MESSAGE as u32
+}
+
+/// How long the long side of a photo may be: scale larger ones down before uploading.
+#[uniffi::export]
+pub fn attachment_image_max_side() -> u32 {
+    p::ATTACHMENT_IMAGE_MAX_SIDE
+}
+
 /// A new key pair for this device's pushes through a relay; make one per install and keep it.
 #[uniffi::export]
 pub fn new_device_key() -> DeviceKey {
@@ -593,23 +611,68 @@ impl NudgeClient {
     }
 
     /// Sends a message, shown as pending in the room's updates until the timeline has it. With
-    /// `private`, only this player sees it and the answer to it.
-    #[uniffi::method(default(private = false))]
+    /// `private`, only this player sees it and the answer to it. `attachments` were uploaded
+    /// with `upload_attachment` and not sent yet; `text` may then be empty.
+    #[uniffi::method(default(private = false, attachments = []))]
     pub async fn send(
         &self,
         room: String,
         text: String,
         when_busy: Option<WhenBusy>,
         private: bool,
+        attachments: Vec<Attachment>,
     ) -> Result<Sent, NudgeError> {
         let client = self.client.clone();
         let options = SendOptions {
             when_busy: when_busy.map(Into::into),
             private,
+            attachments: attachments.into_iter().map(Into::into).collect(),
             request_id: None,
         };
         let sent = run(async move { client.send(&room, &text, options).await }).await?;
         Ok(sent.into())
+    }
+
+    /// Uploads a file to send with a message in `room` (ADR 24); only this player sees it until
+    /// it is sent. Scale photos down to `attachment_image_max_side()` pixels on the long side
+    /// first; the server refuses files over `attachment_max_bytes()`.
+    pub async fn upload_attachment(
+        &self,
+        room: String,
+        name: String,
+        mime: String,
+        bytes: Vec<u8>,
+    ) -> Result<Attachment, NudgeError> {
+        let api = self.client.api().clone();
+        Ok(
+            run(async move { api.upload_attachment(&room, &name, &mime, bytes).await })
+                .await?
+                .into(),
+        )
+    }
+
+    /// An attachment's bytes; 404 for one this player may not see, 410 for a removed one.
+    pub async fn attachment(&self, room: String, id: String) -> Result<Vec<u8>, NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.attachment(&room, &id).await }).await?)
+    }
+
+    /// Removes an attachment, its bytes at once; its uploader or an admin may.
+    pub async fn remove_attachment(&self, room: String, id: String) -> Result<(), NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.remove_attachment(&room, &id).await }).await?)
+    }
+
+    /// Whether the model gets the images attached in `room` as they are. Redaction can't read
+    /// pictures, so with `allowed` whatever they show reaches the model's provider: say so where
+    /// it is turned on.
+    pub async fn set_room_images(&self, room: String, allowed: bool) -> Result<Room, NudgeError> {
+        let api = self.client.api().clone();
+        Ok(
+            run(async move { api.set_room_images(&room, allowed).await })
+                .await?
+                .into(),
+        )
     }
 
     /// Sends a pending message again, with the same request id.

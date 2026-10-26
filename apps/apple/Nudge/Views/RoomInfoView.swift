@@ -12,6 +12,8 @@ struct RoomInfoView: View {
     @State private var extensions: [RoomExtension]?
     @State private var personal: PersonalDetails?
     @State private var newFact = ""
+    /// Asking before images go to the model as they are.
+    @State private var confirmingImages = false
     @State private var problem: String?
 
     var body: some View {
@@ -110,6 +112,23 @@ struct RoomInfoView: View {
                         EmptyView()
                     }
                 }
+                // Consent, as for the extensions: anyone in the room may change it, never the model.
+                if let room = state?.room {
+                    Section {
+                        Toggle(isOn: Binding(
+                            get: { room.imagesToModel },
+                            set: { on in if on { confirmingImages = true } else { setImages(false) } }
+                        )) {
+                            Label("Send images to the model", systemImage: "photo")
+                        }
+                    } header: {
+                        Text("Images")
+                    } footer: {
+                        Text(room.imagesToModel
+                            ? "Images attached here reach the model's provider as they are. Redaction reads text, not pictures, so whatever they show goes along. Everyone in the room sees this is on."
+                            : "The model gets each attachment's name, type and size, not the picture.")
+                    }
+                }
                 if let nudges = state?.nudges, !nudges.isEmpty {
                     Section("Nudges") {
                         ForEach(nudges, id: \.id) { nudge in
@@ -159,6 +178,11 @@ struct RoomInfoView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
+            .confirmationDialog("Send images to the model?", isPresented: $confirmingImages, titleVisibility: .visible) {
+                Button("Send images") { setImages(true) }
+            } message: {
+                Text("Images sent in this room will reach the model's provider as they are, with whatever they show: faces, addresses, card numbers. It is on for everyone here.")
+            }
             .task { await loadExtensions() }
             .task { personal = try? await client.personal() }
         }
@@ -201,6 +225,11 @@ struct RoomInfoView: View {
 
     private func shareLocation(_ shared: Bool) {
         run { personal = try await client.shareLocationIn(room: roomId, shared: shared) }
+    }
+
+    /// The change comes back through the room's view.
+    private func setImages(_ allowed: Bool) {
+        run { _ = try await client.setRoomImages(room: roomId, allowed: allowed) }
     }
 
     private func set(_ ext: RoomExtension, _ enabled: Bool) {

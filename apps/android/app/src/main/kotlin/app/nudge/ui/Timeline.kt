@@ -94,12 +94,31 @@ fun TimelineRow(item: TimelineItem, me: String?, assistant: String, openBrowser:
         } else {
             val mine = item.author == null || item.author?.id == me
             val sender = if (mine) stringResource(R.string.room_you) else item.author?.displayName ?: stringResource(R.string.room_someone)
+            val said = listOf(item.text, item.attachments.joinToString { it.name }).filter { it.isNotEmpty() }.joinToString(", ")
             Column(
-                Modifier.fillMaxWidth().spokenAs(sender, item.text, item.sentAt, onlyYou = item.privateTo != null),
+                Modifier.fillMaxWidth().spokenAs(sender, said, item.sentAt, onlyYou = item.privateTo != null),
                 horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 if (item.privateTo != null) OnlyYou()
-                Bubble(item.text, mine, if (mine) null else item.author?.displayName, sentAt = item.sentAt)
+                if (item.attachments.isNotEmpty()) {
+                    if (!mine) item.author?.displayName?.let {
+                        Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    AttachmentList(item.attachments)
+                }
+                if (item.text.isNotEmpty() || item.attachments.isEmpty()) {
+                    Bubble(item.text, mine, if (mine || item.attachments.isNotEmpty()) null else item.author?.displayName, sentAt = item.sentAt)
+                } else {
+                    item.sentAt?.let {
+                        Text(
+                            timeOfDay(it),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 6.dp),
+                        )
+                    }
+                }
             }
         }
         is TimelineItem.Nudge, is TimelineItem.Approval -> {}
@@ -267,7 +286,7 @@ fun Bubble(text: String, mine: Boolean, author: String?, faded: Boolean = false,
 fun PendingRow(message: PendingMessage, retry: () -> Unit, dismiss: () -> Unit) {
     // Read as one with its state; Retry and Dismiss stay buttons of their own.
     Column(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}, horizontalAlignment = Alignment.End) {
-        Bubble(message.text, mine = true, author = null, faded = true)
+        Bubble(attachmentsLabel(message.text, message.attachments), mine = true, author = null, faded = true)
         val small = MaterialTheme.typography.labelSmall
         when (val state = message.state) {
             is PendingState.Sending -> Text(stringResource(R.string.room_sending), style = small, color = MaterialTheme.colorScheme.onSurfaceVariant)

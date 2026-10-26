@@ -4463,6 +4463,17 @@
         }
       }
     },
+    "RoomImagesRequest": {
+      "type": "object",
+      "required": [
+        "allowed"
+      ],
+      "properties": {
+        "allowed": {
+          "type": "boolean"
+        }
+      }
+    },
     "TimelineResponse": {
       "type": "object",
       "required": [

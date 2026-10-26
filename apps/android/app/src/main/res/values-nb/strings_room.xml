@@ -34,6 +34,21 @@
     <string name="room_message">Melding</string>
     <string name="room_stop">Stopp</string>
     <string name="room_send">Send</string>
+    <!-- Vedlegg (ADR 24): i meldingsfeltet og tidslinjen. -->
+    <string name="room_attach">Legg ved</string>
+    <string name="room_attach_photos">Bilder</string>
+    <string name="room_attach_files">Filer</string>
+    <string name="room_attachment_remove">Fjern %1$s</string>
+    <string name="room_attachment_uploading">Laster opp …</string>
+    <string name="room_attachment_too_many">Høyst %1$s filer per melding</string>
+    <string name="room_attachment_too_large">Større enn %1$s</string>
+    <string name="room_attachment_unreadable">Klarte ikke å lese filen</string>
+    <string name="room_attachment_removed">%1$s (fjernet)</string>
+    <string name="room_attachment_save">Lagre %1$s</string>
+    <string name="room_attachment_saved">Lagret</string>
+    <string name="room_attachments">📎 %1$s</string>
+    <string name="room_images_seen">Modellen ser disse bildene som de er.</string>
+    <string name="room_images_not_seen">Modellen får bare navnene på disse bildene. Slå på Send bilder til modellen i rommets info for å la den se dem.</string>
     <string name="room_retrying">Prøver igjen (%1$s): %2$s</string>
     <string name="room_compacting">Oppsummerer samtalen så langt…</string>
     <string name="room_compaction_failed">Kunne ikke oppsummere: %1$s</string>
@@ -123,6 +138,13 @@
     <string name="room_info_location_explain_not_yet">Da kan alle her spørre om hva som er i nærheten av deg. Alle ser at du deler den, men selve stedet holdes skjult for dem og for modellen. Enhetene dine har ikke delt hvor du er ennå.</string>
     <string name="room_info_location_share">La assistenten vite hvor jeg er her</string>
     <string name="room_info_nudges">Påminnelser</string>
+    <string name="room_info_images">Bilder</string>
+    <string name="room_info_images_allow">Send bilder til modellen</string>
+    <string name="room_info_images_on">Bilder som legges ved her, når modellens leverandør som de er. Skjuling leser tekst, ikke bilder, så det de viser, blir med. Alle i rommet ser at dette er på.</string>
+    <string name="room_info_images_off">Modellen får navnet, typen og størrelsen på hvert vedlegg, ikke bildet.</string>
+    <string name="room_info_images_confirm_title">Sende bilder til modellen?</string>
+    <string name="room_info_images_confirm">Bilder som sendes i dette rommet, når modellens leverandør som de er, med det de viser: ansikter, adresser, kortnumre. Dette slår det på for alle her.</string>
+    <string name="room_info_images_turn_on">Slå på</string>
     <string name="room_info_extensions">Utvidelser</string>
     <string name="room_info_model_saw">Det modellen så</string>
     <string name="room_info_role_system">System</string>

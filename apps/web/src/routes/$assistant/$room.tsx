@@ -1,6 +1,8 @@
 import {
   type AppendMessage,
   AssistantRuntimeProvider,
+  AttachmentPrimitive,
+  type Attachment as ComposerAttachment,
   ComposerPrimitive,
   MessagePrimitive,
   type MessageState,
@@ -15,6 +17,7 @@ import {
 import { MarkdownTextPrimitive } from "@assistant-ui/react-markdown";
 import type {
   Approval,
+  Attachment,
   PendingMessage,
   RoomState,
   RoomStore,
@@ -36,6 +39,7 @@ import {
   useState,
 } from "react";
 import { clientFor, forgetToken, useConnection, useRoom, useRoomList } from "../../api.ts";
+import { RoomAttachments, sizeLabel } from "../../attachments.ts";
 import { type Appearance, lookOf, NUDGE } from "../../avatar/appearance.ts";
 import { Avatar, Portrait } from "../../avatar/Avatar.tsx";
 import type { Mood } from "../../avatar/pose.ts";
@@ -230,6 +234,7 @@ function Room() {
           <LocationPanel view={view} />
           <PrivateValuesPanel />
           <NudgesPanel view={view} />
+          <ImagesPanel view={view} />
           <ExtensionsPanel />
         </aside>
         <div className="flex min-h-0 min-w-0 flex-1 flex-col px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-4 sm:pt-4 sm:pb-4">
@@ -379,19 +384,30 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
   useEffect(() => {
     if (matchMedia("(pointer: fine)").matches) input.current?.focus();
   }, [room]);
+  // Files are uploaded as they are picked; a message names those it is sent with.
+  const uploads = useMemo(
+    () =>
+      new RoomAttachments(
+        (file) => clientFor(assistant).api.uploadAttachment(room, file),
+        (id) => clientFor(assistant).api.removeAttachment(room, id),
+      ),
+    [assistant, room],
+  );
   const dispatch = useCallback(
     (message: AppendMessage, lane: Lane) => {
       const text = appendText(message).trim();
-      if (text === "") return;
+      const attachments = uploads.take((message.attachments ?? []).map((a) => a.id));
+      if (text === "" && attachments.length === 0) return;
       // A failed send stays in the store's `pending` with its error; the page offers it again.
       clientFor(assistant)
         .send(room, text, {
           ...(lane === "steer" ? { whenBusy: "steer" as const } : {}),
           ...(secret && shared ? { private: true } : {}),
+          ...(attachments.length > 0 ? { attachments } : {}),
         })
         .catch(() => {});
     },
-    [assistant, room, secret, shared],
+    [assistant, room, secret, shared, uploads],
   );
   const convertMessage = useCallback(
     (item: RoomView["timeline"][number]) => toThreadMessageLike(item, me),
@@ -427,7 +443,7 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
       await clientFor(assistant).api.abort(room);
     },
     queue: buildQueueAdapter(view.queue, state.pending, dispatch),
-    ...(dictation === undefined ? {} : { adapters: { dictation } }),
+    adapters: { attachments: uploads, ...(dictation === undefined ? {} : { dictation }) },
   });
 
   return (
@@ -471,7 +487,14 @@ function Chat({ store, state, view }: { store: RoomStore; state: RoomState; view
                 </p>
               )}
             </ComposerPrimitive.Queue>
+            <ComposerAttachments imagesToModel={view.room.imagesToModel === true} />
             <div className="flex gap-2">
+              <ComposerPrimitive.AddAttachment
+                title={m.room.chat.attachTitle}
+                className="shrink-0 rounded border bg-white px-2 text-sm text-stone-600"
+              >
+                {m.room.chat.attach}
+              </ComposerPrimitive.AddAttachment>
               {shared && (
                 <button
                   type="button"
@@ -637,7 +660,11 @@ function FailedSends({ store, pending }: { store: RoomStore; pending: readonly P
           className="flex items-baseline justify-between gap-2 rounded border border-red-200 bg-red-50 px-3 py-1 text-sm"
         >
           <span className="min-w-0 [overflow-wrap:anywhere]">
-            {m.room.chat.notSent(message.text)}{" "}
+            {m.room.chat.notSent(
+              message.text === "" && message.attachments !== undefined
+                ? m.room.chat.attachments(message.attachments.map((a) => a.name))
+                : message.text,
+            )}{" "}
             <span className="text-red-700">({message.error})</span>
           </span>
           <span className="flex shrink-0 gap-2">
@@ -713,7 +740,7 @@ function MessageRow({ message, assistant }: { message: MessageState; assistant: 
 
 function UserMessage({ message }: { message: MessageState }) {
   const custom = message.metadata.custom as
-    | { author?: string; mine?: boolean; private?: boolean }
+    | { author?: string; mine?: boolean; private?: boolean; attachments?: Attachment[] }
     | undefined;
   const mine = custom?.mine ?? false;
   const at = timeOfMessage(message);
@@ -731,6 +758,9 @@ function UserMessage({ message }: { message: MessageState }) {
             </p>
           )}
           {custom?.private === true && <OnlyYou light={mine} />}
+          {custom?.attachments !== undefined && (
+            <AttachmentList attachments={custom.attachments} light={mine} />
+          )}
           <MessagePrimitive.Parts components={{ Text: TextPart }} />
         </div>
         {at !== undefined && (
@@ -853,6 +883,164 @@ function SystemMessage({ message }: { message: MessageState }) {
 }
 
 /** Says a message is the reader's alone, so they know the others don't see it. */
+/**
+ * The files picked in the composer, each uploading, ready or refused, with a way to take it off,
+ * and whether the model will see the images among them.
+ */
+function ComposerAttachments({ imagesToModel }: { imagesToModel: boolean }) {
+  const images = useAuiState((s) => s.composer.attachments.some((a) => a.type === "image"));
+  const any = useAuiState((s) => s.composer.attachments.length > 0);
+  if (!any) return null;
+  return (
+    <div className="flex flex-col gap-1">
+      <ul className="flex flex-wrap gap-2">
+        <ComposerPrimitive.Attachments>
+          {({ attachment }) => <ComposerAttachmentChip attachment={attachment} />}
+        </ComposerPrimitive.Attachments>
+      </ul>
+      {images && (
+        <p className="text-xs text-stone-500">
+          {imagesToModel ? m.room.chat.imagesSeen : m.room.chat.imagesNotSeen}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ComposerAttachmentChip({ attachment }: { attachment: ComposerAttachment }) {
+  const { status } = attachment;
+  return (
+    <AttachmentPrimitive.Root
+      render={<li />}
+      className={`flex max-w-full items-center gap-2 rounded border px-2 py-1 text-sm ${
+        status.type === "incomplete" ? "border-red-300 bg-red-50" : "border-stone-300 bg-white"
+      }`}
+    >
+      <span className="min-w-0 truncate">
+        {attachment.type === "image" ? "🖼 " : "📎 "}
+        <AttachmentPrimitive.Name />
+      </span>
+      {status.type === "running" && (
+        <span className="shrink-0 text-xs text-stone-500">{m.room.chat.uploading}</span>
+      )}
+      {status.type === "incomplete" && status.reason === "error" && (
+        <span className="shrink-0 text-xs text-red-700">{status.message}</span>
+      )}
+      <AttachmentPrimitive.Remove
+        aria-label={m.room.chat.removeAttachment(attachment.name)}
+        className="shrink-0 text-stone-500 hover:text-stone-900"
+      >
+        ×
+      </AttachmentPrimitive.Remove>
+    </AttachmentPrimitive.Root>
+  );
+}
+
+/** A message's attachments: images as pictures, other files to download. */
+function AttachmentList({
+  attachments,
+  light,
+}: {
+  attachments: readonly Attachment[];
+  light: boolean;
+}) {
+  return (
+    <ul className="mb-1 flex flex-wrap gap-2">
+      {attachments.map((attachment) => (
+        <li key={attachment.id} className="max-w-full">
+          {attachment.kind === "image" ? (
+            <ImageAttachment attachment={attachment} />
+          ) : (
+            <FileAttachment attachment={attachment} light={light} />
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * An attachment's bytes as a URL to show or save. The download needs the token, which an
+ * `<img src>` can't send, so it is fetched and shown from a blob.
+ */
+function useAttachment(attachment: Attachment, enabled: boolean) {
+  const { assistant, room } = Route.useParams();
+  const query = useQuery({
+    queryKey: [assistant, "attachment", room, attachment.id],
+    queryFn: () => clientFor(assistant).api.attachment(room, attachment.id),
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
+    enabled,
+  });
+  const [url, setUrl] = useState<string>();
+  useEffect(() => {
+    if (query.data === undefined) return;
+    const made = URL.createObjectURL(query.data);
+    setUrl(made);
+    return () => URL.revokeObjectURL(made);
+  }, [query.data]);
+  return { url, error: query.error };
+}
+
+function ImageAttachment({ attachment }: { attachment: Attachment }) {
+  const { url, error } = useAttachment(attachment, true);
+  if (error !== null) return <RemovedAttachment attachment={attachment} gone={error} />;
+  return (
+    <a href={url} target="_blank" rel="noreferrer" className="block">
+      {url === undefined ? (
+        <span className="block size-40 animate-pulse rounded-lg bg-stone-300/60" />
+      ) : (
+        <img
+          src={url}
+          alt={attachment.name}
+          title={attachment.name}
+          className="max-h-60 max-w-full rounded-lg object-contain"
+        />
+      )}
+    </a>
+  );
+}
+
+function FileAttachment({ attachment, light }: { attachment: Attachment; light: boolean }) {
+  const [asked, setAsked] = useState(false);
+  const { url, error } = useAttachment(attachment, asked);
+  const link = useRef<HTMLAnchorElement>(null);
+  // Saves the file once its bytes are here, when the reader asked for it.
+  useEffect(() => {
+    if (asked && url !== undefined) link.current?.click();
+  }, [asked, url]);
+  if (error !== null) return <RemovedAttachment attachment={attachment} gone={error} />;
+  const label = `📎 ${attachment.name} · ${sizeLabel(attachment.size)}`;
+  return (
+    <>
+      <button
+        type="button"
+        aria-label={m.room.chat.download(attachment.name)}
+        onClick={() => (url === undefined ? setAsked(true) : link.current?.click())}
+        className={`rounded border px-2 py-1 text-left text-sm [overflow-wrap:anywhere] underline-offset-2 hover:underline ${
+          light ? "border-sky-300" : "border-stone-300 bg-white"
+        }`}
+      >
+        {label}
+      </button>
+      {url !== undefined && (
+        <a ref={link} href={url} download={attachment.name} hidden>
+          {label}
+        </a>
+      )}
+    </>
+  );
+}
+
+/** One that can't be shown any more: its name stays, so people know there was one. */
+function RemovedAttachment({ attachment, gone }: { attachment: Attachment; gone: Error }) {
+  return (
+    <span className="text-sm opacity-75" title={gone.message}>
+      📎 <s>{attachment.name}</s> ({m.room.chat.attachmentRemoved})
+    </span>
+  );
+}
+
 function OnlyYou({ light = false }: { light?: boolean }) {
   return (
     <p className={`mb-0.5 text-xs font-medium ${light ? "text-sky-100" : "text-violet-700"}`}>
@@ -1341,6 +1529,53 @@ function NudgesPanel({ view }: { view: RoomView }) {
           </li>
         ))}
       </ul>
+      {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
+    </section>
+  );
+}
+
+/**
+ * Whether the model gets the images attached here as they are (ADR 24). Anyone in the room may
+ * change it; turning it on says first what that means, since redaction can't read pictures.
+ */
+function ImagesPanel({ view }: { view: RoomView }) {
+  const { assistant, room } = Route.useParams();
+  const allowed = view.room.imagesToModel === true;
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+
+  async function set(on: boolean) {
+    if (on && !confirm(m.room.images.confirm)) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      // The change comes back through the room's view.
+      await clientFor(assistant).api.setRoomImages(room, on);
+    } catch (caught) {
+      setError((caught as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="flex flex-col gap-2 rounded border border-stone-200 bg-white p-3">
+      <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">
+        {m.room.images.title}
+      </h3>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          className="size-4 shrink-0"
+          checked={allowed}
+          disabled={busy}
+          onChange={(event) => void set(event.target.checked)}
+        />
+        {m.room.images.allow}
+      </label>
+      <p className={`text-xs ${allowed ? "text-amber-800" : "text-stone-500"}`}>
+        {allowed ? m.room.images.on : m.room.images.off}
+      </p>
       {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
     </section>
   );

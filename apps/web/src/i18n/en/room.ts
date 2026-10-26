@@ -64,6 +64,30 @@ export const room = {
     askedForApproval: "Asked for approval",
     /** The badge on an answer to a fired nudge or to what a watch found. */
     promptedBy: { nudge: "Nudge", watch: "Watch" },
+    attach: "Attach",
+    attachTitle: "Attach photos or files",
+    removeAttachment: (name: string) => `Remove ${name}`,
+    uploading: "Uploading…",
+    tooManyAttachments: (most: number) => `At most ${most} files per message`,
+    attachmentTooLarge: (most: string) => `Larger than ${most}`,
+    notUploaded: "Not uploaded yet",
+    /** Under the composer's images, in a room that sends them to the model or not. */
+    imagesSeen: "The model sees these images as they are.",
+    imagesNotSeen:
+      "The model gets only these images' names. Turn on Send images to the model in the room's details to let it see them.",
+    attachmentRemoved: "removed",
+    download: (name: string) => `Download ${name}`,
+    /** A message waiting in the queue with files and no text. */
+    attachments: (names: readonly string[]) => `📎 ${names.join(", ")}`,
+  },
+  /** The room's switch for sending images to the model (ADR 24). */
+  images: {
+    title: "Images",
+    allow: "Send images to the model",
+    on: "Images attached here reach the model's provider as they are. Redaction reads text, not pictures, so whatever they show goes along. Everyone in the room sees this is on.",
+    off: "The model gets each attachment's name, type and size, not the picture.",
+    confirm:
+      "Images sent in this room will reach the model's provider as they are, with whatever they show: faces, addresses, card numbers. Turn it on for everyone here?",
   },
   /** Under the robot, what it is doing. */
   presence: {

@@ -7,6 +7,7 @@ import type {
 } from "@assistant-ui/react";
 import type {
   Approval,
+  Attachment,
   Part,
   PendingMessage,
   QueuedMessage,
@@ -144,6 +145,7 @@ export function toThreadMessageLike(item: TimelineItem, me: string): ThreadMessa
                   private: item.privateTo !== undefined,
                 }),
             ...(item.sentAt === undefined ? {} : { at: item.sentAt }),
+            ...(item.attachments === undefined ? {} : { attachments: item.attachments }),
           },
         },
       };
@@ -274,9 +276,18 @@ function toStatus(answer: Answer): MessageStatus {
   }
 }
 
-function queueItem(id: string | number, text: string): QueueItemState {
-  // Someone else's private message waits as an empty one.
-  const shown = text === "" ? m.room.runtime.privateMessage : text;
+function queueItem(
+  id: string | number,
+  text: string,
+  attachments: readonly Attachment[] = [],
+): QueueItemState {
+  // A message of files alone shows their names; someone else's private one waits as an empty one.
+  const shown =
+    text !== ""
+      ? text
+      : attachments.length > 0
+        ? m.room.chat.attachments(attachments.map((a) => a.name))
+        : m.room.runtime.privateMessage;
   return { id: String(id), prompt: shown, parts: [{ type: "text", text: shown }] };
 }
 
@@ -300,11 +311,11 @@ export function buildQueueAdapter(
   const items = (lane: Lane) => [
     ...queue
       .filter((item) => (item.mode === "steer" ? "steer" : "queue") === lane)
-      .map((item) => queueItem(item.id, item.text)),
+      .map((item) => queueItem(item.id, item.text, item.attachments)),
     ...pending
       .filter((item) => item.error === undefined)
       .filter((item) => (item.whenBusy === "steer" ? "steer" : "queue") === lane)
-      .map((item) => queueItem(item.requestId, item.text)),
+      .map((item) => queueItem(item.requestId, item.text, item.attachments)),
   ];
   return {
     items: items("queue"),

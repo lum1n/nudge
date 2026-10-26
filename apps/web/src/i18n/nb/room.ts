@@ -60,6 +60,27 @@ export const room: Messages["room"] = {
     openBrowser: "Åpne rommets nettleser for å logge inn",
     askedForApproval: "Ba om godkjenning",
     promptedBy: { nudge: "Påminnelse", watch: "Overvåking" },
+    attach: "Legg ved",
+    attachTitle: "Legg ved bilder eller filer",
+    removeAttachment: (name) => `Fjern ${name}`,
+    uploading: "Laster opp …",
+    tooManyAttachments: (most) => `Høyst ${most} filer per melding`,
+    attachmentTooLarge: (most) => `Større enn ${most}`,
+    notUploaded: "Ikke lastet opp ennå",
+    imagesSeen: "Modellen ser disse bildene som de er.",
+    imagesNotSeen:
+      "Modellen får bare navnene på disse bildene. Slå på Send bilder til modellen i rommets detaljer for å la den se dem.",
+    attachmentRemoved: "fjernet",
+    download: (name) => `Last ned ${name}`,
+    attachments: (names) => `📎 ${names.join(", ")}`,
+  },
+  images: {
+    title: "Bilder",
+    allow: "Send bilder til modellen",
+    on: "Bilder som legges ved her, når modellens leverandør som de er. Skjuling leser tekst, ikke bilder, så det de viser, blir med. Alle i rommet ser at dette er på.",
+    off: "Modellen får navnet, typen og størrelsen på hvert vedlegg, ikke bildet.",
+    confirm:
+      "Bilder som sendes i dette rommet, når modellens leverandør som de er, med det de viser: ansikter, adresser, kortnumre. Slå det på for alle her?",
   },
   presence: {
     using: (tool) => `Bruker ${tool} …`,

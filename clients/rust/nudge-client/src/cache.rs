@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::sync::Mutex;
 
-use nudge_protocol::{Target, WhenBusy};
+use nudge_protocol::{Attachment, Target, WhenBusy};
 use rusqlite::{OptionalExtension, params};
 
 /// What a client keeps on disk between runs: the last view of every target it followed, shown
@@ -21,6 +21,8 @@ pub struct Outgoing {
     pub when_busy: Option<WhenBusy>,
     /// Only the sender sees it and the answer to it.
     pub private: bool,
+    /// Uploaded already; the message names them.
+    pub attachments: Vec<Attachment>,
     /// Ms since the epoch.
     pub created_at: i64,
     /// Why the server refused it; it is not sent again until `resend`.
@@ -63,6 +65,13 @@ impl Cache {
             .exists([])?;
         if !has_private {
             db.execute_batch("alter table outbox add column private integer not null default 0")?;
+        }
+        // And from before attachments.
+        let has_attachments = db
+            .prepare("select 1 from pragma_table_info('outbox') where name = 'attachments'")?
+            .exists([])?;
+        if !has_attachments {
+            db.execute_batch("alter table outbox add column attachments text")?;
         }
         Ok(Cache { db: Mutex::new(db) })
     }
@@ -135,10 +144,14 @@ impl Cache {
                 created_at: row.get(4)?,
                 error: row.get(5)?,
                 private: row.get(6)?,
+                attachments: row
+                    .get::<_, Option<String>>(7)?
+                    .and_then(|json| serde_json::from_str(&json).ok())
+                    .unwrap_or_default(),
             })
         };
-        let columns =
-            "select request_id, room, text, when_busy, created_at, error, private from outbox";
+        let columns = "select request_id, room, text, when_busy, created_at, error, private, \
+                       attachments from outbox";
         let rows = match room {
             Some(room) => db
                 .prepare(&format!(
@@ -159,11 +172,14 @@ impl Cache {
                 .and_then(|v| v.as_str().map(str::to_owned))
                 .unwrap_or_default()
         });
+        let attachments = (!message.attachments.is_empty())
+            .then(|| serde_json::to_string(&message.attachments).ok())
+            .flatten();
         let db = self.db.lock().unwrap();
         let _ = db.execute(
             "insert or replace into outbox
-               (request_id, room, text, when_busy, created_at, error, private)
-             values (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+               (request_id, room, text, when_busy, created_at, error, private, attachments)
+             values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             params![
                 message.request_id,
                 message.room,
@@ -171,7 +187,8 @@ impl Cache {
                 when_busy,
                 message.created_at,
                 message.error,
-                message.private
+                message.private,
+                attachments
             ],
         );
     }
@@ -204,6 +221,7 @@ mod tests {
             text: format!("text {id}"),
             when_busy: Some(WhenBusy::Steer),
             private: true,
+            attachments: vec![],
             created_at: at,
             error: None,
         }
@@ -220,7 +238,16 @@ mod tests {
             cache.save_view(&Target::RoomList, "{\"rooms\":1}");
             cache.add_outgoing(&message("b", "trip", 2));
             cache.add_outgoing(&message("a", "trip", 1));
-            cache.add_outgoing(&message("c", "lobby", 3));
+            cache.add_outgoing(&Outgoing {
+                attachments: vec![Attachment {
+                    id: "a1".into(),
+                    name: "receipt.jpg".into(),
+                    mime: "image/jpeg".into(),
+                    size: 1200,
+                    kind: nudge_protocol::AttachmentKind::Image,
+                }],
+                ..message("c", "lobby", 3)
+            });
             cache.set_outgoing_error("c", Some("Not a member"));
         }
         let cache = Cache::open(&path).unwrap();
@@ -240,6 +267,8 @@ mod tests {
         assert_eq!(all.len(), 3);
         assert_eq!(all[0].when_busy, Some(WhenBusy::Steer));
         assert_eq!(all[2].error.as_deref(), Some("Not a member"));
+        assert_eq!(all[2].attachments[0].name, "receipt.jpg");
+        assert!(all[0].attachments.is_empty());
         cache.remove_outgoing("a");
         assert_eq!(cache.outbox(None).len(), 2);
         // Another player's client starts afresh.

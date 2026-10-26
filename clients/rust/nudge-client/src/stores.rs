@@ -242,6 +242,8 @@ pub struct PendingMessage {
     pub when_busy: Option<WhenBusy>,
     /// Only the sender sees it and the answer to it.
     pub private: bool,
+    /// Uploaded already; sent with it.
+    pub attachments: Vec<Attachment>,
     pub state: PendingState,
 }
 
@@ -880,6 +882,7 @@ mod tests {
             text: text.into(),
             when_busy: None,
             private: false,
+            attachments: vec![],
             state: PendingState::Sending,
         };
         for (id, text) in [("r1", "Hello"), ("r2", "Again")] {
@@ -889,6 +892,7 @@ mod tests {
                 text: text.into(),
                 when_busy: None,
                 private: false,
+                attachments: vec![],
                 created_at: 0,
                 error: None,
             });

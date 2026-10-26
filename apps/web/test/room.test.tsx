@@ -239,7 +239,8 @@ describe("the room page", () => {
     expect(shown).toContain("Retrying (attempt 2): overloaded");
     expect(shown).toContain("Trying again…");
     expect(shown).toContain("Stop");
-    expect(shown).not.toMatch(/\bSend\b/);
+    // The composer's Send, not the room's "Send images to the model".
+    expect(shown).not.toMatch(/\bSend\b(?! images)/);
 
     const browsing: TimelineItem = {
       type: "answer",
@@ -257,7 +258,7 @@ describe("the room page", () => {
     hold(view({ live: { running: false, status: { kind: "compaction-failed", error: "no" } } }));
     shown = text(await render());
     expect(shown).toContain("Couldn't summarize older messages: no");
-    expect(shown).toMatch(/\bSend\b/);
+    expect(shown).toMatch(/\bSend\b(?! images)/);
   });
 
   it("offers a send that failed again, or to let it go", async () => {

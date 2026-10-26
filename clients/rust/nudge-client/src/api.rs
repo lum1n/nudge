@@ -204,6 +204,67 @@ impl Api {
             .await
     }
 
+    /// Uploads a file to send with a message in `room` (ADR 24): only the caller sees it until
+    /// they name it in a message's `attachments`. Scale photos down to
+    /// `ATTACHMENT_IMAGE_MAX_SIDE` first; the server refuses files over `ATTACHMENT_MAX_BYTES`.
+    pub async fn upload_attachment(
+        &self,
+        room: &str,
+        name: &str,
+        mime: &str,
+        bytes: Vec<u8>,
+    ) -> Result<Attachment, ApiError> {
+        let request = self
+            .build(
+                Method::POST,
+                &["rooms", room, "attachments"],
+                &[("name", name)],
+                NO_BODY,
+            )
+            .header(reqwest::header::CONTENT_TYPE, mime)
+            .body(bytes);
+        read(request.send().await).await
+    }
+
+    /// An attachment's bytes; 404 for one the caller may not see, 410 for a removed one.
+    pub async fn attachment(&self, room: &str, attachment: &str) -> Result<Vec<u8>, ApiError> {
+        let response = checked(
+            self.build(
+                Method::GET,
+                &["rooms", room, "attachments", attachment],
+                &[],
+                NO_BODY,
+            )
+            .send()
+            .await,
+        )
+        .await?;
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|error| ApiError::Network(error.to_string()))?;
+        Ok(bytes.to_vec())
+    }
+
+    /// Removes an attachment, its bytes at once; its uploader or an admin may.
+    pub async fn remove_attachment(&self, room: &str, attachment: &str) -> Result<(), ApiError> {
+        self.request_empty(
+            Method::DELETE,
+            &["rooms", room, "attachments", attachment],
+            &[],
+            NO_BODY,
+        )
+        .await
+    }
+
+    /// Whether the model gets the images attached in `room` as they are. Redaction can't read
+    /// pictures, so with `allowed` whatever they show reaches the model's provider.
+    pub async fn set_room_images(&self, room: &str, allowed: bool) -> Result<Room, ApiError> {
+        let body = RoomImagesRequest { allowed };
+        self.request(Method::PUT, &["rooms", room, "images"], &[], Some(&body))
+            .await
+    }
+
     /// Stops the answer in progress, and drops the room's queued messages.
     pub async fn abort(&self, room: &str) -> Result<(), ApiError> {
         self.request_empty(Method::POST, &["rooms", room, "abort"], &[], NO_BODY)

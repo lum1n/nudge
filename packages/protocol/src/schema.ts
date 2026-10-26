@@ -47,6 +47,8 @@ export type ApprovalStatus = Static<typeof ApprovalStatus>;
 export const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
 /** Most attachments one message names. */
 export const ATTACHMENTS_PER_MESSAGE = 8;
+/** How long the long side of a photo may be: clients scale larger ones down before uploading. */
+export const ATTACHMENT_IMAGE_MAX_SIDE = 2048;
 
 /**
  * A file someone attached to a message (ADR 24). Its bytes come from
@@ -1585,6 +1587,7 @@ export const SCHEMAS = {
   WhenBusy,
   MessageRequest,
   MessageResponse,
+  RoomImagesRequest,
   TimelineResponse,
   RememberRequest,
   PlayerMemoryResponse,

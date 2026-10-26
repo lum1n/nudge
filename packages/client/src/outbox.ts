@@ -1,4 +1,4 @@
-import type { WhenBusy } from "@nudge/protocol";
+import type { Attachment, WhenBusy } from "@nudge/protocol";
 
 /**
  * Where an outbox is kept between page loads: the browser's `localStorage` and `sessionStorage`
@@ -27,6 +27,8 @@ export type Outgoing = {
   readonly text: string;
   readonly whenBusy?: WhenBusy;
   readonly private?: boolean;
+  /** Uploaded already; the message names them. */
+  readonly attachments?: readonly Attachment[];
   /** When it was first sent, in ms since the epoch. */
   readonly createdAt: number;
   /** Why the server refused it; it waits for `resend` or a dismissal rather than going again. */

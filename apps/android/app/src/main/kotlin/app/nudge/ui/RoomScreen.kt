@@ -45,6 +45,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -55,6 +56,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -86,6 +88,7 @@ import nudge.ffi.QueueMode
 import nudge.ffi.RoomKind
 import nudge.ffi.Status
 import nudge.ffi.SyncStatus
+import nudge.ffi.attachmentsPerMessage
 
 /** A room: its timeline as it streams, this device's messages on their way, and the composer. */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -111,6 +114,9 @@ fun RoomScreen(
     val state = room?.state?.collectAsStateWithLifecycle()?.value
     val me by session.me.collectAsStateWithLifecycle()
     var draft by remember(roomId) { mutableStateOf("") }
+    val picked = remember(client, roomId) { ComposerAttachments(client, roomId) }
+    val attachments = remember(client, roomId) { RoomAttachments(client, roomId) }
+    val resolver = LocalContext.current.contentResolver
     var secret by remember(roomId) { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
     var showActivity by remember(roomId) { mutableStateOf(false) }
@@ -153,6 +159,9 @@ fun RoomScreen(
                     if (state != null && (state.timeline.transcript.isNotEmpty() || state.pending.isNotEmpty())) {
                         Presence(mood, presenceLabel(mood, state.timeline, state.live), session.account.assistantName, level)
                     }
+                    PickedChips(picked.picked, state?.room?.imagesToModel == true) { key ->
+                        scope.launch { picked.remove(key) }
+                    }
                     Composer(
                         draft = draft,
                         onDraft = {
@@ -167,17 +176,21 @@ fun RoomScreen(
                         // Only in a shared room is there anyone to keep a message from.
                         secret = if (state?.room?.kind == RoomKind.PERSONAL) null else secret,
                         onSecret = { secret = it },
+                        attachable = picked.picked.size < attachmentsPerMessage().toInt(),
+                        attach = { uris -> scope.launch { picked.add(resolver, uris) } },
+                        sendable = (draft.isNotBlank() || picked.ready.isNotEmpty()) && !picked.uploading,
                         send = {
                             val text = draft.trim()
-                            if (text.isNotEmpty()) {
+                            if ((text.isNotEmpty() || picked.ready.isNotEmpty()) && !picked.uploading) {
                                 if (dictating) {
                                     dictating = false
                                     dictation.cancel()
                                 }
                                 draft = ""
                                 val private = secret && state?.room?.kind != RoomKind.PERSONAL
+                                val files = picked.take()
                                 // A refused message stays pending, marked failed, with Retry and Dismiss.
-                                scope.launch { runCatching { client.send(roomId, text, null, private) } }
+                                scope.launch { runCatching { client.send(roomId, text, null, private, files) } }
                             }
                         },
                         stop = { attempt { client.abort(roomId) } },
@@ -235,14 +248,14 @@ fun RoomScreen(
                 )
                 state == null || (state.room == null && state.status == SyncStatus.SYNCING) ->
                     LoadingIndicator(Modifier.align(Alignment.Center))
-                else -> Timeline(
+                else -> CompositionLocalProvider(LocalRoomAttachments provides attachments) { Timeline(
                     state, me?.player?.id, session.account.assistantName, mood, level,
                     loadEarlier = { scope.launch { room?.loadEarlier() } },
                     retry = { requestId -> attempt { client.resend(roomId, requestId) } },
                     dismiss = { requestId -> client.dismiss(roomId, requestId) },
                     openBrowser = browser,
                     openActivity = { showActivity = true },
-                )
+                ) }
             }
         }
     }
@@ -312,7 +325,7 @@ private fun Timeline(
                 horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
                 modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {},
             ) {
-                Bubble(message.text, mine, if (mine) null else message.author?.displayName, faded = true)
+                Bubble(attachmentsLabel(message.text, message.attachments), mine, if (mine) null else message.author?.displayName, faded = true)
                 Text(
                     stringResource(if (message.mode == QueueMode.STEER) R.string.room_queued_next else R.string.room_queued),
                     style = MaterialTheme.typography.labelSmall,
@@ -390,6 +403,11 @@ private fun Composer(
     /** Whether the next message is private; null where there is nobody to keep it from. */
     secret: Boolean?,
     onSecret: (Boolean) -> Unit,
+    /** Whether another file may go with this message. */
+    attachable: Boolean,
+    attach: (List<android.net.Uri>) -> Unit,
+    /** Whether there is something to send: text, or files uploaded and none still on its way. */
+    sendable: Boolean,
     send: () -> Unit,
     stop: () -> Unit,
     mic: @Composable () -> Unit,
@@ -400,6 +418,7 @@ private fun Composer(
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            if (attachable) AttachButton(attach)
             if (secret != null) {
                 FilledIconToggleButton(
                     checked = secret,
@@ -429,7 +448,7 @@ private fun Composer(
                 modifier = Modifier.weight(1f),
             )
             val size = Modifier.size(56.dp)
-            if (running && draft.isEmpty()) {
+            if (running && !sendable) {
                 FilledTonalIconButton(
                     onClick = stop,
                     shapes = IconButtonDefaults.shapes(),
@@ -442,7 +461,7 @@ private fun Composer(
             } else {
                 FilledIconButton(
                     onClick = send,
-                    enabled = draft.isNotBlank(),
+                    enabled = sendable,
                     shapes = IconButtonDefaults.shapes(),
                     modifier = size,
                 ) { Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.room_send)) }

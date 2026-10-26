@@ -124,6 +124,16 @@
         }
       }
     },
+    "(removed)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "(fjernet)"
+          }
+        }
+      }
+    },
     "1. Sign in to exe.dev" : {
       "localizations" : {
         "nb" : {
@@ -450,6 +460,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Høyst %1$lld GB på disk (%2$@ nå)"
+          }
+        }
+      }
+    },
+    "Attach photos or files" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legg ved bilder eller filer"
           }
         }
       }
@@ -1144,6 +1164,16 @@
         }
       }
     },
+    "Files" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filer"
+          }
+        }
+      }
+    },
     "Find by name" : {
       "localizations" : {
         "nb" : {
@@ -1290,6 +1320,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hvordan assistentens robot ser ut for alle. Slå utvidelser av eller på og endre innstillingene deres, for alle rom. Inviter noen fra en annen assistent med adressen deres."
+          }
+        }
+      }
+    },
+    "Images" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bilder"
+          }
+        }
+      }
+    },
+    "Images attached here reach the model's provider as they are. Redaction reads text, not pictures, so whatever they show goes along. Everyone in the room sees this is on." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bilder som legges ved her, når modellens leverandør som de er. Skjuling leser tekst, ikke bilder, så det de viser, blir med. Alle i rommet ser at dette er på."
+          }
+        }
+      }
+    },
+    "Images sent in this room will reach the model's provider as they are, with whatever they show: faces, addresses, card numbers. It is on for everyone here." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bilder som sendes i dette rommet, når modellens leverandør som de er, med det de viser: ansikter, adresser, kortnumre. Det gjelder for alle her."
           }
         }
       }
@@ -2474,6 +2534,16 @@
         }
       }
     },
+    "Photos" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bilder"
+          }
+        }
+      }
+    },
     "Pick a room" : {
       "localizations" : {
         "nb" : {
@@ -2590,6 +2660,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fjern"
+          }
+        }
+      }
+    },
+    "Remove %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fjern %@"
           }
         }
       }
@@ -2840,6 +2920,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Send"
+          }
+        }
+      }
+    },
+    "Send images" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send bilder"
+          }
+        }
+      }
+    },
+    "Send images to the model" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send bilder til modellen"
+          }
+        }
+      }
+    },
+    "Send images to the model?" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sende bilder til modellen?"
           }
         }
       }
@@ -3444,6 +3554,36 @@
         }
       }
     },
+    "The model gets each attachment's name, type and size, not the picture." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modellen får navnet, typen og størrelsen på hvert vedlegg, ikke bildet."
+          }
+        }
+      }
+    },
+    "The model gets only these images' names. Turn on Send images to the model in the room's details to let it see them." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modellen får bare navnene på disse bildene. Slå på Send bilder til modellen i rommets detaljer for å la den se dem."
+          }
+        }
+      }
+    },
+    "The model sees these images as they are." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modellen ser disse bildene som de er."
+          }
+        }
+      }
+    },
     "The room's browser, at %@" : {
       "localizations" : {
         "nb" : {
@@ -3850,6 +3990,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Last opp"
+          }
+        }
+      }
+    },
+    "Uploading" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Laster opp"
           }
         }
       }
