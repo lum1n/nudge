@@ -43,6 +43,7 @@ An extendable, multiplayer personal assistant that keeps personal data away from
 - `@nudge/ext-federation`: lets people from other assistants join, with their home vouching for them (`extensions/federation`).
 - `@nudge/ext-peers`: lets linked assistants on other servers talk to each other (`extensions/peers`).
 - `@nudge/ext-places`: reminders when you get somewhere, with places the model sees as `⟦PLACE:home⟧` (`extensions/places`).
+- `@nudge/ext-a2a`: talks with other AI agents over the A2A protocol, both ways (`extensions/a2a`).
 - `@nudge/ext-push`: notifications of answers and approvals, through Web Push, APNs and FCM (`extensions/push`).
 - `@nudge/ext-rss`: RSS and Atom feeds the assistant checks first for news (`extensions/rss`).
 - `@nudge/ext-triggers`: secret web addresses that let outside events start a turn in a room (`extensions/triggers`).
@@ -308,6 +309,21 @@ The shared parts (links, chats to rooms, commands, relaying) live in `packages/b
 ### Assistants talking to each other
 
 `extensions/peers` lets this assistant talk to assistants on other servers, such as to find a time with Ann's household or hand her assistant a request (ADR 23). Both sides' admins link them first; a linked assistant is a guest in a shared room with the admins, and talks in threads. See [Assistants talking to each other](docs/extensions/peers.md).
+
+### Other AI agents (A2A)
+
+`extensions/a2a` talks with any agent that speaks [A2A](https://a2a-protocol.org) 1.0, the open Agent2Agent protocol, such as agents built with Google's ADK, LangGraph or a company's own (ADR 25). It needs no federation, and it can sit beside `extensions/peers`: peers links Nudge assistants with signed, encrypted messages; A2A reaches everyone else, over HTTPS (or Wired) with bearer tokens.
+
+```json
+{
+  "from": "./extensions/a2a",
+  "settings": { "server": "https://nudge.example.com", "offer": ["calendar"] }
+}
+```
+
+- **Agents calling this assistant.** An admin lets one in on the settings page (or `POST /ext/a2a/clients` with `{ name }`), which shows its token once; only its hash is kept. The agent reads the Agent Card at `/v1/a/<assistant>/ext/a2a/.well-known/agent-card.json` and calls the JSON-RPC address it names with `Authorization: Bearer <token>`. Like a linked assistant, it is a guest: a player of its own ("Planner (agent)") in a shared room with the admins, "With Planner", where only what `offer` turns on is on. Each message is a task, answered there as its player's: a blocking call waits up to `waitSeconds`, then `GetTask` or a push notification has the answer. When the answer waits on an approval, the task stays working until the room's people decide, and then completes with what came of it. `SendMessage`, `GetTask`, `ListTasks`, `CancelTask` and push notification configs work; streaming doesn't. An admin removes a client on the settings page, or with `remove_agent`, and its token stops working.
+- **This assistant calling agents.** An admin adds one by its address on the settings page, with a token if it needs one, kept in the extension's secrets (or `POST /ext/a2a/agents` with `{ url, token? }`). In chat, `add_agent` asks an admin to approve adding one; its token is set on the settings page, never in chat. `message_agent` sends a message and returns the answer, marked as the agent's words. One that takes longer than `waitSeconds` goes on in the background: the agent pushes to `server` when it can, and the assistant checks every `pollMinutes` for up to `replyHours`, and the room hears how it went like a fired nudge. Answers name their conversation, so the model goes on in it, also when the agent asks for more. `list_agents` lists both kinds.
+- **Privacy and limits.** What goes out is shown as whoever asked may see it; values others made private stay placeholders. Rooms of agents that call in can't message agents, so agents don't chain on their own. `maxMessagesPerHour` (default 30) per calling agent, `maxChars` (default 8000) per message, and `onlyAdmins` keeps messaging agents to admins.
 
 ### Write an extension
 

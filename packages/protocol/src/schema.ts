@@ -836,6 +836,50 @@ export type OwnedServer = Static<typeof OwnedServer>;
 export const OwnedServersResponse = Type.Object({ servers: Type.Array(OwnedServer) });
 export type OwnedServersResponse = Static<typeof OwnedServersResponse>;
 
+/** An outside agent that may call this assistant over A2A, through the extension `a2a` (ADR 25). */
+export const A2AClientInfo = Type.Object({
+  id: Type.String(),
+  name: Type.String(),
+  /** The room it speaks in, with the admins. */
+  roomId: Type.String(),
+  createdAt: Type.Number(),
+});
+export type A2AClientInfo = Static<typeof A2AClientInfo>;
+
+export const A2AClientsResponse = Type.Object({ clients: Type.Array(A2AClientInfo) });
+export type A2AClientsResponse = Static<typeof A2AClientsResponse>;
+
+export const A2AClientRequest = Type.Object({ name: Type.String() });
+export type A2AClientRequest = Static<typeof A2AClientRequest>;
+
+/** A new client: its token, shown only now, and its Agent Card's address to hand it. */
+export const A2AClientCreated = Type.Object({
+  client: A2AClientInfo,
+  token: Type.String(),
+  card: Type.String(),
+});
+export type A2AClientCreated = Static<typeof A2AClientCreated>;
+
+/** An outside agent this assistant may message over A2A. */
+export const A2AAgentInfo = Type.Object({
+  id: Type.String(),
+  name: Type.String(),
+  description: Type.String(),
+  url: Type.String(),
+  hasToken: Type.Boolean(),
+  createdAt: Type.Number(),
+});
+export type A2AAgentInfo = Static<typeof A2AAgentInfo>;
+
+export const A2AAgentsResponse = Type.Object({ agents: Type.Array(A2AAgentInfo) });
+export type A2AAgentsResponse = Static<typeof A2AAgentsResponse>;
+
+export const A2AAgentRequest = Type.Object({
+  url: Type.String(),
+  token: Type.Optional(Type.String()),
+});
+export type A2AAgentRequest = Static<typeof A2AAgentRequest>;
+
 export const InviteRequest = Type.Object({ address: Type.String() });
 export type InviteRequest = Static<typeof InviteRequest>;
 
@@ -1618,6 +1662,13 @@ export const SCHEMAS = {
   ServerRequest,
   OwnedServer,
   OwnedServersResponse,
+  A2AClientInfo,
+  A2AClientsResponse,
+  A2AClientRequest,
+  A2AClientCreated,
+  A2AAgentInfo,
+  A2AAgentsResponse,
+  A2AAgentRequest,
   InviteRequest,
   Invite,
   InviteResponse,

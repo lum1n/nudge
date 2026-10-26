@@ -74,6 +74,12 @@
           "enabled": false
         },
         {
+          "$comment": "Talk with other AI agents over the A2A protocol, without federation. Agents an admin lets in (POST /ext/a2a/clients, or the web settings) call this assistant with their token, each as a guest in a room of its own where only offer is on; the Agent Card is at /v1/a/<assistant>/ext/a2a/.well-known/agent-card.json. The assistant messages agents an admin added with message_agent. server is the address other agents reach this one at; off here so the example works without it.",
+          "from": "./extensions/a2a",
+          "settings": { "server": "https://nudge.example.com", "offer": ["calendar"] },
+          "enabled": false
+        },
+        {
           "$comment": "Web search through your own SearXNG (JSON output on), and reading a page as text.",
           "from": "./extensions/search",
           "settings": { "url": "http://127.0.0.1:8888", "language": "nb" },

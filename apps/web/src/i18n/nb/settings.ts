@@ -148,6 +148,28 @@ export const settings: Messages["settings"] = {
     kinds: { lobby: "Alle", personal: "Personlige", shared: "Delte" },
     roomsCanChange: "Medlemmene i et rom kan fortsatt slå den av eller på der.",
   },
+  a2a: {
+    title: "Andre KI-agenter",
+    intro:
+      "Agenter laget andre steder som snakker med assistenten over A2A. De du slipper inn, ringer den med sitt token, hver i et eget rom med dere administratorer; assistenten sender meldinger til dem du legger til.",
+    clients: "Agenter som kan kontakte assistenten",
+    agents: "Agenter assistenten kan sende meldinger til",
+    none: "Ingen ennå.",
+    giveThese: (name: string) =>
+      `Gi ${name} disse. Tokenet vises bare nå; fjern agenten og slipp den inn igjen om det blir borte.`,
+    card: "Agent Card",
+    token: "Token",
+    clientName: "Navnet, for eksempel Planlegger",
+    letIn: "Slipp inn",
+    tokenIfNeeded: "Token, om den trenger et",
+    add: "Legg til",
+    withToken: "med token",
+    noToken: "uten token",
+    newToken: "Nytt token",
+    clear: "Fjern token",
+    copy: "Kopier",
+    copied: "Kopiert",
+  },
   form: {
     default: (value: string) => `Standard (${value})`,
     atLeast: (n: number) => `minst ${n}`,

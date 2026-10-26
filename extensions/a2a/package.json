@@ -1,0 +1,29 @@
+{
+  "name": "@nudge/ext-a2a",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A2A: other agents call this assistant over the Agent2Agent protocol, each in a room of its own, and it calls the A2A agents its admins added",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "@nudge/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@a2a-js/sdk": "1.3.0",
+    "@nudge/core": "workspace:*",
+    "typebox": "1.3.27"
+  },
+  "devDependencies": {
+    "@nudge/server": "workspace:*",
+    "hono": "4.13.13"
+  }
+}
