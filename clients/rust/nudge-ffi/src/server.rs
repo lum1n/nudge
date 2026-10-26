@@ -139,6 +139,51 @@ pub struct UpdateState {
     pub error: Option<String>,
 }
 
+/// Where backups are copied off the server (ADR 8).
+#[derive(Clone, Debug, PartialEq, uniffi::Enum)]
+pub enum BackupTarget {
+    /// An S3-compatible bucket: AWS, B2, R2, MinIO. `region` defaults to the one in an AWS
+    /// endpoint, else us-east-1; `path_style` (bucket in the path) defaults on, except for AWS.
+    S3 {
+        endpoint: String,
+        bucket: String,
+        region: Option<String>,
+        prefix: Option<String>,
+        path_style: Option<bool>,
+    },
+    /// A WebDAV folder, such as `https://cloud.example/remote.php/dav/files/me/nudge/`.
+    WebDav { url: String },
+}
+
+/// The server's backups: where, how often, how many, and how the last upload went.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct BackupState {
+    /// Whether the server makes backups on its own; the rest is its defaults when it doesn't.
+    pub on: bool,
+    /// The folder on the server they go to.
+    pub dir: Option<String>,
+    pub every_hours: f64,
+    /// Backups kept, in the folder and on the remote alike.
+    pub keep: u32,
+    pub last_backup_at: Option<f64>,
+    pub remote: Option<BackupTarget>,
+    /// The access key id or user name the remote is reached with.
+    pub remote_user: Option<String>,
+    /// Whether that is set in the server's environment, so the apps can't change it.
+    pub remote_user_from_env: bool,
+    pub last_upload_at: Option<f64>,
+    /// Why the last upload failed, when it did, and when.
+    pub last_error: Option<String>,
+    pub last_error_at: Option<f64>,
+}
+
+/// A backup made now: its file name, and why the upload failed if it did.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct BackupMade {
+    pub file: String,
+    pub upload_error: Option<String>,
+}
+
 /// How far the server's map is (ADR 18).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
 pub enum GeoState {
@@ -400,6 +445,66 @@ impl From<p::UpdateState> for UpdateState {
             available: u.available,
             checked_at: u.checked_at,
             error: u.error,
+        }
+    }
+}
+
+impl From<p::BackupRemoteTarget> for BackupTarget {
+    fn from(t: p::BackupRemoteTarget) -> Self {
+        match t {
+            p::BackupRemoteTarget::S3(s3) => BackupTarget::S3 {
+                endpoint: s3.endpoint,
+                bucket: s3.bucket,
+                region: s3.region,
+                prefix: s3.prefix,
+                path_style: s3.path_style,
+            },
+            p::BackupRemoteTarget::Webdav(dav) => BackupTarget::WebDav { url: dav.url },
+        }
+    }
+}
+
+impl From<BackupTarget> for p::BackupRemoteTarget {
+    fn from(t: BackupTarget) -> Self {
+        match t {
+            BackupTarget::S3 {
+                endpoint,
+                bucket,
+                region,
+                prefix,
+                path_style,
+            } => p::BackupRemoteTarget::S3(p::S3Target {
+                endpoint,
+                bucket,
+                region,
+                prefix,
+                path_style,
+            }),
+            BackupTarget::WebDav { url } => p::BackupRemoteTarget::Webdav(p::WebDavTarget { url }),
+        }
+    }
+}
+
+impl From<p::BackupState> for BackupState {
+    fn from(b: p::BackupState) -> Self {
+        BackupState {
+            on: b.on,
+            dir: b.dir,
+            every_hours: b.every_hours,
+            keep: b.keep as u32,
+            last_backup_at: b.last_backup_at,
+            remote: b.remote.map(Into::into),
+            remote_user_from_env: matches!(
+                b.credentials,
+                Some(p::BackupCredentials {
+                    from: p::CredentialsFrom::Env,
+                    ..
+                })
+            ),
+            remote_user: b.credentials.map(|c| c.user),
+            last_upload_at: b.last_upload_at,
+            last_error: b.last_error,
+            last_error_at: b.last_error_at,
         }
     }
 }
@@ -826,6 +931,52 @@ impl ServerClient {
     pub async fn recovery_kit(&self, passphrase: String) -> Result<String, NudgeError> {
         let api = self.api.clone();
         Ok(run(async move { api.recovery_kit(&passphrase).await }).await?)
+    }
+
+    /// The server's backups; fails with 404 on a server that doesn't make them through its API.
+    pub async fn backups(&self) -> Result<BackupState, NudgeError> {
+        let api = self.api.clone();
+        Ok(run(async move { api.backups().await }).await?.into())
+    }
+
+    /// Makes a backup now, and uploads it where backups are copied.
+    pub async fn back_up_now(&self) -> Result<BackupMade, NudgeError> {
+        let api = self.api.clone();
+        let made = run(async move { api.back_up_now().await }).await?;
+        Ok(BackupMade {
+            file: made.file,
+            upload_error: made.upload_error,
+        })
+    }
+
+    /// Copies every backup to `target` too, signed in with `user` and `secret` (an access key
+    /// id and secret for S3, a user name and password for WebDAV); without them the kept ones
+    /// stay. The server first writes, lists and deletes a small file there; a 400 says why that
+    /// failed.
+    pub async fn set_backup_remote(
+        &self,
+        target: BackupTarget,
+        user: Option<String>,
+        secret: Option<String>,
+    ) -> Result<BackupState, NudgeError> {
+        let body = p::SetBackupRemoteRequest {
+            target: target.into(),
+            user,
+            secret,
+            test: None,
+        };
+        let api = self.api.clone();
+        Ok(run(async move { api.set_backup_remote(&body).await })
+            .await?
+            .into())
+    }
+
+    /// Keeps backups on the server only, and forgets the remote's credentials.
+    pub async fn remove_backup_remote(&self) -> Result<BackupState, NudgeError> {
+        let api = self.api.clone();
+        Ok(run(async move { api.remove_backup_remote().await })
+            .await?
+            .into())
     }
 }
 

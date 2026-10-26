@@ -1,5 +1,5 @@
 import { createHash, createHmac } from "node:crypto";
-import { existsSync, openAsBlob, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, openAsBlob, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { BackupError, backupNames, backupsBeyond, backupTime } from "./backup.ts";
 import type { BackupRemoteConfig } from "./config.ts";
@@ -96,6 +96,12 @@ export class RemoteBackups {
     } catch {
       return {};
     }
+  }
+
+  /** Forgets how the last upload went, as when the target changes or goes. */
+  forgetState(): void {
+    this.memoryState = {};
+    if (this.stateFile !== undefined) rmSync(this.stateFile, { force: true });
   }
 
   private record(change: RemoteState): void {
@@ -357,14 +363,19 @@ class WebDavRemote implements BackupRemote {
     if (response.status !== 404) await expectOk(response, "DELETE", url);
   }
 
-  private async makeFolders(): Promise<void> {
-    const parts = this.base.pathname.split("/").filter((part) => part !== "");
-    for (let i = 1; i <= parts.length; i++) {
-      const url = new URL(`/${parts.slice(0, i).join("/")}/`, this.base);
-      const response = await this.send("MKCOL", url);
-      // 405: it is there already.
-      if (!response.ok && response.status !== 405) await expectOk(response, "MKCOL", url);
+  /**
+   * Makes `url`'s folder, and those above it that are missing, from the deepest one up: a server
+   * such as Nextcloud refuses MKCOL above the user's own files (404), so it never starts at "/".
+   */
+  private async makeFolders(url: URL = this.base): Promise<void> {
+    let response = await this.send("MKCOL", url);
+    // 409: the folder above is missing too.
+    if (response.status === 409 && url.pathname !== "/") {
+      await this.makeFolders(new URL("../", url));
+      response = await this.send("MKCOL", url);
     }
+    // 405: it is there already.
+    if (!response.ok && response.status !== 405) await expectOk(response, "MKCOL", url);
   }
 
   private send(
@@ -386,7 +397,10 @@ class WebDavRemote implements BackupRemote {
 
 async function expectOk(response: Response, method: string, url: URL): Promise<void> {
   if (response.ok || response.status === 207) return;
-  const text = (await response.text().catch(() => "")).trim().slice(0, 200);
+  const body = (await response.text().catch(() => "")).trim();
+  // Nextcloud and other SabreDAV servers say what went wrong in <s:message>; other markup, such
+  // as an HTML error page, says nothing a person needs.
+  const text = (tags(body, "message")[0] ?? (body.startsWith("<") ? "" : body)).slice(0, 200);
   throw new Error(`${method} ${url.pathname}: ${response.status}${text ? ` ${text}` : ""}`);
 }
 

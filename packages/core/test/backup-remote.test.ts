@@ -141,21 +141,30 @@ function fakeS3(objects: Map<string, Buffer>, options: { refuse?: boolean } = {}
   };
 }
 
-/** A WebDAV server over memory, behind basic auth, whose folder is made with MKCOL. */
+/**
+ * A WebDAV server over memory, behind basic auth, whose folder is made with MKCOL. Like Nextcloud,
+ * it refuses MKCOL on `/dav/` and above with 404, and one whose parent is missing with 409.
+ */
 function fakeWebDav(files: Map<string, Buffer>, folders: Set<string>) {
   const auth = `Basic ${Buffer.from("ann:hunter2").toString("base64")}`;
   return async (request: IncomingMessage, response: ServerResponse) => {
     const body = await bodyOf(request);
     if (request.headers.authorization !== auth) {
+      // As Nextcloud answers.
       response.statusCode = 401;
-      response.end("Unauthorized");
+      response.end(
+        `<?xml version="1.0" encoding="utf-8"?>\n<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">\n  <s:exception>Sabre\\DAV\\Exception\\NotAuthenticated</s:exception>\n  <s:message>No public access to this resource.</s:message>\n</d:error>`,
+      );
       return;
     }
     const path = decodeURIComponent(new URL(request.url!, "http://dav").pathname);
     const parent = path.slice(0, path.lastIndexOf("/") + 1);
     switch (request.method) {
       case "MKCOL":
-        if (folders.has(path)) response.statusCode = 405;
+        if (!path.startsWith("/dav/") || path === "/dav/") response.statusCode = 404;
+        else if (folders.has(path)) response.statusCode = 405;
+        else if (!folders.has(path.slice(0, path.slice(0, -1).lastIndexOf("/") + 1)))
+          response.statusCode = 409;
         else {
           folders.add(path);
           response.statusCode = 201;
@@ -297,11 +306,13 @@ describe("remote backups", () => {
     ({ server, url } = await listen(fakeWebDav(files, folders)));
     const remotes = new RemoteBackups(undefined);
     remotes.setCredentials({ user: "ann", secret: "hunter2" });
-    const config: BackupRemoteConfig = { type: "webdav", url: `${url}/dav/nudge backups` };
+    const config: BackupRemoteConfig = { type: "webdav", url: `${url}/dav/home/nudge backups` };
     expect(await remotes.open(config).list()).toEqual([]);
     for (const name of NAMES) await remotes.upload(config, join(dir, name), 3);
-    expect(folders.has("/dav/nudge backups/")).toBe(true);
-    expect([...files.keys()].sort()).toEqual(NAMES.slice(1).map((n) => `/dav/nudge backups/${n}`));
+    expect(folders.has("/dav/home/nudge backups/")).toBe(true);
+    expect([...files.keys()].sort()).toEqual(
+      NAMES.slice(1).map((n) => `/dav/home/nudge backups/${n}`),
+    );
     expect(await remotes.open(config).list()).toEqual(NAMES.slice(1));
     await remotes.check(config);
   });
@@ -313,6 +324,8 @@ describe("remote backups", () => {
     remotes.setCredentials({ user: "ann", secret: "wrong" });
     await expect(
       remotes.upload({ type: "webdav", url: `${url}/dav/` }, join(dir, NAMES[0]!), 3),
-    ).rejects.toThrow(/PUT \/dav\/nudge-20261020T010000Z.nudgebackup: 401 Unauthorized/);
+    ).rejects.toThrow(
+      /PUT \/dav\/nudge-20261020T010000Z.nudgebackup: 401 No public access to this resource.$/,
+    );
   });
 });

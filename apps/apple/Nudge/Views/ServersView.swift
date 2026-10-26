@@ -79,8 +79,8 @@ struct ServersView: View {
     }
 }
 
-/// One server: its updates, its assistants, the model keys set on it, its Wired, and its
-/// recovery kit; removing it, for one made on exe.dev.
+/// One server: its updates, its assistants, the model keys set on it, its Wired, its backups and
+/// its recovery kit; removing it, for one made on exe.dev.
 private struct ServerView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -127,6 +127,7 @@ private struct ServerView: View {
                 }
                 WiredSection(server: server)
                 MapsSection(server: server)
+                BackupsSection(server: server)
                 Section("Model keys") {
                     ForEach(keys, id: \.provider) { key in
                         Button {

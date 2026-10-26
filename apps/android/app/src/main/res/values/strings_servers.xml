@@ -47,6 +47,48 @@
     <string name="servers_delete_summary">Deletes %1$s from your exe.dev account, with its assistants, their history and the backups on it.</string>
     <string name="servers_delete">Remove this server</string>
 
+    <!-- Backups (ADR 8) -->
+    <string name="servers_backups">Backups</string>
+    <string name="servers_backups_off_short">Off</string>
+    <string name="servers_backups_failed_short">The last upload failed</string>
+    <string name="servers_backups_to">Copied to %1$s</string>
+    <string name="servers_backups_here">On the server only</string>
+    <string name="servers_backups_intro">The whole server, encrypted with its backup key. A copy on another machine survives the server\'s disk: an S3-compatible bucket (AWS, Backblaze B2, Cloudflare R2, MinIO) or a WebDAV folder (Nextcloud, a NAS). Only encrypted files leave the server.</string>
+    <string name="servers_backups_daily">Every day, the last %1$d kept, in %2$s.</string>
+    <string name="servers_backups_every">Every %1$d hours, the last %2$d kept, in %3$s.</string>
+    <string name="servers_backups_off">Off: this server makes no backups of its own. Setting a copy below turns them on, daily.</string>
+    <string name="servers_backups_none_made">None made yet.</string>
+    <string name="servers_backups_newest">The newest was made %1$s.</string>
+    <string name="servers_backups_none_uploaded">None uploaded yet.</string>
+    <string name="servers_backups_uploaded">Last uploaded %1$s.</string>
+    <string name="servers_backups_upload_failed">The last upload failed: %1$s</string>
+    <string name="servers_backups_upload_failed_at">The last upload failed %1$s: %2$s</string>
+    <string name="servers_backups_copy_to">Copy each backup to</string>
+    <string name="servers_backups_s3">An S3 bucket</string>
+    <string name="servers_backups_webdav">A WebDAV folder</string>
+    <string name="servers_backups_endpoint">Endpoint</string>
+    <string name="servers_backups_bucket">Bucket</string>
+    <string name="servers_backups_region">Region</string>
+    <string name="servers_backups_region_hint">Optional: us-east-1 unless the endpoint says</string>
+    <string name="servers_backups_prefix">Folder in the bucket</string>
+    <string name="servers_backups_access_key">Access key id</string>
+    <string name="servers_backups_secret_key">Secret access key</string>
+    <string name="servers_backups_kept">Kept; type to change it</string>
+    <string name="servers_backups_url">Folder address</string>
+    <string name="servers_backups_user">User name</string>
+    <string name="servers_backups_password">Password</string>
+    <string name="servers_backups_password_hint">An app password, if the service has them</string>
+    <string name="servers_backups_from_env">The server takes its credentials from NUDGE_BACKUP_REMOTE_USER and NUDGE_BACKUP_REMOTE_SECRET, which win over what is set here.</string>
+    <string name="servers_backups_checking">Checking…</string>
+    <string name="servers_backups_check_and_save">Check and save</string>
+    <string name="servers_backups_saved">Saved: the server wrote a test file there and deleted it again.</string>
+    <string name="servers_backups_stop">Stop copying</string>
+    <string name="servers_backups_stopped">Backups stay on the server only. What was copied there is left there.</string>
+    <string name="servers_backups_now">Back up now</string>
+    <string name="servers_backups_backing_up">Backing up…</string>
+    <string name="servers_backups_made">Made %1$s.</string>
+    <string name="servers_backups_made_uploaded">Made %1$s and uploaded it.</string>
+
     <!-- A new assistant -->
     <string name="servers_ready_for">%1$s is ready for %2$s</string>
     <string name="servers_ready_send">Send them this link, or have them type the code %1$s in the Nudge app. It works once, for ten minutes.</string>

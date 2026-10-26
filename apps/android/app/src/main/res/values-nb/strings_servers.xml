@@ -47,6 +47,48 @@
     <string name="servers_delete_summary">Sletter %1$s fra exe.dev-kontoen din, med assistentene, historikken deres og sikkerhetskopiene på den.</string>
     <string name="servers_delete">Fjern denne serveren</string>
 
+    <!-- Backups (ADR 8) -->
+    <string name="servers_backups">Sikkerhetskopier</string>
+    <string name="servers_backups_off_short">Av</string>
+    <string name="servers_backups_failed_short">Siste opplasting feilet</string>
+    <string name="servers_backups_to">Kopieres til %1$s</string>
+    <string name="servers_backups_here">Bare på serveren</string>
+    <string name="servers_backups_intro">Hele serveren, kryptert med sikkerhetskopinøkkelen. En kopi på en annen maskin overlever om serverens disk ryker: en S3-kompatibel bøtte (AWS, Backblaze B2, Cloudflare R2, MinIO) eller en WebDAV-mappe (Nextcloud, en NAS). Bare krypterte filer forlater serveren.</string>
+    <string name="servers_backups_daily">Hver dag, de siste %1$d beholdes, i %2$s.</string>
+    <string name="servers_backups_every">Hver %1$d. time, de siste %2$d beholdes, i %3$s.</string>
+    <string name="servers_backups_off">Av: denne serveren lager ingen egne sikkerhetskopier. Velger du en kopi nedenfor, slås de på, daglig.</string>
+    <string name="servers_backups_none_made">Ingen laget ennå.</string>
+    <string name="servers_backups_newest">Den nyeste ble laget %1$s.</string>
+    <string name="servers_backups_none_uploaded">Ingen lastet opp ennå.</string>
+    <string name="servers_backups_uploaded">Sist lastet opp %1$s.</string>
+    <string name="servers_backups_upload_failed">Siste opplasting feilet: %1$s</string>
+    <string name="servers_backups_upload_failed_at">Siste opplasting feilet %1$s: %2$s</string>
+    <string name="servers_backups_copy_to">Kopier hver sikkerhetskopi til</string>
+    <string name="servers_backups_s3">En S3-bøtte</string>
+    <string name="servers_backups_webdav">En WebDAV-mappe</string>
+    <string name="servers_backups_endpoint">Endepunkt</string>
+    <string name="servers_backups_bucket">Bøtte</string>
+    <string name="servers_backups_region">Region</string>
+    <string name="servers_backups_region_hint">Valgfritt: us-east-1 med mindre endepunktet sier noe annet</string>
+    <string name="servers_backups_prefix">Mappe i bøtta</string>
+    <string name="servers_backups_access_key">Tilgangsnøkkel-ID</string>
+    <string name="servers_backups_secret_key">Hemmelig tilgangsnøkkel</string>
+    <string name="servers_backups_kept">Beholdt; skriv for å endre den</string>
+    <string name="servers_backups_url">Mappeadresse</string>
+    <string name="servers_backups_user">Brukernavn</string>
+    <string name="servers_backups_password">Passord</string>
+    <string name="servers_backups_password_hint">Et app-passord, hvis tjenesten har det</string>
+    <string name="servers_backups_from_env">Serveren henter påloggingen fra NUDGE_BACKUP_REMOTE_USER og NUDGE_BACKUP_REMOTE_SECRET, som går foran det som er satt her.</string>
+    <string name="servers_backups_checking">Sjekker …</string>
+    <string name="servers_backups_check_and_save">Sjekk og lagre</string>
+    <string name="servers_backups_saved">Lagret: serveren skrev en testfil der og slettet den igjen.</string>
+    <string name="servers_backups_stop">Slutt å kopiere</string>
+    <string name="servers_backups_stopped">Sikkerhetskopiene blir bare på serveren. Det som er kopiert dit, blir liggende der.</string>
+    <string name="servers_backups_now">Ta sikkerhetskopi nå</string>
+    <string name="servers_backups_backing_up">Tar sikkerhetskopi …</string>
+    <string name="servers_backups_made">Laget %1$s.</string>
+    <string name="servers_backups_made_uploaded">Laget %1$s og lastet den opp.</string>
+
     <!-- A new assistant -->
     <string name="servers_ready_for">%1$s er klar for %2$s</string>
     <string name="servers_ready_send">Send denne lenken, eller be dem skrive koden %1$s i Nudge-appen. Den virker én gang, i ti minutter.</string>
