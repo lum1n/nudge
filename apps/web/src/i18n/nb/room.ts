@@ -25,6 +25,8 @@ export const room: Messages["room"] = {
     mcp: "MCP",
     mcpTitle: "MCP-servere assistenten bruker i dette rommet",
     lists: "Lister",
+    project: "Prosjekt",
+    projectTitle: "Rommets kodeprosjekt og agentene som jobber med det",
     documents: "Dokumenter",
     model: "Modellens visning",
     modelTitle: "Hva modellen ser av dette rommet",
@@ -90,6 +92,9 @@ export const room: Messages["room"] = {
       failed: "mislyktes",
     },
     by: (name) => ` av ${name}`,
+    optional: " (valgfritt)",
+    openAppToLaunch: (vm) => `Åpne Nudge-appen på telefonen for å starte VM-en ${vm}.`,
+    openAppToDelete: (vm) => `Åpne Nudge-appen på telefonen for å slette VM-en ${vm}.`,
   },
   memory: {
     title: "Minne",

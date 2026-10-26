@@ -36,6 +36,7 @@ import {
   useState,
 } from "react";
 import { clientFor, forgetToken, useConnection, useRoom, useRoomList } from "../../api.ts";
+import { decideWithInputs, inputsFilled, type InputValues } from "../../approval-inputs.ts";
 import { type Appearance, lookOf, NUDGE } from "../../avatar/appearance.ts";
 import { Avatar, Portrait } from "../../avatar/Avatar.tsx";
 import type { Mood } from "../../avatar/pose.ts";
@@ -67,9 +68,21 @@ const ViewContext = createContext<RoomView | undefined>(undefined);
 /** How the assistant's robot looks, for the portraits beside its answers. */
 const LookContext = createContext<Appearance>(NUDGE);
 
+/** The installed extensions as this room has them; the sidebar's links and switches share it. */
+function roomExtensionsQuery(assistant: string, room: string) {
+  return {
+    queryKey: [assistant, "room-extensions", room],
+    queryFn: () => clientFor(assistant).api.roomExtensions(room),
+  };
+}
+
 function Room() {
   const { assistant, room } = Route.useParams();
   const held = useRoom(assistant, room);
+  const projects =
+    useQuery(roomExtensionsQuery(assistant, room)).data?.some(
+      (extension) => extension.name === "projects" && extension.enabled,
+    ) ?? false;
   const connection = useConnection(assistant);
   const navigate = useNavigate();
   // Below `md` the sidebar is a drawer over the chat.
@@ -209,6 +222,16 @@ function Room() {
             >
               {m.room.links.lists}
             </Link>
+            {projects && (
+              <Link
+                to="/$assistant/$room/project"
+                params={{ assistant, room }}
+                title={m.room.links.projectTitle}
+                className="rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
+              >
+                {m.room.links.project}
+              </Link>
+            )}
             <Link
               to="/$assistant/$room/documents"
               params={{ assistant, room }}
@@ -968,12 +991,23 @@ function ApprovalRow({ approval }: { approval: Approval }) {
   const { assistant, room } = Route.useParams();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  // What the reader types for the approval's inputs, here only until it is sent: never stored.
+  const [values, setValues] = useState<InputValues>({});
+  const action = approval.clientAction;
+  // The app fills in what a client action needs; here there is nothing to type.
+  const inputs = action === undefined ? (approval.inputs ?? []) : [];
 
   async function decide(approve: boolean) {
     setBusy(true);
     setError(undefined);
     try {
-      await clientFor(assistant).api.decide(room, approval.id, approve);
+      await decideWithInputs(
+        (yes, given) => clientFor(assistant).api.decide(room, approval.id, yes, given),
+        approve,
+        inputs,
+        values,
+        () => setValues({}),
+      );
     } catch (caught) {
       setError((caught as Error).message);
     } finally {
@@ -987,14 +1021,16 @@ function ApprovalRow({ approval }: { approval: Approval }) {
         <span className="min-w-0 [overflow-wrap:anywhere]">{approval.summary}</span>
         {approval.status === "pending" ? (
           <span className="flex shrink-0 gap-2">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void decide(true)}
-              className="rounded bg-emerald-700 px-2 py-0.5 text-white disabled:opacity-50"
-            >
-              {m.room.approvals.approve}
-            </button>
+            {action === undefined && (
+              <button
+                type="button"
+                disabled={busy || !inputsFilled(inputs, values)}
+                onClick={() => void decide(true)}
+                className="rounded bg-emerald-700 px-2 py-0.5 text-white disabled:opacity-50"
+              >
+                {m.room.approvals.approve}
+              </button>
+            )}
             <button
               type="button"
               disabled={busy}
@@ -1011,6 +1047,39 @@ function ApprovalRow({ approval }: { approval: Approval }) {
           </span>
         )}
       </div>
+      {approval.status === "pending" && action !== undefined && (
+        <p className="text-stone-600">
+          {action.type === "exe.new"
+            ? m.room.approvals.openAppToLaunch(action.name)
+            : m.room.approvals.openAppToDelete(action.name)}
+        </p>
+      )}
+      {approval.status === "pending" &&
+        inputs.map((input) => (
+          <label key={input.name} className="flex flex-col gap-0.5">
+            <span>
+              {input.label}
+              {input.optional === true && (
+                <span className="text-stone-500">{m.room.approvals.optional}</span>
+              )}
+            </span>
+            {input.description !== undefined && (
+              <span className="text-xs text-stone-500">{input.description}</span>
+            )}
+            <input
+              type={input.secret ? "password" : "text"}
+              autoComplete="off"
+              name={input.name}
+              value={values[input.name] ?? ""}
+              disabled={busy}
+              onChange={(event) => {
+                const value = event.target.value;
+                setValues((current) => ({ ...current, [input.name]: value }));
+              }}
+              className="rounded border border-stone-300 bg-white px-2 py-1"
+            />
+          </label>
+        ))}
       {error !== undefined && <p className="text-red-700">{error}</p>}
     </div>
   );
@@ -1350,18 +1419,15 @@ function NudgesPanel({ view }: { view: RoomView }) {
 function ExtensionsPanel() {
   const { assistant, room } = Route.useParams();
   const queryClient = useQueryClient();
-  const key = [assistant, "room-extensions", room];
-  const extensions = useQuery({
-    queryKey: key,
-    queryFn: () => clientFor(assistant).api.roomExtensions(room),
-  });
+  const query = roomExtensionsQuery(assistant, room);
+  const extensions = useQuery(query);
   const [error, setError] = useState<string>();
 
   async function set(name: string, enabled: boolean | null) {
     setError(undefined);
     try {
       await clientFor(assistant).api.setRoomExtension(room, name, enabled);
-      await queryClient.invalidateQueries({ queryKey: key });
+      await queryClient.invalidateQueries({ queryKey: query.queryKey });
     } catch (caught) {
       setError((caught as Error).message);
     }

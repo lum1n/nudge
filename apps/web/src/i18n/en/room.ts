@@ -26,6 +26,8 @@ export const room = {
     mcp: "MCP",
     mcpTitle: "MCP servers the assistant uses in this room",
     lists: "Lists",
+    project: "Project",
+    projectTitle: "The room's coding project and the agents working on it",
     documents: "Documents",
     model: "Model view",
     modelTitle: "What the model sees of this room",
@@ -96,6 +98,9 @@ export const room = {
       failed: "failed",
     },
     by: (name: string) => ` by ${name}`,
+    optional: " (optional)",
+    openAppToLaunch: (vm: string) => `Open the Nudge app on your phone to launch the VM ${vm}.`,
+    openAppToDelete: (vm: string) => `Open the Nudge app on your phone to delete the VM ${vm}.`,
   },
   memory: {
     title: "Memory",
