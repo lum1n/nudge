@@ -50,6 +50,7 @@ const serverSettings = (options: { title?: string; description?: string } = {}) 
       /** `${NAME}` takes it from the host's environment, so it stays out of nudge.json. */
       password: Type.Optional(
         Type.String({
+          writeOnly: true,
           description:
             "The password to log in with; write ${NAME} to take it from an environment variable instead.",
         }),
@@ -77,6 +78,7 @@ const AccountSettings = Type.Object({
             "The user name to log in with; ${NAME} takes it from an environment variable.",
         }),
         password: Type.String({
+          writeOnly: true,
           description:
             "The password to log in with; write ${NAME} to take it from an environment variable instead.",
         }),

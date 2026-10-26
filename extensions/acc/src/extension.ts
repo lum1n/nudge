@@ -58,6 +58,7 @@ const HostSettings = Type.Object({
   ),
   password: Type.Optional(
     Type.String({
+      writeOnly: true,
       description:
         "For password login; write ${NAME} to take it from an environment variable instead.",
     }),

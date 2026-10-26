@@ -245,6 +245,7 @@ export {
   type ExtensionSetup,
   listExtensionSetups,
   saveExtensionSetups,
+  sealConfigSecrets,
 } from "./extensions/settings.ts";
 // What extensions and hosts need from Pi, so they depend on @nudge/core alone and a Pi upgrade
 // touches only this package (ADR 1). Tests take the faux provider from @nudge/core/testing.

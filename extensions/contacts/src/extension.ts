@@ -37,6 +37,7 @@ const AccountSettings = Type.Object({
   }),
   /** `${NAME}` takes it from the host's environment, so it stays out of nudge.json. */
   password: Type.String({
+    writeOnly: true,
     description:
       "The password to log in with; write ${NAME} to take it from an environment variable instead.",
   }),

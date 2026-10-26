@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { type Static, Type } from "typebox";
 import { Value } from "typebox/value";
+import { openSecrets, SettingSecrets } from "./setting-secrets.ts";
 
 const ModelRefSchema = Type.Object({
   provider: Type.String(),
@@ -197,6 +198,7 @@ export function parseConfig(value: unknown, baseDir: string): NudgeConfig {
       .map((error) => `${error.instancePath || "/"} ${error.message}`);
     throw new ConfigError(`Invalid config:\n  ${problems.join("\n  ")}`);
   }
+  const secrets = new SettingSecrets(baseDir);
   const names = new Set<string>();
   for (const assistant of value.assistants) {
     if (names.has(assistant.name))
@@ -225,6 +227,9 @@ export function parseConfig(value: unknown, baseDir: string): NudgeConfig {
             extensions: assistant.extensions.map((extension) => ({
               ...extension,
               from: resolveExtension(extension.from, baseDir),
+              ...(extension.settings === undefined
+                ? {}
+                : { settings: openSettings(extension, assistant.name, secrets) }),
             })),
           }),
     })),
@@ -236,6 +241,20 @@ export function parseConfig(value: unknown, baseDir: string): NudgeConfig {
  * file its package.json exports), a package name is looked up from `baseDir`. A package that cannot
  * be found from there stays a bare name for `import()` to try.
  */
+/** An extension's settings with the secrets the config refers to put back (`SettingSecrets`). */
+function openSettings(
+  extension: Static<typeof ExtensionSchema>,
+  assistant: string,
+  secrets: SettingSecrets,
+): Record<string, unknown> {
+  const { value, missing } = openSecrets(extension.settings, (id) => secrets.get(assistant, id));
+  if (missing.length > 0)
+    throw new ConfigError(
+      `${assistant}: ${extension.from} refers to secrets that aren't in server/settings-secrets (${missing.join(", ")}); set those settings again`,
+    );
+  return value as Record<string, unknown>;
+}
+
 export function resolveExtension(from: string, baseDir: string): string {
   if (!(from.startsWith(".") || isAbsolute(from))) {
     try {

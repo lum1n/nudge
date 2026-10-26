@@ -157,6 +157,9 @@ export const settings = {
     secretBefore: "Write",
     secretAfter:
       "to take it from the server's environment; anything else is saved in nudge.json as written.",
+    secretAfterStored:
+      "to take it from the server's environment; anything else is stored encrypted on the server, not in nudge.json.",
+    secretStored: "Saved. Type to replace it.",
     everyRoom: "Every room",
     onePerLine: "One per line",
     add: "Add",
