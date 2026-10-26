@@ -579,6 +579,10 @@ export function toApproval(approval: CoreApproval): Approval {
     ...(approval.result === undefined ? {} : { result: approval.result }),
     ...(approval.privateTo === undefined ? {} : { privateTo: player(approval.privateTo) }),
     ...(approval.adminOnly === true ? { adminOnly: true } : {}),
+    ...(approval.inputs === undefined
+      ? {}
+      : { inputs: approval.inputs.map((input) => ({ ...input })) }),
+    ...(approval.clientAction === undefined ? {} : { clientAction: { ...approval.clientAction } }),
   };
 }
 

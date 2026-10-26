@@ -207,7 +207,14 @@ export async function chat(options: ChatOptions): Promise<void> {
         for (const approval of now().approvals) console.log(`  ${describeApproval(approval)}`);
       } else if (/^\/(approve|deny)(\s|$)/.test(line)) {
         const [, verb, id] = /^\/(approve|deny)\s+(\S+)$/.exec(line) ?? [];
+        const asked = now().approvals.find((approval) => approval.id === id);
         if (id === undefined) console.log("  Usage: /approve <id> | /deny <id>");
+        else if (verb === "approve" && asked?.clientAction !== undefined)
+          console.log(`  ${id} runs on your phone: approve it in the Nudge app.`);
+        else if (verb === "approve" && (asked?.inputs?.length ?? 0) > 0)
+          console.log(
+            `  ${id} asks for something to type in: approve it in the app or on the web.`,
+          );
         else {
           const decided = await session.decide(id, verb === "approve");
           await shown((view) =>

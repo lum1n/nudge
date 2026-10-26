@@ -51,14 +51,17 @@ export {
   type ApprovalEntryData,
   type ApprovalDenialHandler,
   type ApprovalHandler,
+  type ApprovalInput,
   ApprovalNotFound,
   type ApprovalOutcome,
   type ApprovalRun,
   Approvals,
   ApprovalsDoc,
   type ApprovalStatus,
+  type ClientAction,
   type Decision,
   MAX_PENDING,
+  MissingInputs,
   requestApproval,
 } from "./approvals/approvals.ts";
 export { consequentialLabel } from "./approvals/consequential.ts";

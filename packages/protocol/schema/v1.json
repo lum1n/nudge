@@ -858,6 +858,73 @@
         }
       }
     },
+    "ApprovalInput": {
+      "type": "object",
+      "required": [
+        "name",
+        "label",
+        "secret"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "secret": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string"
+        },
+        "optional": {
+          "type": "boolean"
+        }
+      }
+    },
+    "ClientAction": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "name"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "exe.new"
+            },
+            "name": {
+              "type": "string"
+            },
+            "image": {
+              "type": "string"
+            },
+            "sshKey": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "name"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "exe.rm"
+            },
+            "name": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
     "Approval": {
       "type": "object",
       "required": [
@@ -944,6 +1011,76 @@
         },
         "adminOnly": {
           "type": "boolean"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "label",
+              "secret"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "secret": {
+                "type": "boolean"
+              },
+              "description": {
+                "type": "string"
+              },
+              "optional": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "clientAction": {
+          "anyOf": [
+            {
+              "type": "object",
+              "required": [
+                "type",
+                "name"
+              ],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "exe.new"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "image": {
+                  "type": "string"
+                },
+                "sshKey": {
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "type",
+                "name"
+              ],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "exe.rm"
+                },
+                "name": {
+                  "type": "string"
+                }
+              }
+            }
+          ]
         }
       }
     },
@@ -1828,6 +1965,76 @@
               },
               "adminOnly": {
                 "type": "boolean"
+              },
+              "inputs": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "name",
+                    "label",
+                    "secret"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "secret": {
+                      "type": "boolean"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "optional": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              },
+              "clientAction": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "type",
+                      "name"
+                    ],
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "exe.new"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "image": {
+                        "type": "string"
+                      },
+                      "sshKey": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "type",
+                      "name"
+                    ],
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "exe.rm"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                ]
               }
             }
           }
@@ -3488,6 +3695,76 @@
                           },
                           "adminOnly": {
                             "type": "boolean"
+                          },
+                          "inputs": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "required": [
+                                "name",
+                                "label",
+                                "secret"
+                              ],
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "secret": {
+                                  "type": "boolean"
+                                },
+                                "description": {
+                                  "type": "string"
+                                },
+                                "optional": {
+                                  "type": "boolean"
+                                }
+                              }
+                            }
+                          },
+                          "clientAction": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "required": [
+                                  "type",
+                                  "name"
+                                ],
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "const": "exe.new"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "image": {
+                                    "type": "string"
+                                  },
+                                  "sshKey": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "required": [
+                                  "type",
+                                  "name"
+                                ],
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "const": "exe.rm"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            ]
                           }
                         }
                       }
@@ -6440,6 +6717,15 @@
       "properties": {
         "approve": {
           "type": "boolean"
+        },
+        "inputs": {
+          "type": "object",
+          "patternProperties": {
+            "^.*$": {
+              "type": "string",
+              "maxLength": 16384
+            }
+          }
         }
       }
     },

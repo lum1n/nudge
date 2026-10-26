@@ -189,6 +189,43 @@ export const QueuedMessage = Type.Object({
 });
 export type QueuedMessage = Static<typeof QueuedMessage>;
 
+/**
+ * A value the approval asks for when someone approves it, such as a key. The value goes with the
+ * decision to the extension's handler and is never stored, shown to the room or given to the model.
+ */
+export const ApprovalInput = Type.Object({
+  /** What the handler gets it as: letters, digits and `_`. */
+  name: Type.String(),
+  label: Type.String(),
+  /** A password field: the value isn't shown while typed. */
+  secret: Type.Boolean(),
+  description: Type.Optional(Type.String()),
+  /** It may be left empty; required otherwise. */
+  optional: Type.Optional(Type.Boolean()),
+});
+export type ApprovalInput = Static<typeof ApprovalInput>;
+
+/**
+ * Something the app does on the device before it approves, with what only the device has, such as
+ * its exe.dev token (ADR 11). The app then approves with the inputs the action names. A client that
+ * can't do it says to open the app that can; it may still deny.
+ *
+ * - `exe.new`: adds `sshKey` (when given) to the person's exe.dev account with `ssh-key add`, makes
+ *   the VM with `new --json --name <name>` (and `--image` when given), and approves with `vm` (the
+ *   VM's name as exe.dev gave it) and `sshHost` (`<vm>.exe.xyz` unless exe.dev said otherwise).
+ * - `exe.rm`: removes the VM with `rm <name>`, and approves with nothing.
+ */
+export const ClientAction = Type.Union([
+  Type.Object({
+    type: Type.Literal("exe.new"),
+    name: Type.String(),
+    image: Type.Optional(Type.String()),
+    sshKey: Type.Optional(Type.String()),
+  }),
+  Type.Object({ type: Type.Literal("exe.rm"), name: Type.String() }),
+]);
+export type ClientAction = Static<typeof ClientAction>;
+
 export const Approval = Type.Object({
   /** `a1`, `a2`, … within its room. */
   id: Type.String(),
@@ -203,6 +240,10 @@ export const Approval = Type.Object({
   privateTo: Type.Optional(Player),
   /** Only an admin may decide it. */
   adminOnly: Type.Optional(Type.Boolean()),
+  /** What approving it takes, besides a yes; see `ApprovalInput`. */
+  inputs: Type.Optional(Type.Array(ApprovalInput)),
+  /** What the app does before it approves; see `ClientAction`. */
+  clientAction: Type.Optional(ClientAction),
 });
 export type Approval = Static<typeof Approval>;
 
@@ -901,7 +942,11 @@ export type InviteResponse = Static<typeof InviteResponse>;
 export const InvitesResponse = Type.Object({ invites: Type.Array(Invite) });
 export type InvitesResponse = Static<typeof InvitesResponse>;
 
-export const DecideRequest = Type.Object({ approve: Type.Boolean() });
+export const DecideRequest = Type.Object({
+  approve: Type.Boolean(),
+  /** The approval's inputs by name, when approving; ignored when denying. Never stored. */
+  inputs: Type.Optional(Type.Record(Type.String(), Type.String({ maxLength: 16_384 }))),
+});
 export type DecideRequest = Static<typeof DecideRequest>;
 
 /** An installed extension as one room has it. The built-in one is always on and not listed. */
@@ -1625,6 +1670,8 @@ export const SCHEMAS = {
   TimelineItem,
   Status,
   QueuedMessage,
+  ApprovalInput,
+  ClientAction,
   Approval,
   Fact,
   RoomNudge,

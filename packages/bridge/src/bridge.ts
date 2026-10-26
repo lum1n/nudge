@@ -369,6 +369,15 @@ export class ChatBridge {
   ): Promise<string> {
     const by = { playerId: player.id, displayName: player.displayName };
     try {
+      if (approve) {
+        // A key typed into a chat would sit in its history, and a VM is made on the phone.
+        const asked = await this.nudge.approvals.get(roomId, id, context);
+        if (
+          asked?.status === "pending" &&
+          (asked.clientAction !== undefined || asked.inputs?.length)
+        )
+          return `Approve ${id} in the Nudge app: it ${asked.clientAction === undefined ? "asks for something to type in" : "runs on your phone"}.`;
+      }
       const approval = await this.nudge.approvals.decide(roomId, id, { approve, by }, context);
       if (approval.status === "denied") return `Denied by ${player.displayName}.`;
       return `Approved by ${player.displayName}${approval.result === undefined ? "" : `: ${approval.result}`}`;
