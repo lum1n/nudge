@@ -19,6 +19,8 @@ export type Schema = {
   maximum?: number;
   minLength?: number;
   pattern?: string;
+  /** A password or token: the server keeps it encrypted, and the page sees a reference to it. */
+  writeOnly?: boolean;
   /** Nudge's own hints: `rooms` is a list of room ids with `*` for every room (`roomsSetting`). */
   "x-nudge"?: string;
 };
@@ -31,6 +33,8 @@ type Value = Record<string, unknown>;
 const INPUT = "w-full rounded border border-stone-300 bg-white px-2 py-1 text-sm";
 /** Names whose values are usually secrets, so they get the `${NAME}` hint. */
 const SECRET = /token|password|secret|key$/i;
+/** A `writeOnly` setting the server stored, as the config refers to it. */
+const STORED = /^\$\{secret:[A-Za-z0-9_-]+\}$/;
 
 /** Fields for an object schema's properties; a property set to `undefined` is left out. */
 export function ObjectFields({
@@ -131,7 +135,30 @@ function Field({
         onChange={onChange}
       />
     );
-  else if (type === "string")
+  else if (type === "string" && schema.writeOnly === true) {
+    // A stored one stays as it is until something is typed over it.
+    const stored = typeof value === "string" && STORED.test(value);
+    control = (
+      <input
+        id={id}
+        type={typeof value === "string" && value.startsWith("${") ? "text" : "password"}
+        value={stored ? "" : ((value as string | undefined) ?? "")}
+        placeholder={
+          stored
+            ? m.settings.form.secretStored
+            : schema.default === undefined
+              ? undefined
+              : String(schema.default)
+        }
+        onChange={(event) =>
+          onChange(event.target.value === "" ? (stored ? value : undefined) : event.target.value)
+        }
+        autoComplete="new-password"
+        spellCheck={false}
+        className={`${INPUT} font-mono`}
+      />
+    );
+  } else if (type === "string")
     control = (
       <input
         id={id}
@@ -193,7 +220,10 @@ function Field({
         {required && schema.default === undefined && <span className="text-red-700"> *</span>}
       </label>
       {control}
-      <Help schema={schema} secret={type === "string" && SECRET.test(name)} />
+      <Help
+        schema={schema}
+        secret={type === "string" && (schema.writeOnly === true || SECRET.test(name))}
+      />
     </div>
   );
 }
@@ -218,7 +248,9 @@ function Help({ schema, secret = false }: { schema: Schema; secret?: boolean }) 
           {" "}
           {m.settings.form.secretBefore}{" "}
           <code className="rounded bg-stone-200 px-1">{"${NAME}"}</code>{" "}
-          {m.settings.form.secretAfter}
+          {schema.writeOnly === true
+            ? m.settings.form.secretAfterStored
+            : m.settings.form.secretAfter}
         </>
       )}
     </p>

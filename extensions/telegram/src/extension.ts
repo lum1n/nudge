@@ -7,6 +7,7 @@ const VERSION = "0.1.0";
 const Settings = Type.Object({
   /** The bot's token from @BotFather; `${NAME}` takes it from the host's environment. */
   token: Type.String({
+    writeOnly: true,
     default: "${TELEGRAM_BOT_TOKEN}",
     title: "Bot token",
     description: "The bot's token from @BotFather; ${NAME} takes it from an environment variable.",

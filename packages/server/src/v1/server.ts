@@ -516,6 +516,8 @@ function toAssistant(control: ServerControl, entry: AssistantConfig): ServerAssi
     model: entry.model ?? DEFAULT_MODEL,
     ...(entry.timeZone === undefined ? {} : { timeZone: entry.timeZone }),
     ...(entry.instructions === undefined ? {} : { instructions: entry.instructions }),
+    ...(entry.style === undefined ? {} : { style: entry.style }),
+    ...(entry.autonomy === undefined ? {} : { autonomy: entry.autonomy }),
     ...(entry.budget === undefined ? {} : { budget: entry.budget }),
     running: nudge !== undefined,
   };

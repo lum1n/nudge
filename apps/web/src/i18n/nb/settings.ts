@@ -177,6 +177,9 @@ export const settings: Messages["settings"] = {
     secretBefore: "Skriv",
     secretAfter:
       "for å hente den fra serverens miljø; alt annet lagres i nudge.json slik det er skrevet.",
+    secretAfterStored:
+      "for å hente den fra serverens miljø; alt annet lagres kryptert på serveren, ikke i nudge.json.",
+    secretStored: "Lagret. Skriv for å bytte den ut.",
     everyRoom: "Alle rom",
     onePerLine: "Én per linje",
     add: "Legg til",

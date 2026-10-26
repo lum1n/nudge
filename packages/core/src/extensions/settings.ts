@@ -2,8 +2,15 @@ import { readdir, stat } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { ConfigError, type NudgeConfig, parseConfig, resolveExtension } from "../config.ts";
-import { rawAssistant, readRawConfig, writeRawConfig } from "../config-file.ts";
+import {
+  type RawAssistant,
+  type RawConfig,
+  rawAssistant,
+  readRawConfig,
+  writeRawConfig,
+} from "../config-file.ts";
 import type { RoomKind } from "../identity/directory.ts";
+import { sealSecrets, secretReferences, SettingSecrets } from "../setting-secrets.ts";
 import { isNudgeExtension } from "./define.ts";
 import { importExtension } from "./loader.ts";
 
@@ -125,8 +132,59 @@ export async function saveExtensionSetups(
     };
   });
   if (target.extensions.length === 0) delete target.extensions;
+  const secrets = new SettingSecrets(baseDir);
+  await sealAssistant(target, baseDir, secrets);
   await apply(parseConfig(raw, baseDir));
   await writeRawConfig(path, raw);
+  // Only once the file no longer needs them, so a save that fails keeps the old ones.
+  secrets.prune(assistant, secretReferences(target.extensions ?? []));
+}
+
+/**
+ * Moves the passwords and tokens written into the config file as plain values into
+ * `SettingSecrets`, leaving references, as for a config written by an older release or by hand.
+ * Rewrites the file only when something moved. A module that won't load is skipped: its schema
+ * says nothing about which settings are secret.
+ */
+export async function sealConfigSecrets(configPath: string): Promise<boolean> {
+  const path = resolve(configPath);
+  const baseDir = dirname(path);
+  const raw: RawConfig = await readRawConfig(path);
+  if (!Array.isArray(raw.assistants)) return false;
+  const secrets = new SettingSecrets(baseDir);
+  let changed = false;
+  for (const assistant of raw.assistants)
+    changed = (await sealAssistant(assistant, baseDir, secrets)) || changed;
+  if (!changed) return false;
+  await writeRawConfig(path, raw);
+  for (const assistant of raw.assistants)
+    secrets.prune(assistant.name, secretReferences(assistant.extensions ?? []));
+  return true;
+}
+
+/** Seals `assistant`'s extension settings in place; true when a value moved. */
+async function sealAssistant(
+  assistant: RawAssistant,
+  baseDir: string,
+  secrets: SettingSecrets,
+): Promise<boolean> {
+  let changed = false;
+  for (const entry of assistant.extensions ?? []) {
+    if (entry.settings === undefined) continue;
+    let schema: unknown;
+    try {
+      const extension = await importExtension(resolveExtension(entry.from, baseDir));
+      if (!isNudgeExtension(extension)) continue;
+      schema = extension.settings;
+    } catch {
+      continue;
+    }
+    entry.settings = sealSecrets(schema, entry.settings, (secret) => {
+      changed = true;
+      return secrets.put(assistant.name, secret);
+    }) as Record<string, unknown>;
+  }
+  return changed;
 }
 
 async function describe(

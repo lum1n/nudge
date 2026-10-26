@@ -1430,6 +1430,24 @@ pub struct AssistantBudget {
     pub warn_usd: Option<f64>,
 }
 
+/// How much an assistant says.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AssistantStyle {
+    Concise,
+    Balanced,
+    Detailed,
+}
+
+/// How much an assistant decides itself before asking; approvals apply at every level.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AssistantAutonomy {
+    Cautious,
+    Balanced,
+    Independent,
+}
+
 /// One of the server's assistants, with its settings.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -1442,6 +1460,10 @@ pub struct ServerAssistant {
     pub time_zone: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub instructions: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub style: Option<AssistantStyle>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub autonomy: Option<AssistantAutonomy>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub budget: Option<AssistantBudget>,
     /// False when it is in the config but failed to open.
@@ -1473,6 +1495,10 @@ pub struct CreateAssistantRequest {
     pub time_zone: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub instructions: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub style: Option<AssistantStyle>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub autonomy: Option<AssistantAutonomy>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub budget: Option<AssistantBudget>,
     /// Someone whose home it is to be: its first player, so its admin, with a pairing code.
@@ -1530,6 +1556,10 @@ pub struct UpdateAssistantRequest {
     pub time_zone: Option<Option<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none", with = "nullable")]
     pub instructions: Option<Option<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "nullable")]
+    pub style: Option<Option<AssistantStyle>>,
+    #[serde(default, skip_serializing_if = "Option::is_none", with = "nullable")]
+    pub autonomy: Option<Option<AssistantAutonomy>>,
     #[serde(default, skip_serializing_if = "Option::is_none", with = "nullable")]
     pub budget: Option<Option<AssistantBudget>>,
 }

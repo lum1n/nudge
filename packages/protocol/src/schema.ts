@@ -1099,6 +1099,22 @@ export const AssistantBudget = Type.Object({
 });
 export type AssistantBudget = Static<typeof AssistantBudget>;
 
+/** How much an assistant says. */
+export const AssistantStyle = Type.Union([
+  Type.Literal("concise"),
+  Type.Literal("balanced"),
+  Type.Literal("detailed"),
+]);
+export type AssistantStyle = Static<typeof AssistantStyle>;
+
+/** How much an assistant decides itself before asking; approvals apply at every level. */
+export const AssistantAutonomy = Type.Union([
+  Type.Literal("cautious"),
+  Type.Literal("balanced"),
+  Type.Literal("independent"),
+]);
+export type AssistantAutonomy = Static<typeof AssistantAutonomy>;
+
 /** One of the server's assistants, with its settings. */
 export const ServerAssistant = Type.Object({
   /** In its URLs and its people's addresses; it never changes. */
@@ -1107,6 +1123,8 @@ export const ServerAssistant = Type.Object({
   model: ModelChoice,
   timeZone: Type.Optional(Type.String()),
   instructions: Type.Optional(Type.String()),
+  style: Type.Optional(AssistantStyle),
+  autonomy: Type.Optional(AssistantAutonomy),
   budget: Type.Optional(AssistantBudget),
   /** False when it is in the config but failed to open. */
   running: Type.Boolean(),
@@ -1122,6 +1140,8 @@ export const CreateAssistantRequest = Type.Object({
   model: Type.Optional(ModelChoice),
   timeZone: Type.Optional(Type.String()),
   instructions: Type.Optional(Type.String()),
+  style: Type.Optional(AssistantStyle),
+  autonomy: Type.Optional(AssistantAutonomy),
   budget: Type.Optional(AssistantBudget),
   /** Someone whose home it is to be: made its first player, so its admin, with a pairing code. */
   firstPlayer: Type.Optional(Type.Object({ displayName: Type.String({ minLength: 1 }) })),
@@ -1161,6 +1181,8 @@ export const UpdateAssistantRequest = Type.Object({
   model: Type.Optional(Type.Union([ModelChoice, Type.Null()])),
   timeZone: Type.Optional(Type.Union([Type.String(), Type.Null()])),
   instructions: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  style: Type.Optional(Type.Union([AssistantStyle, Type.Null()])),
+  autonomy: Type.Optional(Type.Union([AssistantAutonomy, Type.Null()])),
   budget: Type.Optional(Type.Union([AssistantBudget, Type.Null()])),
 });
 export type UpdateAssistantRequest = Static<typeof UpdateAssistantRequest>;

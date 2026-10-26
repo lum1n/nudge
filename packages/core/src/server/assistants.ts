@@ -24,8 +24,10 @@ import {
   type ExtensionSetup,
   listExtensionSetups,
   saveExtensionSetups,
+  sealConfigSecrets,
 } from "../extensions/settings.ts";
 import type { InstalledExtension, Nudge } from "../nudge.ts";
+import { SettingSecrets } from "../setting-secrets.ts";
 
 export class AssistantNotFound extends Error {
   override name = "AssistantNotFound";
@@ -50,12 +52,21 @@ export type AssistantChange = {
   readonly [K in ChangeableKey]?: AssistantConfig[K] | null;
 };
 
-type ChangeableKey = "displayName" | "model" | "timeZone" | "instructions" | "budget";
+type ChangeableKey =
+  | "displayName"
+  | "model"
+  | "timeZone"
+  | "instructions"
+  | "style"
+  | "autonomy"
+  | "budget";
 const CHANGEABLE: readonly ChangeableKey[] = [
   "displayName",
   "model",
   "timeZone",
   "instructions",
+  "style",
+  "autonomy",
   "budget",
 ];
 
@@ -98,6 +109,7 @@ export class Assistants {
     const assistants = new Assistants(options);
     let config: NudgeConfig;
     try {
+      await assistants.sealSecrets();
       config = await loadConfig(assistants.configPath);
     } catch (error) {
       if (options.allowMissing === true && error instanceof ConfigMissing) return assistants;
@@ -189,6 +201,7 @@ export class Assistants {
       raw.assistants = raw.assistants.filter((assistant) => assistant.name !== name);
       await writeRawConfig(this.configPath, raw);
       if (entry.database !== undefined) await removeFiles(entry.database);
+      new SettingSecrets(dirname(this.configPath)).prune(name, new Set());
       this.say(`${name}: deleted`);
       return kept;
     });
@@ -240,6 +253,7 @@ export class Assistants {
    */
   reload(): Promise<void> {
     return this.serially(async () => {
+      await this.sealSecrets();
       const config = await loadConfig(this.configPath);
       const names = new Set(config.assistants.map((assistant) => assistant.name));
       for (const [name, nudge] of this.running) {
@@ -300,6 +314,13 @@ export class Assistants {
       if (before !== undefined) this.running.set(name, await this.track(config, before));
       throw error;
     }
+  }
+
+  /** Moves passwords written into the config file into encrypted storage (`sealConfigSecrets`). */
+  private async sealSecrets(): Promise<void> {
+    if (!existsSync(this.configPath)) return;
+    if (await sealConfigSecrets(this.configPath))
+      this.say("moved passwords and tokens out of the config file into encrypted storage");
   }
 
   private async track(config: NudgeConfig, entry: AssistantConfig): Promise<Nudge> {

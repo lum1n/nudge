@@ -12,6 +12,7 @@ const Settings = Type.Object({
   }),
   /** The bot's access token; `${NAME}` takes it from the host's environment. */
   token: Type.String({
+    writeOnly: true,
     default: "${MATRIX_ACCESS_TOKEN}",
     title: "Access token",
     description: "The bot account's access token; ${NAME} takes it from an environment variable.",

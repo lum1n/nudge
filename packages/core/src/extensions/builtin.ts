@@ -1,4 +1,5 @@
 import type { Change } from "../changes.ts";
+import type { Autonomy, Style } from "../config.ts";
 import type { Context } from "@earendil-works/chord";
 import {
   type ConversationId,
@@ -31,7 +32,54 @@ export type BuiltinOptions = {
   readonly describe?: (extension: string) => string | undefined;
   /** Whether the vault can still put a placeholder's value back, looked up at render time. */
   readonly known: (placeholder: string) => boolean;
+  /** How much it says; default "concise". */
+  readonly style?: Style;
+  /** How much it decides itself; default "balanced". */
+  readonly autonomy?: Autonomy;
 };
+
+const STYLES: Record<Style, string> = {
+  concise:
+    "Answer in as few words as do the job: the answer first, no preamble, no recap of the steps " +
+    "you took, no offer of more help at the end. Say how you got it only when asked, or when it " +
+    "changes how far to trust it.",
+  balanced:
+    "Answer first, then the context that helps act on it. Keep it short: add detail only where it " +
+    "changes what someone would do. No preamble, and no offer of more help at the end.",
+  detailed:
+    "Answer first, then explain: the reasons, sources, trade-offs and what to watch for. Use " +
+    "headings or lists when they make a long answer easier to scan.",
+};
+
+const AUTONOMY: Record<Autonomy, string> = {
+  cautious:
+    "Look things up without asking. Before work that takes many steps, changes something, or " +
+    "costs notable time or money, say in one line what you'll do and wait for a go-ahead.",
+  balanced:
+    "Ask only when a wrong guess is costly or hard to undo, or when the request can mean quite " +
+    "different things. Otherwise make the call yourself, and name an assumption in a few words " +
+    "when you make one.",
+  independent:
+    "Make the calls yourself, also on bigger or unclear tasks: take the likeliest meaning, say it " +
+    "in a line, and finish the job. Ask only for what you can't go on without and only the person " +
+    "knows, such as a choice between their own plans.",
+};
+
+/**
+ * What every level shares: do the task rather than offer ways to, and get past a failed tool
+ * without asking. Approvals the tools ask for are the person's at every level.
+ */
+export function describeAutonomy(autonomy: Autonomy): string {
+  return [
+    "Do what is asked; don't describe how you could. When a tool fails or a source is down, try " +
+      "the next way yourself, such as another tool, a web search or the browser, and mention in a " +
+      "few words what you used. Give one answer, not a menu of options: when choices are close, " +
+      "pick one and name the other in a line.",
+    AUTONOMY[autonomy],
+    "Approvals the tools ask for, such as before buying, booking or sending, still apply: those " +
+      "are the person's call.",
+  ].join(" ");
+}
 
 /**
  * The always-on `nudge` extension: who the assistant is, who is in the room, the personal details
@@ -47,11 +95,13 @@ export function createBuiltinExtension(options: BuiltinOptions): Extension {
       section(
         "identity",
         () =>
-          `You are ${options.displayName}, a personal assistant. Be brief and concrete. ` +
+          `You are ${options.displayName}, a personal assistant. ` +
           `Several people may share a conversation; each message starts with the name of who wrote it and the time they sent it.`,
         { tag: false },
       ),
-      // Static, so it comes before what changes, for prompt caching.
+      // Static, so they come before what changes, for prompt caching.
+      section("style", () => STYLES[options.style ?? "concise"]),
+      section("autonomy", () => describeAutonomy(options.autonomy ?? "balanced")),
       section("untrusted", () => UNTRUSTED_RULE),
       section("members", async (input, context) => {
         const directory = await input.read.snapshot(DirectoryDoc, context);
