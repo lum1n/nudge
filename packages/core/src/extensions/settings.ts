@@ -237,6 +237,7 @@ export const BUNDLED_EXTENSIONS: readonly string[] = [
   "@nudge/ext-ner",
   "@nudge/ext-peers",
   "@nudge/ext-places",
+  "@nudge/ext-projects",
   "@nudge/ext-push",
   "@nudge/ext-rss",
   "@nudge/ext-scripts",
