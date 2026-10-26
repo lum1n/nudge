@@ -301,8 +301,13 @@ impl Api {
         room: &str,
         approval: &str,
         approve: bool,
+        inputs: Option<std::collections::HashMap<String, String>>,
     ) -> Result<Approval, ApiError> {
-        let body = DecideRequest { approve };
+        // What's typed into an approval's inputs is only sent, with a yes.
+        let body = DecideRequest {
+            approve,
+            inputs: inputs.filter(|_| approve),
+        };
         self.request(
             Method::POST,
             &["rooms", room, "approvals", approval],

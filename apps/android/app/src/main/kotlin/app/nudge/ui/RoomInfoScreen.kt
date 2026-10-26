@@ -15,6 +15,7 @@ import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.DesktopWindows
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.Engineering
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.NotificationsActive
@@ -83,6 +84,7 @@ fun RoomInfoScreen(
     browser: () -> Unit,
     desktop: () -> Unit,
     terminal: () -> Unit,
+    project: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val observed = remember(client, roomId) { MutableStateFlow<ObservedRoom?>(null) }
@@ -144,6 +146,7 @@ fun RoomInfoScreen(
                 Triple("browser", text(R.string.room_info_browser), Icons.Outlined.Language to browser),
                 Triple("desktop", text(R.string.room_info_desktop), Icons.Outlined.DesktopWindows to desktop),
                 Triple("terminal", text(R.string.room_info_terminal), Icons.Outlined.Terminal to terminal),
+                Triple("projects", text(R.string.project_title), Icons.Outlined.Engineering to project),
             ).filter { it.first in on }.map { (_, title, action) ->
                 { shapes ->
                     SegmentedListItem(

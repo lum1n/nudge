@@ -10,6 +10,7 @@ mod server;
 mod speech;
 mod types;
 
+use std::collections::HashMap;
 use std::future::Future;
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, UNIX_EPOCH};
@@ -875,15 +876,19 @@ impl NudgeClient {
         )
     }
 
+    /// Approves or denies. `inputs` are the approval's inputs by name, sent only with a yes and
+    /// never kept: clear the fields once it is sent.
+    #[uniffi::method(default(inputs = None))]
     pub async fn decide(
         &self,
         room: String,
         approval_id: String,
         approve: bool,
+        inputs: Option<HashMap<String, String>>,
     ) -> Result<Approval, NudgeError> {
         let api = self.client.api().clone();
         Ok(
-            run(async move { api.decide(&room, &approval_id, approve).await })
+            run(async move { api.decide(&room, &approval_id, approve, inputs).await })
                 .await?
                 .into(),
         )

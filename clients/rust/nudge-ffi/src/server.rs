@@ -21,6 +21,10 @@ impl From<ExeError> for NudgeError {
                 detail,
             },
             ExeError::Status { status, .. } => NudgeError::Status { status, detail },
+            ExeError::Invalid(_) => NudgeError::Status {
+                status: 400,
+                detail,
+            },
             ExeError::Network(_) | ExeError::NotUp(_) | ExeError::Wired(_) => {
                 NudgeError::Network { detail }
             }
@@ -1252,6 +1256,17 @@ impl ExeClient {
     pub async fn delete(&self, name: String) -> Result<(), NudgeError> {
         let exe = self.exe.clone();
         Ok(run(async move { exe.delete(&name).await }).await?)
+    }
+
+    /// Does an approval's client action, and returns the inputs to approve it with
+    /// (`NudgeClient::decide`). On an error the approval stays pending, to try again or deny.
+    pub async fn run_client_action(
+        &self,
+        action: crate::ClientAction,
+    ) -> Result<std::collections::HashMap<String, String>, NudgeError> {
+        let exe = self.exe.clone();
+        let action = p::ClientAction::from(action);
+        Ok(run(async move { exe.run_client_action(&action).await }).await?)
     }
 }
 

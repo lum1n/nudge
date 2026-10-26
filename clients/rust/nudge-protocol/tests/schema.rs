@@ -221,6 +221,27 @@ fn room_view() -> RoomView {
             result: Some("paid".into()),
             private_to: Some(ann()),
             admin_only: Some(true),
+            inputs: vec![
+                ApprovalInput {
+                    name: "token".into(),
+                    label: "GitHub token".into(),
+                    secret: true,
+                    description: Some("A fine-grained one".into()),
+                    optional: Some(false),
+                },
+                ApprovalInput {
+                    name: "note".into(),
+                    label: "Note".into(),
+                    secret: false,
+                    description: Some("For the log".into()),
+                    optional: Some(true),
+                },
+            ],
+            client_action: Some(ClientAction::ExeNew {
+                name: "proj-1".into(),
+                image: Some("ubuntu:24.04".into()),
+                ssh_key: Some("ssh-ed25519 AAAA nudge".into()),
+            }),
         }],
         memory: vec![Fact {
             id: "f1".into(),
@@ -471,7 +492,27 @@ fn http_bodies_match_the_schema() {
         },
     );
     check("RememberRequest", &RememberRequest { text: "x".into() });
-    check("DecideRequest", &DecideRequest { approve: true });
+    check(
+        "DecideRequest",
+        &DecideRequest {
+            approve: true,
+            inputs: Some([("token".to_owned(), "s3cret".to_owned())].into()),
+        },
+    );
+    check(
+        "ClientAction",
+        &ClientAction::ExeRm {
+            name: "proj-1".into(),
+        },
+    );
+    check(
+        "ClientAction",
+        &ClientAction::ExeNew {
+            name: "proj-1".into(),
+            image: Some("ubuntu:24.04".into()),
+            ssh_key: Some("ssh-ed25519 AAAA nudge".into()),
+        },
+    );
     check(
         "PlayerMemoryResponse",
         &PlayerMemoryResponse {
@@ -1391,4 +1432,51 @@ fn json_map(value: Value) -> Map<String, Value> {
         Value::Object(map) => map,
         _ => panic!("not an object"),
     }
+}
+
+/// An approval with a client action this client doesn't know, or inputs it can't read, still
+/// reads: the action is `None` and the unreadable inputs are left out, so it can be denied.
+#[test]
+fn reads_unknown_client_actions_and_inputs_leniently() {
+    let approval: Approval = serde_json::from_value(json!({
+        "id": "a1",
+        "summary": "Do it",
+        "status": "pending",
+        "requestedAt": 1,
+        "inputs": [
+            { "name": "token", "label": "Token", "secret": true, "extra": 1 },
+            { "label": "No name" }
+        ],
+        "clientAction": { "type": "fly.new", "name": "x" }
+    }))
+    .unwrap();
+    assert_eq!(approval.client_action, None);
+    assert_eq!(approval.inputs.len(), 1);
+    assert_eq!(approval.inputs[0].name, "token");
+    let broken: Approval = serde_json::from_value(json!({
+        "id": "a1",
+        "summary": "Do it",
+        "status": "pending",
+        "requestedAt": 1,
+        "inputs": "nope",
+        "clientAction": { "type": "exe.new" }
+    }))
+    .unwrap();
+    assert_eq!((broken.inputs.len(), broken.client_action), (0, None));
+    let plain: Approval = serde_json::from_value(json!({
+        "id": "a1", "summary": "Do it", "status": "pending", "requestedAt": 1
+    }))
+    .unwrap();
+    assert!(plain.inputs.is_empty() && plain.client_action.is_none());
+    assert_eq!(
+        serde_json::from_value::<ClientAction>(
+            json!({ "type": "exe.new", "name": "p", "sshKey": "k" })
+        )
+        .unwrap(),
+        ClientAction::ExeNew {
+            name: "p".into(),
+            image: None,
+            ssh_key: Some("k".into())
+        }
+    );
 }
