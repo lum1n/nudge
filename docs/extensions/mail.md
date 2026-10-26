@@ -23,6 +23,7 @@
 ```
 
 - The model gets `mail_search`, `mail_read` and `mail_send`. Reading opens the inbox read-only, so nothing is marked read. Sending, replies included (kept in their thread), waits for someone in the room to approve it.
+- `mail_send` takes `attachments`: ids of files people attached to messages in the room, such as `a3` ([ADR 24](../adr/0024-attachments-in-chat.md)). Only attachments the person the turn acts for may see are taken, the approval names them, and their bytes are read only once it is approved, so one removed meanwhile isn't sent. One mail takes up to 18 MB of them.
 - SMTP defaults to the IMAP host with `imap.` changed to `smtp.`, port 465 and the same login; give `smtp` to set it.
 - `rooms` lists the rooms that may use the account, by id (`*` for every room). In Settings, on the web or in the apps, you pick them by name instead; `nudge room` lists the ids.
 - Mail goes to the model like any tool output: e-mail addresses, phone numbers and the like as placeholders. Names are readable.

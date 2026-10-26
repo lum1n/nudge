@@ -156,6 +156,19 @@ describe("mail", () => {
         return fauxAssistantMessage([fauxToolCall("mail_read", { uid: 42 })], {
           stopReason: "toolUse",
         });
+      const attached = /mail (a\d+)/i.exec(text);
+      if (attached !== null)
+        return fauxAssistantMessage(
+          [
+            fauxToolCall("mail_send", {
+              to: ["regnskap@example.no"],
+              subject: "Kvittering",
+              body: "Vedlagt.",
+              attachments: [attached[1]!],
+            }),
+          ],
+          { stopReason: "toolUse" },
+        );
       if (/answer them/i.test(text))
         return fauxAssistantMessage(
           [
@@ -289,6 +302,49 @@ describe("mail", () => {
     ]);
   });
 
+  it("sends attachments the asker may see, read once someone approves", async () => {
+    await nudge.players.invite("Ann", context);
+    const ann = { playerId: "ann", displayName: "Ann" };
+    const pdf = Buffer.from("%PDF-1.4 receipt");
+    const attach = (by: string) =>
+      nudge.addAttachment(
+        LOBBY,
+        { name: "kvittering.pdf", mime: "application/pdf", bytes: pdf, by },
+        context,
+      );
+    await attach("owner");
+    await (
+      await nudge.submit(LOBBY, { text: "Mail a1", author: by, attachments: ["a1"] }, context)
+    ).wait(context);
+    const [approval] = await nudge.approvals.list(LOBBY, context);
+    expect(nudge.showTo(undefined, approval!.summary)).toContain("Vedlagt.\n\nWith kvittering.pdf");
+    await nudge.approvals.decide(LOBBY, approval!.id, { approve: true, by: ann }, context);
+    expect(mail.sent[0]?.mail.attachments).toEqual([
+      { filename: "kvittering.pdf", contentType: "application/pdf", content: pdf },
+    ]);
+
+    // Not sent yet: the owner's alone, so Ann's turn doesn't get it.
+    await attach("owner");
+    await (await nudge.submit(LOBBY, { text: "Mail a2", author: ann }, context)).wait(context);
+    expect(toolOutput()).toBe("No attachment a2 here.");
+
+    // Removed after it was asked for: nothing goes out.
+    await (await nudge.submit(LOBBY, { text: "Mail a1", author: by }, context)).wait(context);
+    const asked = (await nudge.approvals.list(LOBBY, context)).find((a) => a.status === "pending");
+    await nudge.attachments.remove(LOBBY, "a1", { playerId: "owner", admin: false }, context);
+    const failed = await nudge.approvals.decide(
+      LOBBY,
+      asked!.id,
+      { approve: true, by: ann },
+      context,
+    );
+    expect(failed).toMatchObject({
+      status: "failed",
+      result: "Not sent: Attachment a1 was removed.",
+    });
+    expect(mail.sent).toHaveLength(1);
+  });
+
   it("gives rooms not listed no account", async () => {
     await nudge.players.invite("Ann", context);
     const room = await nudge.rooms.ensurePersonal("ann", context);
@@ -344,6 +400,9 @@ describe("the SMTP side, against a real SMTP server", () => {
         text: "Vi kommer!",
         inReplyTo: "<m41@skole.example>",
         references: ["<m41@skole.example>"],
+        attachments: [
+          { filename: "plan.pdf", contentType: "application/pdf", content: Buffer.from("%PDF") },
+        ],
       });
       expect(sent.messageId).toMatch(/^<.+>$/);
       expect(logins).toEqual(["family:pw"]);
@@ -355,6 +414,9 @@ describe("the SMTP side, against a real SMTP server", () => {
       expect(parsed.subject).toBe("Re: Foreldremøte");
       expect(parsed.text?.trim()).toBe("Vi kommer!");
       expect(parsed.inReplyTo).toBe("<m41@skole.example>");
+      expect(parsed.attachments.map((a) => [a.filename, a.contentType, String(a.content)])).toEqual(
+        [["plan.pdf", "application/pdf", "%PDF"]],
+      );
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }

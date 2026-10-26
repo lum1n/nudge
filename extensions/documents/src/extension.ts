@@ -2,8 +2,12 @@ import { createHash, randomBytes } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
+  actingFor,
+  AttachmentNotFound,
+  AttachmentRemoved,
   BACKGROUND_CONTEXT,
   type Context,
+  currentTurn,
   defineDocFamily,
   defineNudgeExtension,
   defineTool,
@@ -452,9 +456,63 @@ export const documentsExtension = defineNudgeExtension({
       },
     });
 
+    const save = defineTool({
+      name: "save_attachment",
+      description:
+        "File a file someone attached to a message in this conversation (its id, such as a3, is " +
+        "in the message's [attachment …] line) as one of the room's documents, its text read " +
+        "here, so search_documents and read_document find what's in it.",
+      parameters: Type.Object({
+        id: Type.String({ description: "The attachment's id, such as a3" }),
+        name: Type.Optional(
+          Type.String({
+            description: "Its name among the documents; the attachment's if not given",
+          }),
+        ),
+      }),
+      execute: async (args, api, context) => {
+        const room = await roomOf(api, api.conversationId, context);
+        const nudge = host.assistant();
+        // Only what the person this turn acts for may see (ADR 24).
+        const owner = actingFor(currentTurn());
+        let found;
+        try {
+          found = await nudge.attachments.read(room.id, args.id, owner?.playerId, context);
+        } catch (error) {
+          if (error instanceof AttachmentNotFound)
+            return text(`No attachment ${args.id} here.`, true);
+          if (error instanceof AttachmentRemoved)
+            return text(`Attachment ${args.id} was removed.`, true);
+          throw error;
+        }
+        const { info, bytes } = found;
+        // The room's documents are everyone's in it.
+        if (info.privateTo !== undefined)
+          return text(
+            `${info.id} was sent privately, and the room's documents are everyone's here; ask them to send it again without privacy if it should be one.`,
+            true,
+          );
+        try {
+          const document = await library.add(
+            room.id,
+            args.name?.trim() || nudge.showTo(undefined, info.name),
+            info.mime,
+            bytes,
+            owner?.displayName ?? host.displayName,
+            true,
+          );
+          await library.changed(room.id);
+          return text(`Saved ${info.id} among the documents: ${describe(document)}.`);
+        } catch (error) {
+          if (error instanceof UnsupportedDocument) return text(error.message, true);
+          throw error;
+        }
+      },
+    });
+
     return {
       // Documents come from anywhere: the model reads them as data (ADR 20).
-      tools: [readsOnly(list), readsOnly(search), readsOnly(read)].map(returnsUntrusted),
+      tools: [...[readsOnly(list), readsOnly(search), readsOnly(read)].map(returnsUntrusted), save],
       roomSocket: library.roomSocket,
       sections: [
         section("documents", async (input, context) => {

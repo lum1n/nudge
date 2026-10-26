@@ -116,6 +116,11 @@ describe("documents", () => {
       const message = request.messages.findLast((m) => m.role === "user");
       const text =
         typeof message?.content === "string" ? message.content : JSON.stringify(message?.content);
+      const file = /file (a\d+)/.exec(text);
+      if (file !== null)
+        return fauxAssistantMessage([fauxToolCall("save_attachment", { id: file[1]! })], {
+          stopReason: "toolUse",
+        });
       if (text.includes("which documents"))
         return fauxAssistantMessage([fauxToolCall("list_documents", {})], {
           stopReason: "toolUse",
@@ -142,6 +147,7 @@ describe("documents", () => {
       context,
     );
     await nudge.players.invite("Ann", context);
+    await nudge.players.invite("Bo", context);
   });
 
   afterEach(async () => {
@@ -240,5 +246,48 @@ describe("documents", () => {
     expect(await readdir(files)).toEqual(["d2"]);
     expect(page.listed().map((d) => d.id)).toEqual(["d2"]);
     page.session.close();
+  });
+
+  it("files an attachment the turn's person may see as a document", async () => {
+    const ann = { playerId: "ann", displayName: "Ann" };
+    const bo = { playerId: "bo", displayName: "Bo" };
+    const send = async (
+      author: typeof ann,
+      text: string,
+      attachments: string[] = [],
+      secret = false,
+    ) => {
+      await (
+        await nudge.submit(
+          LOBBY,
+          { text, author, attachments, ...(secret ? { private: true } : {}) },
+          context,
+        )
+      ).wait(context);
+      const last = requests.at(-1)!.messages.findLast((m) => m.role === "toolResult");
+      return last?.role === "toolResult"
+        ? last.content.map((p) => (p.type === "text" ? p.text : "")).join("")
+        : "";
+    };
+    const attach = (name: string, body: string, by: string) =>
+      nudge.addAttachment(
+        LOBBY,
+        { name, mime: "text/plain", bytes: Buffer.from(body), by },
+        context,
+      );
+
+    await attach("warranty.txt", "Dishwasher warranty until 2028", "ann");
+    // Not sent yet: Ann's alone, so a turn for Bo doesn't get it.
+    expect(await send(bo, "file a1")).toBe("No attachment a1 here.");
+    expect(await send(ann, "file a1 please", ["a1"])).toMatch(
+      /^Saved a1 among the documents: d1 {2}warranty\.txt \(30 characters\) — added .* by Ann\.$/,
+    );
+    expect(await say("Where's the dishwasher warranty?")).toContain("d1  warranty.txt");
+
+    await attach("secret.txt", "Only mine", "ann");
+    expect(await send(ann, "file a2", ["a2"], true)).toMatch(/^a2 was sent privately/);
+    expect(await send(ann, "file a1")).toMatch(/is here already, as d1/);
+    await nudge.attachments.remove(LOBBY, "a1", { playerId: "ann", admin: false }, context);
+    expect(await send(ann, "file a1")).toBe("Attachment a1 was removed.");
   });
 });
