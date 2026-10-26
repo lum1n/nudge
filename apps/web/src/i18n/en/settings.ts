@@ -149,6 +149,28 @@ export const settings = {
     roomsCanChange: "People in a room can still turn it on or off there.",
   },
   /** The form's own words around what extensions' schemas say. */
+  a2a: {
+    title: "Other AI agents",
+    intro:
+      "Agents built elsewhere that talk with the assistant over A2A. Those you let in call it with their token, each in a room of its own with you admins; the assistant messages those you add.",
+    clients: "Agents that may call the assistant",
+    agents: "Agents the assistant may message",
+    none: "None yet.",
+    giveThese: (name: string) =>
+      `Give ${name} these. The token is shown only now; remove it and let it in again if it gets lost.`,
+    card: "Agent Card",
+    token: "Token",
+    clientName: "Its name, such as Planner",
+    letIn: "Let in",
+    tokenIfNeeded: "Token, if it needs one",
+    add: "Add",
+    withToken: "with a token",
+    noToken: "no token",
+    newToken: "New token",
+    clear: "Clear",
+    copy: "Copy",
+    copied: "Copied",
+  },
   form: {
     default: (value: string) => `Default (${value})`,
     atLeast: (n: number) => `at least ${n}`,

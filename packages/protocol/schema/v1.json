@@ -5978,6 +5978,200 @@
         }
       }
     },
+    "A2AClientInfo": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "roomId",
+        "createdAt"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "roomId": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "number"
+        }
+      }
+    },
+    "A2AClientsResponse": {
+      "type": "object",
+      "required": [
+        "clients"
+      ],
+      "properties": {
+        "clients": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "roomId",
+              "createdAt"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "roomId": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    "A2AClientRequest": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "A2AClientCreated": {
+      "type": "object",
+      "required": [
+        "client",
+        "token",
+        "card"
+      ],
+      "properties": {
+        "client": {
+          "type": "object",
+          "required": [
+            "id",
+            "name",
+            "roomId",
+            "createdAt"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "roomId": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "number"
+            }
+          }
+        },
+        "token": {
+          "type": "string"
+        },
+        "card": {
+          "type": "string"
+        }
+      }
+    },
+    "A2AAgentInfo": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "description",
+        "url",
+        "hasToken",
+        "createdAt"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "hasToken": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "number"
+        }
+      }
+    },
+    "A2AAgentsResponse": {
+      "type": "object",
+      "required": [
+        "agents"
+      ],
+      "properties": {
+        "agents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "description",
+              "url",
+              "hasToken",
+              "createdAt"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "hasToken": {
+                "type": "boolean"
+              },
+              "createdAt": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    "A2AAgentRequest": {
+      "type": "object",
+      "required": [
+        "url"
+      ],
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "token": {
+          "type": "string"
+        }
+      }
+    },
     "InviteRequest": {
       "type": "object",
       "required": [

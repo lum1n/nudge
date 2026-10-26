@@ -162,6 +162,7 @@ async function describe(
  * where `extensions/` beside the config has them.
  */
 export const BUNDLED_EXTENSIONS: readonly string[] = [
+  "@nudge/ext-a2a",
   "@nudge/ext-acc",
   "@nudge/ext-browser",
   "@nudge/ext-calendar",

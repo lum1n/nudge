@@ -10,6 +10,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { ApiError, asOwner, clientFor, serverApi, signInToServer, useRoomList } from "../../api.ts";
+import { A2AAgents } from "../../a2a-agents.tsx";
 import { type Appearance, lookOf } from "../../avatar/appearance.ts";
 import { Avatar } from "../../avatar/Avatar.tsx";
 import { LookPicker } from "../../avatar/LookPicker.tsx";
@@ -58,6 +59,7 @@ function Settings() {
       <SpendByMonth />
       <Clients />
       <Backups />
+      <A2AAgents assistant={assistant} />
       <Extensions />
     </>
   );

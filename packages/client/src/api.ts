@@ -1,4 +1,10 @@
 import type {
+  A2AAgentInfo,
+  A2AAgentRequest,
+  A2AAgentsResponse,
+  A2AClientCreated,
+  A2AClientInfo,
+  A2AClientsResponse,
   AdminPlayer,
   Appearance,
   AppearanceResponse,
@@ -374,6 +380,41 @@ export class Api {
     return (
       await this.request<AssertResponse>("POST", "/ext/federation/owner-assertion", { server })
     ).assertion;
+  }
+
+  // Other AI agents, through the extension `a2a` (ADR 17): 404 on an assistant without it. Admins only.
+
+  /** Outside agents that may call this assistant. */
+  async a2aClients(): Promise<A2AClientInfo[]> {
+    return (await this.request<A2AClientsResponse>("GET", "/ext/a2a/clients")).clients;
+  }
+
+  /** Lets an outside agent call this assistant; its token is in the answer, and only there. */
+  createA2AClient(name: string): Promise<A2AClientCreated> {
+    return this.request("POST", "/ext/a2a/clients", { name });
+  }
+
+  removeA2AClient(id: string): Promise<void> {
+    return this.request("DELETE", `/ext/a2a/clients/${encodeURIComponent(id)}`);
+  }
+
+  /** Outside agents this assistant may message. */
+  async a2aAgents(): Promise<A2AAgentInfo[]> {
+    return (await this.request<A2AAgentsResponse>("GET", "/ext/a2a/agents")).agents;
+  }
+
+  /** Adds an agent by its site or its card's address, reading its card there. */
+  addA2AAgent(request: A2AAgentRequest): Promise<A2AAgentInfo> {
+    return this.request("POST", "/ext/a2a/agents", request);
+  }
+
+  /** Sets the token sent to an agent, or clears it with null. */
+  setA2AAgentToken(id: string, token: string | null): Promise<void> {
+    return this.request("PUT", `/ext/a2a/agents/${encodeURIComponent(id)}/token`, { token });
+  }
+
+  removeA2AAgent(id: string): Promise<void> {
+    return this.request("DELETE", `/ext/a2a/agents/${encodeURIComponent(id)}`);
   }
 
   decide(room: string, approval: string, approve: boolean): Promise<Approval> {
