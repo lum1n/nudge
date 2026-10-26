@@ -26,6 +26,7 @@ import {
 
 export {
   type AssistantConfig,
+  type Autonomy,
   ConfigError,
   ConfigMissing,
   DEFAULT_CONFIG,
@@ -39,6 +40,7 @@ export {
   type NudgeConfig,
   parseConfig,
   type ServerSettings,
+  type Style,
 } from "./config.ts";
 export {
   AdminOnly,
@@ -564,6 +566,8 @@ async function assistantOptions(
     displayName: assistant.displayName ?? capitalize(assistant.name),
     timeZone: assistant.timeZone,
     instructions: assistant.instructions,
+    ...(assistant.style === undefined ? {} : { style: assistant.style }),
+    ...(assistant.autonomy === undefined ? {} : { autonomy: assistant.autonomy }),
     extensions: await loadExtensions(assistant.extensions ?? []),
     ...(assistant.budget === undefined ? {} : { budget: assistant.budget }),
     ...overrides,

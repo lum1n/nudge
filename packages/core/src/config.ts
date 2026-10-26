@@ -10,6 +10,20 @@ const ModelRefSchema = Type.Object({
   modelId: Type.String(),
 });
 
+const StyleSchema = Type.Union([
+  Type.Literal("concise"),
+  Type.Literal("balanced"),
+  Type.Literal("detailed"),
+]);
+export type Style = Static<typeof StyleSchema>;
+
+const AutonomySchema = Type.Union([
+  Type.Literal("cautious"),
+  Type.Literal("balanced"),
+  Type.Literal("independent"),
+]);
+export type Autonomy = Static<typeof AutonomySchema>;
+
 /** An OpenAI-compatible server, such as Ollama, llama.cpp or vLLM. */
 const LocalProviderSchema = Type.Object({
   id: Type.String(),
@@ -56,6 +70,10 @@ const AssistantSchema = Type.Object({
   /** IANA time zone the assistant tells time in. Default: the host's. */
   timeZone: Type.Optional(Type.String()),
   instructions: Type.Optional(Type.String()),
+  /** How much it says: "concise" (the default), "balanced" or "detailed". */
+  style: Type.Optional(StyleSchema),
+  /** How much it decides itself before asking: "cautious", "balanced" (the default) or "independent". */
+  autonomy: Type.Optional(AutonomySchema),
   /** Installed after the built-in extension, in order. */
   extensions: Type.Optional(Type.Array(ExtensionSchema)),
   /** Monthly limits on model spend, in US dollars as the model catalog prices it. */

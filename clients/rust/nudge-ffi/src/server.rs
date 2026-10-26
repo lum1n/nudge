@@ -579,6 +579,9 @@ impl ServerClient {
             model: Some(settings.model.into()),
             time_zone: settings.time_zone,
             instructions: settings.instructions,
+            // Not among the app's settings yet: the server's defaults.
+            style: None,
+            autonomy: None,
             budget: settings.budget.map(Into::into),
             first_player,
             invite,
@@ -608,6 +611,9 @@ impl ServerClient {
             model: Some(Some(settings.model.into())),
             time_zone: Some(settings.time_zone),
             instructions: Some(settings.instructions),
+            // Not among the app's settings yet: left as the server has them.
+            style: None,
+            autonomy: None,
             budget: Some(settings.budget.map(Into::into)),
         };
         let api = self.api.clone();

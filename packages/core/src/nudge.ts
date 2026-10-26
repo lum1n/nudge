@@ -2,6 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { Context } from "@earendil-works/chord";
 import type { TSchema } from "typebox";
+import type { Autonomy, Style } from "./config.ts";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { ImageContent, JsonValue, Message, Models, TextContent } from "@earendil-works/pi-ai";
 import {
@@ -126,6 +127,10 @@ export type NudgeOptions = {
   readonly timeZone?: string;
   /** Extra instructions, rendered last in the system prompt. */
   readonly instructions?: string;
+  /** How much it says; default "concise". */
+  readonly style?: Style;
+  /** How much it decides itself before asking; default "balanced". */
+  readonly autonomy?: Autonomy;
   /** Extensions installed after the built-in one, in order. */
   readonly extensions?: readonly ExtensionInput[];
   readonly settings?: HarnessSettings;
@@ -373,6 +378,8 @@ export class Nudge {
         createBuiltinExtension({
           displayName,
           timeZone,
+          style: options.style,
+          autonomy: options.autonomy,
           now,
           nudges: () => whenOpen().nudges,
           changed: (change) => whenOpen().changes.emit(change),

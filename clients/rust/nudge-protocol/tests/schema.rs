@@ -893,6 +893,8 @@ fn server_and_setup_bodies_match_the_schema() {
         model: model.clone(),
         time_zone: Some("Europe/Oslo".into()),
         instructions: Some("Be brief.".into()),
+        style: Some(AssistantStyle::Concise),
+        autonomy: Some(AssistantAutonomy::Independent),
         budget: Some(budget.clone()),
         running: true,
     };
@@ -945,6 +947,8 @@ fn server_and_setup_bodies_match_the_schema() {
             model: Some(model.clone()),
             time_zone: Some("Europe/Oslo".into()),
             instructions: Some("x".into()),
+            style: Some(AssistantStyle::Detailed),
+            autonomy: Some(AssistantAutonomy::Cautious),
             budget: Some(budget.clone()),
             first_player: Some(FirstPlayer {
                 display_name: "Kari".into(),
@@ -972,6 +976,8 @@ fn server_and_setup_bodies_match_the_schema() {
             model: Some(Some(model.clone())),
             time_zone: Some(None),
             instructions: Some(Some("x".into())),
+            style: Some(Some(AssistantStyle::Balanced)),
+            autonomy: Some(None),
             budget: Some(Some(budget.clone())),
         },
     );

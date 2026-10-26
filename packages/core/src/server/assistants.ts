@@ -50,12 +50,21 @@ export type AssistantChange = {
   readonly [K in ChangeableKey]?: AssistantConfig[K] | null;
 };
 
-type ChangeableKey = "displayName" | "model" | "timeZone" | "instructions" | "budget";
+type ChangeableKey =
+  | "displayName"
+  | "model"
+  | "timeZone"
+  | "instructions"
+  | "style"
+  | "autonomy"
+  | "budget";
 const CHANGEABLE: readonly ChangeableKey[] = [
   "displayName",
   "model",
   "timeZone",
   "instructions",
+  "style",
+  "autonomy",
   "budget",
 ];
 

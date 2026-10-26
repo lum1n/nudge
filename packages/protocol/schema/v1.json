@@ -7225,6 +7225,38 @@
         "instructions": {
           "type": "string"
         },
+        "style": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "concise"
+            },
+            {
+              "type": "string",
+              "const": "balanced"
+            },
+            {
+              "type": "string",
+              "const": "detailed"
+            }
+          ]
+        },
+        "autonomy": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "cautious"
+            },
+            {
+              "type": "string",
+              "const": "balanced"
+            },
+            {
+              "type": "string",
+              "const": "independent"
+            }
+          ]
+        },
         "budget": {
           "type": "object",
           "properties": {
@@ -7296,6 +7328,38 @@
               "instructions": {
                 "type": "string"
               },
+              "style": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "concise"
+                  },
+                  {
+                    "type": "string",
+                    "const": "balanced"
+                  },
+                  {
+                    "type": "string",
+                    "const": "detailed"
+                  }
+                ]
+              },
+              "autonomy": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "cautious"
+                  },
+                  {
+                    "type": "string",
+                    "const": "balanced"
+                  },
+                  {
+                    "type": "string",
+                    "const": "independent"
+                  }
+                ]
+              },
               "budget": {
                 "type": "object",
                 "properties": {
@@ -7361,6 +7425,38 @@
         },
         "instructions": {
           "type": "string"
+        },
+        "style": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "concise"
+            },
+            {
+              "type": "string",
+              "const": "balanced"
+            },
+            {
+              "type": "string",
+              "const": "detailed"
+            }
+          ]
+        },
+        "autonomy": {
+          "anyOf": [
+            {
+              "type": "string",
+              "const": "cautious"
+            },
+            {
+              "type": "string",
+              "const": "balanced"
+            },
+            {
+              "type": "string",
+              "const": "independent"
+            }
+          ]
         },
         "budget": {
           "type": "object",
@@ -7442,6 +7538,38 @@
             },
             "instructions": {
               "type": "string"
+            },
+            "style": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "concise"
+                },
+                {
+                  "type": "string",
+                  "const": "balanced"
+                },
+                {
+                  "type": "string",
+                  "const": "detailed"
+                }
+              ]
+            },
+            "autonomy": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "cautious"
+                },
+                {
+                  "type": "string",
+                  "const": "balanced"
+                },
+                {
+                  "type": "string",
+                  "const": "independent"
+                }
+              ]
             },
             "budget": {
               "type": "object",
@@ -7581,6 +7709,52 @@
           "anyOf": [
             {
               "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "style": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "concise"
+                },
+                {
+                  "type": "string",
+                  "const": "balanced"
+                },
+                {
+                  "type": "string",
+                  "const": "detailed"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "autonomy": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "cautious"
+                },
+                {
+                  "type": "string",
+                  "const": "balanced"
+                },
+                {
+                  "type": "string",
+                  "const": "independent"
+                }
+              ]
             },
             {
               "type": "null"
@@ -8409,6 +8583,38 @@
               },
               "instructions": {
                 "type": "string"
+              },
+              "style": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "concise"
+                  },
+                  {
+                    "type": "string",
+                    "const": "balanced"
+                  },
+                  {
+                    "type": "string",
+                    "const": "detailed"
+                  }
+                ]
+              },
+              "autonomy": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "cautious"
+                  },
+                  {
+                    "type": "string",
+                    "const": "balanced"
+                  },
+                  {
+                    "type": "string",
+                    "const": "independent"
+                  }
+                ]
               },
               "budget": {
                 "type": "object",

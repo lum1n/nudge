@@ -65,6 +65,26 @@ describe("Nudge", () => {
     await reopened.close(context);
   });
 
+  it("tells the model the style and autonomy it was set to, concise and balanced by default", async () => {
+    const prompt = async (options: Partial<NudgeOptions>) => {
+      const { faux, models, model, answer, requests } = setup();
+      faux.setResponses([answer("Ok.")]);
+      const nudge = await createNudge({ database: ":memory:", models, model, ...options }, context);
+      await (await nudge.submit(LOBBY, { text: "News?" }, context)).wait(context);
+      await nudge.close(context);
+      return requests[0]?.systemPrompt ?? JSON.stringify(requests[0]?.messages);
+    };
+    const defaults = await prompt({});
+    expect(defaults).toContain("as few words as do the job");
+    expect(defaults).toContain("Ask only when a wrong guess is costly");
+    expect(defaults).toContain("try the next way yourself");
+    expect(defaults).toContain("Approvals the tools ask for");
+    const set = await prompt({ style: "detailed", autonomy: "independent" });
+    expect(set).toContain("Answer first, then explain");
+    expect(set).toContain("Make the calls yourself");
+    expect(set).toContain("Approvals the tools ask for");
+  });
+
   it("tells the model who wrote a message, and when, and stores the author", async () => {
     const { faux, models, model, answer, requests } = setup();
     faux.setResponses([answer("Hi Ann.")]);
