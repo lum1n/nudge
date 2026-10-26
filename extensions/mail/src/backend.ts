@@ -53,6 +53,14 @@ export type OutgoingMail = {
   readonly text: string;
   readonly inReplyTo?: string;
   readonly references?: readonly string[];
+  readonly attachments?: readonly MailAttachment[];
+};
+
+/** A file sent with a mail. */
+export type MailAttachment = {
+  readonly filename: string;
+  readonly contentType: string;
+  readonly content: Uint8Array;
 };
 
 /** What the tools need from a mail server; tests put a fake in its place. */
@@ -145,6 +153,15 @@ export class ImapSmtpBackend implements MailBackend {
         text: mail.text,
         ...(mail.inReplyTo === undefined ? {} : { inReplyTo: mail.inReplyTo }),
         ...(mail.references === undefined ? {} : { references: [...mail.references] }),
+        ...(mail.attachments === undefined
+          ? {}
+          : {
+              attachments: mail.attachments.map(({ filename, contentType, content }) => ({
+                filename,
+                contentType,
+                content: Buffer.from(content),
+              })),
+            }),
       });
       return { messageId: sent.messageId };
     } finally {

@@ -255,6 +255,50 @@ describe("terminal extension", () => {
     expect(String(await documents.file(LOBBY, "d2"))).toBe("PK docx");
   });
 
+  it("copies an attachment the turn's person may see into the workspace", async () => {
+    const { faux, requests, reply, tool, open } = setup();
+    faux.setResponses([
+      tool("attachment_to_workspace", { id: "a1" }),
+      reply(fauxAssistantMessage([fauxText("Not yet.")])),
+      tool("attachment_to_workspace", { id: "a1" }),
+      reply(fauxAssistantMessage([fauxText("Copied.")])),
+      tool("attachment_to_workspace", { id: "a2", path: "secret.csv" }),
+      reply(fauxAssistantMessage([fauxText("Done.")])),
+    ]);
+    nudge = await open();
+    const bytes = Buffer.from("date,amount\n2026-10-01,120\n");
+    await nudge.addAttachment(
+      LOBBY,
+      { name: "bank.csv", mime: "text/csv", bytes, by: "owner" },
+      context,
+    );
+    await nudge.addAttachment(
+      LOBBY,
+      { name: "mine.csv", mime: "text/csv", bytes, by: "owner" },
+      context,
+    );
+    const author = { playerId: "owner", displayName: "Vegard" };
+    // Not sent yet: nobody's turn but its uploader's gets it.
+    await (await nudge.submit(LOBBY, { text: "Sum it" }, context)).wait(context);
+    expect(json(requests[1])).toContain("No attachment a1 here.");
+    await (
+      await nudge.submit(LOBBY, { text: "Sum it", author, attachments: ["a1"] }, context)
+    ).wait(context);
+    await (
+      await nudge.submit(
+        LOBBY,
+        { text: "Hold this", author, attachments: ["a2"], private: true },
+        context,
+      )
+    ).wait(context);
+    expect(workspace.get("attachments/bank.csv")?.toString()).toBe(bytes.toString());
+    expect(json(requests[3])).toContain(
+      `Copied a1 (bank.csv, ${bytes.length} bytes) to /workspace/attachments/bank.csv.`,
+    );
+    expect(json(requests[5])).toContain("a2 was sent privately");
+    expect(workspace.has("secret.csv")).toBe(false);
+  });
+
   it("says so when the room has no documents", async () => {
     const { faux, requests, reply, tool, open } = setup();
     faux.setResponses([

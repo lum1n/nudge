@@ -1,5 +1,10 @@
 import { fillVariables } from "@nudge/bridge";
 import {
+  actingFor,
+  AttachmentNotFound,
+  AttachmentRemoved,
+  ATTACHMENTS_PER_MESSAGE,
+  currentTurn,
   defineNudgeExtension,
   defineTool,
   formatTime,
@@ -14,6 +19,7 @@ import {
 import {
   ImapSmtpBackend,
   type MailAccount,
+  type MailAttachment,
   type MailBackend,
   type MailSummary,
   type OutgoingMail,
@@ -22,6 +28,11 @@ import {
 const VERSION = "0.1.0";
 /** Characters of a message body the model gets. */
 const MAX_BODY = 15_000;
+/**
+ * Most bytes of attachments one mail sends: many mail servers refuse messages over 25 MB, and
+ * base64 makes files a third bigger.
+ */
+const MAX_ATTACHED = 18 * 1024 * 1024;
 
 const serverSettings = (options: { title?: string; description?: string } = {}) =>
   Type.Object(
@@ -103,7 +114,14 @@ const Settings = Type.Object({
   }),
 });
 
-type SendPayload = OutgoingMail & { readonly account: string };
+type SendPayload = Omit<OutgoingMail, "attachments"> & {
+  readonly account: string;
+  /**
+   * Attachments of the room's messages (ADR 24), read when it is sent, as whoever asked may see
+   * them; names with placeholders, which the approval puts back.
+   */
+  readonly attachments?: readonly { readonly id: string; readonly name: string }[];
+};
 
 export type MailOptions = {
   /** The mail servers; tests pass a fake. */
@@ -163,6 +181,20 @@ export function mailExtension(options: MailOptions = {}) {
       const line = (mail: MailSummary) =>
         `#${mail.uid}  ${formatTime(mail.date.getTime(), host.timeZone)}  ${mail.from} — ${mail.subject}` +
         (mail.unread ? "  [unread]" : "");
+      const nudge = () => host.assistant();
+      /** What `find` gives, or why the attachment `id` can't be sent. */
+      const reachable = async <T extends object>(
+        id: string,
+        find: () => Promise<T>,
+      ): Promise<T | string> => {
+        try {
+          return await find();
+        } catch (error) {
+          if (error instanceof AttachmentNotFound) return `No attachment ${id} here.`;
+          if (error instanceof AttachmentRemoved) return `Attachment ${id} was removed.`;
+          throw error;
+        }
+      };
       const accountParameter = Type.Optional(
         Type.String({ description: "Account id; default the first one here." }),
       );
@@ -232,7 +264,9 @@ export function mailExtension(options: MailOptions = {}) {
         name: "mail_send",
         description:
           "Send an e-mail from an account this conversation may use. It waits for someone in the " +
-          "room to approve it; say so. With reply_to_uid it answers that message in its thread.",
+          "room to approve it; say so. With reply_to_uid it answers that message in its thread. " +
+          "attachments sends files people attached to messages here, by their ids (such as a3, " +
+          "from the messages' [attachment …] lines).",
         parameters: Type.Object({
           account: accountParameter,
           to: Type.Array(Type.String(), { minItems: 1 }),
@@ -242,6 +276,12 @@ export function mailExtension(options: MailOptions = {}) {
           ),
           body: Type.String(),
           reply_to_uid: Type.Optional(Type.Number()),
+          attachments: Type.Optional(
+            Type.Array(Type.String(), {
+              maxItems: ATTACHMENTS_PER_MESSAGE,
+              description: "Ids of attachments to send with it, such as a3.",
+            }),
+          ),
         }),
         execute: async (args, api, context) => {
           const room = await roomOf(api, api.conversationId, context);
@@ -263,6 +303,21 @@ export function mailExtension(options: MailOptions = {}) {
               };
           }
           if (subject === undefined || subject.trim() === "") return text("Give a subject.", true);
+          // Only what the person this turn acts for may see (ADR 24).
+          const viewer = actingFor(currentTurn())?.playerId;
+          const attached: { id: string; name: string; size: number }[] = [];
+          for (const id of new Set(args.attachments ?? [])) {
+            const found = await reachable(id, () =>
+              nudge().attachments.get(room.id, id, viewer, context),
+            );
+            if (typeof found === "string") return text(found, true);
+            attached.push({ id, name: found.name, size: found.size });
+          }
+          if (attached.reduce((sum, { size }) => sum + size, 0) > MAX_ATTACHED)
+            return text(
+              `Those attachments come to more than ${MAX_ATTACHED / 1024 / 1024} MB, more than mail takes.`,
+              true,
+            );
           const payload: SendPayload = {
             account: account.id,
             to: args.to,
@@ -270,6 +325,9 @@ export function mailExtension(options: MailOptions = {}) {
             subject,
             text: args.body,
             ...thread,
+            ...(attached.length === 0
+              ? {}
+              : { attachments: attached.map(({ id, name }) => ({ id, name })) }),
           };
           const approval = await api.commit(
             (tx) =>
@@ -281,7 +339,10 @@ export function mailExtension(options: MailOptions = {}) {
                   kind: "send",
                   summary:
                     `Send an e-mail from ${account.from} to ${[...args.to, ...(args.cc ?? [])].join(", ")}: ` +
-                    `"${subject}"\n\n${args.body.slice(0, 600)}${args.body.length > 600 ? "…" : ""}`,
+                    `"${subject}"\n\n${args.body.slice(0, 600)}${args.body.length > 600 ? "…" : ""}` +
+                    (attached.length === 0
+                      ? ""
+                      : `\n\nWith ${attached.map(({ name }) => name).join(", ")}`),
                   payload: payload as never,
                 },
                 host.now(),
@@ -328,7 +389,24 @@ export function mailExtension(options: MailOptions = {}) {
                 text: `Mail account ${mail.account} isn't available here any more.`,
                 isError: true,
               };
-            const { messageId } = await backend.send(account, mail);
+            const { attachments, ...rest } = mail;
+            const files: MailAttachment[] = [];
+            for (const { id, name } of attachments ?? []) {
+              const found = await reachable(id, () =>
+                nudge().attachments.read(
+                  run.room.id,
+                  id,
+                  run.approval.requestedBy?.playerId,
+                  run.context,
+                ),
+              );
+              if (typeof found === "string") return { text: `Not sent: ${found}`, isError: true };
+              files.push({ filename: name, contentType: found.info.mime, content: found.bytes });
+            }
+            const { messageId } = await backend.send(
+              account,
+              files.length === 0 ? rest : { ...rest, attachments: files },
+            );
             return { text: `Sent from ${account.id} to ${mail.to.join(", ")} (${messageId}).` };
           },
         },

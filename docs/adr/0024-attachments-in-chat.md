@@ -20,10 +20,12 @@ Because this is decided per request rather than when the message was sent, turni
 
 **Extensions reach attachments through the assistant, as the person their turn acts for.** `Nudge.attachments` reads one by room and id, and only if `actingFor` (ADR 9) may see it. Through it:
 
-- the documents extension can file an attachment as a document, with its text read on the host;
-- the terminal can copy one to `/workspace/attachments/`;
-- mail can send one with a message, through its usual approval.
+- the documents extension can file an attachment as a document, with its text read on the host (`save_attachment`);
+- the terminal can copy one to `/workspace/attachments/` (`attachment_to_workspace`);
+- mail can send one with a message, through its usual approval (`mail_send`'s `attachments`, read when it is approved, as whoever asked may see it).
 
-Those tools, and the clients' pickers and previews, come after the protocol and the server. This ADR settles the shapes they build on.
+Documents and the workspace are the whole room's, so neither takes an attachment that was sent privately.
+
+The clients' pickers and previews come after the protocol and the server. This ADR settles the shapes they build on.
 
 What this doesn't do: files' text isn't given to the model on its own. A text file or a PDF reaches it only through a tool, such as the documents extension, which reads and redacts it. Attachments from other assistants, from chat bridges, or in mail the assistant reads are not attachments in this sense; they stay with the extensions that bring them. There is no virus scanning. Like redaction itself, none of this keeps a person from sending something they shouldn't, and in a room that sends images, whatever a picture shows reaches the provider.

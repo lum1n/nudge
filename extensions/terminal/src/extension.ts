@@ -2,7 +2,10 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, extname, join } from "node:path";
 import {
+  actingFor,
   type Approval,
+  AttachmentNotFound,
+  AttachmentRemoved,
   type Context,
   currentTurn,
   defineNudgeExtension,
@@ -37,6 +40,9 @@ type RunPayload = { command: string; cwd?: string };
 
 /** What a call's `details` says: the approval it waits for, or how the command ended. */
 type Details = Record<string, string | number | boolean | null>;
+
+/** Where attachments are copied to unless the model says otherwise. */
+const ATTACHMENTS = `${WORKSPACE}/attachments`;
 
 /** Most characters of a command's output the model gets: its start and its end. */
 const MAX_OUTPUT = 30_000;
@@ -89,7 +95,8 @@ const MIME_TYPES: Record<string, string> = {
  * the server's programs read-only and the room's workspace, and nothing else of the machine.
  * Every command is read first: what deletes or sends waits for the room's approval, what changes
  * the machine never runs, and the rest runs at once. Output goes to the model redacted, like any
- * tool's. Files move between the workspace and the room's documents, and the room's desktop's
+ * tool's. Files move between the workspace and the room's documents, attachments people sent are
+ * copied in to /workspace/attachments, and the room's desktop's
  * files can be shared with it. People in the room watch its commands on the terminal's panel.
  */
 export default defineNudgeExtension({
@@ -230,7 +237,7 @@ export default defineNudgeExtension({
       tools: [
         defineTool({
           name: "run_command",
-          description: `Run a shell command with bash in a terminal of this room's own: a sandboxed Linux workspace at ${WORKSPACE}, where files stay between commands, up to ${settings.workspaceMB} MB in all; a command gets ${settings.memoryMB} MB of memory. Each command starts a fresh shell in ${WORKSPACE} (or cwd), so chain steps with && or pass cwd. The basic tools for files, text and archives are there${tools.length ? `; of bigger ones, ${tools.join(", ")}` : ", but no bigger ones such as Python, Node or pandoc"}. ${network === "all" ? "It has the network." : network === "internet" ? "It has the internet, but not this machine's services or the local network." : "It has no network: downloads and installs fail."}${settings.desktopFiles ? ` The room's desktop's files (where its apps save) are at ${DESKTOP}.` : ""} document_to_workspace and workspace_to_documents move files between it and the room's documents. Commands that delete files, send data or connect elsewhere, or run programs not on its list, wait for the room's approval; some, like sudo, never run. Output is cut to its start and end past ${MAX_OUTPUT} characters, so filter long output (grep, head, tail).`,
+          description: `Run a shell command with bash in a terminal of this room's own: a sandboxed Linux workspace at ${WORKSPACE}, where files stay between commands, up to ${settings.workspaceMB} MB in all; a command gets ${settings.memoryMB} MB of memory. Each command starts a fresh shell in ${WORKSPACE} (or cwd), so chain steps with && or pass cwd. The basic tools for files, text and archives are there${tools.length ? `; of bigger ones, ${tools.join(", ")}` : ", but no bigger ones such as Python, Node or pandoc"}. ${network === "all" ? "It has the network." : network === "internet" ? "It has the internet, but not this machine's services or the local network." : "It has no network: downloads and installs fail."}${settings.desktopFiles ? ` The room's desktop's files (where its apps save) are at ${DESKTOP}.` : ""} document_to_workspace and workspace_to_documents move files between it and the room's documents, and attachment_to_workspace copies in a file someone attached to a message. Commands that delete files, send data or connect elsewhere, or run programs not on its list, wait for the room's approval; some, like sudo, never run. Output is cut to its start and end past ${MAX_OUTPUT} characters, so filter long output (grep, head, tail).`,
           parameters: Type.Object({
             command: Type.String({ minLength: 1, description: "The bash command to run" }),
             cwd: Type.Optional(
@@ -346,6 +353,56 @@ export default defineNudgeExtension({
                 files(api.conversationId),
               );
               return text(`Copied ${info.id} (${info.name}, ${bytes.length} bytes) to ${saved}.`);
+            } catch (error) {
+              return failure(`Could not copy it: ${(error as Error).message}`);
+            }
+          },
+        }),
+        defineTool({
+          name: "attachment_to_workspace",
+          description: `Copy a file someone attached to a message in this conversation (its id, such as a3, is in the message's [attachment …] line) into the terminal's workspace, to work on it with run_command. It goes to ${ATTACHMENTS}/ under its own name unless path says otherwise, and never replaces a file there.`,
+          parameters: Type.Object({
+            id: Type.String({ description: "The attachment's id, such as a3" }),
+            path: Type.Optional(
+              Type.String({
+                description: `Where to put it, in ${WORKSPACE} or relative to it; ${ATTACHMENTS}/ and its name if not given`,
+              }),
+            ),
+          }),
+          execute: async ({ id, path }, api, context) => {
+            const problem = sandboxProblem();
+            if (problem) return failure(problem);
+            const room = await roomOf(api, api.conversationId, context);
+            const nudge = assistant();
+            let found;
+            try {
+              // Only what the person this turn acts for may see (ADR 24).
+              found = await nudge.attachments.read(
+                room.id,
+                id,
+                actingFor(currentTurn())?.playerId,
+                context,
+              );
+            } catch (error) {
+              if (error instanceof AttachmentNotFound) return failure(`No attachment ${id} here.`);
+              if (error instanceof AttachmentRemoved)
+                return failure(`Attachment ${id} was removed.`);
+              throw error;
+            }
+            const { info, bytes } = found;
+            // Every later command in the room can read the workspace.
+            if (info.privateTo !== undefined)
+              return failure(
+                `${info.id} was sent privately, and the workspace is the whole room's; ask them to send it again without privacy if it should go there.`,
+              );
+            const name = nudge.showTo(undefined, info.name);
+            try {
+              const saved = await writeToSandbox(
+                path ?? `attachments/${name}`,
+                bytes,
+                files(api.conversationId),
+              );
+              return text(`Copied ${info.id} (${name}, ${bytes.length} bytes) to ${saved}.`);
             } catch (error) {
               return failure(`Could not copy it: ${(error as Error).message}`);
             }
