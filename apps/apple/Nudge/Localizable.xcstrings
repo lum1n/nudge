@@ -204,6 +204,16 @@
         }
       }
     },
+    "Actions the tools ask approval for still wait for you at every level." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Handlinger verktøyene ber om godkjenning for, venter fortsatt på deg på alle nivåer."
+          }
+        }
+      }
+    },
     "Actions waiting for approval" : {
       "localizations" : {
         "nb" : {
@@ -444,6 +454,16 @@
         }
       }
     },
+    "Asks only when a wrong guess is costly or the request is unclear." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spør bare når en feil gjetning koster mye eller forespørselen er uklar."
+          }
+        }
+      }
+    },
     "Assistant" : {
       "localizations" : {
         "nb" : {
@@ -490,6 +510,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Høyst %1$lld GB på disk (%2$@ nå)"
+          }
+        }
+      }
+    },
+    "Autonomy" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selvstendighet"
           }
         }
       }
@@ -560,6 +590,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sikkerhetskopiene blir bare på serveren. Det som er kopiert dit, blir liggende der."
+          }
+        }
+      }
+    },
+    "Balanced" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Balansert"
           }
         }
       }
@@ -704,6 +744,16 @@
         }
       }
     },
+    "Cautious" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forsiktig"
+          }
+        }
+      }
+    },
     "Check and save" : {
       "localizations" : {
         "nb" : {
@@ -800,6 +850,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Farger"
+          }
+        }
+      }
+    },
+    "Concise" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kort"
           }
         }
       }
@@ -924,6 +984,16 @@
         }
       }
     },
+    "Default" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Standard"
+          }
+        }
+      }
+    },
     "Delete" : {
       "localizations" : {
         "nb" : {
@@ -990,6 +1060,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Skrivebord"
+          }
+        }
+      }
+    },
+    "Detailed" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Utfyllende"
           }
         }
       }
@@ -1230,6 +1310,76 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Alt på den forsvinner for godt, og ingenting beholdes: lag et gjenopprettingssett og last ned en sikkerhetskopi først hvis du trenger det. Skriv %@ for å fjerne den."
+          }
+        }
+      }
+    },
+    "Independent" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selvstendig"
+          }
+        }
+      }
+    },
+    "Makes the calls itself, also on bigger tasks, and finishes the job." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tar avgjørelsene selv, også på større oppgaver, og gjør jobben ferdig."
+          }
+        }
+      }
+    },
+    "Says what it will do and waits before longer work or changes." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sier hva den skal gjøre og venter før lengre arbeid eller endringer."
+          }
+        }
+      }
+    },
+    "Style" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stil"
+          }
+        }
+      }
+    },
+    "The answer first, in as few words as do the job." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Svaret først, med så få ord som trengs."
+          }
+        }
+      }
+    },
+    "The answer, then the context that helps act on it." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Svaret, så sammenhengen som hjelper deg å handle."
+          }
+        }
+      }
+    },
+    "The answer, then the reasons, sources and trade-offs." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Svaret, så grunner, kilder og avveininger."
           }
         }
       }

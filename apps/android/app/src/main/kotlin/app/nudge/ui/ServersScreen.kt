@@ -69,8 +69,10 @@ import app.nudge.explain
 import app.nudge.hostOf
 import app.nudge.text
 import kotlinx.coroutines.launch
+import nudge.ffi.AssistantAutonomy
 import nudge.ffi.AssistantFor
 import nudge.ffi.AssistantSettings
+import nudge.ffi.AssistantStyle
 import nudge.ffi.BackupState
 import nudge.ffi.GeoStatus
 import nudge.ffi.KeySource
@@ -615,6 +617,43 @@ private fun NewAssistantScreen(
 }
 
 /** An assistant's settings, joining it from home, and deleting it. */
+/** Each style with its label and hint; a missing style is the server's default, concise. */
+private val STYLES = listOf(
+    Triple(AssistantStyle.CONCISE, R.string.servers_style_concise, R.string.servers_style_concise_hint),
+    Triple(AssistantStyle.BALANCED, R.string.servers_style_balanced, R.string.servers_style_balanced_hint),
+    Triple(AssistantStyle.DETAILED, R.string.servers_style_detailed, R.string.servers_style_detailed_hint),
+)
+
+/** Each autonomy level with its label and hint; a missing one is the server's default, balanced. */
+private val AUTONOMIES = listOf(
+    Triple(AssistantAutonomy.CAUTIOUS, R.string.servers_autonomy_cautious, R.string.servers_autonomy_cautious_hint),
+    Triple(AssistantAutonomy.BALANCED, R.string.servers_autonomy_balanced, R.string.servers_autonomy_balanced_hint),
+    Triple(AssistantAutonomy.INDEPENDENT, R.string.servers_autonomy_independent, R.string.servers_autonomy_independent_hint),
+)
+
+/** One radio row per choice, with its hint beneath; the server's default is marked. */
+@Composable
+private fun <T> Choices(title: Int, choices: List<Triple<T, Int, Int>>, chosen: T, fallback: T, pick: (T) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(stringResource(title), style = MaterialTheme.typography.labelLarge)
+        choices.forEach { (value, label, hint) ->
+            Row(
+                Modifier.fillMaxWidth().selectable(selected = chosen == value, onClick = { pick(value) }),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(selected = chosen == value, onClick = null)
+                Column(Modifier.padding(start = 12.dp)) {
+                    Text(
+                        if (value == fallback) stringResource(R.string.servers_choice_default, stringResource(label))
+                        else stringResource(label),
+                    )
+                    Text(stringResource(hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AssistantScreen(
@@ -629,6 +668,8 @@ private fun AssistantScreen(
     var displayName by remember { mutableStateOf(assistant.settings.displayName) }
     var modelId by remember { mutableStateOf(assistant.settings.model.modelId) }
     var instructions by remember { mutableStateOf(assistant.settings.instructions.orEmpty()) }
+    var style by remember { mutableStateOf(assistant.settings.style) }
+    var autonomy by remember { mutableStateOf(assistant.settings.autonomy) }
     var confirm by remember { mutableStateOf("") }
     var deleting by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
@@ -688,6 +729,13 @@ private fun AssistantScreen(
                 supportingText = { Text(stringResource(R.string.servers_instructions_supporting)) },
                 minLines = 3, modifier = Modifier.fillMaxWidth(),
             )
+            Choices(R.string.servers_style, STYLES, style ?: AssistantStyle.CONCISE, AssistantStyle.CONCISE) { style = it }
+            Choices(R.string.servers_autonomy, AUTONOMIES, autonomy ?: AssistantAutonomy.BALANCED, AssistantAutonomy.BALANCED) { autonomy = it }
+            Text(
+                stringResource(R.string.servers_autonomy_approvals),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             if (home != null && !joined) {
                 HomeFederationCard(model)
@@ -723,6 +771,8 @@ private fun AssistantScreen(
                                 displayName = displayName.trim(),
                                 model = assistant.settings.model.copy(modelId = modelId.trim()),
                                 instructions = instructions.trim().ifEmpty { null },
+                                style = style,
+                                autonomy = autonomy,
                             ),
                         )
                     }

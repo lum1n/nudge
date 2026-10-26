@@ -89,6 +89,40 @@ export const settings = {
     byRoom: "By room",
     nothing: "Nothing.",
   },
+  manner: {
+    title: "How it answers",
+    intro:
+      "How much the assistant says, and how much it decides itself before asking. Saving reopens the assistant, so apps connect again.",
+    style: "Style",
+    styles: {
+      concise: { label: "Concise", hint: "The answer first, in as few words as do the job." },
+      balanced: { label: "Balanced", hint: "The answer, then the context that helps act on it." },
+      detailed: {
+        label: "Detailed",
+        hint: "The answer, then the reasons, sources and trade-offs.",
+      },
+    },
+    autonomy: "Autonomy",
+    autonomies: {
+      cautious: {
+        label: "Cautious",
+        hint: "Says what it will do and waits before longer work or changes.",
+      },
+      balanced: {
+        label: "Balanced",
+        hint: "Asks only when a wrong guess is costly or the request is unclear.",
+      },
+      independent: {
+        label: "Independent",
+        hint: "Makes the calls itself, also on bigger tasks, and finishes the job.",
+      },
+    },
+    default: "default",
+    approvals: "Actions the tools ask approval for still wait for you at every level.",
+    ownerOnly: "Only an owner of this server can change how the assistant answers.",
+    notHere:
+      "This server can't change how the assistant answers from the web. Run it with nudge serve.",
+  },
   budget: {
     title: "Budget",
     intro:

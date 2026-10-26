@@ -439,6 +439,26 @@ private struct NewAssistantView: View {
     }
 }
 
+/// One style or autonomy level in its picker, with what it means; the server's default is marked.
+private struct MannerChoice: View {
+    let label: LocalizedStringKey
+    let hint: LocalizedStringKey
+    var isDefault = false
+
+    var body: some View {
+        VStack(alignment: .leading) {
+            HStack(spacing: 4) {
+                Text(label)
+                if isDefault {
+                    Text(verbatim: "·").foregroundStyle(.secondary)
+                    Text("Default").foregroundStyle(.secondary)
+                }
+            }
+            Text(hint).font(.caption).foregroundStyle(.secondary)
+        }
+    }
+}
+
 /// An assistant's settings, and deleting it.
 private struct AssistantView: View {
     @Environment(AppModel.self) private var model
@@ -449,6 +469,9 @@ private struct AssistantView: View {
     @State private var displayName: String
     @State private var modelId: String
     @State private var instructions: String
+    /// Nil until picked: the server's default, concise and balanced.
+    @State private var style: AssistantStyle?
+    @State private var autonomy: AssistantAutonomy?
     @State private var deleting = false
     @State private var confirm = ""
     @State private var problem: String?
@@ -461,6 +484,8 @@ private struct AssistantView: View {
         _displayName = State(initialValue: assistant.settings.displayName)
         _modelId = State(initialValue: assistant.settings.model.modelId)
         _instructions = State(initialValue: assistant.settings.instructions ?? "")
+        _style = State(initialValue: assistant.settings.style)
+        _autonomy = State(initialValue: assistant.settings.autonomy)
     }
 
     var body: some View {
@@ -482,6 +507,32 @@ private struct AssistantView: View {
                 Text("Instructions")
             } footer: {
                 Text("Said to the model before every conversation")
+            }
+            Section {
+                Picker("Style", selection: Binding(get: { style ?? .concise }, set: { style = $0 })) {
+                    MannerChoice(label: "Concise", hint: "The answer first, in as few words as do the job.", isDefault: true)
+                        .tag(AssistantStyle.concise)
+                    MannerChoice(label: "Balanced", hint: "The answer, then the context that helps act on it.")
+                        .tag(AssistantStyle.balanced)
+                    MannerChoice(label: "Detailed", hint: "The answer, then the reasons, sources and trade-offs.")
+                        .tag(AssistantStyle.detailed)
+                }
+                .pickerStyle(.inline)
+            }
+            Section {
+                Picker("Autonomy", selection: Binding(get: { autonomy ?? .balanced }, set: { autonomy = $0 })) {
+                    MannerChoice(label: "Cautious", hint: "Says what it will do and waits before longer work or changes.")
+                        .tag(AssistantAutonomy.cautious)
+                    MannerChoice(
+                        label: "Balanced", hint: "Asks only when a wrong guess is costly or the request is unclear.",
+                        isDefault: true)
+                        .tag(AssistantAutonomy.balanced)
+                    MannerChoice(label: "Independent", hint: "Makes the calls itself, also on bigger tasks, and finishes the job.")
+                        .tag(AssistantAutonomy.independent)
+                }
+                .pickerStyle(.inline)
+            } footer: {
+                Text("Actions the tools ask approval for still wait for you at every level.")
             }
             if let problem {
                 Section { Text(problem).foregroundStyle(.red) }
@@ -539,6 +590,8 @@ private struct AssistantView: View {
         settings.displayName = displayName.trimmed
         settings.model.modelId = modelId.trimmed
         settings.instructions = instructions.trimmed.isEmpty ? nil : instructions.trimmed
+        settings.style = style
+        settings.autonomy = autonomy
         await act { _ = try await model.servers.client(server).updateAssistant(name: assistant.name, settings: settings) }
     }
 

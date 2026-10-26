@@ -88,6 +88,38 @@ export const settings: Messages["settings"] = {
     byRoom: "Per rom",
     nothing: "Ingenting.",
   },
+  manner: {
+    title: "Slik svarer den",
+    intro:
+      "Hvor mye assistenten sier, og hvor mye den avgjør selv før den spør. Når du lagrer, startes assistenten på nytt, så appene kobler til igjen.",
+    style: "Stil",
+    styles: {
+      concise: { label: "Kort", hint: "Svaret først, med så få ord som trengs." },
+      balanced: { label: "Balansert", hint: "Svaret, så sammenhengen som hjelper deg å handle." },
+      detailed: { label: "Utfyllende", hint: "Svaret, så grunner, kilder og avveininger." },
+    },
+    autonomy: "Selvstendighet",
+    autonomies: {
+      cautious: {
+        label: "Forsiktig",
+        hint: "Sier hva den skal gjøre og venter før lengre arbeid eller endringer.",
+      },
+      balanced: {
+        label: "Balansert",
+        hint: "Spør bare når en feil gjetning koster mye eller forespørselen er uklar.",
+      },
+      independent: {
+        label: "Selvstendig",
+        hint: "Tar avgjørelsene selv, også på større oppgaver, og gjør jobben ferdig.",
+      },
+    },
+    default: "standard",
+    approvals:
+      "Handlinger verktøyene ber om godkjenning for, venter fortsatt på deg på alle nivåer.",
+    ownerOnly: "Bare en eier av denne serveren kan endre hvordan assistenten svarer.",
+    notHere:
+      "Denne serveren kan ikke endre hvordan assistenten svarer fra nettet. Kjør den med nudge serve.",
+  },
   budget: {
     title: "Budsjett",
     intro:

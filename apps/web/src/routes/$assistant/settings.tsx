@@ -1,4 +1,6 @@
 import type {
+  AssistantAutonomy,
+  AssistantStyle,
   BackupState,
   ExtensionSetup,
   RoomKind,
@@ -43,8 +45,8 @@ function draftOf(setup: ExtensionSetup): Draft {
 }
 
 /**
- * What an admin sets up for everyone: how the robot looks, who uses it and is signed in, what it
- * may spend, the extensions.
+ * What an admin sets up for everyone: how the robot looks, who uses it and is signed in, how it
+ * answers, what it may spend, the extensions.
  */
 function Settings() {
   const { assistant } = Route.useParams();
@@ -55,6 +57,7 @@ function Settings() {
       <Robot />
       <People />
       <Guests />
+      <Manner />
       <Budget />
       <SpendByMonth />
       <Clients />
@@ -617,6 +620,181 @@ function Guests() {
   );
 }
 
+/**
+ * The assistant as its server has it, for the sections that change it. The server's setting, so
+ * only its owners read and change it.
+ */
+function useServerAssistant(assistant: string) {
+  const me = useQuery(meQuery(assistant));
+  const key = [assistant, "server-assistant"];
+  const settings = useQuery({
+    queryKey: key,
+    queryFn: () =>
+      asOwner(assistant, async (api) => {
+        const found = (await api.assistants()).find((item) => item.name === assistant);
+        if (found === undefined) throw new Error(m.settings.budget.noAssistant(assistant));
+        return found;
+      }),
+    enabled: me.data?.admin === true,
+    retry: false,
+  });
+  return { key, settings };
+}
+
+const STYLES: AssistantStyle[] = ["concise", "balanced", "detailed"];
+const AUTONOMIES: AssistantAutonomy[] = ["cautious", "balanced", "independent"];
+/** What the server uses when the setting is missing (packages/core/src/extensions/builtin.ts). */
+const MANNER_DEFAULTS = { style: "concise", autonomy: "balanced" } as const;
+
+type MannerDraft = { style: AssistantStyle; autonomy: AssistantAutonomy };
+
+/** How much the assistant says, and how much it decides itself before asking. */
+function Manner() {
+  const { assistant } = Route.useParams();
+  const queryClient = useQueryClient();
+  const { key, settings } = useServerAssistant(assistant);
+  const [draft, setDraft] = useState<MannerDraft>();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string>();
+  const [saved, setSaved] = useState(false);
+  const words = m.settings.manner;
+
+  const savedDraft: MannerDraft = {
+    style: settings.data?.style ?? MANNER_DEFAULTS.style,
+    autonomy: settings.data?.autonomy ?? MANNER_DEFAULTS.autonomy,
+  };
+  const shown = draft ?? savedDraft;
+  const dirty = draft !== undefined && stable(draft) !== stable(savedDraft);
+
+  function pick(change: Partial<MannerDraft>) {
+    setSaved(false);
+    setError(undefined);
+    setDraft({ ...shown, ...change });
+  }
+
+  async function save() {
+    setSaving(true);
+    setError(undefined);
+    try {
+      const next = await asOwner(assistant, (api) =>
+        api.updateAssistant(assistant, { style: shown.style, autonomy: shown.autonomy }),
+      );
+      queryClient.setQueryData<ServerAssistant>(key, next);
+      setDraft(undefined);
+      setSaved(true);
+    } catch (caught) {
+      setError((caught as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function choices<T extends string>(
+    name: string,
+    legend: string,
+    values: T[],
+    chosen: T,
+    fallback: T,
+    text: Record<T, { label: string; hint: string }>,
+    onPick: (value: T) => void,
+  ) {
+    return (
+      <fieldset className="flex flex-col gap-2 text-sm">
+        <legend className="mb-1 font-medium">{legend}</legend>
+        {values.map((value) => (
+          <label key={value} className="flex items-start gap-2">
+            <input
+              type="radio"
+              name={name}
+              checked={chosen === value}
+              onChange={() => onPick(value)}
+              className="mt-1"
+            />
+            <span className="flex flex-col">
+              <span>
+                {text[value].label}
+                {value === fallback && <span className="text-stone-500"> · {words.default}</span>}
+              </span>
+              <span className="text-xs text-stone-500">{text[value].hint}</span>
+            </span>
+          </label>
+        ))}
+      </fieldset>
+    );
+  }
+
+  return (
+    <section className="mx-auto flex max-w-3xl flex-col gap-3 p-3 sm:p-4">
+      <div>
+        <h2 className="text-lg font-medium">{words.title}</h2>
+        <p className="text-sm text-stone-600">{words.intro}</p>
+      </div>
+      {settings.error ? (
+        <p className="text-sm text-stone-600">
+          {settings.error instanceof ApiError && settings.error.status === 403
+            ? words.ownerOnly
+            : settings.error instanceof ApiError && settings.error.status === 404
+              ? words.notHere
+              : settings.error.message}
+        </p>
+      ) : settings.data === undefined ? (
+        <p className="text-sm text-stone-600">{m.common.loading}</p>
+      ) : (
+        <div className="flex flex-col gap-4 rounded border border-stone-200 bg-white p-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            {choices(
+              "style",
+              words.style,
+              STYLES,
+              shown.style,
+              MANNER_DEFAULTS.style,
+              words.styles,
+              (style) => pick({ style }),
+            )}
+            {choices(
+              "autonomy",
+              words.autonomy,
+              AUTONOMIES,
+              shown.autonomy,
+              MANNER_DEFAULTS.autonomy,
+              words.autonomies,
+              (autonomy) => pick({ autonomy }),
+            )}
+          </div>
+          <p className="text-xs text-stone-500">{words.approvals}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={!dirty || saving}
+              onClick={() => void save()}
+              className="rounded bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-40"
+            >
+              {saving ? m.settings.saving : m.common.save}
+            </button>
+            {dirty && (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => {
+                  setDraft(undefined);
+                  setError(undefined);
+                }}
+                className="rounded border border-stone-300 px-3 py-1.5 text-sm"
+              >
+                {m.settings.discard}
+              </button>
+            )}
+            {error !== undefined && <span className="text-sm text-red-700">{error}</span>}
+            {saved && !dirty && error === undefined && (
+              <span className="text-sm text-emerald-700">{m.settings.saved}</span>
+            )}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 /** The budget's fields, in the current language. */
 function budgetFields(): { key: keyof BudgetDraft; label: string; hint: string; unit: string }[] {
   const words = m.settings.budget;
@@ -645,20 +823,8 @@ function budgetFields(): { key: keyof BudgetDraft; label: string; hint: string; 
  */
 function Budget() {
   const { assistant } = Route.useParams();
-  const me = useQuery(meQuery(assistant));
   const queryClient = useQueryClient();
-  const key = [assistant, "server-assistant"];
-  const settings = useQuery({
-    queryKey: key,
-    queryFn: () =>
-      asOwner(assistant, async (api) => {
-        const found = (await api.assistants()).find((item) => item.name === assistant);
-        if (found === undefined) throw new Error(m.settings.budget.noAssistant(assistant));
-        return found;
-      }),
-    enabled: me.data?.admin === true,
-    retry: false,
-  });
+  const { key, settings } = useServerAssistant(assistant);
   const [draft, setDraft] = useState<BudgetDraft>();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();

@@ -46,7 +46,24 @@ pub struct AssistantBudget {
     pub warn_usd: Option<f64>,
 }
 
-/// An assistant's settings, as the owner edits them; saved whole.
+/// How much an assistant says.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum AssistantStyle {
+    Concise,
+    Balanced,
+    Detailed,
+}
+
+/// How much an assistant decides itself before asking; approvals apply at every level.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum AssistantAutonomy {
+    Cautious,
+    Balanced,
+    Independent,
+}
+
+/// An assistant's settings, as the owner edits them; saved whole. A missing style or autonomy
+/// is the server's default (concise, balanced).
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
 pub struct AssistantSettings {
     pub display_name: String,
@@ -54,6 +71,10 @@ pub struct AssistantSettings {
     pub time_zone: Option<String>,
     pub instructions: Option<String>,
     pub budget: Option<AssistantBudget>,
+    #[uniffi(default = None)]
+    pub style: Option<AssistantStyle>,
+    #[uniffi(default = None)]
+    pub autonomy: Option<AssistantAutonomy>,
 }
 
 /// One of the server's assistants.
@@ -409,6 +430,46 @@ impl From<AssistantBudget> for p::AssistantBudget {
     }
 }
 
+impl From<p::AssistantStyle> for AssistantStyle {
+    fn from(s: p::AssistantStyle) -> Self {
+        match s {
+            p::AssistantStyle::Concise => AssistantStyle::Concise,
+            p::AssistantStyle::Balanced => AssistantStyle::Balanced,
+            p::AssistantStyle::Detailed => AssistantStyle::Detailed,
+        }
+    }
+}
+
+impl From<AssistantStyle> for p::AssistantStyle {
+    fn from(s: AssistantStyle) -> Self {
+        match s {
+            AssistantStyle::Concise => p::AssistantStyle::Concise,
+            AssistantStyle::Balanced => p::AssistantStyle::Balanced,
+            AssistantStyle::Detailed => p::AssistantStyle::Detailed,
+        }
+    }
+}
+
+impl From<p::AssistantAutonomy> for AssistantAutonomy {
+    fn from(a: p::AssistantAutonomy) -> Self {
+        match a {
+            p::AssistantAutonomy::Cautious => AssistantAutonomy::Cautious,
+            p::AssistantAutonomy::Balanced => AssistantAutonomy::Balanced,
+            p::AssistantAutonomy::Independent => AssistantAutonomy::Independent,
+        }
+    }
+}
+
+impl From<AssistantAutonomy> for p::AssistantAutonomy {
+    fn from(a: AssistantAutonomy) -> Self {
+        match a {
+            AssistantAutonomy::Cautious => p::AssistantAutonomy::Cautious,
+            AssistantAutonomy::Balanced => p::AssistantAutonomy::Balanced,
+            AssistantAutonomy::Independent => p::AssistantAutonomy::Independent,
+        }
+    }
+}
+
 impl From<p::ServerAssistant> for ServerAssistant {
     fn from(a: p::ServerAssistant) -> Self {
         ServerAssistant {
@@ -419,6 +480,8 @@ impl From<p::ServerAssistant> for ServerAssistant {
                 time_zone: a.time_zone,
                 instructions: a.instructions,
                 budget: a.budget.map(Into::into),
+                style: a.style.map(Into::into),
+                autonomy: a.autonomy.map(Into::into),
             },
             running: a.running,
         }
@@ -684,9 +747,8 @@ impl ServerClient {
             model: Some(settings.model.into()),
             time_zone: settings.time_zone,
             instructions: settings.instructions,
-            // Not among the app's settings yet: the server's defaults.
-            style: None,
-            autonomy: None,
+            style: settings.style.map(Into::into),
+            autonomy: settings.autonomy.map(Into::into),
             budget: settings.budget.map(Into::into),
             first_player,
             invite,
@@ -716,9 +778,8 @@ impl ServerClient {
             model: Some(Some(settings.model.into())),
             time_zone: Some(settings.time_zone),
             instructions: Some(settings.instructions),
-            // Not among the app's settings yet: left as the server has them.
-            style: None,
-            autonomy: None,
+            style: Some(settings.style.map(Into::into)),
+            autonomy: Some(settings.autonomy.map(Into::into)),
             budget: Some(settings.budget.map(Into::into)),
         };
         let api = self.api.clone();
