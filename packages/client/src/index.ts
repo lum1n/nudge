@@ -46,3 +46,8 @@ export {
   type ViewState,
 } from "./stores.ts";
 export type * from "@nudge/protocol";
+export {
+  ATTACHMENT_IMAGE_MAX_SIDE,
+  ATTACHMENT_MAX_BYTES,
+  ATTACHMENTS_PER_MESSAGE,
+} from "@nudge/protocol";

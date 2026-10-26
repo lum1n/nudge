@@ -176,6 +176,48 @@ describe("NudgeClient against a server", () => {
     roomList.release();
   });
 
+  it("uploads an attachment, sends it, and lets the room send images to the model", async () => {
+    const { client } = clientFor(annToken);
+    const room = client.room("trip");
+    client.open();
+    await eventually(() => room.store.getState().status === "live");
+
+    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+    const attachment = await client.api.uploadAttachment(
+      "trip",
+      new File([bytes], "receipt.png", { type: "image/png" }),
+    );
+    expect(attachment).toEqual({
+      id: expect.any(String),
+      name: "receipt.png",
+      mime: "image/png",
+      size: bytes.length,
+      kind: "image",
+    });
+    const sending = client.send("trip", "", { attachments: [attachment] });
+    expect(room.store.getState().pending).toMatchObject([{ attachments: [attachment] }]);
+    await sending;
+    await eventually(() => room.store.getState().timeline.some((item) => item.type === "user"));
+    expect(room.store.getState().timeline[0]).toMatchObject({
+      type: "user",
+      text: "",
+      attachments: [attachment],
+    });
+    const blob = await client.api.attachment("trip", attachment.id);
+    expect(blob.type).toBe("image/png");
+    expect(new Uint8Array(await blob.arrayBuffer())).toEqual(bytes);
+
+    expect(await client.api.setRoomImages("trip", true)).toMatchObject({ imagesToModel: true });
+    await eventually(() => room.store.getState().view?.room.imagesToModel === true);
+    expect((await client.api.setRoomImages("trip", false)).imagesToModel).toBeUndefined();
+
+    await client.api.removeAttachment("trip", attachment.id);
+    await expect(client.api.attachment("trip", attachment.id)).rejects.toMatchObject({
+      status: 410,
+    });
+    room.release();
+  });
+
   it("loads earlier items back to the start, joining the room view", async () => {
     for (let n = 0; n < 60; n++)
       await nudge.submit("trip", { text: `Message ${n}`, requestId: `m${n}` }, context);

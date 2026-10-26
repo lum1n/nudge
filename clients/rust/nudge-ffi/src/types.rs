@@ -26,6 +26,29 @@ pub struct Room {
     pub kind: RoomKind,
     pub name: String,
     pub members: Vec<Player>,
+    /// The model gets the images people attach here as they are (ADR 24).
+    #[uniffi(default = false)]
+    pub images_to_model: bool,
+}
+
+/// `Image` for PNG, JPEG, GIF and WebP, which can reach the model; `File` for the rest.
+#[derive(Clone, Copy, Debug, PartialEq, uniffi::Enum)]
+pub enum AttachmentKind {
+    Image,
+    File,
+}
+
+/// A file sent with a message (ADR 24); its bytes come from `NudgeClient::attachment`.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct Attachment {
+    /// `a1`, `a2`, … within its room.
+    pub id: String,
+    pub name: String,
+    /// Its media type, such as `image/jpeg`.
+    pub mime: String,
+    /// In bytes.
+    pub size: u64,
+    pub kind: AttachmentKind,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, uniffi::Enum)]
@@ -99,6 +122,8 @@ pub enum TimelineItem {
         request_id: Option<String>,
         /// Only this player sees it; everyone else gets it emptied.
         private_to: Option<Player>,
+        /// What it was sent with; empty for those a private message isn't for.
+        attachments: Vec<Attachment>,
     },
     Nudge {
         id: String,
@@ -171,6 +196,9 @@ pub struct QueuedMessage {
     /// Only this player sees it; everyone else gets it with empty text.
     #[uniffi(default = None)]
     pub private_to: Option<Player>,
+    /// What it was sent with.
+    #[uniffi(default)]
+    pub attachments: Vec<Attachment>,
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
@@ -435,6 +463,9 @@ pub struct PendingMessage {
     /// Only the sender sees it and the answer to it.
     #[uniffi(default = false)]
     pub private: bool,
+    /// Uploaded already; sent with it.
+    #[uniffi(default)]
+    pub attachments: Vec<Attachment>,
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
@@ -548,8 +579,46 @@ impl From<p::Room> for Room {
             kind: room.kind.into(),
             name: room.name,
             members: room.members.into_iter().map(Into::into).collect(),
+            images_to_model: room.images_to_model == Some(true),
         }
     }
+}
+
+impl From<p::Attachment> for Attachment {
+    fn from(attachment: p::Attachment) -> Self {
+        Attachment {
+            id: attachment.id,
+            name: attachment.name,
+            mime: attachment.mime,
+            size: attachment.size,
+            kind: match attachment.kind {
+                p::AttachmentKind::Image => AttachmentKind::Image,
+                p::AttachmentKind::File => AttachmentKind::File,
+            },
+        }
+    }
+}
+
+impl From<Attachment> for p::Attachment {
+    fn from(attachment: Attachment) -> Self {
+        p::Attachment {
+            id: attachment.id,
+            name: attachment.name,
+            mime: attachment.mime,
+            size: attachment.size,
+            kind: match attachment.kind {
+                AttachmentKind::Image => p::AttachmentKind::Image,
+                AttachmentKind::File => p::AttachmentKind::File,
+            },
+        }
+    }
+}
+
+fn attachments(list: Option<Vec<p::Attachment>>) -> Vec<Attachment> {
+    list.unwrap_or_default()
+        .into_iter()
+        .map(Into::into)
+        .collect()
 }
 
 impl From<p::ApprovalStatus> for ApprovalStatus {
@@ -612,6 +681,7 @@ pub fn timeline_item(item: &p::TimelineItem) -> Option<TimelineItem> {
             client_id: user.client_id.clone(),
             request_id: user.request_id.clone(),
             private_to: user.private_to.clone().map(Into::into),
+            attachments: attachments(user.attachments.clone()),
         },
         p::TimelineItem::Nudge(nudge) => TimelineItem::Nudge {
             id: nudge.id.clone(),
@@ -688,6 +758,7 @@ impl From<p::QueuedMessage> for QueuedMessage {
             request_id: queued.request_id,
             nudge: queued.nudge,
             private_to: queued.private_to.map(Into::into),
+            attachments: attachments(queued.attachments),
         }
     }
 }
@@ -842,6 +913,12 @@ impl From<&nudge_client::PendingMessage> for PendingMessage {
             text: message.text.clone(),
             when_busy: message.when_busy.map(Into::into),
             private: message.private,
+            attachments: message
+                .attachments
+                .iter()
+                .cloned()
+                .map(Into::into)
+                .collect(),
             state: match &message.state {
                 nudge_client::PendingState::Sending => PendingState::Sending,
                 nudge_client::PendingState::Waiting { error } => PendingState::Waiting {

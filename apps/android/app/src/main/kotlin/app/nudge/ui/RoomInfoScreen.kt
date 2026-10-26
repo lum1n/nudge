@@ -18,11 +18,13 @@ import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Engineering
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Hub
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -100,6 +102,7 @@ fun RoomInfoScreen(
     var modelView by remember { mutableStateOf<List<ModelMessage>?>(null) }
     var newFact by remember { mutableStateOf("") }
     var problem by remember { mutableStateOf<String?>(null) }
+    var confirmImages by remember { mutableStateOf(false) }
 
     fun run(action: suspend () -> Unit) = scope.launch {
         try {
@@ -256,6 +259,31 @@ fun RoomInfoScreen(
                 else -> {}
             }
 
+            // Whether the model gets the images attached here as they are (ADR 24); anyone in
+            // the room may change it, and turning it on says first what that means.
+            state?.room?.let { shown ->
+                group(
+                    text(R.string.room_info_images),
+                    listOf { shapes ->
+                        SegmentedListItem(
+                            checked = shown.imagesToModel,
+                            onCheckedChange = { allowed ->
+                                if (allowed) confirmImages = true else run { client.setRoomImages(roomId, false) }
+                            },
+                            shapes = shapes,
+                            leadingContent = { Icon(Icons.Outlined.Image, null) },
+                            supportingContent = {
+                                Text(
+                                    stringResource(if (shown.imagesToModel) R.string.room_info_images_on else R.string.room_info_images_off),
+                                    color = if (shown.imagesToModel) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            },
+                            trailingContent = { Switch(checked = shown.imagesToModel, onCheckedChange = null) },
+                        ) { Text(stringResource(R.string.room_info_images_allow)) }
+                    },
+                )
+            }
+
             val nudges = state?.nudges.orEmpty()
             if (nudges.isNotEmpty()) {
                 group(
@@ -333,5 +361,19 @@ fun RoomInfoScreen(
                 }
             }
         }
+    }
+    if (confirmImages) {
+        AlertDialog(
+            onDismissRequest = { confirmImages = false },
+            title = { Text(stringResource(R.string.room_info_images_confirm_title)) },
+            text = { Text(stringResource(R.string.room_info_images_confirm)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmImages = false
+                    run { client.setRoomImages(roomId, true) }
+                }) { Text(stringResource(R.string.room_info_images_turn_on)) }
+            },
+            dismissButton = { TextButton(onClick = { confirmImages = false }) { Text(stringResource(R.string.room_cancel)) } },
+        )
     }
 }

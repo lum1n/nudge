@@ -11,6 +11,7 @@ import type {
   Approval,
   AssertResponse,
   AssistantsResponse,
+  Attachment,
   CarryMemoryRequest,
   ClientInfo,
   CreateRoomRequest,
@@ -46,6 +47,7 @@ import type {
   PushSubscribeRequest,
   RenameRoomRequest,
   Room,
+  RoomImagesRequest,
   RoomExtension,
   RoomExtensionsResponse,
   RoomsResponse,
@@ -204,6 +206,59 @@ export class Api {
   /** Posts a message. Sending the same `requestId` again is answered with the same submission. */
   send(room: string, body: MessageRequest): Promise<MessageResponse> {
     return this.request("POST", `${roomPath(room)}/messages`, body);
+  }
+
+  /**
+   * Uploads a file to send with a message in `room` (ADR 24): only the caller sees it until they
+   * name it in a message's `attachments`. Scale photos down to `ATTACHMENT_IMAGE_MAX_SIDE` pixels
+   * on the long side first; the server refuses files over `ATTACHMENT_MAX_BYTES`. `name` is a
+   * `File`'s own when left out.
+   */
+  async uploadAttachment(
+    room: string,
+    file: Blob,
+    name: string = (file as Partial<File>).name ?? "",
+  ): Promise<Attachment> {
+    const query = new URLSearchParams({ name });
+    return read(
+      await this.fetcher(`${this.base}${roomPath(room)}/attachments?${query}`, {
+        method: "POST",
+        headers: {
+          ...this.authorization(),
+          "content-type": file.type === "" ? "application/octet-stream" : file.type,
+        },
+        body: file,
+      }),
+    );
+  }
+
+  /**
+   * An attachment's bytes, with its type for an image. An `<img src>` can't send the token, so
+   * show it from these, through `URL.createObjectURL`.
+   */
+  async attachment(room: string, id: string): Promise<Blob> {
+    const response = await this.fetcher(
+      `${this.base}${roomPath(room)}/attachments/${encodeURIComponent(id)}`,
+      { headers: this.authorization() },
+    );
+    if (!response.ok) await read(response);
+    return response.blob();
+  }
+
+  /** Removes an attachment, its bytes at once; its uploader or an admin may. */
+  removeAttachment(room: string, id: string): Promise<void> {
+    return this.request("DELETE", `${roomPath(room)}/attachments/${encodeURIComponent(id)}`);
+  }
+
+  /**
+   * Whether the model gets the images attached in `room` as they are. Redaction can't read
+   * pictures, so with `allowed` whatever they show reaches the model's provider: say so where it
+   * is turned on.
+   */
+  setRoomImages(room: string, allowed: boolean): Promise<Room> {
+    return this.request("PUT", `${roomPath(room)}/images`, {
+      allowed,
+    } satisfies RoomImagesRequest);
   }
 
   /** Stops the answer in progress, and drops the room's queued messages. */
@@ -570,10 +625,13 @@ export class Api {
       .extensions;
   }
 
-  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
-    const headers: Record<string, string> = {};
+  private authorization(): Record<string, string> {
     const token = this.tokens.get();
-    if (token !== undefined) headers.authorization = `Bearer ${token}`;
+    return token === undefined ? {} : { authorization: `Bearer ${token}` };
+  }
+
+  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+    const headers: Record<string, string> = this.authorization();
     if (body !== undefined) headers["content-type"] = "application/json";
     return read(
       await this.fetcher(`${this.base}${path}`, {

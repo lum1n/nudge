@@ -479,6 +479,7 @@ fn http_bodies_match_the_schema() {
             name: "Trip".into(),
         },
     );
+    check("RoomImagesRequest", &RoomImagesRequest { allowed: true });
     for when_busy in [WhenBusy::FollowUp, WhenBusy::Steer, WhenBusy::Reject] {
         check(
             "MessageRequest",

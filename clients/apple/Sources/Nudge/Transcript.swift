@@ -68,7 +68,7 @@ extension TimelineItem {
     /// started, a nudge when it fired.
     public var time: Double? {
         switch self {
-        case .user(_, _, _, let sentAt, _, _, _): sentAt
+        case .user(_, _, _, let sentAt, _, _, _, _): sentAt
         case .answer(_, _, _, _, let startedAt, _, _): startedAt
         case .nudge(_, _, let firedAt, _): firedAt
         case .approval, .marker: nil

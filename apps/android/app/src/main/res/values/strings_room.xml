@@ -37,6 +37,21 @@
     <string name="room_message">Message</string>
     <string name="room_stop">Stop</string>
     <string name="room_send">Send</string>
+    <!-- Attachments (ADR 24): in the composer and the timeline. -->
+    <string name="room_attach">Attach</string>
+    <string name="room_attach_photos">Photos</string>
+    <string name="room_attach_files">Files</string>
+    <string name="room_attachment_remove">Remove %1$s</string>
+    <string name="room_attachment_uploading">Uploading…</string>
+    <string name="room_attachment_too_many">At most %1$s files per message</string>
+    <string name="room_attachment_too_large">Larger than %1$s</string>
+    <string name="room_attachment_unreadable">Couldn\'t read the file</string>
+    <string name="room_attachment_removed">%1$s (removed)</string>
+    <string name="room_attachment_save">Save %1$s</string>
+    <string name="room_attachment_saved">Saved</string>
+    <string name="room_attachments">📎 %1$s</string>
+    <string name="room_images_seen">The model sees these images as they are.</string>
+    <string name="room_images_not_seen">The model gets only these images\' names. Turn on Send images to the model in the room\'s info to let it see them.</string>
     <string name="room_retrying">Trying again (%1$s): %2$s</string>
     <string name="room_compacting">Summarizing the conversation so far…</string>
     <string name="room_compaction_failed">Couldn\'t summarize: %1$s</string>
@@ -130,6 +145,13 @@
     <string name="room_info_location_explain_not_yet">Anyone here can then ask about what is near you. Everyone sees that you share it; the place stays hidden from them and the model. Your devices haven\'t shared where you are yet.</string>
     <string name="room_info_location_share">Let the assistant know where I am here</string>
     <string name="room_info_nudges">Nudges</string>
+    <string name="room_info_images">Images</string>
+    <string name="room_info_images_allow">Send images to the model</string>
+    <string name="room_info_images_on">Images attached here reach the model\'s provider as they are. Redaction reads text, not pictures, so whatever they show goes along. Everyone in the room sees this is on.</string>
+    <string name="room_info_images_off">The model gets each attachment\'s name, type and size, not the picture.</string>
+    <string name="room_info_images_confirm_title">Send images to the model?</string>
+    <string name="room_info_images_confirm">Images sent in this room will reach the model\'s provider as they are, with whatever they show: faces, addresses, card numbers. This turns it on for everyone here.</string>
+    <string name="room_info_images_turn_on">Turn on</string>
     <string name="room_info_extensions">Extensions</string>
     <string name="room_info_model_saw">What the model saw</string>
     <string name="room_info_role_system">System</string>
