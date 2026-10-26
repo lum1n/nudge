@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Key
@@ -53,6 +54,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -69,6 +71,7 @@ import app.nudge.text
 import kotlinx.coroutines.launch
 import nudge.ffi.AssistantFor
 import nudge.ffi.AssistantSettings
+import nudge.ffi.BackupState
 import nudge.ffi.GeoStatus
 import nudge.ffi.KeySource
 import nudge.ffi.MadeAssistant
@@ -141,8 +144,8 @@ fun ServersScreen(model: AppModel, address: String?, exe: () -> Unit, close: () 
 }
 
 /**
- * One server: its updates, its assistants, the model keys set on it, its Wired, and its recovery
- * kit; removing it, for one made on exe.dev.
+ * One server: its updates, its assistants, the model keys set on it, its Wired, its backups and
+ * its recovery kit; removing it, for one made on exe.dev.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -160,6 +163,8 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
     var removing by remember { mutableStateOf(false) }
     var geo by remember { mutableStateOf<GeoStatus?>(null) }
     var maps by remember { mutableStateOf(false) }
+    var backups by remember { mutableStateOf<BackupState?>(null) }
+    var backingUp by remember { mutableStateOf(false) }
     // Followed, so assistants show as joined once they are.
     val places by model.places.collectAsStateWithLifecycle()
     val home by model.session.collectAsStateWithLifecycle()
@@ -169,6 +174,8 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
         keys = client.keys(null)
         // Older servers have no map.
         geo = runCatching { client.geo() }.getOrNull()
+        // A server whose backups aren't run through its API (404) has none to show.
+        backups = runCatching { client.backups() }.getOrNull()
     }
 
     fun act(action: suspend () -> Unit) = scope.launch {
@@ -185,6 +192,11 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
     if (maps) {
         BackHandler { maps = false }
         MapsScreen(client, close = { maps = false; scope.launch { geo = runCatching { client.geo() }.getOrNull() } })
+        return
+    }
+    if (backingUp) {
+        BackHandler { backingUp = false }
+        BackupsScreen(client, close = { backingUp = false; scope.launch { backups = runCatching { client.backups() }.getOrNull() } })
         return
     }
     editing?.let { assistant ->
@@ -414,6 +426,18 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
                                 leadingContent = { Icon(Icons.Outlined.Map, null) },
                                 supportingContent = { Text(mapsSummary(status)) },
                             ) { Text(stringResource(R.string.servers_maps)) }
+                        }
+                    }
+                    backups?.let { state ->
+                        add { shapes ->
+                            SegmentedListItem(
+                                onClick = { backingUp = true },
+                                shapes = shapes,
+                                leadingContent = { Icon(Icons.Outlined.Backup, null) },
+                                supportingContent = {
+                                    Text(backupsSummary(state), color = if (state.lastError != null) MaterialTheme.colorScheme.error else Color.Unspecified)
+                                },
+                            ) { Text(stringResource(R.string.servers_backups)) }
                         }
                     }
                     add { shapes ->

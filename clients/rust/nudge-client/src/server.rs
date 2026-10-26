@@ -316,6 +316,33 @@ impl ServerApi {
         Ok(response.kit)
     }
 
+    /// The server's backups (ADR 8): where, how often, and how the last upload went; 404 on a
+    /// server that doesn't make them through this API.
+    pub async fn backups(&self) -> Result<BackupState, ApiError> {
+        self.request(Method::GET, &["backups"], &[], NO_BODY).await
+    }
+
+    /// Makes a backup now, and uploads it where backups are copied.
+    pub async fn back_up_now(&self) -> Result<BackupNowResponse, ApiError> {
+        self.request(Method::POST, &["backups"], &[], NO_BODY).await
+    }
+
+    /// Copies every backup to an S3 bucket or a WebDAV folder too, once the server could write
+    /// there; a 400 says why it couldn't.
+    pub async fn set_backup_remote(
+        &self,
+        target: &SetBackupRemoteRequest,
+    ) -> Result<BackupState, ApiError> {
+        self.request(Method::PUT, &["backups", "remote"], &[], Some(target))
+            .await
+    }
+
+    /// Keeps backups on the server only, and forgets the remote's credentials.
+    pub async fn remove_backup_remote(&self) -> Result<BackupState, ApiError> {
+        self.request(Method::DELETE, &["backups", "remote"], &[], NO_BODY)
+            .await
+    }
+
     async fn request<T: DeserializeOwned>(
         &self,
         method: Method,

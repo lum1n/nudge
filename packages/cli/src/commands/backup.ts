@@ -135,7 +135,11 @@ export function backupControl(
         await remotes.check(target, credentials).catch((error: unknown) => {
           throw new BackupError(`Nudge couldn't write there: ${(error as Error).message}`);
         });
-      await writeBackup((backup) => (backup.remote = target));
+      await writeBackup((backup) => {
+        // Another target: how uploads to the old one went says nothing about this one.
+        if (JSON.stringify(backup.remote) !== JSON.stringify(target)) remotes.forgetState();
+        backup.remote = target;
+      });
       if (credentials !== undefined && (secret || kept?.from === "server"))
         remotes.setCredentials(credentials);
       return state();
@@ -143,6 +147,7 @@ export function backupControl(
     removeRemote: async () => {
       await writeBackup((backup) => delete backup.remote);
       remotes.deleteCredentials();
+      remotes.forgetState();
       return state();
     },
     backUpNow: async () => {

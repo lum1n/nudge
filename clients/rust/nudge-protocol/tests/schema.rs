@@ -1217,6 +1217,58 @@ fn server_and_setup_bodies_match_the_schema() {
         "RecoveryKitResponse",
         &RecoveryKitResponse { kit: "{}".into() },
     );
+    let s3 = BackupRemoteTarget::S3(S3Target {
+        endpoint: "https://s3.eu-north-1.amazonaws.com".into(),
+        bucket: "vault".into(),
+        region: Some("eu-north-1".into()),
+        prefix: Some("nudge/".into()),
+        path_style: Some(false),
+    });
+    check(
+        "BackupState",
+        &BackupState {
+            on: true,
+            dir: Some("/data/backups".into()),
+            every_hours: 24.0,
+            keep: 14.0,
+            last_backup_at: Some(1.0),
+            remote: Some(s3.clone()),
+            credentials: Some(BackupCredentials {
+                user: "AKID".into(),
+                from: CredentialsFrom::Server,
+            }),
+            last_upload_at: Some(2.0),
+            last_error: Some("PUT /vault/: 403".into()),
+            last_error_at: Some(3.0),
+        },
+    );
+    check(
+        "SetBackupRemoteRequest",
+        &SetBackupRemoteRequest {
+            target: s3,
+            user: Some("AKID".into()),
+            secret: Some("shh".into()),
+            test: Some(true),
+        },
+    );
+    check(
+        "SetBackupRemoteRequest",
+        &SetBackupRemoteRequest {
+            target: BackupRemoteTarget::Webdav(WebDavTarget {
+                url: "https://dav.example/".into(),
+            }),
+            user: Some("me".into()),
+            secret: Some("app password".into()),
+            test: Some(false),
+        },
+    );
+    check(
+        "BackupNowResponse",
+        &BackupNowResponse {
+            file: "nudge-20261024T100000Z.nudgebackup".into(),
+            upload_error: Some("Upload to s3://vault/ failed".into()),
+        },
+    );
 
     check(
         "SetupInfoResponse",

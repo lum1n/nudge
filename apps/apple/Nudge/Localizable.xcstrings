@@ -174,6 +174,26 @@
         }
       }
     },
+    "A WebDAV folder" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En WebDAV-mappe"
+          }
+        }
+      }
+    },
+    "Access key id" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tilgangsnøkkel-ID"
+          }
+        }
+      }
+    },
     "Account" : {
       "localizations" : {
         "nb" : {
@@ -290,6 +310,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "En administrator for en annen assistent inviterer deg med adressen din; invitasjonen åpnes her. Det bare du ser, blir hjemme."
+          }
+        }
+      }
+    },
+    "An app password, if the service has them" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Et app-passord, hvis tjenesten har det"
+          }
+        }
+      }
+    },
+    "An S3 bucket" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En S3-bøtte"
           }
         }
       }
@@ -484,12 +524,62 @@
         }
       }
     },
+    "Back up now" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ta sikkerhetskopi nå"
+          }
+        }
+      }
+    },
+    "Backing up…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tar sikkerhetskopi …"
+          }
+        }
+      }
+    },
+    "Backups" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sikkerhetskopier"
+          }
+        }
+      }
+    },
+    "Backups stay on the server only. What was copied there is left there." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sikkerhetskopiene blir bare på serveren. Det som er kopiert dit, blir liggende der."
+          }
+        }
+      }
+    },
     "Browser" : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nettleser"
+          }
+        }
+      }
+    },
+    "Bucket" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bøtte"
           }
         }
       }
@@ -614,6 +704,16 @@
         }
       }
     },
+    "Check and save" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sjekk og lagre"
+          }
+        }
+      }
+    },
     "Check for updates" : {
       "localizations" : {
         "nb" : {
@@ -730,6 +830,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Samtalen startet på nytt"
+          }
+        }
+      }
+    },
+    "Copied to %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopieres til %@"
+          }
+        }
+      }
+    },
+    "Copy each backup to" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopier hver sikkerhetskopi til"
           }
         }
       }
@@ -1054,6 +1174,36 @@
         }
       }
     },
+    "Endpoint" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Endepunkt"
+          }
+        }
+      }
+    },
+    "Every %lld hours, the last %lld kept, in %@." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hver %1$lld. time, de siste %2$lld beholdes, i %3$@."
+          }
+        }
+      }
+    },
+    "Every day, the last %lld kept, in %@." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hver dag, de siste %1$lld beholdes, i %2$@."
+          }
+        }
+      }
+    },
     "Every room" : {
       "localizations" : {
         "nb" : {
@@ -1160,6 +1310,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Første punkt"
+          }
+        }
+      }
+    },
+    "Folder address" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mappeadresse"
+          }
+        }
+      }
+    },
+    "Folder in the bucket" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mappe i bøtta"
           }
         }
       }
@@ -1564,6 +1734,16 @@
         }
       }
     },
+    "Kept; type to change it" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beholdt; skriv for å endre den"
+          }
+        }
+      }
+    },
     "Key" : {
       "localizations" : {
         "nb" : {
@@ -1590,6 +1770,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Språk du snakker"
+          }
+        }
+      }
+    },
+    "Last uploaded %@." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sist lastet opp %@."
           }
         }
       }
@@ -1680,6 +1870,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Små bokstaver, sifre og bindestreker, for eksempel box."
+          }
+        }
+      }
+    },
+    "Made %@ and uploaded it." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Laget %@ og lastet den opp."
+          }
+        }
+      }
+    },
+    "Made %@." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Laget %@."
           }
         }
       }
@@ -2144,6 +2354,26 @@
         }
       }
     },
+    "None made yet." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen laget ennå."
+          }
+        }
+      }
+    },
+    "None uploaded yet." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen lastet opp ennå."
+          }
+        }
+      }
+    },
     "None yet. Logins you remember here show up here." : {
       "localizations" : {
         "nb" : {
@@ -2264,6 +2494,26 @@
         }
       }
     },
+    "Off" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Av"
+          }
+        }
+      }
+    },
+    "Off: this server makes no backups of its own. Setting a copy below turns them on, daily." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Av: denne serveren lager ingen egne sikkerhetskopier. Velger du en kopi nedenfor, slås de på, daglig."
+          }
+        }
+      }
+    },
     "OK" : {
       "localizations" : {
         "nb" : {
@@ -2280,6 +2530,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "På som standard i"
+          }
+        }
+      }
+    },
+    "On the server only" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bare på serveren"
           }
         }
       }
@@ -2340,6 +2600,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Åpne rommets nettleser for å logge inn"
+          }
+        }
+      }
+    },
+    "Optional: us-east-1 unless the endpoint says" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Valgfritt: us-east-1 med mindre endepunktet sier noe annet"
           }
         }
       }
@@ -2430,6 +2700,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Passfrase, 8 tegn eller mer"
+          }
+        }
+      }
+    },
+    "Password" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Passord"
           }
         }
       }
@@ -2550,6 +2830,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gjenopprettingssett"
+          }
+        }
+      }
+    },
+    "Region" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Region"
           }
         }
       }
@@ -2814,6 +3104,16 @@
         }
       }
     },
+    "Saved: the server wrote a test file there and deleted it again." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lagret: serveren skrev en testfil der og slettet den igjen."
+          }
+        }
+      }
+    },
     "Saving…" : {
       "localizations" : {
         "nb" : {
@@ -2830,6 +3130,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Si hei til %@."
+          }
+        }
+      }
+    },
+    "Secret access key" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hemmelig tilgangsnøkkel"
           }
         }
       }
@@ -3274,6 +3584,16 @@
         }
       }
     },
+    "Stop copying" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slutt å kopiere"
+          }
+        }
+      }
+    },
     "Stop dictating" : {
       "localizations" : {
         "nb" : {
@@ -3444,6 +3764,46 @@
         }
       }
     },
+    "The last upload failed" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Siste opplasting feilet"
+          }
+        }
+      }
+    },
+    "The last upload failed %@: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Siste opplasting feilet %1$@: %2$@"
+          }
+        }
+      }
+    },
+    "The last upload failed: %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Siste opplasting feilet: %@"
+          }
+        }
+      }
+    },
+    "The newest was made %@." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Den nyeste ble laget %@."
+          }
+        }
+      }
+    },
     "The room's browser, at %@" : {
       "localizations" : {
         "nb" : {
@@ -3470,6 +3830,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Serveren skrev den ut da den startet."
+          }
+        }
+      }
+    },
+    "The server takes its credentials from NUDGE_BACKUP_REMOTE_USER and NUDGE_BACKUP_REMOTE_SECRET, which win over what is set here." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serveren henter påloggingen fra NUDGE_BACKUP_REMOTE_USER og NUDGE_BACKUP_REMOTE_SECRET, som går foran det som er satt her."
+          }
+        }
+      }
+    },
+    "The whole server, encrypted with its backup key. A copy on another machine survives the server's disk: an S3-compatible bucket (AWS, Backblaze B2, Cloudflare R2, MinIO) or a WebDAV folder (Nextcloud, a NAS). Only encrypted files leave the server." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hele serveren, kryptert med sikkerhetskopinøkkelen. En kopi på en annen maskin overlever om serverens disk ryker: en S3-kompatibel bøtte (AWS, Backblaze B2, Cloudflare R2, MinIO) eller en WebDAV-mappe (Nextcloud, en NAS). Bare krypterte filer forlater serveren."
           }
         }
       }
@@ -3910,6 +4290,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bruk denne enhetens: %@"
+          }
+        }
+      }
+    },
+    "User name" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Brukernavn"
           }
         }
       }

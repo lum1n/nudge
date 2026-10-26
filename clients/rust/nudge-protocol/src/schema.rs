@@ -1868,6 +1868,103 @@ pub struct RecoveryKitResponse {
     pub kit: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct S3Target {
+    /// Such as `https://s3.eu-north-1.amazonaws.com` or `https://<account>.r2.cloudflarestorage.com`.
+    pub endpoint: String,
+    pub bucket: String,
+    /// Default the one in an AWS endpoint, else `us-east-1`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub region: Option<String>,
+    /// A folder in the bucket, such as `nudge/`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prefix: Option<String>,
+    /// Bucket in the path rather than the host name; default on, except for AWS.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path_style: Option<bool>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WebDavTarget {
+    /// The folder, such as `https://cloud.example/remote.php/dav/files/me/nudge/`.
+    pub url: String,
+}
+
+/// Where backups are copied off the server (ADR 8): an S3-compatible bucket or a WebDAV folder.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum BackupRemoteTarget {
+    S3(S3Target),
+    Webdav(WebDavTarget),
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CredentialsFrom {
+    Env,
+    Server,
+}
+
+/// The access key id or user name the remote is reached with, and where it is set.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct BackupCredentials {
+    pub user: String,
+    pub from: CredentialsFrom,
+}
+
+/// The server's backups: where, how often, how many, and how the last upload went.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupState {
+    /// Whether the server makes backups on its own; the rest is its defaults when it doesn't.
+    pub on: bool,
+    /// The folder on the server they go to.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dir: Option<String>,
+    pub every_hours: f64,
+    /// Backups kept, in the folder and on the remote alike.
+    pub keep: f64,
+    /// When the newest in the folder was made.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_backup_at: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote: Option<BackupRemoteTarget>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credentials: Option<BackupCredentials>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_upload_at: Option<f64>,
+    /// Why the last upload failed, when it did, and when.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_error: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_error_at: Option<f64>,
+}
+
+/// A remote target for backups, with what to sign in with: an access key id and secret for S3, a
+/// user name and password for WebDAV. Without them the kept ones stay. The server first writes,
+/// lists and deletes a small file there, unless `test` is false.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SetBackupRemoteRequest {
+    #[serde(flatten)]
+    pub target: BackupRemoteTarget,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secret: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub test: Option<bool>,
+}
+
+/// A backup made now: its file name, and why the upload failed if it did.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupNowResponse {
+    pub file: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upload_error: Option<String>,
+}
+
 // Setting a server up, under `/v1/setup` (ADR 11): open only while it has no config.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

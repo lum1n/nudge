@@ -388,6 +388,14 @@ describe("nudge backup to a remote target", () => {
       expect(removed.remote).toBeUndefined();
       expect(removed.credentials).toBeUndefined();
       expect(JSON.parse(await readFile(config, "utf8")).backup.remote).toBeUndefined();
+      // Set again, it hasn't uploaded anything there yet.
+      const again = await control.setRemote({
+        type: "webdav",
+        url: dav.url,
+        user: "ann",
+        secret: "hunter2",
+      });
+      expect(again.lastUploadAt).toBeUndefined();
     } finally {
       dav.close();
     }

@@ -244,6 +244,22 @@ async fn makes_a_server_on_exe_dev_and_sets_it_up_from_the_app() {
             .unwrap()
             .contains("recovery-kit")
     );
+    // Set up without backups of its own: the defaults, and nowhere they are copied.
+    let backups = owner.backups().await.unwrap();
+    assert!(!backups.on && backups.remote.is_none() && backups.keep == 14.0);
+    // A WebDAV folder nothing answers at is refused, and nothing is kept.
+    let refused = owner
+        .set_backup_remote(&SetBackupRemoteRequest {
+            target: BackupRemoteTarget::Webdav(WebDavTarget {
+                url: "http://127.0.0.1:9/dav/".into(),
+            }),
+            user: Some("me".into()),
+            secret: Some("shh".into()),
+            test: None,
+        })
+        .await;
+    assert!(matches!(refused, Err(ApiError::Status { status: 400, .. })));
+    assert!(owner.backups().await.unwrap().remote.is_none());
     owner.delete_assistant("kari").await.unwrap();
     assert_eq!(
         owner
