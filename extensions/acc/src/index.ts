@@ -1,5 +1,7 @@
 export {
+  type AccApi,
   type AccOptions,
+  accApi,
   accExtension,
   allowAndReject,
   default,

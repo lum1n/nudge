@@ -26,17 +26,50 @@ type KeyPair = { readonly privateKey: string; readonly publicKey: string };
 export class Hosts {
   private readonly connections = new Map<string, Promise<AccHost>>();
   private pins: Record<string, string> | undefined;
+  private added: HostEntry[] | undefined;
   /** Hosts whose key changed, with the key they show now. */
   readonly changedKeys = new Map<string, string>();
 
   constructor(
-    readonly entries: readonly HostEntry[],
+    /** The machines from the settings. */
+    private readonly configured: readonly HostEntry[],
     private readonly backend: AccBackend,
     private readonly secrets: SecretStore,
     /** Where pinned host keys are kept; in memory only when absent. */
     private readonly pinsFile: string | undefined,
     private readonly comment: string,
+    /** Where machines added at runtime are kept; in memory only when absent. */
+    private readonly addedFile?: string,
   ) {}
+
+  /** The machines from the settings, then those added at runtime. */
+  get entries(): readonly HostEntry[] {
+    return [...this.configured, ...this.loadAdded()];
+  }
+
+  /**
+   * Adds a machine at runtime, such as a project's VM, kept across restarts; replaces one added
+   * before under the name. A name the settings use is refused. Logs in with the extension's key.
+   */
+  async add(entry: Omit<HostEntry, "auth" | "password">): Promise<void> {
+    if (this.configured.some((other) => other.name.toLowerCase() === entry.name.toLowerCase()))
+      throw new Error(`The settings have a machine "${entry.name}" already.`);
+    const kept = this.loadAdded().filter((other) => other.name !== entry.name);
+    this.saveAdded([...kept, { ...entry, auth: "key" }]);
+    await this.drop(entry.name);
+  }
+
+  /** Removes a machine added at runtime, and forgets its pinned key. False when there was none. */
+  async remove(name: string): Promise<boolean> {
+    const kept = this.loadAdded().filter((other) => other.name !== name);
+    if (kept.length === this.loadAdded().length) return false;
+    this.saveAdded(kept);
+    const pins = { ...this.loadPins() };
+    delete pins[name];
+    this.savePins(pins);
+    await this.drop(name);
+    return true;
+  }
 
   /** The entries a room may use. */
   usableIn(roomId: string): HostEntry[] {
@@ -80,6 +113,11 @@ export class Hosts {
     delete pins[name];
     this.savePins(pins);
     this.changedKeys.delete(name);
+    await this.drop(name);
+  }
+
+  /** Closes `name`'s connection, if open; the next use connects afresh. */
+  private async drop(name: string): Promise<void> {
     const connection = this.connections.get(name);
     this.connections.delete(name);
     await connection?.then((host) => host.disconnect()).catch(() => undefined);
@@ -161,6 +199,26 @@ export class Hosts {
       this.pins = {};
     }
     return this.pins;
+  }
+
+  private loadAdded(): HostEntry[] {
+    if (this.added !== undefined) return this.added;
+    try {
+      this.added =
+        this.addedFile === undefined
+          ? []
+          : (JSON.parse(readFileSync(this.addedFile, "utf8")) as HostEntry[]);
+    } catch {
+      this.added = [];
+    }
+    return this.added;
+  }
+
+  private saveAdded(added: HostEntry[]): void {
+    this.added = added;
+    if (this.addedFile === undefined) return;
+    mkdirSync(dirname(this.addedFile), { recursive: true });
+    writeFileSync(this.addedFile, `${JSON.stringify(added, null, 2)}\n`);
   }
 
   private savePins(pins: Record<string, string>): void {
