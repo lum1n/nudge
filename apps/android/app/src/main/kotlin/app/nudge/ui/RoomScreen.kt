@@ -94,6 +94,8 @@ fun RoomScreen(
     session: Session,
     roomId: String,
     dictation: Dictation,
+    /** The exe.dev token on this device, for approvals that make or remove a VM with it. */
+    exeToken: () -> String?,
     back: (() -> Unit)?,
     lists: () -> Unit,
     info: () -> Unit,
@@ -142,8 +144,9 @@ fun RoomScreen(
                     Column(Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
                         state?.approvals?.filter { it.status == ApprovalStatus.PENDING }?.forEach { approval ->
                             Box(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
-                                ApprovalCard(approval.summary, approval.status, null) { approve ->
-                                    attempt { client.decide(roomId, approval.id, approve) }
+                                // Its own errors show on the card, which stays to try again.
+                                PendingApprovalCard(approval, exeToken()) { approve, inputs ->
+                                    client.decide(roomId, approval.id, approve, inputs)
                                 }
                             }
                         }

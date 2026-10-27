@@ -326,6 +326,77 @@ pub struct Approval {
     /// Only an admin may decide it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub admin_only: Option<bool>,
+    /// What approving it takes, besides a yes; see `ApprovalInput`. One this client can't read
+    /// is left out.
+    #[serde(
+        default,
+        skip_serializing_if = "Vec::is_empty",
+        deserialize_with = "lenient_inputs"
+    )]
+    pub inputs: Vec<ApprovalInput>,
+    /// What the app does before it approves; see `ClientAction`. `None` for one this client
+    /// doesn't know, so it can still deny.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "lenient_action"
+    )]
+    pub client_action: Option<ClientAction>,
+}
+
+/// Something approving an approval takes, such as a password; the value is sent with the yes and
+/// never stored.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ApprovalInput {
+    /// What the handler gets it as: letters, digits and `_`.
+    pub name: String,
+    pub label: String,
+    /// A password field: the value isn't shown while typed.
+    pub secret: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// It may be left empty; required otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub optional: Option<bool>,
+}
+
+/// Something the app does on the device before it approves, with what only the device has, such
+/// as its exe.dev token (ADR 11); then it approves with the inputs the action names.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum ClientAction {
+    /// Adds `ssh_key` (when given) to the person's exe.dev account, makes the VM, and approves
+    /// with `vm` and `sshHost`.
+    #[serde(rename = "exe.new", rename_all = "camelCase")]
+    ExeNew {
+        name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        image: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        ssh_key: Option<String>,
+    },
+    /// Removes the VM, and approves with nothing.
+    #[serde(rename = "exe.rm")]
+    ExeRm { name: String },
+}
+
+fn lenient_inputs<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Vec<ApprovalInput>, D::Error> {
+    let value = Value::deserialize(deserializer)?;
+    Ok(match value {
+        Value::Array(items) => items
+            .into_iter()
+            .filter_map(|item| serde_json::from_value(item).ok())
+            .collect(),
+        _ => Vec::new(),
+    })
+}
+
+fn lenient_action<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<ClientAction>, D::Error> {
+    Ok(serde_json::from_value(Value::deserialize(deserializer)?).ok())
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -743,6 +814,9 @@ pub struct ShareMemoryRequest {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct DecideRequest {
     pub approve: bool,
+    /// The approval's inputs by name, when approving; ignored when denying. Never stored.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inputs: Option<std::collections::HashMap<String, String>>,
 }
 
 /// An installed extension as one room has it. The built-in one is always on and not listed.

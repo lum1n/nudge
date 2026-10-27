@@ -96,6 +96,65 @@ type StartPayload = {
   readonly model?: string;
 };
 
+/**
+ * What other extensions may do with this one, such as the projects extension's supervisor: add a
+ * VM as a machine, run scripts there, and start and steer agents without asking the room. Get it
+ * with `accApi(host.assistant())` once the assistant is open.
+ */
+export type AccApi = {
+  /** The `authorized_keys` line machines let the assistant in with. */
+  readonly publicKey: () => string;
+  /** Adds a machine at runtime, kept across restarts, or replaces one added before; see `Hosts.add`. */
+  readonly addHost: (entry: {
+    readonly name: string;
+    readonly host: string;
+    readonly user: string;
+    readonly port?: number;
+    /** Room ids that may use it, `*` for every room. */
+    readonly rooms: readonly string[];
+  }) => Promise<void>;
+  readonly removeHost: (name: string) => Promise<boolean>;
+  /** Runs a script there with `sh -c`, with `stdin` on its standard input, such as a secret. */
+  readonly exec: (
+    host: string,
+    script: string,
+    stdin?: string,
+  ) => Promise<{ stdout: string; stderr: string; exitCode: number | null }>;
+  /** Starts an agent there that `roomId` follows, without asking the room. */
+  readonly start: (
+    roomId: string,
+    args: {
+      readonly host: string;
+      readonly harness: HarnessId;
+      readonly cwd: string;
+      readonly prompt: string;
+      readonly model?: string;
+    },
+    privateTo?: Owner,
+  ) => Promise<{ readonly id: string; readonly cwd: string }>;
+  /** A session's transcript as `acc_read` gives it, scrubbed for `roomId`. */
+  readonly read: (roomId: string, host: string, id: string, last?: number) => Promise<string>;
+  readonly send: (host: string, id: string, text: string) => Promise<void>;
+  /** Asks the agent to exit. */
+  readonly stop: (host: string, id: string) => Promise<void>;
+  /** What a session is doing, such as `working` or `exited (0)`; undefined when it isn't read. */
+  readonly state: (host: string, id: string) => Promise<string | undefined>;
+  /**
+   * Runs on every text about a room's sessions before the room or the model gets it, such as to
+   * take out secrets an agent printed. Returns what removes it.
+   */
+  readonly addScrubber: (scrub: (roomId: string, text: string) => string) => () => void;
+  /** Hears each thing a followed session tells its room, by key (`turn:…`, `exited`, …). */
+  readonly onHeard: (listener: (follow: Follow, key: string) => void) => () => void;
+};
+
+const apis = new WeakMap<object, AccApi>();
+
+/** The acc extension's API in the assistant `assistant` (`host.assistant()`), when it is on. */
+export function accApi(assistant: object): AccApi | undefined {
+  return apis.get(assistant);
+}
+
 export type AccOptions = {
   /** ACC's binding; tests pass a fake. Default: the one `loadAcc` finds. */
   readonly backend?: AccBackend;
@@ -220,13 +279,14 @@ export function accExtension(options: AccOptions = {}) {
           rooms: entry.rooms ?? ["*"],
         })),
       );
+      let countMachines = () => entries.length;
       const problems = (): string[] => [
         ...(backend === undefined
           ? [
               "ACC's Node binding isn't installed: run pnpm acc:fetch in a checkout, or set NUDGE_ACC_MODULE to its index.js.",
             ]
           : []),
-        ...(entries.length === 0 ? ["No machines are set up for coding agents."] : []),
+        ...(countMachines() === 0 ? ["No machines are set up for coding agents."] : []),
         ...(backend !== undefined && backend.localHost === undefined && host.settings.local
           ? [
               "This ACC binding can't reach this machine's sessions; run pnpm acc:fetch for a newer one.",
@@ -248,12 +308,29 @@ export function accExtension(options: AccOptions = {}) {
         host.secrets,
         host.dataDir === undefined ? undefined : join(host.dataDir, "hosts.json"),
         `nudge-${host.name}`,
+        host.dataDir === undefined ? undefined : join(host.dataDir, "added-hosts.json"),
       );
       changedKeys = hosts.changedKeys;
+      countMachines = () => hosts.entries.length;
+      const scrubbers = new Set<(roomId: string, text: string) => string>();
+      const scrub = (roomId: string, text: string): string => {
+        let out = text;
+        for (const each of scrubbers) out = each(roomId, out);
+        return out;
+      };
+      const listeners = new Set<(follow: Follow, key: string) => void>();
       const sessions = new Sessions(
         hosts,
         host.dataDir === undefined ? undefined : join(host.dataDir, "follows.json"),
-        tell(host, report),
+        tell(host, report, scrub, (follow, key) => {
+          for (const listener of listeners) {
+            try {
+              listener(follow, key);
+            } catch (error) {
+              report(error);
+            }
+          }
+        }),
       );
       const asked = {
         starts: new Asked<StartPayload>(
@@ -293,11 +370,11 @@ export function accExtension(options: AccOptions = {}) {
         return out.stdout.toString().trim();
       };
 
-      const start = async (
+      const launch = async (
         roomId: string,
         privateTo: Owner | undefined,
         args: StartPayload,
-      ): Promise<string> => {
+      ): Promise<{ id: string; cwd: string }> => {
         const connection = await hosts.connect(args.host);
         const cwd = await resolveDir(connection, args.cwd);
         const id = backend.newSessionId(args.harness);
@@ -311,6 +388,15 @@ export function accExtension(options: AccOptions = {}) {
           ...(privateTo === undefined ? {} : { privateTo }),
         });
         if (args.prompt.trim() !== "") await attachment.send({ type: "prompt", text: args.prompt });
+        return { id, cwd };
+      };
+
+      const start = async (
+        roomId: string,
+        privateTo: Owner | undefined,
+        args: StartPayload,
+      ): Promise<string> => {
+        const { id, cwd } = await launch(roomId, privateTo, args);
         return (
           `Started ${args.harness} on ${args.host} in ${cwd} as session ${id}. This room follows ` +
           "it: you'll hear when it finishes a turn, fails or exits, and its permission requests " +
@@ -330,6 +416,36 @@ export function accExtension(options: AccOptions = {}) {
         if (!(await attachment.ready()))
           return `Session ${name}/${id} is still catching up on its log; try again in a moment.`;
         return attachment;
+      };
+
+      /** A session's state, waiting requests and latest items, as `acc_read` gives them. */
+      const describeSession = (
+        roomId: string,
+        name: string,
+        attachment: Attachment,
+        last = 30,
+      ): string => {
+        const waiting = [...attachment.pending.values()].map(
+          (p) =>
+            `Waiting on ${p.kind} (request ${p.requestId}): ${p.title}` +
+            (p.options.length === 0
+              ? ""
+              : ` [${p.options.map((o) => `${o.id}: ${o.label}`).join("; ")}]`),
+        );
+        const items = transcript(
+          attachment.session.topLevelItems(),
+          Math.min(Math.max(1, last), 200),
+        );
+        return scrub(
+          roomId,
+          [
+            `${name}/${attachment.id}: ${attachment.harness} in ${attachment.cwd}, ${describeState(attachment)}` +
+              (attachment.follow?.roomId === roomId ? ", followed here" : ""),
+            ...waiting,
+            "",
+            items || "(nothing yet)",
+          ].join("\n"),
+        );
       };
 
       const sessionParameters = {
@@ -472,7 +588,7 @@ export function accExtension(options: AccOptions = {}) {
               }
             }),
           );
-          return text(blocks.join("\n"));
+          return text(scrub(room.id, blocks.join("\n")));
         },
       });
 
@@ -559,28 +675,9 @@ export function accExtension(options: AccOptions = {}) {
           try {
             const attachment = await reach(room.id, args.host, args.id);
             if (typeof attachment === "string") return text(attachment, true);
-            const waiting = [...attachment.pending.values()].map(
-              (p) =>
-                `Waiting on ${p.kind} (request ${p.requestId}): ${p.title}` +
-                (p.options.length === 0
-                  ? ""
-                  : ` [${p.options.map((o) => `${o.id}: ${o.label}`).join("; ")}]`),
-            );
-            const items = transcript(
-              attachment.session.topLevelItems(),
-              Math.min(Math.max(1, args.last ?? 30), 200),
-            );
-            return text(
-              [
-                `${args.host}/${args.id}: ${attachment.harness} in ${attachment.cwd}, ${describeState(attachment)}` +
-                  (attachment.follow?.roomId === room.id ? ", followed here" : ""),
-                ...waiting,
-                "",
-                items || "(nothing yet)",
-              ].join("\n"),
-            );
+            return text(describeSession(room.id, args.host, attachment, args.last));
           } catch (error) {
-            return text((error as Error).message, true);
+            return text(scrub(room.id, (error as Error).message), true);
           }
         },
       });
@@ -790,6 +887,59 @@ export function accExtension(options: AccOptions = {}) {
         return undefined;
       };
 
+      const api: AccApi = {
+        publicKey: () => hosts.publicKey(),
+        addHost: (entry) => hosts.add({ ...entry, port: entry.port ?? 22 }),
+        removeHost: async (name) => {
+          for (const follow of sessions.followed().filter((f) => f.host === name))
+            await sessions.unfollow(follow.host, follow.id);
+          return hosts.remove(name);
+        },
+        exec: async (name, script, stdin) => {
+          const connection = await hosts.connect(name);
+          const out = await connection.exec(
+            script,
+            stdin === undefined ? null : Buffer.from(stdin, "utf8"),
+          );
+          return {
+            stdout: out.stdout.toString("utf8"),
+            stderr: out.stderr.toString("utf8"),
+            exitCode: out.exitCode,
+          };
+        },
+        start: (roomId, args, privateTo) => launch(roomId, privateTo, args),
+        read: async (roomId, name, id, last) => {
+          const attachment = await sessions.attach(name, id);
+          if (!(await attachment.ready()))
+            return `Session ${name}/${id} is still catching up on its log.`;
+          return describeSession(roomId, name, attachment, last);
+        },
+        send: async (name, id, message) => {
+          const attachment = await sessions.attach(name, id);
+          if (attachment.exit !== undefined) throw new Error(`${name}/${id} has exited.`);
+          await attachment.send({ type: "prompt", text: message });
+        },
+        stop: async (name, id) => {
+          const attachment = await sessions.attach(name, id);
+          if (attachment.exit === undefined) await attachment.session.stop();
+        },
+        state: async (name, id) => {
+          const attachment = await sessions.current(name, id);
+          return attachment === undefined ? undefined : describeState(attachment);
+        },
+        addScrubber: (each) => {
+          scrubbers.add(each);
+          return () => scrubbers.delete(each);
+        },
+        onHeard: (listener) => {
+          listeners.add(listener);
+          return () => listeners.delete(listener);
+        },
+      };
+      void host.whenOpen().then((assistant) => {
+        if (!stop.signal.aborted) apis.set(assistant, api);
+      });
+
       return {
         problems,
         tools: [
@@ -871,6 +1021,9 @@ export function accExtension(options: AccOptions = {}) {
         },
         close: async () => {
           stop.abort();
+          void host.whenOpen().then((assistant) => {
+            if (apis.get(assistant) === api) apis.delete(assistant);
+          });
           await restoring;
           await sessions.close();
           await hosts.close();
@@ -884,6 +1037,9 @@ export function accExtension(options: AccOptions = {}) {
 function tell(
   host: Pick<ExtensionHost<unknown>, "assistant" | "now">,
   report: (error: unknown) => void,
+  /** Takes out of what a room hears what it mustn't, such as secrets an agent printed. */
+  scrub: (roomId: string, text: string) => string,
+  heard: (follow: Follow, key: string) => void,
 ) {
   const turn = (follow: Follow) => {
     const nudge = host.assistant();
@@ -895,6 +1051,9 @@ function tell(
   return {
     report,
     post: async (follow: Follow, key: string, content: string, message: string) => {
+      heard(follow, key);
+      content = scrub(follow.roomId, content);
+      message = scrub(follow.roomId, message);
       const nudge = host.assistant();
       const room = await nudge.rooms.get(follow.roomId, context);
       if (room === undefined) return;
@@ -925,6 +1084,7 @@ function tell(
     },
     ask: async (follow: Follow, pending: Pending): Promise<string> => {
       const nudge = host.assistant();
+      heard(follow, `ask:${pending.requestId}`);
       const input =
         pending.input === undefined ? "" : `\n${cut(JSON.stringify(pending.input, null, 1), 600)}`;
       const approval = await inTurn(turn(follow), () =>
@@ -936,7 +1096,10 @@ function tell(
               {
                 extension: "acc",
                 kind: "permission",
-                summary: `${follow.harness} on ${follow.host} (${follow.cwd}) asks: ${pending.title}${input}`,
+                summary: scrub(
+                  follow.roomId,
+                  `${follow.harness} on ${follow.host} (${follow.cwd}) asks: ${pending.title}${input}`,
+                ),
                 // Which request it is, is kept with the follow; see `Asked`.
                 payload: {},
               },

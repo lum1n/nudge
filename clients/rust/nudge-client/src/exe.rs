@@ -6,6 +6,7 @@
 //! What a command answers is read leniently: the shapes of `new` and `ls` aren't documented, so a
 //! VM's address falls back to `https://<name>.exe.xyz`.
 
+use std::collections::HashMap;
 use std::time::Duration;
 
 use rand::RngExt;
@@ -13,6 +14,7 @@ use serde_json::Value;
 use url::Url;
 
 use crate::api::ApiError;
+use crate::protocol::ClientAction;
 use crate::server::setup_info;
 
 /// The image a new server runs when the newest release can't be looked up: a Nudge release that
@@ -44,6 +46,9 @@ pub enum ExeError {
     /// The home server couldn't add the new server to its Wired network.
     #[error("Home's Wired: {0}")]
     Wired(String),
+    /// Something this client won't put into an exe.dev command, such as a name with a space.
+    #[error("{0}")]
+    Invalid(String),
 }
 
 /// A VM on exe.dev, as far as Nudge needs it.
@@ -52,6 +57,10 @@ pub struct ExeVm {
     pub name: String,
     /// Where exe.dev's proxy serves it, such as `https://robin.exe.xyz`.
     pub url: String,
+    /// Where SSH reaches it, when exe.dev said, such as `robin.exe.xyz`.
+    pub ssh_host: Option<String>,
+    /// Who SSH logs in as there, when exe.dev said.
+    pub ssh_user: Option<String>,
 }
 
 /// A server made on exe.dev, waiting to be set up with `code` (`set_up`).
@@ -185,10 +194,7 @@ impl ExeDev {
                 "new --json --name {name} --image {image} --env NUDGE_SETUP_CODE={code} --env NUDGE_SETUP_MINUTES={SETUP_MINUTES}{extra_env}"
             ))
             .await?;
-        let vm = vm_of(&answer).unwrap_or_else(|| ExeVm {
-            name: name.to_owned(),
-            url: format!("https://{name}.exe.xyz"),
-        });
+        let vm = vm_of(&answer).unwrap_or_else(|| ExeVm::named(name));
         self.exec(&format!("share port {} {NUDGE_PORT}", vm.name))
             .await?;
         self.exec(&format!("share set-public {}", vm.name)).await?;
@@ -223,8 +229,133 @@ impl ExeDev {
     /// Removes the VM and everything on it. Back it up and delete its assistants first, so their
     /// guests' homes are told.
     pub async fn delete(&self, name: &str) -> Result<(), ExeError> {
+        check_name(name)?;
         self.exec(&format!("rm {name}")).await.map(drop)
     }
+
+    /// Makes a plain VM named `name`, of `image` or exe.dev's default, such as for a project's
+    /// coding agents.
+    pub async fn new_vm(&self, name: &str, image: Option<&str>) -> Result<ExeVm, ExeError> {
+        check_name(name)?;
+        let mut command = format!("new --json --name {name}");
+        if let Some(image) = image.filter(|image| !image.is_empty()) {
+            if image
+                .chars()
+                .any(|c| c.is_whitespace() || c.is_control() || "'\"\\".contains(c))
+            {
+                return Err(ExeError::Invalid(format!("Not an image name: {image}")));
+            }
+            command.push_str(&format!(" --image {image}"));
+        }
+        let answer = self.exec(&command).await?;
+        Ok(vm_of(&answer).unwrap_or_else(|| ExeVm::named(name)))
+    }
+
+    /// Adds an SSH public key to the person's exe.dev account. One that is there already is fine.
+    pub async fn add_ssh_key(&self, public_key: &str) -> Result<(), ExeError> {
+        let key = public_key.trim();
+        if key.is_empty() || key.chars().any(|c| c == '\'' || c.is_control()) {
+            return Err(ExeError::Invalid("Not an SSH public key".into()));
+        }
+        match self.exec(&format!("ssh-key add '{key}'")).await {
+            Ok(_) => Ok(()),
+            Err(ExeError::Command(message) | ExeError::Status { message, .. })
+                if message.to_ascii_lowercase().contains("already") =>
+            {
+                Ok(())
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Does what an approval asks of the device before it is approved, and returns the inputs
+    /// to approve it with: for `exe.new`, `vm` and `sshHost` (and `sshUser` when exe.dev named
+    /// one, `sshKeyError` when the key couldn't be added); nothing for `exe.rm`.
+    pub async fn run_client_action(
+        &self,
+        action: &ClientAction,
+    ) -> Result<HashMap<String, String>, ExeError> {
+        let mut inputs = HashMap::new();
+        match action {
+            ClientAction::ExeNew {
+                name,
+                image,
+                ssh_key,
+            } => {
+                check_name(name)?;
+                if let Some(key) = ssh_key.as_deref().filter(|key| !key.trim().is_empty()) {
+                    // The VM is still worth making: the handler hears why the key isn't there.
+                    if let Err(error) = self.add_ssh_key(key).await {
+                        inputs.insert("sshKeyError".to_owned(), error.to_string());
+                    }
+                }
+                let vm = self.new_vm(name, image.as_deref()).await?;
+                let host = vm
+                    .ssh_host
+                    .clone()
+                    .unwrap_or_else(|| format!("{}.exe.xyz", vm.name));
+                if let Some(user) = vm.ssh_user {
+                    inputs.insert("sshUser".to_owned(), user);
+                }
+                inputs.insert("vm".to_owned(), vm.name);
+                inputs.insert("sshHost".to_owned(), host);
+            }
+            ClientAction::ExeRm { name } => self.delete(name).await?,
+        }
+        Ok(inputs)
+    }
+}
+
+impl ExeVm {
+    /// What a VM named `name` is when exe.dev said nothing about it.
+    fn named(name: &str) -> Self {
+        ExeVm {
+            name: name.to_owned(),
+            url: format!("https://{name}.exe.xyz"),
+            ssh_host: None,
+            ssh_user: None,
+        }
+    }
+}
+
+/// A VM's name as exe.dev takes it, and as safe in a command: `[a-z0-9][a-z0-9-]*`.
+fn check_name(name: &str) -> Result<(), ExeError> {
+    let mut chars = name.chars();
+    let first = chars
+        .next()
+        .is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit());
+    if first && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-') {
+        Ok(())
+    } else {
+        Err(ExeError::Invalid(format!("Not a VM name: {name}")))
+    }
+}
+
+/// Where SSH reaches a VM, from what exe.dev said: `user@host`, `ssh user@host` or
+/// `ssh://user@host`, as a host and the user when there is one.
+fn ssh_dest_of(value: &Value) -> Option<(String, Option<String>)> {
+    let dest = [
+        "ssh_dest",
+        "sshDest",
+        "ssh_host",
+        "sshHost",
+        "ssh",
+        "ssh_command",
+    ]
+    .iter()
+    .find_map(|key| value.get(key).and_then(Value::as_str))?
+    .trim();
+    let dest = dest.strip_prefix("ssh://").unwrap_or(dest);
+    let dest = dest.strip_prefix("ssh ").unwrap_or(dest).trim();
+    let dest = dest
+        .split_whitespace()
+        .find(|part| !part.starts_with('-'))?;
+    let (user, host) = match dest.rsplit_once('@') {
+        Some((user, host)) => (Some(user.to_owned()).filter(|u| !u.is_empty()), host),
+        None => (None, dest),
+    };
+    let host = host.trim_end_matches('/');
+    (!host.is_empty()).then(|| (host.to_owned(), user))
 }
 
 /// Polls `server`'s setup until it answers open, every two seconds, at most `wait`.
@@ -277,7 +408,13 @@ fn vm_of(value: &Value) -> Option<ExeVm> {
         .filter(|url| url.starts_with("https://") || url.starts_with("http://"))
         .map(|url| url.trim_end_matches('/').to_owned())
         .unwrap_or_else(|| format!("https://{name}.exe.xyz"));
-    Some(ExeVm { name, url })
+    let (ssh_host, ssh_user) = ssh_dest_of(value).map_or((None, None), |(h, u)| (Some(h), u));
+    Some(ExeVm {
+        name,
+        url,
+        ssh_host,
+        ssh_user,
+    })
 }
 
 fn message_of(text: &str) -> String {
@@ -300,10 +437,7 @@ mod tests {
     fn reads_vms_leniently() {
         assert_eq!(
             vm_of(&json!({ "name": "robin" })),
-            Some(ExeVm {
-                name: "robin".into(),
-                url: "https://robin.exe.xyz".into()
-            })
+            Some(ExeVm::named("robin"))
         );
         assert_eq!(
             vm_of(&json!({ "vm_name": "robin", "https_url": "https://robin.exe.xyz/" }))
@@ -312,6 +446,25 @@ mod tests {
             "https://robin.exe.xyz"
         );
         assert_eq!(vm_of(&json!({ "status": "running" })), None);
+        let vm = vm_of(&json!({ "vm_name": "p1", "ssh_dest": "ssh dev@p1.exe.xyz" })).unwrap();
+        assert_eq!(
+            (vm.ssh_host.as_deref(), vm.ssh_user.as_deref()),
+            (Some("p1.exe.xyz"), Some("dev"))
+        );
+        let vm = vm_of(&json!({ "name": "p1", "ssh": "p1.exe.xyz" })).unwrap();
+        assert_eq!(
+            (vm.ssh_host.as_deref(), vm.ssh_user),
+            (Some("p1.exe.xyz"), None)
+        );
+    }
+
+    #[test]
+    fn puts_only_safe_names_into_commands() {
+        assert!(check_name("proj-1").is_ok());
+        assert!(check_name("1a").is_ok());
+        for bad in ["", "-a", "Proj", "a b", "a;rm", "a_b"] {
+            assert!(check_name(bad).is_err(), "{bad}");
+        }
     }
 
     #[test]

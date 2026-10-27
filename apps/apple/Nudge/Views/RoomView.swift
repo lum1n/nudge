@@ -128,8 +128,10 @@ struct RoomView: View {
                         VStack(spacing: 8) {
                             // Asked for by a tool and waiting: the activity shows them once decided.
                             ForEach(state?.approvals.filter { $0.status == .pending } ?? [], id: \.id) { approval in
-                                ApprovalCard(summary: approval.summary, status: approval.status, decidedBy: nil) { approve in
-                                    decide(approval.id, approve)
+                                // Its own errors show on the card, which stays to try again.
+                                PendingApprovalCard(approval: approval) { approve, inputs in
+                                    _ = try await client.decide(
+                                        room: roomId, approvalId: approval.id, approve: approve, inputs: inputs)
                                 }
                             }
                             if !empty {
@@ -256,10 +258,6 @@ struct RoomView: View {
         let isPrivate = secret && state?.room?.kind != .personal
         // A refused message stays in `pending`, marked failed, with Retry and Dismiss.
         _ = try? await client.send(room: roomId, text: trimmed, whenBusy: nil, private: isPrivate)
-    }
-
-    private func decide(_ approval: String, _ approve: Bool) {
-        Task { await attempt { _ = try await client.decide(room: roomId, approvalId: approval, approve: approve) } }
     }
 
     private func attempt(_ action: () async throws -> Void) async {

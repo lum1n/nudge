@@ -20,162 +20,18 @@ import {
 import { scriptsExtension } from "@nudge/ext-scripts";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  type AccBackend,
-  type AccCommand,
   type AccEvent,
-  type AccHost,
-  type AccItem,
-  type AccSession,
   accExtension,
   allowAndReject,
-  type DetachedStatus,
-  type HarnessId,
   Hosts,
   machines,
   quote,
-  type SessionConfig,
-  type SshConfig,
   transcript,
 } from "../src/index.ts";
+import { FakeAcc, push } from "./fake.ts";
 
 const context = BACKGROUND_CONTEXT;
 const by = { playerId: "owner", displayName: "Vegard" };
-
-/** A session's log on the fake host: batches of events, read by every attachment from the start. */
-type Log = {
-  readonly harness: HarnessId;
-  readonly cwd: string;
-  readonly batches: AccEvent[][];
-  readonly waiters: (() => void)[];
-  items: AccItem[];
-  readonly sent: AccCommand[];
-};
-
-function push(log: Log, ...events: AccEvent[]): void {
-  log.batches.push(events);
-  for (const wake of log.waiters.splice(0)) wake();
-}
-
-class FakeSession implements AccSession {
-  offset = 0;
-  constructor(
-    readonly id: string,
-    private readonly log: Log,
-  ) {}
-  async nextEvents(): Promise<AccEvent[]> {
-    while (this.offset >= this.log.batches.length)
-      await new Promise<void>((resolve) => this.log.waiters.push(resolve));
-    return this.log.batches[this.offset++]!;
-  }
-  async send(command: AccCommand): Promise<void> {
-    this.log.sent.push(command);
-  }
-  async stop(): Promise<void> {
-    push(this.log, { type: "exited", code: 0 });
-  }
-  async status(): Promise<DetachedStatus> {
-    return { status: "alive", pid: 1, size: this.log.batches.length };
-  }
-  state() {
-    return null;
-  }
-  topLevelItems(): AccItem[] {
-    return this.log.items;
-  }
-}
-
-/** ACC's binding as the extension uses it, with one host whose key the test can change. */
-class FakeAcc implements AccBackend {
-  fingerprint = "SHA256:one";
-  readonly logs = new Map<string, Log>();
-  readonly configs: (SshConfig | "local")[] = [];
-  keys = 0;
-  private ids = 0;
-
-  /** Configs of the hosts made, `"local"` for this machine. */
-  localHost = (): AccHost => {
-    this.configs.push("local");
-    return this.make({
-      host: "localhost",
-      user: "",
-      auth: { agent: true },
-      hostKey: { acceptAny: true },
-    });
-  };
-
-  host(config: SshConfig): AccHost {
-    this.configs.push(config);
-    return this.make(config);
-  }
-
-  private make(config: SshConfig): AccHost {
-    return {
-      connect: async () => {
-        if (
-          "fingerprints" in config.hostKey &&
-          !config.hostKey.fingerprints.includes(this.fingerprint)
-        )
-          throw Object.assign(new Error(`untrusted host key ${this.fingerprint}`), {
-            code: "HostKeyRejected",
-          });
-      },
-      disconnect: async () => {},
-      hostKeyFingerprint: () => this.fingerprint,
-      exec: async (script: string) => {
-        return script.includes("missing")
-          ? { stdout: Buffer.alloc(0), stderr: Buffer.from("no such directory"), exitCode: 1 }
-          : { stdout: Buffer.from("/home/u/proj\n"), stderr: Buffer.alloc(0), exitCode: 0 };
-      },
-      probe: async () => {
-        return [
-          {
-            harness: "claude" as const,
-            path: "/usr/bin/claude",
-            version: "2.1.0",
-            compat: "tested" as const,
-          },
-        ];
-      },
-      listSessions: async () => {
-        return [...this.logs].map(([id, log]) => ({
-          id,
-          status: { status: "alive" as const, pid: 1, size: log.batches.length },
-          modified: 0,
-          spec: { harness: log.harness, cwd: log.cwd, model: null, title: null, created_ms: 0 },
-        }));
-      },
-      launchSession: async (id: string, session: SessionConfig) => {
-        const log: Log = {
-          harness: session.harness,
-          cwd: session.cwd,
-          batches: [],
-          waiters: [],
-          items: [],
-          sent: [],
-        };
-        this.logs.set(id, log);
-        return new FakeSession(id, log);
-      },
-      attachSession: (id: string) => {
-        const log = this.logs.get(id);
-        if (log === undefined) throw new Error(`no session ${id}`);
-        return new FakeSession(id, log);
-      },
-      removeSession: async (id: string) => {
-        this.logs.delete(id);
-      },
-    };
-  }
-
-  generateKey(comment: string) {
-    this.keys++;
-    return { privateKey: "PRIVATE KEY", publicKey: `ssh-ed25519 AAAA ${comment}` };
-  }
-
-  newSessionId(harness: HarnessId): string {
-    return `${harness}-s${++this.ids}`;
-  }
-}
 
 function lastUser(request: ModelContext): string {
   const message = request.messages.findLast((m) => m.role === "user");
@@ -423,6 +279,45 @@ describe("acc", () => {
     expect(later.pinned("devbox")).toBe("SHA256:two");
     expect(later.publicKey()).toBe("ssh-ed25519 AAAA nudge-test");
     expect(acc.keys).toBe(1);
+  });
+
+  it("keeps machines added at runtime, logging in with its key, and forgets them", async () => {
+    const acc = new FakeAcc();
+    const dir = mkdtempSync(join(tmpdir(), "nudge-acc-"));
+    dirs.push(dir);
+    const secrets = new SecretStore(join(dir, "secrets"));
+    const configured = {
+      name: "devbox",
+      host: "10.0.0.2",
+      port: 22,
+      user: "u",
+      auth: "key" as const,
+      rooms: ["*"],
+    };
+    const added = join(dir, "added-hosts.json");
+    const hosts = new Hosts([configured], acc, secrets, join(dir, "hosts.json"), "t", added);
+    await expect(
+      hosts.add({ name: "devbox", host: "x", port: 22, user: "u", rooms: ["*"] }),
+    ).rejects.toThrow(/settings have/);
+    await hosts.add({
+      name: "proj-1",
+      host: "proj-1.exe.xyz",
+      port: 22,
+      user: "exedev",
+      rooms: ["r1"],
+    });
+    const later = new Hosts([configured], acc, secrets, join(dir, "hosts.json"), "t", added);
+    expect(later.usableIn("r1").map((entry) => entry.name)).toEqual(["devbox", "proj-1"]);
+    expect(later.usableIn("r2").map((entry) => entry.name)).toEqual(["devbox"]);
+    await later.connect("proj-1");
+    expect(acc.configs.at(-1)).toMatchObject({
+      host: "proj-1.exe.xyz",
+      user: "exedev",
+      auth: { privateKey: "PRIVATE KEY" },
+    });
+    expect(await later.remove("proj-1")).toBe(true);
+    expect(later.pinned("proj-1")).toBeUndefined();
+    expect(later.entries.map((entry) => entry.name)).toEqual(["devbox"]);
   });
 
   it("lets a script look at the machines, but not ask to trust a host key", async () => {

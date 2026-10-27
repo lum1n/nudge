@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Approvals that take inputs or an action on the device, and a room's project. -->
+<resources>
+    <!-- An approval's inputs and client action. -->
+    <string name="approval_optional">%1$s (optional)</string>
+    <string name="approval_launch_vm">Launch VM %1$s</string>
+    <string name="approval_delete_vm">Delete VM %1$s</string>
+    <string name="approval_making_vm">Making the VM…</string>
+    <string name="approval_deleting_vm">Deleting the VM…</string>
+    <string name="approval_approving">Approving…</string>
+    <string name="approval_needs_exe">This is done with your exe.dev account. Add your exe.dev token first, under Settings › Servers › Make a server on exe.dev, then come back to approve.</string>
+
+    <!-- A room's project. -->
+    <string name="project_title">Project</string>
+    <string name="project_none">No project in this room.</string>
+    <string name="project_off">No projects here. Turn on the projects extension for this room under About this room.</string>
+    <string name="project_pause">Pause</string>
+    <string name="project_resume">Resume</string>
+    <string name="project_status_planning">Planning</string>
+    <string name="project_status_running">Running</string>
+    <string name="project_status_paused">Paused</string>
+    <string name="project_status_gate">Waiting for you</string>
+    <string name="project_status_done">Done</string>
+    <string name="project_brief">Brief</string>
+    <string name="project_milestones">Milestones</string>
+    <string name="project_milestone_planned">Planned</string>
+    <string name="project_milestone_active">Active</string>
+    <string name="project_milestone_merged">Merged</string>
+    <string name="project_task_todo">To do</string>
+    <string name="project_task_review">In review</string>
+    <string name="project_task_blocked">Blocked</string>
+    <string name="project_task_skipped">Skipped</string>
+    <string name="project_no_tasks">No tasks yet</string>
+    <string name="project_pr">Pull request #%1$s</string>
+    <string name="project_pr_plain">Pull request</string>
+    <string name="project_ci_pending">checks running</string>
+    <string name="project_ci_passing">checks pass</string>
+    <string name="project_ci_failing">checks fail</string>
+    <string name="project_agents">Agents at work</string>
+    <string name="project_agents_none">No agents at work</string>
+    <string name="project_agents_max">At most %1$s at a time</string>
+    <string name="project_vm">VM</string>
+    <string name="project_vm_ready">Ready</string>
+    <string name="project_vm_not_ready">Being set up</string>
+    <string name="project_secrets">Secrets</string>
+    <string name="project_secrets_none">None yet</string>
+    <string name="project_spend">Spend</string>
+    <string name="project_spend_of">%1$s of %2$s</string>
+    <string name="project_repo">Repository</string>
+</resources>

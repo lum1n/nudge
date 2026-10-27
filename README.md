@@ -48,6 +48,7 @@ An extendable, multiplayer personal assistant that keeps personal data away from
 - `@nudge/ext-rss`: RSS and Atom feeds the assistant checks first for news (`extensions/rss`).
 - `@nudge/ext-triggers`: secret web addresses that let outside events start a turn in a room (`extensions/triggers`).
 - `@nudge/ext-acc`: lets the assistant start, watch and steer coding agents on your machines over SSH (`extensions/acc`).
+- `@nudge/ext-projects`: takes a software project from idea to merged code, with the assistant supervising coding agents on an exe.dev VM (`extensions/projects`).
 
 ## Install a server
 
@@ -219,6 +220,10 @@ Passwords and tokens set through the settings page (mail, calendar, contacts, ac
 ### Coding agents
 
 `extensions/acc` lets the assistant start, watch and steer the coding agents you run on your machines: Claude Code, Codex, Cursor, Copilot CLI, pi and opencode. It embeds [ACC](https://github.com/lum1n/acc), its core and its own SSH client, so nothing is installed on the machines and the server needs no `ssh`. See [Coding agents](docs/extensions/acc.md).
+
+### Projects
+
+`extensions/projects` builds on it: say "New project: …" and the assistant interviews you, plans milestones and tasks, and once you approve the plan runs coding agents on an exe.dev VM your phone launches. Every task becomes a pull request, and milestones merge only when you approve. Secrets you give on a card reach the agents but never the model. See [Projects](docs/extensions/projects.md).
 
 ### MCP servers
 

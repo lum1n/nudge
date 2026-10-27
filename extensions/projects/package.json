@@ -1,0 +1,24 @@
+{
+  "name": "@nudge/ext-projects",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Take a software project from idea to merged code: the assistant supervises coding agents on an exe.dev VM per project",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "@nudge/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@nudge/core": "workspace:*",
+    "@nudge/ext-acc": "workspace:*"
+  }
+}

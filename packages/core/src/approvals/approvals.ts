@@ -16,8 +16,33 @@ import { mapStrings } from "../privacy/redact.ts";
 import { actingFor, currentTurn, inTurn, type Owner } from "../privacy/turn.ts";
 import { PLACEHOLDER } from "../privacy/vault.ts";
 import { untrustedData } from "../privacy/untrusted.ts";
+import { scrubSecrets } from "../secrets.ts";
 
 export type ApprovalStatus = "pending" | "approved" | "denied" | "done" | "failed";
+
+/**
+ * A value an approval asks for when someone approves it, such as a key. It goes with the decision
+ * to the handler (`ApprovalRun.inputs`) and is never stored, told to the room or given to the model.
+ */
+export type ApprovalInput = {
+  /** Letters, digits and `_`. */
+  name: string;
+  label: string;
+  /** Typed into a password field. */
+  secret: boolean;
+  description?: string;
+  /** May be left empty; required otherwise. */
+  optional?: true;
+};
+
+/**
+ * What the app does on the device before it approves, with what only the device has, such as its
+ * exe.dev token (ADR 11, 26); it then approves with the inputs the action names. See the
+ * protocol's `ClientAction`.
+ */
+export type ClientAction =
+  | { type: "exe.new"; name: string; image?: string; sshKey?: string }
+  | { type: "exe.rm"; name: string };
 
 // Stored in a document, so plain JSON.
 export type Approval = {
@@ -47,6 +72,10 @@ export type Approval = {
   privateTo?: Owner;
   /** Only an admin may decide it, as for an action that runs a program on the server. */
   adminOnly?: true;
+  /** What approving it takes, besides a yes. */
+  inputs?: ApprovalInput[];
+  /** What the app does before it approves. */
+  clientAction?: ClientAction;
 };
 
 export type ApprovalsState = {
@@ -85,6 +114,10 @@ export type ApprovalDraft = {
   readonly payload: JsonValue;
   /** Only an admin may decide it. */
   readonly adminOnly?: boolean;
+  /** Values approving it takes, such as a key; see `ApprovalInput`. */
+  readonly inputs?: readonly ApprovalInput[];
+  /** What the app does on the device before it approves; see `ClientAction`. */
+  readonly clientAction?: ClientAction;
 };
 
 /** What an approved action's handler gets. */
@@ -102,6 +135,11 @@ export type ApprovalRun = {
    * or tell people what it could not fill in.
    */
   readonly heldBack: readonly string[];
+  /**
+   * The approval's inputs as the decider gave them, by name; empty for a denial. Never stored:
+   * keep what must last in the extension's secrets. What the handler reports has them scrubbed.
+   */
+  readonly inputs: Readonly<Record<string, string>>;
 };
 
 export type ApprovalOutcome = {
@@ -163,6 +201,22 @@ export async function requestApproval(
     approval.requestedBy = { playerId: requestedBy.playerId, displayName: requestedBy.displayName };
   if (privateTo !== undefined) approval.privateTo = { ...privateTo };
   if (draft.adminOnly === true) approval.adminOnly = true;
+  if (draft.inputs !== undefined && draft.inputs.length > 0) {
+    const names = new Set<string>();
+    for (const input of draft.inputs) {
+      if (!INPUT_NAME.test(input.name) || names.has(input.name))
+        throw new Error(`Approval input "${input.name}" is not a unique name`);
+      names.add(input.name);
+    }
+    approval.inputs = draft.inputs.map((input) => ({
+      name: input.name,
+      label: redact(input.label),
+      secret: input.secret,
+      ...(input.description === undefined ? {} : { description: redact(input.description) }),
+      ...(input.optional === true ? { optional: true as const } : {}),
+    }));
+  }
+  if (draft.clientAction !== undefined) approval.clientAction = structuredClone(draft.clientAction);
   state.next += 1;
   state.items.push(structuredClone(approval));
   return approval;
@@ -181,10 +235,19 @@ export class AdminOnly extends Error {
   override name = "AdminOnly";
 }
 
+/** An approval approved without an input it needs. */
+export class MissingInputs extends Error {
+  override name = "MissingInputs";
+}
+
 export type Decision = {
   readonly approve: boolean;
   readonly by: { readonly playerId: string; readonly displayName: string };
+  /** The approval's inputs by name, when approving. Others are dropped. */
+  readonly inputs?: Readonly<Record<string, string>>;
 };
+
+const INPUT_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 /** Each room's approvals, for hosts: list them and decide. */
 export class Approvals {
@@ -240,12 +303,14 @@ export class Approvals {
     if (room === undefined) throw new Error(`No room "${roomId}"`);
     const by = { playerId: decision.by.playerId, displayName: decision.by.displayName };
     const admin = await this.isAdmin(by.playerId, context);
+    let inputs: Record<string, string> = {};
     const decided = await this.update(roomId, id, context, (item) => {
       if (item.privateTo !== undefined && item.privateTo.playerId !== by.playerId)
         throw new ApprovalNotFound(`No approval ${id} in room "${roomId}"`);
       if (item.status !== "pending") throw new AlreadyDecided(`Approval ${id} is ${item.status}`);
       if (item.adminOnly === true && !admin)
         throw new AdminOnly(`Only an admin may decide approval ${id}`);
+      if (decision.approve) inputs = takeInputs(item, decision.inputs ?? {});
       item.status = decision.approve ? "approved" : "denied";
       item.decidedBy = by;
       item.decidedAt = this.now();
@@ -253,21 +318,22 @@ export class Approvals {
     if (!decision.approve) {
       const denied = this.denial(decided.extension, decided.kind);
       if (denied !== undefined) {
-        const { payload, run } = this.runFor(room, decided, context);
+        const { payload, run } = this.runFor(room, decided, context, {});
         await denied(payload, run).catch(this.report);
       }
       await this.tell(room, decided, context);
       return decided;
     }
     // Marked approved before it runs: after a crash it is never run a second time.
-    const outcome = await this.run(room, decided, context);
+    const outcome = await this.run(room, decided, context, inputs);
     const finished = await this.update(
       roomId,
       id,
       context,
       (item) => {
         item.status = outcome.isError ? "failed" : "done";
-        item.result = this.redact(outcome.text);
+        // A handler that echoes an input doesn't put it in the room.
+        item.result = this.redact(scrubSecrets(outcome.text, Object.values(inputs)));
       },
       async (tx) => {
         if (outcome.usage === undefined) return;
@@ -299,7 +365,12 @@ export class Approvals {
     }
   }
 
-  private async run(room: Room, approval: Approval, context: Context): Promise<ApprovalOutcome> {
+  private async run(
+    room: Room,
+    approval: Approval,
+    context: Context,
+    inputs: Readonly<Record<string, string>>,
+  ): Promise<ApprovalOutcome> {
     const handler = this.handler(approval.extension, approval.kind);
     if (handler === undefined)
       return {
@@ -309,7 +380,7 @@ export class Approvals {
     try {
       // What the action asks for in turn, such as another approval, stays as private as it is.
       const turn = approval.privateTo === undefined ? {} : { privateTo: approval.privateTo };
-      const { payload, run } = this.runFor(room, approval, context);
+      const { payload, run } = this.runFor(room, approval, context, inputs);
       return await inTurn(turn, () => handler(payload, run));
     } catch (error) {
       return { text: (error as Error).message, isError: true };
@@ -321,6 +392,7 @@ export class Approvals {
     room: Room,
     approval: Approval,
     context: Context,
+    inputs: Readonly<Record<string, string>>,
   ): { payload: Approval["payload"]; run: ApprovalRun } {
     const viewer = valuesFor(approval);
     const heldBack = new Set<string>();
@@ -338,6 +410,7 @@ export class Approvals {
         models: this.models(viewer),
         context,
         heldBack: [...heldBack],
+        inputs,
       },
     };
   }
@@ -445,6 +518,26 @@ function sumUsage(total: Readonly<Usage> | undefined, add: Usage): Usage {
       total: cost("total"),
     },
   };
+}
+
+/**
+ * The inputs `item` asks for from what the decider gave, or throws when a required one is missing.
+ * Ones it doesn't ask for are dropped.
+ */
+function takeInputs(
+  item: Readonly<Approval>,
+  given: Readonly<Record<string, string>>,
+): Record<string, string> {
+  const taken: Record<string, string> = {};
+  const missing: string[] = [];
+  for (const input of item.inputs ?? []) {
+    const value = given[input.name];
+    if (typeof value === "string" && value.trim() !== "") taken[input.name] = value;
+    else if (input.optional !== true) missing.push(input.label);
+  }
+  if (missing.length > 0)
+    throw new MissingInputs(`Approving ${item.id} takes ${missing.join(", ")}`);
+  return taken;
 }
 
 /** A plain copy of a stored approval; documents hand out proxies. */

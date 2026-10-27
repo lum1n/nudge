@@ -417,9 +417,16 @@ export class Api {
     return this.request("DELETE", `/ext/a2a/agents/${encodeURIComponent(id)}`);
   }
 
-  decide(room: string, approval: string, approve: boolean): Promise<Approval> {
+  /** `inputs` are the approval's inputs by name, when approving; see `Approval.inputs`. */
+  decide(
+    room: string,
+    approval: string,
+    approve: boolean,
+    inputs?: Readonly<Record<string, string>>,
+  ): Promise<Approval> {
     return this.request("POST", `${roomPath(room)}/approvals/${encodeURIComponent(approval)}`, {
       approve,
+      ...(inputs === undefined ? {} : { inputs }),
     });
   }
 

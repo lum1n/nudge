@@ -70,6 +70,12 @@
           "enabled": false
         },
         {
+          "$comment": "Projects: the assistant takes a software project from idea to merged code, supervising coding agents on an exe.dev VM per project that the Nudge app on your phone launches. Needs ./extensions/acc; off here so the example works without it.",
+          "from": "./extensions/projects",
+          "settings": { "maxAgents": 2, "harness": "claude", "reviewHarness": "codex" },
+          "enabled": false
+        },
+        {
           "$comment": "Talk to assistants on other servers once both sides' admins link them (link_assistant). Each thread runs in the background for a few rounds; a linked assistant speaks here as a guest in a room of its own and can use only what offer turns on there. Needs ./extensions/federation with its server address; off here so the example works without it.",
           "from": "./extensions/peers",
           "settings": { "maxRounds": 6, "replyHours": 24, "offer": ["calendar"] },

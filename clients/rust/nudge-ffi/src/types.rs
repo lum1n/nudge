@@ -184,6 +184,73 @@ pub struct Approval {
     /// Asked for in answer to something private: only this player sees and decides it.
     #[uniffi(default = None)]
     pub private_to: Option<Player>,
+    /// What approving it takes, besides a yes: send the values with `decide`, never keep them.
+    #[uniffi(default = [])]
+    pub inputs: Vec<ApprovalInput>,
+    /// What the app does before it approves (`ExeClient::run_client_action`); `None` too for one
+    /// this client doesn't know, which can still be denied.
+    #[uniffi(default = None)]
+    pub client_action: Option<ClientAction>,
+}
+
+/// Something approving an approval takes, such as a password.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct ApprovalInput {
+    /// The key its value is sent with.
+    pub name: String,
+    pub label: String,
+    /// A password field: the value isn't shown while typed.
+    pub secret: bool,
+    pub description: Option<String>,
+    /// It may be left empty; required otherwise.
+    pub optional: bool,
+}
+
+/// Something the app does on the device before it approves, with its exe.dev token.
+#[derive(Clone, Debug, PartialEq, uniffi::Enum)]
+pub enum ClientAction {
+    /// Makes the VM `name` (adding `ssh_key` to the account first, when given).
+    ExeNew {
+        name: String,
+        image: Option<String>,
+        ssh_key: Option<String>,
+    },
+    /// Removes the VM `name`.
+    ExeRm { name: String },
+}
+
+impl From<p::ClientAction> for ClientAction {
+    fn from(action: p::ClientAction) -> Self {
+        match action {
+            p::ClientAction::ExeNew {
+                name,
+                image,
+                ssh_key,
+            } => ClientAction::ExeNew {
+                name,
+                image,
+                ssh_key,
+            },
+            p::ClientAction::ExeRm { name } => ClientAction::ExeRm { name },
+        }
+    }
+}
+
+impl From<ClientAction> for p::ClientAction {
+    fn from(action: ClientAction) -> Self {
+        match action {
+            ClientAction::ExeNew {
+                name,
+                image,
+                ssh_key,
+            } => p::ClientAction::ExeNew {
+                name,
+                image,
+                ssh_key,
+            },
+            ClientAction::ExeRm { name } => p::ClientAction::ExeRm { name },
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
@@ -623,6 +690,18 @@ impl From<p::Approval> for Approval {
             decided_at: approval.decided_at,
             result: approval.result,
             private_to: approval.private_to.map(Into::into),
+            inputs: approval
+                .inputs
+                .into_iter()
+                .map(|input| ApprovalInput {
+                    name: input.name,
+                    label: input.label,
+                    secret: input.secret,
+                    description: input.description,
+                    optional: input.optional.unwrap_or(false),
+                })
+                .collect(),
+            client_action: approval.client_action.map(Into::into),
         }
     }
 }

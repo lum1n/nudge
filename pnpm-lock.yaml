@@ -290,6 +290,15 @@ importers:
         specifier: workspace:*
         version: link:../../packages/core
 
+  extensions/projects:
+    dependencies:
+      '@nudge/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@nudge/ext-acc':
+        specifier: workspace:*
+        version: link:../acc
+
   extensions/push:
     dependencies:
       '@nudge/core':
@@ -569,6 +578,9 @@ importers:
       '@nudge/ext-places':
         specifier: workspace:*
         version: link:../../extensions/places
+      '@nudge/ext-projects':
+        specifier: workspace:*
+        version: link:../../extensions/projects
       '@nudge/ext-push':
         specifier: workspace:*
         version: link:../../extensions/push

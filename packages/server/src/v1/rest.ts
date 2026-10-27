@@ -16,6 +16,7 @@ import {
   InvalidPersonal,
   InvalidProfile,
   MAX_ROUTE_BODY,
+  MissingInputs,
   AttachmentNotFound,
   AttachmentRefused,
   AttachmentRemoved,
@@ -731,11 +732,16 @@ export function restRoutes(options: RestOptions): Hono {
       const approval = await c.var.nudge.approvals.decide(
         room.id,
         c.req.param("approval"),
-        { approve: body.approve, by: { playerId: player.id, displayName: player.displayName } },
+        {
+          approve: body.approve,
+          by: { playerId: player.id, displayName: player.displayName },
+          ...(body.inputs === undefined ? {} : { inputs: body.inputs }),
+        },
         context,
       );
       return c.json(viewerOf(c).strings(toApproval(approval)));
     } catch (error) {
+      if (error instanceof MissingInputs) throw new HttpError(400, error.message);
       if (error instanceof ApprovalNotFound) throw new HttpError(404, error.message);
       if (error instanceof AlreadyDecided) throw new HttpError(409, error.message);
       if (error instanceof AdminOnly) throw new HttpError(403, error.message);

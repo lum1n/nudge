@@ -87,7 +87,7 @@ private data class Destination(val account: String, val room: String, val extra:
     }
 }
 
-private enum class Extra { LISTS, INFO, DOCUMENTS, CONNECTORS, MCP, BROWSER, DESKTOP, TERMINAL }
+private enum class Extra { LISTS, INFO, DOCUMENTS, CONNECTORS, MCP, BROWSER, DESKTOP, TERMINAL, PROJECT }
 
 /**
  * The rooms beside the open room, the Android way: one pane on a phone, list and detail side by
@@ -174,6 +174,7 @@ private fun SignedIn(model: AppModel, session: Session) {
                     CompositionLocalProvider(LocalRobotLook provides at.look()) {
                         RoomScreen(
                             at, room.room, model.dictation,
+                            exeToken = { model.servers.exeToken },
                             back = if (listVisible) null else ({ scope.launch { navigator.navigateBack() } }),
                             lists = { open(Destination.of(room, Extra.LISTS)) },
                             info = { open(Destination.of(room, Extra.INFO)) },
@@ -201,6 +202,7 @@ private fun SignedIn(model: AppModel, session: Session) {
                             browser = { open(Destination.of(room, Extra.BROWSER)) },
                             desktop = { open(Destination.of(room, Extra.DESKTOP)) },
                             terminal = { open(Destination.of(room, Extra.TERMINAL)) },
+                            project = { open(Destination.of(room, Extra.PROJECT)) },
                         )
                         Extra.DOCUMENTS -> DocumentsScreen(client, room.room, close)
                         Extra.CONNECTORS -> ConnectorsScreen(client, room.room, close)
@@ -208,6 +210,7 @@ private fun SignedIn(model: AppModel, session: Session) {
                         Extra.BROWSER -> BrowserScreen(client, room.room, close)
                         Extra.DESKTOP -> DesktopScreen(client, room.room, close)
                         Extra.TERMINAL -> TerminalScreen(client, room.room, close)
+                        Extra.PROJECT -> ProjectScreen(client, room.room, close)
                     }
                 }
             }

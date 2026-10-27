@@ -1,4 +1,10 @@
-import type { PendingMessage, RoomState, RoomView, TimelineItem } from "@nudge/client";
+import type {
+  PendingMessage,
+  RoomExtension,
+  RoomState,
+  RoomView,
+  TimelineItem,
+} from "@nudge/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
 import { renderToString } from "react-dom/server";
@@ -33,8 +39,13 @@ afterEach(() => {
 });
 
 /** The room page at /robin/<room>, rendered once, as Ann; `admin` says whether she is one. */
-async function render(room = "trip", { admin = true } = {}): Promise<string> {
+async function render(
+  room = "trip",
+  { admin = true, extensions }: { admin?: boolean; extensions?: RoomExtension[] } = {},
+): Promise<string> {
   const queryClient = new QueryClient();
+  if (extensions !== undefined)
+    queryClient.setQueryData(["robin", "room-extensions", room], extensions);
   queryClient.setQueryData(["robin", "me"], {
     player: { id: "ann", displayName: "Ann" },
     admin,
@@ -224,6 +235,64 @@ describe("the room page", () => {
     expect(shown).not.toContain("Rent a car");
     expect(shown).toContain("Room 1 waiting for approval");
     expect(shown).toContain("Waiting for an approval");
+  });
+
+  it("asks for an approval's inputs, a secret one as a password, and holds Approve until they are in", async () => {
+    hold(
+      view({
+        approvals: [
+          {
+            id: "a3",
+            summary: "Add the deploy token",
+            status: "pending",
+            requestedAt: now,
+            inputs: [
+              { name: "token", label: "Token", secret: true, description: "From the dashboard" },
+              { name: "note", label: "Note", secret: false, optional: true },
+            ],
+          },
+        ],
+      }),
+    );
+    const html = await render();
+    expect(text(html)).toContain("Token From the dashboard");
+    expect(text(html)).toContain("Note (optional)");
+    expect(html).toMatch(/<input type="password" autoComplete="off"[^>]*name="token"/);
+    expect(html).toMatch(/<input type="text" autoComplete="off"[^>]*name="note"/);
+    expect(html).toMatch(/<button type="button" disabled="" [^>]*>Approve</);
+  });
+
+  it("sends a VM launch to the phone app, with Deny but no Approve", async () => {
+    hold(
+      view({
+        approvals: [
+          {
+            id: "a4",
+            summary: "Make the VM nudge-site",
+            status: "pending",
+            requestedAt: now,
+            inputs: [{ name: "vm", label: "VM", secret: false }],
+            clientAction: { type: "exe.new", name: "nudge-site" },
+          },
+        ],
+      }),
+    );
+    const shown = text(await render());
+    expect(shown).toContain(
+      "Make the VM nudge-site Deny Open the Nudge app on your phone to launch the VM nudge-site.",
+    );
+    expect(shown).not.toContain("Approve");
+  });
+
+  it("links to the project only where the projects extension is on", async () => {
+    hold(view());
+    const projects = (enabled: boolean): RoomExtension[] => [
+      { name: "projects", enabled, byDefault: false },
+    ];
+    expect(text(await render("trip", { extensions: projects(true) }))).toContain("Lists Project");
+    expect(text(await render("trip", { extensions: projects(false) }))).not.toContain(
+      "Lists Project",
+    );
   });
 
   it("says what the assistant is doing, and offers Stop while it runs", async () => {

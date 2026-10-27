@@ -336,3 +336,94 @@ async fn a_wired_server_gets_homes_invite_at_launch() {
         commands[0]
     );
 }
+
+/// An approval's client action: the project's key is added (one there already is fine), the VM
+/// made, and the inputs to approve with come back; removing runs `rm`. Names that aren't safe in
+/// a command never reach exe.dev.
+#[tokio::test]
+async fn runs_client_actions_and_returns_the_inputs() {
+    let commands = Arc::new(Mutex::new(Vec::<String>::new()));
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    {
+        let commands = commands.clone();
+        serve_http(listener, move |_, body| {
+            commands.lock().unwrap().push(body.clone());
+            Box::pin(async move {
+                if body.starts_with("ssh-key add 'ssh-ed25519 OLD") {
+                    (422, r#"{"error":"key already exists"}"#.to_owned())
+                } else if body.starts_with("ssh-key add") {
+                    (422, r#"{"error":"bad key"}"#.to_owned())
+                } else if body.starts_with("new ") {
+                    (
+                        200,
+                        r#"{"vm_name":"proj-1","ssh_dest":"ssh dev@proj-1.exe.xyz"}"#.to_owned(),
+                    )
+                } else {
+                    (200, "{}".to_owned())
+                }
+            })
+        });
+    }
+    let exe = ExeDev::with_base(&url, "exe1.token").unwrap();
+
+    let inputs = exe
+        .run_client_action(&ClientAction::ExeNew {
+            name: "proj-1".into(),
+            image: Some("ubuntu:24.04".into()),
+            ssh_key: Some("ssh-ed25519 OLD nudge".into()),
+        })
+        .await
+        .unwrap();
+    assert_eq!(inputs["vm"], "proj-1");
+    assert_eq!(inputs["sshHost"], "proj-1.exe.xyz");
+    assert_eq!(inputs["sshUser"], "dev");
+    assert!(!inputs.contains_key("sshKeyError"));
+
+    let inputs = exe
+        .run_client_action(&ClientAction::ExeNew {
+            name: "proj-1".into(),
+            image: None,
+            ssh_key: Some("ssh-ed25519 NEW nudge".into()),
+        })
+        .await
+        .unwrap();
+    assert!(inputs["sshKeyError"].contains("bad key"), "{inputs:?}");
+
+    let removed = exe
+        .run_client_action(&ClientAction::ExeRm {
+            name: "proj-1".into(),
+        })
+        .await
+        .unwrap();
+    assert!(removed.is_empty());
+
+    for action in [
+        ClientAction::ExeRm {
+            name: "proj-1; rm x".into(),
+        },
+        ClientAction::ExeNew {
+            name: "proj-1".into(),
+            image: Some("ubuntu --env X=1".into()),
+            ssh_key: None,
+        },
+    ] {
+        let refused = exe.run_client_action(&action).await;
+        assert!(matches!(refused, Err(ExeError::Invalid(_))), "{refused:?}");
+    }
+    assert!(matches!(
+        exe.add_ssh_key("ssh-ed25519 A'B").await,
+        Err(ExeError::Invalid(_))
+    ));
+
+    assert_eq!(
+        *commands.lock().unwrap(),
+        [
+            "ssh-key add 'ssh-ed25519 OLD nudge'",
+            "new --json --name proj-1 --image ubuntu:24.04",
+            "ssh-key add 'ssh-ed25519 NEW nudge'",
+            "new --json --name proj-1",
+            "rm proj-1",
+        ]
+    );
+}

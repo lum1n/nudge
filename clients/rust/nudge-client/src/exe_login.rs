@@ -20,7 +20,8 @@ use crate::exe::ExeError;
 /// exe.dev's host key, as its documentation gives it (https://exe.dev/docs/faq/host-key).
 pub const EXE_HOST_KEY: &str = "SHA256:JJOP/lwiBGOMilfONPWZCXUrfK154cnJFXcqlsi6lPo";
 
-/// What the app's token may run: what making a server, listing and removing them needs.
+/// What the app's token may run: what making a server, listing and removing them needs, and
+/// adding a project's SSH key.
 pub const EXE_TOKEN_COMMANDS: &[&str] = &[
     "whoami",
     "ls",
@@ -29,6 +30,8 @@ pub const EXE_TOKEN_COMMANDS: &[&str] = &[
     "share show",
     "share port",
     "share set-public",
+    // Projects' client actions add the project's SSH key before they make its VM.
+    "ssh-key add",
 ];
 
 /// How often the screen is passed on at most, while it changes.
