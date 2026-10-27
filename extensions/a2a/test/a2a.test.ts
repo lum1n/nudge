@@ -391,6 +391,13 @@ describe("a2a", { timeout: 30_000 }, () => {
     expect(Object.values(awayState.tasks).map((task) => task.task.contextId)).toEqual([id, id]);
     const call_ = Object.values((await home.harness.snapshot(A2ADoc, context))!.calls)[0]!;
     expect(call_).toMatchObject({ status: "open", state: "TASK_STATE_WORKING" });
+    // A wrong token is turned away, even one as long as the right one with a non-ASCII letter.
+    const forged = await between(`${HOME}/v1/a/robin/ext/a2a/push/${call_.id}`, {
+      method: "POST",
+      headers: { "X-A2A-Notification-Token": `é${call_.pushToken.slice(1)}` },
+      body: "{}",
+    });
+    expect(forged.status).toBe(404);
     const room = Object.values(awayState.clients)[0]!.roomId;
     const asked = (await pending(away, room))[0]!;
     await away.approvals.decide(room, asked.id, { approve: true, by: ann }, context);
@@ -439,5 +446,22 @@ describe("a2a", { timeout: 30_000 }, () => {
     ) as { artifacts: { parts: { text: string }[] }[] };
     expect(chained.artifacts[0]!.parts[0]!.text).toContain("own people's rooms");
     expect(client.roomId).toBeDefined();
+  });
+
+  it("turns down a message without a messageId instead of taking it for a retry", async () => {
+    await start(quiet);
+    const { token } = await letIn();
+    const sent = (text: string, id: number) =>
+      call(AWAY, "team", "POST", "/ext/a2a/rpc", token, {
+        jsonrpc: "2.0",
+        id,
+        method: "SendMessage",
+        params: { message: { role: "ROLE_USER", parts: [{ text }] } },
+      });
+    const first = await sent("When are you free?", 1);
+    const second = await sent("And next week?", 2);
+    expect(first.json.error?.message).toContain("messageId");
+    expect(second.json.error?.message).toContain("messageId");
+    expect(Object.keys((await away.harness.snapshot(A2ADoc, context))?.tasks ?? {})).toEqual([]);
   });
 });

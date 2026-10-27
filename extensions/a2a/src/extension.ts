@@ -428,6 +428,9 @@ class A2A {
     const { maxChars, maxMessagesPerHour, waitSeconds } = this.host.settings;
     const text = cut(textOfParts(message.parts), maxChars);
     if (text.trim() === "") throw new RequestMalformedError("The message has no text");
+    // A retry is found by it, so a message without one can't be told from another.
+    if (typeof message.messageId !== "string" || message.messageId === "")
+      throw new RequestMalformedError("The message has no messageId");
     if (configuration.push !== undefined) this.checkPush(configuration.push);
     const nudge = this.nudge();
     const now = this.host.now();
@@ -965,11 +968,13 @@ class A2A {
 
   private async push(request: Request, callId: string, context: Context): Promise<Response> {
     const call = (await this.state(context)).calls[callId];
-    const presented = request.headers.get("X-A2A-Notification-Token") ?? "";
+    // Compared as bytes: a header with non-ASCII letters is longer in bytes than in characters.
+    const presented = Buffer.from(request.headers.get("X-A2A-Notification-Token") ?? "");
+    const expected = Buffer.from(call?.pushToken ?? "");
     if (
       call === undefined ||
-      presented.length !== call.pushToken.length ||
-      !timingSafeEqual(Buffer.from(presented), Buffer.from(call.pushToken))
+      presented.length !== expected.length ||
+      !timingSafeEqual(presented, expected)
     )
       return problem(404, "No such call");
     // The body is only news that something changed; the task is read from the agent itself.
