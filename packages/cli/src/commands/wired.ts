@@ -54,7 +54,9 @@ export async function wired(options: WiredCommandOptions): Promise<void> {
       return;
     case "add": {
       if (options.arg === undefined) throw new UsageError(USAGE);
-      const { invite } = (await call("POST", "/relays", { url: options.arg })) as { invite: string };
+      const { invite } = (await call("POST", "/relays", { url: options.arg })) as {
+        invite: string;
+      };
       console.log(invite);
       console.log(
         `(The invite is a credential. On that server: nudge wired join <invite> --url ${options.arg})`,
@@ -81,10 +83,12 @@ function describe(state: WiredState): void {
       console.log(
         `${state.state === "root" ? "Holds" : "Is in"} the network as ${state.name}: others reach it at http://nudge.${state.name}.wired`,
       );
-      for (const m of state.members ?? []) console.log(`  ${m.name}${m.anchor ? " (holds it)" : ""}`);
+      for (const m of state.members ?? [])
+        console.log(`  ${m.name}${m.anchor ? " (holds it)" : ""}`);
       if (state.relays !== undefined && state.relays.length > 0)
         console.log(`Relays: ${state.relays.join(", ")}`);
-      else console.log("No relays yet: nudge wired add <https-url of a server with a public address>");
+      else
+        console.log("No relays yet: nudge wired add <https-url of a server with a public address>");
       if (state.relay !== undefined) console.log(`Serves a relay at ${state.relay}`);
       return;
     case "unavailable":

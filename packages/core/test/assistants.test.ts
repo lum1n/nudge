@@ -103,9 +103,9 @@ describe("Assistants", () => {
 
   it("keeps the assistant as it was when its new settings don't open", async () => {
     assistants = await open();
-    await expect(
-      assistants.update("robin", { budget: { monthlyUsd: -1 } }),
-    ).rejects.toBeInstanceOf(ConfigError);
+    await expect(assistants.update("robin", { budget: { monthlyUsd: -1 } })).rejects.toBeInstanceOf(
+      ConfigError,
+    );
     expect(assistants.running.has("robin")).toBe(true);
     expect((await config()).assistants[0]).not.toHaveProperty("budget");
     await expect(assistants.update("nobody", {})).rejects.toBeInstanceOf(AssistantNotFound);
