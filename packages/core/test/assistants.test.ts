@@ -14,6 +14,7 @@ import {
   LOBBY,
   openAssistant,
 } from "../src/index.ts";
+import { SettingSecrets } from "../src/setting-secrets.ts";
 
 const context = BACKGROUND_CONTEXT;
 
@@ -101,6 +102,26 @@ describe("Assistants", () => {
     expect((await config()).assistants[0]).not.toHaveProperty("instructions");
   });
 
+  it("sets the style and autonomy, refuses ones it doesn't know, and clears them", async () => {
+    assistants = await open();
+    await assistants.update("robin", { style: "detailed", autonomy: "independent" });
+    expect((await config()).assistants[0]).toMatchObject({
+      style: "detailed",
+      autonomy: "independent",
+    });
+    expect((await assistants.list())[0]).toMatchObject({
+      style: "detailed",
+      autonomy: "independent",
+    });
+    await expect(
+      assistants.update("robin", { style: "chatty" as "concise" }),
+    ).rejects.toBeInstanceOf(ConfigError);
+    expect((await config()).assistants[0]).toMatchObject({ style: "detailed" });
+    await assistants.update("robin", { style: null, autonomy: null });
+    expect((await config()).assistants[0]).not.toHaveProperty("style");
+    expect((await config()).assistants[0]).not.toHaveProperty("autonomy");
+  });
+
   it("keeps the assistant as it was when its new settings don't open", async () => {
     assistants = await open();
     await expect(
@@ -127,6 +148,19 @@ describe("Assistants", () => {
     expect(existsSync(database)).toBe(false);
     expect(existsSync(`${database}.extensions`)).toBe(false);
     expect((await config()).assistants.map((a) => a.name)).toEqual(["robin"]);
+  });
+
+  it("drops a deleted assistant's setting secrets, and keeps the others'", async () => {
+    assistants = await open();
+    await assistants.create({ name: "pocket", model });
+    const secrets = new SettingSecrets(dir);
+    const id = (reference: string) => /^\$\{secret:([\w-]+)\}$/.exec(reference)![1]!;
+    const pocket = id(secrets.put("pocket", "hunter2"));
+    const robin = id(secrets.put("robin", "swordfish"));
+    await assistants.remove("pocket", async () => "backup-file");
+    const reopened = new SettingSecrets(dir);
+    expect(reopened.get("pocket", pocket)).toBeUndefined();
+    expect(reopened.get("robin", robin)).toBe("swordfish");
   });
 
   it("deletes nothing when the backup fails", async () => {
