@@ -42,7 +42,10 @@ export function serveNudge(options: ServeOptions): Promise<RunningServer> {
         ...(relay === undefined
           ? {}
           : {
-              createServer: ((serverOptions: object, listener: (req: IncomingMessage, res: never) => void) => {
+              createServer: ((
+                serverOptions: object,
+                listener: (req: IncomingMessage, res: never) => void,
+              ) => {
                 const http = createServer(serverOptions, (req, res) =>
                   relay.matches(req) ? relay.request(req, res) : listener(req, res as never),
                 );
@@ -51,7 +54,10 @@ export function serveNudge(options: ServeOptions): Promise<RunningServer> {
                 const emit = http.emit.bind(http);
                 http.emit = ((event: string, ...args: unknown[]) => {
                   if (event === "upgrade" && relay.matches(args[0] as IncomingMessage)) {
-                    const socket = args[1] as { destroy(): void; once(event: "close", f: () => void): void };
+                    const socket = args[1] as {
+                      destroy(): void;
+                      once(event: "close", f: () => void): void;
+                    };
                     relaySockets.add(socket);
                     socket.once("close", () => relaySockets.delete(socket));
                     relay.upgrade(args[0], args[1], args[2]);

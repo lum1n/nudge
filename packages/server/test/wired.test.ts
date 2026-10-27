@@ -46,7 +46,10 @@ describe.skipIf(wired === undefined)("Wired between servers", () => {
     // Home: holds the network, no public address, no relay.
     const home = new ServerWired({ dir: join(dir, "home"), publicUrl: () => undefined });
     const homeApi = await serveNudge({ assistants: new Map(), port: 0 });
-    cleanup.push(() => homeApi.close(), () => home.stop());
+    cleanup.push(
+      () => homeApi.close(),
+      () => home.stop(),
+    );
     expect((await home.enableRoot(addr(homeApi), "home")).state).toBe("root");
 
     // A new server, as on exe.dev: one port, with the relay behind it. Home lists the relay
@@ -64,17 +67,28 @@ describe.skipIf(wired === undefined)("Wired between servers", () => {
     await robin.load();
     const front = robin.relayFront();
     expect(front).toBeDefined();
-    const robinApi = await serveNudge({ assistants: new Map(), port, ...(front ? { relay: front } : {}) });
-    cleanup.push(() => robinApi.close(), () => robin.stop());
+    const robinApi = await serveNudge({
+      assistants: new Map(),
+      port,
+      ...(front ? { relay: front } : {}),
+    });
+    cleanup.push(
+      () => robinApi.close(),
+      () => robin.stop(),
+    );
     await robin.resume(addr(robinApi));
     await until(() => robin.state().state !== "starting");
     expect(robin.state()).toMatchObject({ state: "member", name: "robin", relay: relayUrl });
 
     // Each reaches the other's API by name.
-    const fromRobin = await fetch("http://nudge.home.wired/v1/nothing", { dispatcher: robin.dispatcher() });
+    const fromRobin = await fetch("http://nudge.home.wired/v1/nothing", {
+      dispatcher: robin.dispatcher(),
+    });
     expect(fromRobin.status).toBe(404);
     expect(await fromRobin.json()).toEqual({ error: "Not found" });
-    const fromHome = await fetch("http://nudge.robin.wired/v1/nothing", { dispatcher: home.dispatcher() });
+    const fromHome = await fetch("http://nudge.robin.wired/v1/nothing", {
+      dispatcher: home.dispatcher(),
+    });
     expect(fromHome.status).toBe(404);
 
     // The relay shares robin's port without getting in the way of its API.
@@ -108,7 +122,10 @@ describe.skipIf(wired === undefined)("Wired between servers", () => {
     cleanup.push(() => rm(dir, { recursive: true, force: true }));
     const home = new ServerWired({ dir: join(dir, "home"), publicUrl: () => undefined });
     const homeApi = await serveNudge({ assistants: new Map(), port: 0 });
-    cleanup.push(() => homeApi.close(), () => home.stop());
+    cleanup.push(
+      () => homeApi.close(),
+      () => home.stop(),
+    );
     await home.enableRoot(addr(homeApi), "home");
 
     // Already running, with Wired available but off: its front forwards nothing yet.
@@ -122,8 +139,15 @@ describe.skipIf(wired === undefined)("Wired between servers", () => {
     await robin.load();
     const front = robin.relayFront();
     expect(front?.matches({ url: "/relay" })).toBe(false);
-    const robinApi = await serveNudge({ assistants: new Map(), port, ...(front ? { relay: front } : {}) });
-    cleanup.push(() => robinApi.close(), () => robin.stop());
+    const robinApi = await serveNudge({
+      assistants: new Map(),
+      port,
+      ...(front ? { relay: front } : {}),
+    });
+    cleanup.push(
+      () => robinApi.close(),
+      () => robin.stop(),
+    );
 
     // As `nudge wired add` at home, then `nudge wired join` on robin.
     const invite = await home.addRelay(relayUrl);
@@ -133,7 +157,9 @@ describe.skipIf(wired === undefined)("Wired between servers", () => {
     await until(() => robin.state().state !== "starting");
     expect(robin.state()).toMatchObject({ state: "member", relay: relayUrl });
     expect(front?.matches({ url: "/relay" })).toBe(true);
-    const answer = await fetch("http://nudge.robin.wired/v1/nothing", { dispatcher: home.dispatcher() });
+    const answer = await fetch("http://nudge.robin.wired/v1/nothing", {
+      dispatcher: home.dispatcher(),
+    });
     expect(answer.status).toBe(404);
     await expect(robin.join(invite, addr(robinApi))).rejects.toThrow(/already/);
 
@@ -152,7 +178,9 @@ describe.skipIf(wired === undefined)("Wired between servers", () => {
     await robin.join(await home.addRelay(relayUrl), addr(robinApi), { name: "box" });
     await until(() => robin.state().state !== "starting");
     expect(robin.state()).toMatchObject({ state: "member", name: "box" });
-    const boxed = await fetch("http://nudge.box.wired/v1/nothing", { dispatcher: home.dispatcher() });
+    const boxed = await fetch("http://nudge.box.wired/v1/nothing", {
+      dispatcher: home.dispatcher(),
+    });
     expect(boxed.status).toBe(404);
     await robin.stop();
     const restarted = new ServerWired({ dir: join(dir, "robin"), publicUrl: () => relayUrl });
@@ -165,7 +193,10 @@ describe.skipIf(wired === undefined)("Wired between servers", () => {
     cleanup.push(() => rm(dir, { recursive: true, force: true }));
     const home = new ServerWired({ dir: join(dir, "home"), publicUrl: () => undefined });
     const homeApi = await serveNudge({ assistants: new Map(), port: 0 });
-    cleanup.push(() => homeApi.close(), () => home.stop());
+    cleanup.push(
+      () => homeApi.close(),
+      () => home.stop(),
+    );
     await home.enableRoot(addr(homeApi), "home");
 
     const port = await freePort();
@@ -178,8 +209,15 @@ describe.skipIf(wired === undefined)("Wired between servers", () => {
       });
       await wired.load();
       const front = wired.relayFront();
-      const api = await serveNudge({ assistants: new Map(), port, ...(front ? { relay: front } : {}) });
-      cleanup.push(() => api.close(), () => wired.stop());
+      const api = await serveNudge({
+        assistants: new Map(),
+        port,
+        ...(front ? { relay: front } : {}),
+      });
+      cleanup.push(
+        () => api.close(),
+        () => wired.stop(),
+      );
       return { wired, api };
     };
     const joined = async ({ wired, api }: Awaited<ReturnType<typeof server>>) => {
