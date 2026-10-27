@@ -97,6 +97,8 @@ Nudge keeps its config, databases and keys in one data directory: `$NUDGE_HOME`,
 
 [`nudge.example.json`](nudge.example.json) shows every option: two assistants, one on Anthropic with an extension and its settings, and one on a local llama-server.
 
+An assistant's `style` sets how much it says: `"concise"` (the default), `"balanced"` or `"detailed"`. Its `autonomy` sets how much it decides itself before asking: `"cautious"`, `"balanced"` (the default) or `"independent"`. At every level it does the task rather than describe how it could, tries the next tool itself when one fails, and gives one answer; approvals the tools ask for still apply. The server's owners can change both under **How it answers** in the web settings or in the apps' assistant settings.
+
 In `nudge chat`, `/steer <text>` joins the answer in progress, `/stop` or Ctrl-C stops it, `/who` lists who can read along, `/nudges` lists the room's scheduled nudges and `/nudges cancel <id>` cancels one, `/memory` lists what the assistant remembers in the room and `/memory add <text>` and `/memory forget <id>` change it, `/quit` leaves. `nudge chat me` opens your personal room; `nudge chat <room>` any other room you are in.
 
 ## Nudges
@@ -197,6 +199,8 @@ An extension adds tools, prompt sections, hooks, tasks and PII detectors to an a
 ```
 
 An entry's `rooms` lists the kinds of room it is on in by default (`"lobby"`, `"personal"`, `"shared"`; default all). Anyone in a room can turn an extension on or off there with `/extensions on|off|default <name>` in `nudge chat`, or `PUT /v1/a/<assistant>/rooms/<id>/extensions/<name>`; the built-in tools are always on.
+
+Passwords and tokens set through the settings page (mail, calendar, contacts, acc, Telegram and Matrix) are kept encrypted in `server/settings-secrets` beside the config, and `nudge.json` holds a `${secret:<id>}` reference in their place. A server moves such values it finds in the file as plain text there when it starts or reloads. Values written as `${NAME}` come from the environment and stay as they are.
 
 `nudge doctor` loads them and checks their settings. After editing an extension or the list, `nudge reload` makes the running `nudge serve` (or an in-process `nudge chat`) install them again without a restart; if one fails, the old ones stay.
 
