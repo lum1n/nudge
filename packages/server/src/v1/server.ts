@@ -17,6 +17,7 @@ import {
   type NudgeConfig,
   ownerFromHome,
   parseAddress,
+  renderInstructions,
   type PlayerHome,
   sealRecoveryKit,
   type ServerIdentity,
@@ -515,7 +516,9 @@ function toAssistant(control: ServerControl, entry: AssistantConfig): ServerAssi
     displayName: nudge?.displayName ?? entry.displayName ?? entry.name,
     model: entry.model ?? DEFAULT_MODEL,
     ...(entry.timeZone === undefined ? {} : { timeZone: entry.timeZone }),
-    ...(entry.instructions === undefined ? {} : { instructions: entry.instructions }),
+    ...(entry.instructions === undefined
+      ? {}
+      : { instructions: renderInstructions(entry.instructions) }),
     ...(entry.style === undefined ? {} : { style: entry.style }),
     ...(entry.autonomy === undefined ? {} : { autonomy: entry.autonomy }),
     ...(entry.budget === undefined ? {} : { budget: entry.budget }),

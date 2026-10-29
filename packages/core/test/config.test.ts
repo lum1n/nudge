@@ -1,7 +1,14 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { ConfigError, ConfigMissing, formatToday, loadConfig, parseConfig } from "../src/index.ts";
+import {
+  ConfigError,
+  ConfigMissing,
+  formatToday,
+  loadConfig,
+  parseConfig,
+  renderInstructions,
+} from "../src/index.ts";
 
 describe("parseConfig", () => {
   it("resolves database paths against the config directory", () => {
@@ -34,6 +41,31 @@ describe("parseConfig", () => {
     const config = parseConfig(example, root);
     expect(config.assistants.map((a) => a.name)).toEqual(["robin", "pocket"]);
     expect(config.assistants[0]!.extensions?.[0]?.from).toMatch(/extensions\/hello\//);
+  });
+});
+
+describe("instructions", () => {
+  it("takes text or key/value pairs and renders pairs as a line each", () => {
+    const config = parseConfig(
+      {
+        assistants: [
+          { name: "a", instructions: "Be brief." },
+          { name: "b", instructions: { approach: "Look it up first.", tools: "Use search." } },
+        ],
+      },
+      "/",
+    );
+    const [a, b] = config.assistants;
+    expect(renderInstructions(a?.instructions ?? "")).toBe("Be brief.");
+    expect(renderInstructions(b?.instructions ?? "")).toBe(
+      "approach: Look it up first.\ntools: Use search.",
+    );
+  });
+
+  it("refuses pairs whose values are not text", () => {
+    expect(() =>
+      parseConfig({ assistants: [{ name: "a", instructions: { tools: 3 } }] }, "/"),
+    ).toThrow(ConfigError);
   });
 });
 

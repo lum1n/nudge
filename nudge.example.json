@@ -2,7 +2,7 @@
   "$comment": "An example nudge.json. Copy it to nudge.json and keep what you need; `nudge doctor` checks it. Keys named $comment are ignored.",
   "assistants": [
     {
-      "$comment": "name is URL-safe and picks the assistant in -a and /v1/a/<name>. database is relative to this file (default data/<name>.sqlite). Without a model, Anthropic's claude-sonnet-5 is used; it reads ANTHROPIC_API_KEY. style is concise (the default), balanced or detailed; autonomy is cautious, balanced (the default) or independent.",
+      "$comment": "name is URL-safe and picks the assistant in -a and /v1/a/<name>. database is relative to this file (default data/<name>.sqlite). Without a model, Anthropic's claude-sonnet-5 is used; it reads ANTHROPIC_API_KEY. style is concise (the default), balanced or detailed; autonomy is cautious, balanced (the default) or independent. instructions is text, or key/value pairs rendered as a `key: value` line each, such as {\"approach\": \"Look things up before asking.\", \"tools\": \"Search the web for anything recent.\"}.",
       "name": "robin",
       "displayName": "Robin",
       "database": "data/robin.sqlite",

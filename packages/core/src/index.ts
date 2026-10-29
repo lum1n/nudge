@@ -1,6 +1,12 @@
 import type { Context } from "@earendil-works/chord";
 import type { Models } from "@earendil-works/pi-ai";
-import { type AssistantConfig, ConfigError, DEFAULT_MODEL, type NudgeConfig } from "./config.ts";
+import {
+  type AssistantConfig,
+  ConfigError,
+  DEFAULT_MODEL,
+  type NudgeConfig,
+  renderInstructions,
+} from "./config.ts";
 import { loadExtensions } from "./extensions/loader.ts";
 import { buildModels } from "./models/providers.ts";
 import {
@@ -39,6 +45,8 @@ export {
   type ModelChoice,
   type NudgeConfig,
   parseConfig,
+  renderInstructions,
+  type Instructions,
   type ServerSettings,
   type Style,
 } from "./config.ts";
@@ -569,7 +577,8 @@ async function assistantOptions(
     model: assistant.model ?? DEFAULT_MODEL,
     displayName: assistant.displayName ?? capitalize(assistant.name),
     timeZone: assistant.timeZone,
-    instructions: assistant.instructions,
+    instructions:
+      assistant.instructions === undefined ? undefined : renderInstructions(assistant.instructions),
     ...(assistant.style === undefined ? {} : { style: assistant.style }),
     ...(assistant.autonomy === undefined ? {} : { autonomy: assistant.autonomy }),
     extensions: await loadExtensions(assistant.extensions ?? []),
