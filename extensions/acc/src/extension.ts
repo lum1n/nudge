@@ -19,6 +19,7 @@ import {
 import { fillVariables } from "@nudge/bridge";
 import { join } from "node:path";
 import { Asked } from "./asked.ts";
+import { type SessionRow, sessionsCard } from "./card.ts";
 import { type HostEntry, Hosts } from "./hosts.ts";
 import {
   type AccBackend,
@@ -547,6 +548,7 @@ export function accExtension(options: AccOptions = {}) {
               true,
             );
           const followed = sessions.followed(room.id);
+          const rows: SessionRow[] = [];
           const blocks = await Promise.all(
             here.map(async (entry) => {
               try {
@@ -569,10 +571,25 @@ export function accExtension(options: AccOptions = {}) {
                     const attachment = follows
                       ? await sessions.current(entry.name, session.id)
                       : undefined;
-                    const age =
+                    const idle =
                       session.modified === null
-                        ? ""
-                        : `, last active ${Math.round((host.now() / 1000 - session.modified) / 60)} min ago`;
+                        ? undefined
+                        : Math.round((host.now() / 1000 - session.modified) / 60);
+                    const age = idle === undefined ? "" : `, last active ${idle} min ago`;
+                    rows.push({
+                      host: entry.name,
+                      id: session.id,
+                      harness: session.spec?.harness ?? "?",
+                      status:
+                        session.status.status === "alive"
+                          ? "running"
+                          : session.status.status === "exited"
+                            ? "exited"
+                            : "gone",
+                      ...(idle === undefined ? {} : { idleMinutes: Math.max(0, idle) }),
+                      ...(attachment === undefined ? {} : { doing: describeState(attachment) }),
+                      ...(session.spec?.title ? { title: scrub(room.id, session.spec.title) } : {}),
+                    });
                     return (
                       `  ${session.id}: ${session.spec?.harness ?? "?"} in ${session.spec?.cwd ?? "?"}, ${status}${age}` +
                       (attachment === undefined
@@ -588,7 +605,11 @@ export function accExtension(options: AccOptions = {}) {
               }
             }),
           );
-          return text(scrub(room.id, blocks.join("\n")));
+          const card = sessionsCard(
+            rows.sort((a, b) => (a.idleMinutes ?? Infinity) - (b.idleMinutes ?? Infinity)),
+          );
+          const lines = text(scrub(room.id, blocks.join("\n")));
+          return card === undefined ? lines : { ...lines, details: { ui: card } };
         },
       });
 

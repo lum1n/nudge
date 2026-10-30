@@ -20,9 +20,11 @@ import {
   SpendDoc,
   type ToolExecutionApi,
   Type,
+  type UiCard,
 } from "@nudge/core";
 import { type AccApi, accApi } from "@nudge/ext-acc";
 import { randomBytes } from "node:crypto";
+import { projectCard } from "./card.ts";
 import {
   activateNext,
   activeMilestone,
@@ -599,11 +601,22 @@ export function projectsExtension(options: ProjectsOptions = {}) {
         return { room, project: await snapshot(room.id) };
       };
       const guarded =
-        <A>(run: (args: A, roomId: string, project: Project | undefined) => Promise<string>) =>
+        <A>(
+          run: (
+            args: A,
+            roomId: string,
+            project: Project | undefined,
+          ) => Promise<string | { text: string; ui: UiCard | undefined }>,
+        ) =>
         async (args: A, api: ToolExecutionApi, ctx: Context) => {
           const { room, project } = await here(api, ctx);
           try {
-            return text(await run(args, room.id, project));
+            const done = await run(args, room.id, project);
+            if (typeof done === "string") return text(done);
+            return {
+              ...text(done.text),
+              ...(done.ui === undefined ? {} : { details: { ui: done.ui } }),
+            };
           } catch (error) {
             return text(scrub(room.id, (error as Error).message), true);
           }
@@ -867,16 +880,19 @@ export function projectsExtension(options: ProjectsOptions = {}) {
           const prs = args.check_prs === true ? await checkPrs(roomId, found) : "";
           const now = need(await snapshot(roomId));
           const api = accApi(host.assistant());
+          const states = new Map<string, string>();
           const agents = await Promise.all(
             running(now).map(async (task) => {
               const state = await api
                 ?.state(task.session!.host, task.session!.id)
                 .catch(() => undefined);
+              if (state !== undefined) states.set(task.id, state);
               return `${task.id}: ${task.session!.host}/${task.session!.id}, ${state ?? "not read yet"}`;
             }),
           );
           const spent = await spend(roomId, now);
-          return [
+          const card = projectCard(now, spent, states);
+          const lines = [
             `"${now.name}" is ${now.status}.${now.repo === undefined ? "" : ` Repo ${now.repo}.`}`,
             describePlan(now) || "(no plan yet)",
             agents.length === 0 ? "No agents work now." : `Agents:\n${agents.join("\n")}`,
@@ -887,6 +903,7 @@ export function projectsExtension(options: ProjectsOptions = {}) {
             `Spent $${spent.toFixed(2)}${now.budgetUsd === undefined ? "" : ` of $${now.budgetUsd}`}.`,
             ...(prs === "" ? [] : [`PRs:\n${prs}`]),
           ].join("\n");
+          return { text: lines, ui: card };
         }),
       });
 
