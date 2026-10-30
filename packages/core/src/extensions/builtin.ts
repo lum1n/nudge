@@ -16,6 +16,7 @@ import { NudgeTimer } from "../nudges/timer-task.ts";
 import { createNudgeTools } from "../nudges/tools.ts";
 import type { Turn } from "../privacy/turn.ts";
 import { UNTRUSTED_RULE } from "../privacy/untrusted.ts";
+import { createUiTools } from "../ui/tools.ts";
 import { BUILTIN_NAME } from "./define.ts";
 
 export type BuiltinOptions = {
@@ -84,13 +85,17 @@ export function describeAutonomy(autonomy: Autonomy): string {
 /**
  * The always-on `nudge` extension: who the assistant is, who is in the room, the personal details
  * of whose room or private turn it is, what it remembers there, what time it is, how to treat
- * untrusted data (ADR 20), and the nudge timer with its tools.
+ * untrusted data (ADR 20), the nudge timer with its tools, and cards in the chat (ADR 27).
  */
 export function createBuiltinExtension(options: BuiltinOptions): Extension {
   return defineExtension({
     name: BUILTIN_NAME,
     tasks: [NudgeTimer],
-    tools: [...createNudgeTools(options), ...createMemoryTools(options.now, options.changed)],
+    tools: [
+      ...createNudgeTools(options),
+      ...createMemoryTools(options.now, options.changed),
+      ...createUiTools(),
+    ],
     sections: [
       section(
         "identity",

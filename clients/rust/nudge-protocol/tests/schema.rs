@@ -126,6 +126,10 @@ fn tool() -> ToolPart {
         details: Some(json!({ "login": true })),
         output: Some("…".into()),
         truncated: Some(true),
+        pressed: Some(Pressed {
+            button: "go".into(),
+            by: ann(),
+        }),
     }
 }
 
@@ -146,6 +150,10 @@ fn items() -> Vec<TimelineItem> {
                 size: 1024,
                 kind: AttachmentKind::Image,
             }]),
+            press: Some(Press {
+                call_id: "c0".into(),
+                button: "go".into(),
+            }),
         }),
         TimelineItem::Nudge(NudgeItem {
             id: "nudge:2".into(),

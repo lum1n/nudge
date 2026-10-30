@@ -193,4 +193,8 @@
         <item quantity="one">%d side</item>
         <item quantity="other">%d sider</item>
     </plurals>
+    <string name="room_card_pressed_by">%1$s trykket «%2$s»</string>
+    <string name="room_card_optional">%1$s (valgfritt)</string>
+    <string name="room_card_choose">Velg …</string>
+    <string name="room_card_missing">Fyll inn «%1$s»</string>
 </resources>

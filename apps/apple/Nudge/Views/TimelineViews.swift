@@ -230,6 +230,9 @@ struct AnswerView: View {
                 case .tool(let tool) where tool.needsLogin:
                     // The browser stopped for a login only a person can type.
                     LoginButton()
+                case .tool(let tool) where tool.card != nil:
+                    // A card a tool showed in the chat (ADR 27).
+                    CardView(tool: tool, card: tool.card!)
                 case .tool(let tool):
                     ToolView(tool: tool)
                 }

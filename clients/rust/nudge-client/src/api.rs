@@ -317,6 +317,29 @@ impl Api {
         .await
     }
 
+    /// Presses `button` on the card tool call `call_id` showed (ADR 27), with the card's fields by
+    /// name; the press reaches the room as this player's message.
+    pub async fn press_card(
+        &self,
+        room: &str,
+        call_id: &str,
+        button: &str,
+        values: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<MessageResponse, ApiError> {
+        let body = UiPressRequest {
+            button: button.into(),
+            values,
+            request_id: None,
+        };
+        self.request(
+            Method::POST,
+            &["rooms", room, "ui", call_id],
+            &[],
+            Some(&body),
+        )
+        .await
+    }
+
     pub async fn cancel_nudge(&self, nudge: &str) -> Result<(), ApiError> {
         self.request_empty(Method::DELETE, &["nudges", nudge], &[], NO_BODY)
             .await

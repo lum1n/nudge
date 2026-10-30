@@ -45,6 +45,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -78,6 +79,7 @@ import nudge.client.activity
 import nudge.client.dayStarts
 import nudge.client.itemId
 import nudge.client.observeRoomState
+import nudge.client.press
 import nudge.client.transcript
 import nudge.ffi.ApprovalStatus
 import nudge.ffi.GoneReason
@@ -135,6 +137,10 @@ fun RoomScreen(
         }
     }
 
+    // Cards in the chat press through the room on screen (ADR 27).
+    CompositionLocalProvider(
+        LocalCardPress provides { callId, card, button, values -> client.press(roomId, callId, card, button, values) },
+    ) {
     Scaffold(
         bottomBar = {
             if (state?.status != SyncStatus.GONE) {
@@ -248,6 +254,7 @@ fun RoomScreen(
                 )
             }
         }
+    }
     }
 
     if (showActivity && state != null) {

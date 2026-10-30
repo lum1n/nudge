@@ -204,4 +204,9 @@
         <item quantity="one">%d page</item>
         <item quantity="other">%d pages</item>
     </plurals>
+    <!-- A card a tool shows in the chat (ADR 27). -->
+    <string name="room_card_pressed_by">%1$s pressed “%2$s”</string>
+    <string name="room_card_optional">%1$s (optional)</string>
+    <string name="room_card_choose">Choose…</string>
+    <string name="room_card_missing">Fill in “%1$s”</string>
 </resources>

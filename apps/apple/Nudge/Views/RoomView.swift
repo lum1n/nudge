@@ -67,6 +67,9 @@ struct RoomView: View {
             }
             .environment(\.openBrowser, { showing = .browser })
             .environment(\.openActivity, { activity = true })
+            .environment(\.pressCard, { callId, card, button, values in
+                try await client.press(room: roomId, callId: callId, card: card, button: button, values: values)
+            })
             .alert("Something went wrong", isPresented: Binding(get: { problem != nil }, set: { if !$0 { problem = nil } })) {
                 Button("OK") { problem = nil }
             } message: {

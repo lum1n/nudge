@@ -64,6 +64,14 @@ export const room = {
     whatItsDoing: "what it's doing",
     openBrowser: "Open the room's browser to log in",
     askedForApproval: "Asked for approval",
+    /** A card a tool shows in the chat (ADR 27). */
+    card: {
+      pressedBy: (button: string, who: string) => `${who} pressed “${button}”`,
+      optional: " (optional)",
+      yes: "Yes",
+      choose: "Choose…",
+      missing: (label: string) => `Fill in “${label}”`,
+    },
     /** The badge on an answer to a fired nudge or to what a watch found. */
     promptedBy: { nudge: "Nudge", watch: "Watch" },
   },

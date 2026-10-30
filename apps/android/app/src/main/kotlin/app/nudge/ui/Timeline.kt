@@ -66,6 +66,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Date
+import nudge.client.card
 import nudge.client.needsLogin
 import nudge.ffi.AnswerStatus
 import nudge.ffi.ApprovalStatus
@@ -336,7 +337,8 @@ private fun Answer(answer: TimelineItem.Answer, openBrowser: () -> Unit, openAct
                         Text(stringResource(R.string.room_open_browser_login))
                     }
                 } else {
-                    Tool(part.tool)
+                    // A card a tool showed in the chat (ADR 27).
+                    part.tool.card?.let { CardView(part.tool, it) } ?: Tool(part.tool)
                 }
             }
         }

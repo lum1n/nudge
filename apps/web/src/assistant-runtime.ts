@@ -13,14 +13,15 @@ import type {
   TimelineItem,
   ToolPart,
 } from "@nudge/client";
+import { cardIn } from "./cards.ts";
 import { dateLocale, m } from "./i18n/index.ts";
 
 type Answer = Extract<TimelineItem, { type: "answer" }>;
 
 /**
  * The chat itself: messages and what the assistant said. Tool calls, thinking, fired nudges and
- * ended approvals are left to `activity`, except a tool that waits on the reader: a login, or an
- * approval still pending. An answer with nothing left to say drops out once it is done.
+ * ended approvals are left to `activity`, except a tool that waits on the reader: a login, an
+ * approval still pending, or a card (ADR 27). An answer with nothing left to say drops out once it is done.
  */
 export function transcript(
   timeline: readonly TimelineItem[],
@@ -95,10 +96,11 @@ export function timeLabel(at: number): string {
   return new Date(at).toLocaleTimeString(dateLocale(), { hour: "numeric", minute: "2-digit" });
 }
 
-/** A tool the reader has to act on in the chat: the browser wants a login, or an approval. */
+/** A tool the reader has to act on in the chat: the browser wants a login, an approval, or a card. */
 function asksReader(part: ToolPart, pending: ReadonlySet<string>): boolean {
   const details = part.details as { needsLogin?: boolean; approval?: string } | undefined;
   if (part.name === "browse" && details?.needsLogin === true) return true;
+  if (cardIn(part.details) !== undefined) return true;
   return typeof details?.approval === "string" && pending.has(details.approval);
 }
 
@@ -238,7 +240,15 @@ function toPart(part: Part) {
         argsText: JSON.stringify(part.args),
         ...(part.result === undefined ? {} : { result: part.result }),
         ...(part.isError === undefined ? {} : { isError: part.isError }),
-        ...(part.details === undefined ? {} : { artifact: part.details }),
+        ...(part.details === undefined
+          ? {}
+          : {
+              // A card's latest press rides along, so the card can show it was pressed.
+              artifact:
+                part.pressed === undefined
+                  ? part.details
+                  : { ...(part.details as object), pressed: part.pressed },
+            }),
         // While it runs, what the tool says it is doing, such as browse's `Clicking "Search"…`.
         ...(part.result !== undefined || part.output === undefined
           ? {}
