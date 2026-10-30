@@ -109,6 +109,18 @@ export default defineNudgeExtension({
       description:
         "Let the browser open localhost and devices on your local network, such as a router or NAS.",
     }),
+    /** Let the browser call the tools pages offer agents (WebMCP); a read-only one runs at once. */
+    webmcp: Type.Boolean({
+      default: true,
+      description:
+        "Let the browser use the tools sites offer agents themselves (WebMCP). Ones that may change something still ask first. Off hides the API from pages.",
+    }),
+    /** Extra Chromium switches, such as one that turns on the browser's own WebMCP. */
+    chromiumArgs: Type.Array(Type.String({ pattern: "^--" }), {
+      default: [],
+      description:
+        "Extra Chromium command-line switches, such as --enable-features=… for a browser feature in trial.",
+    }),
     /** Keep short notes per site on how to use it, and show them on the next visit. */
     siteNotes: Type.Boolean({
       default: true,
@@ -132,6 +144,8 @@ export default defineNudgeExtension({
       profileDir: join(profiles(), scopeOf(conversationId)),
       headless: settings.headless,
       blockPrivateNetwork: !settings.allowPrivateNetwork,
+      webmcp: settings.webmcp,
+      args: settings.chromiumArgs,
     });
     const useLogins = (session: BrowserSession, scope: string) =>
       session.useLogins(

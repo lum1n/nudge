@@ -14,6 +14,43 @@ const page = (title: string, body: string, head = "") =>
   `<!doctype html><html lang=nb><head><title>${title}</title><style>${head}</style></head><body>${body}</body></html>`;
 
 const PAGES: Record<string, string> = {
+  // A shop that offers agents its own tools (WebMCP): a search that only reads, an add to the
+  // basket that changes it, one through the older navigator.modelContext, and one more after a click.
+  "/webmcp": page(
+    "Butikk",
+    `<h1>Butikk</h1><p id=basket>Tom kurv</p><button id=more>Vis flere verktøy</button>
+    <script>
+      const basket = [];
+      document.modelContext.registerTool({
+        name: "search",
+        description: "Search the shop's products",
+        inputSchema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] },
+        annotations: { readOnlyHint: true },
+        execute: async ({ query }) => ({ content: [{ type: "text", text: "Found: " + query + " (2 for 39 kr)" }] }),
+      });
+      document.modelContext.registerTool({
+        name: "add_to_basket",
+        description: "Put a product in the basket",
+        inputSchema: { type: "object", properties: { product: { type: "string" } } },
+        execute: ({ product }) => {
+          basket.push(product);
+          document.getElementById("basket").textContent = basket.join(", ");
+          return "In the basket: " + basket.join(", ");
+        },
+      });
+      navigator.modelContext.registerTool({
+        name: "slow",
+        description: "Never answers",
+        annotations: { readOnlyHint: true },
+        execute: () => new Promise(() => {}),
+      });
+      document.getElementById("more").onclick = () =>
+        document.modelContext.registerTool({
+          name: "opening_hours", description: "When the shop is open", annotations: { readOnlyHint: true },
+          execute: () => "09–21",
+        });
+    </script>`,
+  ),
   // A consent dialog added last, after the page, as many consent scripts do; it covers the page.
   "/dialog": page(
     "Nyheter",
@@ -347,6 +384,84 @@ run("fixture pages in a real browser", () => {
     expect(posted).toEqual(["/betalt"]);
     expect(approved.approved).toBeUndefined();
   }, 30_000);
+
+  it("lists a page's WebMCP tools, calls the read-only ones, and holds the rest for approval", async () => {
+    const seen = await open("/webmcp");
+    expect(seen).toContain(
+      "Page tools (WebMCP): search, add_to_basket, slow; see browser_page_tools",
+    );
+    const [listed] = await runBatch(session, [
+      { id: "a", name: "browser_page_tools", arguments: {} },
+    ]);
+    expect(listed!.text).toContain("- search (reads): Search the shop's products");
+    expect(listed!.text).toContain("- add_to_basket (may change things");
+
+    const [found] = await runBatch(session, [
+      {
+        id: "b",
+        name: "browser_call_page_tool",
+        arguments: { name: "search", arguments: { query: "melk" } },
+      },
+    ]);
+    expect(found!.isError).toBe(false);
+    expect(found!.text.split("\n")[0]).toBe("Found: melk (2 for 39 kr)");
+
+    const approval: Approval = {};
+    const add = { name: "add_to_basket", arguments: { product: "melk" } };
+    const [held] = await runBatch(
+      session,
+      [{ id: "c", name: "browser_call_page_tool", arguments: add }],
+      undefined,
+      approval,
+    );
+    expect(held!.text).toMatch(/^Not done: the page's tool "add_to_basket" may change things/);
+    expect(await session.page.textContent("#basket")).toBe("Tom kurv");
+
+    await runBatch(
+      session,
+      [
+        {
+          id: "d",
+          name: "browser_confirm",
+          arguments: {
+            action: "Add milk",
+            tool: "browser_call_page_tool",
+            pageTool: add.name,
+            arguments: add.arguments,
+          },
+        },
+      ],
+      undefined,
+      approval,
+    );
+    expect(approval.asked?.tool).toBe("browser_call_page_tool");
+    // Approved for milk only: bread is still held, milk goes through once.
+    const approved: Approval = { approved: approval.asked! };
+    const [bread] = await runBatch(
+      session,
+      [
+        {
+          id: "e",
+          name: "browser_call_page_tool",
+          arguments: { ...add, arguments: { product: "brød" } },
+        },
+      ],
+      undefined,
+      approved,
+    );
+    expect(bread!.text).toContain("The user approved a different action");
+    const [milk] = await runBatch(
+      session,
+      [{ id: "f", name: "browser_call_page_tool", arguments: add }],
+      undefined,
+      approved,
+    );
+    expect(milk!.text.split("\n")[0]).toBe("In the basket: melk");
+    expect(approved.approved).toBeUndefined();
+
+    await session.page.click("#more");
+    expect((await session.pageTools()).map((tool) => tool.name)).toContain("opening_hours");
+  });
 
   it("counts a site as logged in after browser_login, with no log-out control on the page", async () => {
     const profile = await open("/profil");
