@@ -1,4 +1,6 @@
 import type { UiBlock } from "@nudge/client";
+import { useState } from "react";
+import { m } from "./i18n/index.ts";
 
 type ChartBlock = Extract<UiBlock, { type: "chart" }>;
 
@@ -29,13 +31,64 @@ const full = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
 /** A card's chart, drawn as SVG; hovering a mark says its value. */
 export function CardChart(props: { block: ChartBlock }) {
   const { block } = props;
+  const [table, setTable] = useState(false);
   const said = (value: number) => `${full.format(value)}${block.unit ? ` ${block.unit}` : ""}`;
-  if (block.kind === "pie") return <Pie block={block} said={said} />;
   return (
-    <figure className="flex flex-col gap-1">
-      {block.series.length > 1 && <Legend names={block.series.map((series) => series.name)} />}
-      <Plot block={block} said={said} />
-    </figure>
+    <div className="flex flex-col gap-1">
+      {table ? (
+        <Table block={block} said={said} />
+      ) : block.kind === "pie" ? (
+        <Pie block={block} said={said} />
+      ) : (
+        <figure className="flex flex-col gap-1">
+          {block.series.length > 1 && <Legend names={block.series.map((series) => series.name)} />}
+          <Plot block={block} said={said} />
+        </figure>
+      )}
+      <button
+        type="button"
+        onClick={() => setTable(!table)}
+        className="self-start text-xs text-sky-700 underline"
+      >
+        {table ? m.room.chat.card.showChart : m.room.chat.card.showTable}
+      </button>
+    </div>
+  );
+}
+
+/** The chart's values as a table, for reading them exactly or with a screen reader. */
+function Table(props: { block: ChartBlock; said: (value: number) => string }) {
+  const { block, said } = props;
+  return (
+    <div className="max-w-full overflow-x-auto">
+      <table className="text-left tabular-nums">
+        <thead>
+          <tr>
+            <th className="border-b border-stone-300 pr-3" />
+            {block.series.map((series, index) => (
+              <th key={index} className="border-b border-stone-300 pr-3 font-medium">
+                {series.name}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {block.labels.map((label, row) => (
+            <tr key={row}>
+              <th className="border-b border-stone-100 pr-3 font-normal text-stone-600">{label}</th>
+              {block.series.map((series, index) => {
+                const value = series.values[row];
+                return (
+                  <td key={index} className="border-b border-stone-100 pr-3">
+                    {value === null || value === undefined ? "–" : said(value)}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

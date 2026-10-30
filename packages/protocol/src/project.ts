@@ -46,6 +46,8 @@ export { Viewer } from "./viewer.ts";
 // Entry kinds of @nudge/core, kept here so this module needs no runtime import of it. A test
 // checks them against core's.
 export const MESSAGE_ENTRY = "nudge.message";
+/** A card shown again with new content (ADR 30). */
+export const UI_UPDATE_ENTRY = "nudge.ui-update";
 export const FIRE_ENTRY = "nudge.fire";
 export const APPROVAL_ENTRY = "nudge.approval";
 
@@ -241,6 +243,8 @@ function items(
   const results = new Map<string, EntryRecord>();
   // The latest press on each card, by tool call id.
   const presses = new Map<string, EntryRecord>();
+  // The latest update of each card, by tool call id.
+  const updates = new Map<string, EntryRecord>();
   for (const entry of entries)
     if (entry.kind === "pi.tool-result") {
       const id = toolResult(entry)?.toolCallId;
@@ -248,6 +252,13 @@ function items(
     } else if (entry.kind === MESSAGE_ENTRY) {
       const press = (entry.data as MessageEntryData).press;
       if (press !== undefined) presses.set(press.callId, entry);
+    } else if (entry.kind === UI_UPDATE_ENTRY) {
+      // An update starts the card over: a press before it no longer shows.
+      const callId = (entry.data as { callId?: unknown } | undefined)?.callId;
+      if (typeof callId === "string") {
+        updates.set(callId, entry);
+        presses.delete(callId);
+      }
     }
 
   const timeline: TimelineItem[] = [];
@@ -264,11 +275,13 @@ function items(
     const calls = answerEntries.flatMap((entry) => toolCalls(entry));
     const callResults = calls.map((call) => results.get(call.id));
     const callPresses = calls.map((call) => presses.get(call.id));
+    const callUpdates = calls.map((call) => updates.get(call.id));
     const sources = [
       before,
       ...answerEntries,
       ...callResults,
       ...callPresses,
+      ...callUpdates,
       generated,
       live?.tools,
       live !== undefined,
@@ -278,7 +291,14 @@ function items(
     const prompt = before === undefined ? undefined : promptedBy(before);
     timeline.push(
       keep(id, sources, () => {
-        const built = buildAnswer(id, answerEntries, results, presses, live, generated);
+        const built = buildAnswer(
+          id,
+          answerEntries,
+          results,
+          { presses, updates },
+          live,
+          generated,
+        );
         return {
           ...built,
           ...(prompt === undefined ? {} : { promptedBy: prompt }),
@@ -403,7 +423,7 @@ function buildAnswer(
   id: string,
   entries: readonly EntryRecord[],
   results: ReadonlyMap<string, EntryRecord>,
-  presses: ReadonlyMap<string, EntryRecord>,
+  cards: Cards,
   live: LiveState | undefined,
   generated: AssistantMessage | undefined,
 ): TimelineItem {
@@ -417,13 +437,13 @@ function buildAnswer(
         first ??= message;
         last = message;
         for (const content of message.content) {
-          const part = toPart(content, results, presses, slots);
+          const part = toPart(content, results, cards, slots);
           if (part !== undefined) parts.push(part);
         }
       }
   if (generated !== undefined)
     for (const content of generated.content) {
-      const part = toPart(content, results, presses, slots);
+      const part = toPart(content, results, cards, slots);
       if (part !== undefined) parts.push(part);
     }
   // When it started: its first model response; a live one's first token, before that's saved.
@@ -444,7 +464,7 @@ function buildAnswer(
 function toPart(
   content: Content,
   results: ReadonlyMap<string, EntryRecord>,
-  presses: ReadonlyMap<string, EntryRecord>,
+  cards: Cards,
   slots: ReadonlyMap<string, ToolSlot>,
 ): Part | undefined {
   switch (content.type) {
@@ -465,12 +485,13 @@ function toPart(
       };
       if (result === undefined)
         return slot?.output === undefined ? part : { ...part, output: slot.output };
+      const update = cards.updates.get(content.id)?.data as { card?: unknown } | undefined;
       const shown = {
         ...part,
-        ...cut(text(result.content), result.details),
+        ...cut(text(result.content), updated(result.details, update?.card)),
         isError: result.isError,
       };
-      const press = presses.get(content.id)?.data as MessageEntryData | undefined;
+      const press = cards.presses.get(content.id)?.data as MessageEntryData | undefined;
       return press?.press === undefined || cardOf(shown.details) === undefined
         ? shown
         : {
@@ -484,6 +505,19 @@ function toPart(
     default:
       return undefined;
   }
+}
+
+/** The latest press and update of each card, by tool call id. */
+type Cards = {
+  readonly presses: ReadonlyMap<string, EntryRecord>;
+  readonly updates: ReadonlyMap<string, EntryRecord>;
+};
+
+/** A tool's details with its card as its latest valid update has it. */
+function updated(details: unknown, card: unknown): unknown {
+  if (card === undefined || cardOf({ ui: card }) === undefined) return details;
+  if (cardOf(details) === undefined) return details;
+  return { ...(details as Record<string, unknown>), ui: card };
 }
 
 /** A tool's result and details, cut down to what a view carries; an invalid card left out. */

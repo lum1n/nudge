@@ -140,6 +140,7 @@ fun RoomScreen(
     // Cards in the chat press through the room on screen (ADR 27).
     CompositionLocalProvider(
         LocalCardPress provides { callId, card, button, values -> client.press(roomId, callId, card, button, values) },
+        LocalCardImage provides { attachment -> client.attachmentImage(roomId, attachment) },
     ) {
     Scaffold(
         bottomBar = {

@@ -22,6 +22,14 @@ const Point = {
   lon: Type.Number({ minimum: -180, maximum: 180 }),
 };
 
+/** A day, or a time with its offset from UTC. */
+const When = Type.String({
+  pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}(T[0-9]{2}:[0-9]{2}(:[0-9]{2})?(Z|[+-][0-9]{2}:[0-9]{2}))?$",
+});
+
+/** A diagram node's name, which its arrows use. */
+const Id = Type.String({ pattern: "^[A-Za-z0-9_-]{1,40}$" });
+
 /** Most series a chart takes, so that each keeps a colour of its own. */
 export const CHART_MAX_SERIES = 6;
 /** Most slices a pie takes. */
@@ -119,6 +127,32 @@ export const UiBlock = Type.Union([
       { minItems: 1, maxItems: 10 },
     ),
   }),
+  /**
+   * Something on a calendar, which people can add to theirs. `start` and `end` are a day
+   * (`2026-11-03`, all day) or a time with its offset (`2026-11-03T18:00+01:00`).
+   */
+  Type.Object({
+    type: Type.Literal("event"),
+    title: Short(200),
+    start: When,
+    end: Type.Optional(When),
+    location: Type.Optional(Short(300)),
+    notes: Type.Optional(Short(1000)),
+  }),
+  /**
+   * Boxes joined by arrows: a flow, a plan's steps, who reports to whom. The app lays them out in
+   * rows (`down`, the default) or columns (`right`) by where the arrows lead.
+   */
+  Type.Object({
+    type: Type.Literal("diagram"),
+    nodes: Type.Array(Type.Object({ id: Id, label: Short(80) }), { minItems: 1, maxItems: 30 }),
+    edges: Type.Optional(
+      Type.Array(Type.Object({ from: Id, to: Id, label: Type.Optional(Short(40)) }), {
+        maxItems: 60,
+      }),
+    ),
+    direction: Type.Optional(Type.Union([Type.Literal("down"), Type.Literal("right")])),
+  }),
   /** Steps or events in order: a trip, a delivery, what a project did and does next. */
   Type.Object({
     type: Type.Literal("timeline"),
@@ -152,14 +186,22 @@ export const UiField = Type.Object({
     Type.Literal("date"),
     /** A time of day, sent as `HH:MM`. */
     Type.Literal("time"),
+    /** Any number of its `options`, sent as a list. */
+    Type.Literal("choices"),
+    /** A number between `min` and `max`, picked on a slider. */
+    Type.Literal("range"),
   ]),
-  /** A `choice`'s options. */
+  /** A `choice`'s or `choices`' options. */
   options: Type.Optional(Type.Array(Short(100), { minItems: 1, maxItems: 20 })),
   placeholder: Type.Optional(Short(200)),
   /** A `text` field of several lines. */
   multiline: Type.Optional(Type.Boolean()),
   /** It may be left empty; required otherwise. */
   optional: Type.Optional(Type.Boolean()),
+  /** A `range`'s ends and step; 0, 100 and 1 when absent. */
+  min: Type.Optional(Type.Number()),
+  max: Type.Optional(Type.Number()),
+  step: Type.Optional(Type.Number({ exclusiveMinimum: 0 })),
 });
 export type UiField = Static<typeof UiField>;
 
@@ -170,6 +212,11 @@ export const UiButton = Type.Object({
   style: Type.Optional(Type.Union([Type.Literal("primary"), Type.Literal("danger")])),
   /** Pressing it sends no field values and needs none filled in, as for "Cancel". */
   skipsFields: Type.Optional(Type.Boolean()),
+  /**
+   * It opens this page instead of answering: the app names the site and asks first, and nothing
+   * reaches the room.
+   */
+  url: Type.Optional(Type.String({ pattern: "^https://[^\\s]+$", maxLength: 2000 })),
 });
 export type UiButton = Static<typeof UiButton>;
 
@@ -191,7 +238,7 @@ export const UiCard = Type.Object({ v: Type.Literal(1), ...content });
 export type UiCard = Static<typeof UiCard>;
 
 /** The values a press sends, by field name. */
-export type UiValues = Readonly<Record<string, string | number | boolean>>;
+export type UiValues = Readonly<Record<string, string | number | boolean | readonly string[]>>;
 
 /** The card in a tool's details, when there is a valid one. */
 export function cardOf(details: unknown): UiCard | undefined {
@@ -207,8 +254,13 @@ export function cardProblem(card: unknown): string | undefined {
     for (const field of card.fields ?? []) {
       if (names.has(field.name)) return `Field "${field.name}" is there twice`;
       names.add(field.name);
-      if (field.type === "choice" && (field.options?.length ?? 0) === 0)
+      if (
+        (field.type === "choice" || field.type === "choices") &&
+        (field.options?.length ?? 0) === 0
+      )
         return `Field "${field.name}" is a choice without options`;
+      if (field.type === "range" && (field.min ?? 0) >= (field.max ?? 100))
+        return `Field "${field.name}" has its min at or above its max`;
     }
     const ids = new Set<string>();
     for (const button of card.buttons ?? []) {
@@ -247,6 +299,21 @@ function blockProblem(block: UiBlock): string | undefined {
         return "a pie's values can't be negative";
       return undefined;
     }
+    case "diagram": {
+      const ids = new Set<string>();
+      for (const node of block.nodes) {
+        if (ids.has(node.id)) return `node "${node.id}" is there twice`;
+        ids.add(node.id);
+      }
+      const loose = (block.edges ?? []).find((edge) => !ids.has(edge.from) || !ids.has(edge.to));
+      return loose === undefined
+        ? undefined
+        : `the arrow from "${loose.from}" to "${loose.to}" names a node that isn't there`;
+    }
+    case "event":
+      return block.end !== undefined && Date.parse(block.end) < Date.parse(block.start)
+        ? "it ends before it starts"
+        : undefined;
     default:
       return undefined;
   }
@@ -264,6 +331,7 @@ export class UiPressInvalid extends Error {
 export function pressText(card: UiCard, buttonId: string, values: UiValues = {}): string {
   const button = card.buttons?.find((found) => found.id === buttonId);
   if (button === undefined) throw new UiPressInvalid(`No button "${buttonId}"`);
+  if (button.url !== undefined) throw new UiPressInvalid(`"${button.label}" opens a link`);
   const on = card.title === undefined ? "" : ` on "${card.title}"`;
   const lines = [`Pressed "${button.label}"${on}`];
   if (button.skipsFields === true) return lines[0]!;
@@ -273,7 +341,7 @@ export function pressText(card: UiCard, buttonId: string, values: UiValues = {})
       throw new UiPressInvalid(`No field "${name}"`);
   for (const field of fields) {
     const value = values[field.name];
-    if (value === undefined || value === "") {
+    if (value === undefined || value === "" || (Array.isArray(value) && value.length === 0)) {
       if (field.optional !== true) throw new UiPressInvalid(`"${field.label}" is required`);
       continue;
     }
@@ -282,8 +350,26 @@ export function pressText(card: UiCard, buttonId: string, values: UiValues = {})
   return lines.join("\n");
 }
 
-function shown(field: UiField, value: string | number | boolean): string {
+function shown(field: UiField, value: UiValues[string]): string {
   switch (field.type) {
+    case "choices": {
+      // An app that doesn't know the type yet sends what was typed, comma separated.
+      const picked = typeof value === "string" ? value.split(",").map((one) => one.trim()) : value;
+      if (
+        !Array.isArray(picked) ||
+        picked.some((one) => typeof one !== "string" || !(field.options ?? []).includes(one))
+      )
+        throw new UiPressInvalid(`"${field.label}" is some of its options`);
+      return [...new Set(picked)].join(", ");
+    }
+    case "range": {
+      // An app that doesn't know the type yet sends what was typed.
+      const number = typeof value === "string" && value.trim() !== "" ? Number(value) : value;
+      const [min, max] = [field.min ?? 0, field.max ?? 100];
+      if (typeof number !== "number" || !Number.isFinite(number) || number < min || number > max)
+        throw new UiPressInvalid(`"${field.label}" is a number from ${min} to ${max}`);
+      return String(number);
+    }
     case "boolean":
       if (typeof value !== "boolean") throw new UiPressInvalid(`"${field.label}" is yes or no`);
       return value ? "yes" : "no";

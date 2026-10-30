@@ -2,6 +2,7 @@ package nudge.client
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -96,6 +97,61 @@ sealed interface UiBlock {
         data class Bar(val label: String, val value: Double, val max: Double = 100.0, val note: String? = null)
     }
 
+    /**
+     * Something for a calendar: [start] and [end] are a day (`2026-11-03`, all day) or a time with
+     * its offset (`2026-11-03T18:00+01:00`).
+     */
+    @Serializable @SerialName("event")
+    data class Event(
+        val title: String,
+        val start: String,
+        val end: String? = null,
+        val location: String? = null,
+        val notes: String? = null,
+    ) : UiBlock {
+        /** It takes whole days. */
+        val allDay: Boolean get() = 'T' !in start
+    }
+
+    /** Boxes joined by arrows; [direction] is `down` or `right`. See [layout]. */
+    @Serializable @SerialName("diagram")
+    data class Diagram(val nodes: List<Node>, val edges: List<Edge> = emptyList(), val direction: String = "down") : UiBlock {
+        @Serializable
+        data class Node(val id: String, val label: String)
+
+        @Serializable
+        data class Edge(val from: String, val to: String, val label: String? = null)
+
+        /** Where a node goes: its row (column when going right), and its place in that row. */
+        data class Place(val rank: Int, val order: Int)
+
+        /**
+         * Each node's row: one past the furthest row of the nodes with arrows to it, so arrows
+         * point on. A cycle is broken at its earliest node. Within a row, nodes sit by the middle
+         * of where their arrows come from. The same layout as the web app's.
+         */
+        fun layout(): Map<String, Place> {
+            val ids = nodes.map { it.id }
+            val into = ids.associateWith { id -> edges.filter { it.to == id && it.from != id }.map { it.from } }
+            val rank = mutableMapOf<String, Int>()
+            while (rank.size < ids.size) {
+                val ready = ids.firstOrNull { it !in rank && into.getValue(it).all(rank::containsKey) } ?: ids.first { it !in rank }
+                rank[ready] = into.getValue(ready).mapNotNull(rank::get).maxOrNull()?.plus(1) ?: 0
+            }
+            val rows = ids.groupBy { rank.getValue(it) }.toSortedMap()
+            val order = mutableMapOf<String, Int>()
+            for ((r, row) in rows) {
+                val sorted = if (r == 0) row else row.sortedWith(
+                    compareBy<String> { id ->
+                        into.getValue(id).filter { rank[it] == r - 1 }.map { order.getValue(it) }.takeIf { it.isNotEmpty() }?.average() ?: Double.MAX_VALUE
+                    }.thenBy { ids.indexOf(it) },
+                )
+                sorted.forEachIndexed { index, id -> order[id] = index }
+            }
+            return ids.associateWith { Place(rank.getValue(it), order.getValue(it)) }
+        }
+    }
+
     /** Steps in order; [Step.state] is `done`, `current`, `upcoming` or null. */
     @Serializable @SerialName("timeline")
     data class Timeline(val items: List<Step>) : UiBlock {
@@ -108,12 +164,18 @@ sealed interface UiBlock {
 data class UiField(
     val name: String,
     val label: String,
-    /** `text`, `number`, `boolean`, `choice`, `date` (`YYYY-MM-DD`) or `time` (`HH:MM`). */
+    /**
+     * `text`, `number`, `boolean`, `choice`, `date` (`YYYY-MM-DD`), `time` (`HH:MM`), `choices`
+     * (any of [options]) or `range` (a number from [min] to [max] in [step]s).
+     */
     val type: String,
     val options: List<String> = emptyList(),
     val placeholder: String? = null,
     val multiline: Boolean = false,
     val optional: Boolean = false,
+    val min: Double? = null,
+    val max: Double? = null,
+    val step: Double? = null,
 )
 
 @Serializable
@@ -124,6 +186,8 @@ data class UiButton(
     val style: String? = null,
     /** Pressing it sends no field values and needs none filled in. */
     val skipsFields: Boolean = false,
+    /** It opens this https page, after asking, instead of answering. */
+    val url: String? = null,
 )
 
 /** The latest press on a card: which button, and the display name of who pressed it. */
@@ -153,7 +217,7 @@ val ToolPart.pressed: UiPressed?
     }
 
 private fun blocksOf(blocks: JsonElement?): List<UiBlock> =
-    (blocks as? kotlinx.serialization.json.JsonArray).orEmpty().mapNotNull { block ->
+    (blocks as? JsonArray).orEmpty().mapNotNull { block ->
         runCatching { panelJson.decodeFromJsonElement<UiBlock>(block.jsonObject) }.getOrNull()
     }
 
@@ -162,6 +226,8 @@ sealed interface UiValue {
     data class Text(val text: String) : UiValue
     data class Number(val number: Double) : UiValue
     data class Flag(val on: Boolean) : UiValue
+    /** A `choices` field's picks. */
+    data class Choices(val picked: List<String>) : UiValue
 }
 
 /**
@@ -172,8 +238,14 @@ fun UiCard.valuesFor(button: UiButton, values: Map<String, UiValue>): Result<Str
     if (button.skipsFields) return Result.success(null)
     val json = buildJsonObject {
         for (field in fields) {
-            val value = values[field.name] ?: if (field.type == "boolean") UiValue.Flag(false) else null
+            val value = values[field.name] ?: when (field.type) {
+                "boolean" -> UiValue.Flag(false)
+                // A slider shows its start, so that is what is sent when left alone.
+                "range" -> UiValue.Number(field.min ?: 0.0)
+                else -> null
+            }
             val element = when (value) {
+                is UiValue.Choices -> value.picked.takeIf { it.isNotEmpty() }?.let { picked -> JsonArray(picked.map(::JsonPrimitive)) }
                 is UiValue.Text -> value.text.takeIf { it.isNotEmpty() }?.let(::JsonPrimitive)
                 is UiValue.Number -> JsonPrimitive(value.number)
                 is UiValue.Flag -> JsonPrimitive(value.on)

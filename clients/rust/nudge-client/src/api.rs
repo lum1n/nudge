@@ -340,6 +340,30 @@ impl Api {
         .await
     }
 
+    /// An attachment's bytes and its type, such as an image a card shows (ADR 24).
+    pub async fn attachment(
+        &self,
+        room: &str,
+        id: &str,
+    ) -> Result<(Vec<u8>, Option<String>), ApiError> {
+        let response = checked(
+            self.build(Method::GET, &["rooms", room, "attachments", id], &[], NO_BODY)
+                .send()
+                .await,
+        )
+        .await?;
+        let kind = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned);
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|error| ApiError::Network(error.to_string()))?;
+        Ok((bytes.to_vec(), kind))
+    }
+
     pub async fn cancel_nudge(&self, nudge: &str) -> Result<(), ApiError> {
         self.request_empty(Method::DELETE, &["nudges", nudge], &[], NO_BODY)
             .await

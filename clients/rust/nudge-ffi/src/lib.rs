@@ -920,6 +920,19 @@ impl NudgeClient {
         Ok(())
     }
 
+    /// An image attachment's bytes, such as one a card shows (ADR 24); an error for anything
+    /// that isn't an image, so an app only ever draws images from it.
+    pub async fn attachment_image(&self, room: String, id: String) -> Result<Vec<u8>, NudgeError> {
+        let api = self.client.api().clone();
+        let (bytes, kind) = run(async move { api.attachment(&room, &id).await }).await?;
+        if !kind.is_some_and(|kind| kind.starts_with("image/")) {
+            return Err(NudgeError::Decode {
+                detail: "the attachment isn't an image".into(),
+            });
+        }
+        Ok(bytes)
+    }
+
     pub async fn cancel_nudge(&self, nudge_id: String) -> Result<(), NudgeError> {
         let api = self.client.api().clone();
         Ok(run(async move { api.cancel_nudge(&nudge_id).await }).await?)

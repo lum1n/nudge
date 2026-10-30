@@ -966,7 +966,13 @@ export const UiPressRequest = Type.Object({
   values: Type.Optional(
     Type.Record(
       Type.String(),
-      Type.Union([Type.String({ maxLength: 2000 }), Type.Number(), Type.Boolean()]),
+      Type.Union([
+        Type.String({ maxLength: 2000 }),
+        Type.Number(),
+        Type.Boolean(),
+        /** A `choices` field's options. */
+        Type.Array(Type.String({ maxLength: 100 }), { maxItems: 20 }),
+      ]),
     ),
   ),
   /** As for a message: the same id again finds the first press. */

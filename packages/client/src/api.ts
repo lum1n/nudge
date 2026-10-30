@@ -438,7 +438,7 @@ export class Api {
     room: string,
     callId: string,
     button: string,
-    values?: Readonly<Record<string, string | number | boolean>>,
+    values?: Readonly<Record<string, string | number | boolean | readonly string[]>>,
   ): Promise<MessageResponse> {
     return this.request("POST", `${roomPath(room)}/ui/${encodeURIComponent(callId)}`, {
       button,

@@ -198,4 +198,9 @@
     <string name="room_card_choose">Velg …</string>
     <string name="room_card_missing">Fyll inn «%1$s»</string>
     <string name="room_card_map">Kart</string>
+    <string name="room_card_open_link">Åpne %1$s?</string>
+    <string name="room_card_open">Åpne</string>
+    <string name="room_card_add_to_calendar">Legg i kalenderen</string>
+    <string name="room_card_show_table">Vis som tabell</string>
+    <string name="room_card_show_chart">Vis diagrammet</string>
 </resources>

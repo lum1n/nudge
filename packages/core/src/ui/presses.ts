@@ -10,13 +10,25 @@ import {
 import type { Author, MessageDraft } from "../host-api.ts";
 import type { Rooms } from "../identity/rooms.ts";
 import type { Owner } from "../privacy/turn.ts";
-import { cardOf, pressText, type UiCard, type UiValues } from "./card.ts";
+import {
+  cardOf,
+  cardProblem,
+  pressText,
+  type UiCard,
+  UI_CARD_MAX_CHARS,
+  type UiValues,
+} from "./card.ts";
 
 // Entry kinds, as in `privacy/turn.ts`.
 const MESSAGE_ENTRY = "nudge.message";
 const FIRE_ENTRY = "nudge.fire";
 const APPROVAL_ENTRY = "nudge.approval";
 const TOOL_ENTRY = "pi.tool-result";
+/** A card shown again with new content (ADR 30); the projection draws the latest. */
+export const UI_UPDATE_ENTRY = "nudge.ui-update";
+
+/** What a `nudge.ui-update` entry holds. */
+export type UiUpdateEntryData = { readonly callId: string; readonly card: UiCard };
 
 /** How many entries back a press looks for its card; older cards can't be pressed. */
 const LOOK_BACK = 5000;
@@ -57,6 +69,11 @@ export class UiNotYours extends Error {
   }
 }
 
+/** A card that can't be shown, with why. */
+export class UiCardInvalid extends Error {
+  override name = "UiCardInvalid";
+}
+
 /** A card as a room shows it, and who it was for. */
 export type FoundCard = {
   readonly card: UiCard;
@@ -87,25 +104,36 @@ export class UiPresses {
     ) => Promise<Submission>,
   ) {}
 
-  /** The card a tool call showed in a room, if it is there and valid. */
+  /** The card a tool call showed in a room, as its latest update has it, if it is there and valid. */
   async find(roomId: string, callId: string, context: Context): Promise<FoundCard | undefined> {
     const room = await this.rooms.get(roomId, context);
     if (room === undefined) return undefined;
-    const conversation = await this.harness.conversation(
-      room.conversationId as ConversationId,
-      context,
-    );
+    return this.findIn(room.conversationId as ConversationId, callId, context);
+  }
+
+  private async findIn(
+    conversationId: ConversationId,
+    callId: string,
+    context: Context,
+  ): Promise<FoundCard | undefined> {
+    const conversation = await this.harness.conversation(conversationId, context);
     if (conversation === undefined) return undefined;
     let card: UiCard | undefined;
+    // The newest update comes first, reading from the end.
+    let updated: UiCard | undefined;
     let cursor: Cursor | undefined;
     let read = 0;
     do {
       const page = await conversation.entries({}, PAGE, cursor, context);
       for (const entry of page.items) {
         if (card === undefined) {
-          if (entry.kind === TOOL_ENTRY && resultOf(entry)?.toolCallId === callId) {
-            card = cardOf(resultOf(entry)?.details);
-            if (card === undefined) return undefined;
+          if (updated === undefined && entry.kind === UI_UPDATE_ENTRY) {
+            const data = entry.data as UiUpdateEntryData;
+            if (data.callId === callId) updated = cardOf({ ui: data.card });
+          } else if (entry.kind === TOOL_ENTRY && resultOf(entry)?.toolCallId === callId) {
+            const shown = cardOf(resultOf(entry)?.details);
+            if (shown === undefined) return undefined;
+            card = updated ?? shown;
           }
           continue;
         }
@@ -117,6 +145,41 @@ export class UiPresses {
       cursor = page.next;
     } while (cursor !== undefined && read < LOOK_BACK);
     return card === undefined ? undefined : { card };
+  }
+
+  /**
+   * Shows the card tool call `callId` showed in a conversation again with `card` (ADR 30), such as
+   * a delivery's next step or a price that fell. It starts over: its buttons work again. Throws
+   * `UiCardNotFound` when there is no card there, and `UiCardInvalid` for a card that can't be
+   * shown. The model doesn't see it; tell it in a tool result when it should know.
+   */
+  async update(
+    conversationId: ConversationId,
+    callId: string,
+    card: UiCard,
+    context: Context,
+  ): Promise<void> {
+    const size = JSON.stringify(card).length;
+    const problem =
+      cardProblem(card) ??
+      (size > UI_CARD_MAX_CHARS
+        ? `it is ${size} characters as JSON, over ${UI_CARD_MAX_CHARS}`
+        : undefined);
+    if (problem !== undefined) throw new UiCardInvalid(problem);
+    if ((await this.findIn(conversationId, callId, context)) === undefined)
+      throw new UiCardNotFound(callId);
+    const conversation = await this.harness.conversation(conversationId, context);
+    await this.harness.commit(async (tx) => {
+      const state = await tx.doc(UiPressesDoc, String(conversationId), null);
+      delete state.pressed[callId];
+    }, context);
+    await conversation!.submit(
+      {
+        type: "write",
+        entry: { kind: UI_UPDATE_ENTRY, data: { callId, card } satisfies UiUpdateEntryData },
+      },
+      context,
+    );
   }
 
   /**
