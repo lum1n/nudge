@@ -172,6 +172,52 @@ const respond: FauxResponseFactory = (request) => {
       ],
       { stopReason: "toolUse" },
     );
+  // Maps, charts, and date and time fields (ADR 29).
+  if (/show me a map/i.test(text))
+    return fauxAssistantMessage(
+      [
+        fauxToolCall("show_ui", {
+          title: "Maps and charts",
+          blocks: [
+            {
+              type: "map",
+              markers: [
+                { lat: 59.9223, lon: 10.7589, label: "Grünerløkka" },
+                { lat: 59.9139, lon: 10.7522, label: "Centrum" },
+              ],
+            },
+            {
+              type: "chart",
+              kind: "bar",
+              labels: ["Jan", "Feb", "Mar"],
+              series: [
+                { name: "Food", values: [120, 90, 140] },
+                { name: "Rent", values: [900, 900, 950] },
+              ],
+              unit: "kr",
+            },
+            {
+              type: "chart",
+              kind: "line",
+              labels: ["Jan", "Feb", "Mar"],
+              series: [{ name: "Saved", values: [10, 25, 40] }],
+            },
+            {
+              type: "chart",
+              kind: "pie",
+              labels: ["A", "B", "C"],
+              series: [{ name: "Share", values: [5, 3, 2] }],
+            },
+          ],
+          fields: [
+            { name: "day", label: "Day", type: "date" },
+            { name: "at", label: "At", type: "time" },
+          ],
+          buttons: [{ id: "send", label: "Send", style: "primary" }],
+        }),
+      ],
+      { stopReason: "toolUse" },
+    );
   if (/^\S+ \(\d\d:\d\d\): Pressed /.test(text))
     return fauxAssistantMessage(`Got it: ${text.slice(text.indexOf("Pressed"))}`);
   if (/remind me/i.test(text))
