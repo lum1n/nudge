@@ -1,4 +1,4 @@
-import type { MessageResponse, WhenBusy } from "@nudge/protocol";
+import type { Attachment, MessageResponse, WhenBusy } from "@nudge/protocol";
 import { Api, ApiError, type TokenStore } from "./api.ts";
 import { Connection, type ConnectionOptions, connectUrl } from "./connection.ts";
 import { type KeyValueStorage, memoryStorage, Outbox, type Outgoing } from "./outbox.ts";
@@ -103,15 +103,22 @@ export class NudgeClient {
   send(
     room: string,
     text: string,
-    options: { whenBusy?: WhenBusy; requestId?: string; private?: boolean } = {},
+    options: {
+      whenBusy?: WhenBusy;
+      requestId?: string;
+      private?: boolean;
+      /** Uploaded with `api.uploadAttachment` and not sent yet; `text` may then be empty. */
+      attachments?: readonly Attachment[];
+    } = {},
   ): Promise<MessageResponse> {
-    const { whenBusy } = options;
+    const { whenBusy, attachments } = options;
     const message: Outgoing = {
       requestId: options.requestId ?? newRequestId(),
       room,
       text,
       ...(whenBusy && { whenBusy }),
       ...(options.private === true && { private: true }),
+      ...(attachments !== undefined && attachments.length > 0 && { attachments }),
       createdAt: Date.now(),
     };
     this.outbox.put(message);
@@ -131,6 +138,7 @@ export class NudgeClient {
       requestId,
       ...(message.whenBusy && { whenBusy: message.whenBusy }),
       ...(message.private === true && { private: true }),
+      ...(message.attachments !== undefined && { attachments: message.attachments }),
     });
   }
 
@@ -200,13 +208,14 @@ export class NudgeClient {
   private post(message: Outgoing): Promise<MessageResponse> {
     const posting = this.posting.get(message.requestId);
     if (posting !== undefined) return posting;
-    const { requestId, room, text, whenBusy } = message;
+    const { requestId, room, text, whenBusy, attachments } = message;
     const post = this.api
       .send(room, {
         text,
         requestId,
         ...(whenBusy && { whenBusy }),
         ...(message.private === true && { private: true }),
+        ...(attachments !== undefined && { attachments: attachments.map((a) => a.id) }),
       })
       .then(
         (response) => {
@@ -278,12 +287,13 @@ function retryable(error: unknown): boolean {
 }
 
 function pending(message: Outgoing): PendingMessage {
-  const { requestId, text, whenBusy, error } = message;
+  const { requestId, text, whenBusy, attachments, error } = message;
   return {
     requestId,
     text,
     ...(whenBusy && { whenBusy }),
     ...(message.private === true && { private: true }),
+    ...(attachments !== undefined && { attachments }),
     ...(error !== undefined && { error }),
   };
 }

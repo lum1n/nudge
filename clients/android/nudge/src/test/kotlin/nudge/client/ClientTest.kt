@@ -10,6 +10,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import nudge.ffi.AnswerStatus
 import nudge.ffi.ApprovalStatus
+import nudge.ffi.AttachmentKind
 import nudge.ffi.ClientConfig
 import nudge.ffi.ConnectionStatus
 import nudge.ffi.NudgeClient
@@ -198,6 +199,44 @@ class ClientTest {
         assertFalse(off.enabled)
         assertTrue(off.byDefault)
         assertTrue(member.setRoomExtension("trip", "payer", null).enabled)
+    }
+
+    @Test
+    fun sendsAnAttachmentAndLetsTheRoomSendImagesToTheModel() = runBlocking {
+        val uploader = client(MemoryTokens(ann))
+        val member = client(MemoryTokens(bo))
+        val room = member.observeRoomState("trip")
+        room.awaitState { it.status == SyncStatus.LIVE }
+
+        val png = byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47, 1, 2, 3)
+        val attachment = uploader.uploadAttachment("trip", "receipt.png", "image/png", png)
+        assertEquals(AttachmentKind.IMAGE, attachment.kind)
+        assertEquals(png.size.toULong(), attachment.size)
+        try {
+            member.attachment("trip", attachment.id)
+            error("not refused")
+        } catch (e: NudgeException.Status) {
+            assertEquals(404.toUShort(), e.status)
+        }
+
+        uploader.send("trip", "", null, attachments = listOf(attachment))
+        val sent = room.awaitState { state ->
+            state.timeline.any { it is TimelineItem.User && it.attachments.isNotEmpty() }
+        }
+        assertEquals(listOf(attachment), sent.timeline.filterIsInstance<TimelineItem.User>().single().attachments)
+        assertTrue(png.contentEquals(member.attachment("trip", attachment.id)))
+
+        assertTrue(member.setRoomImages("trip", true).imagesToModel)
+        room.awaitState { it.room?.imagesToModel == true }
+        assertFalse(uploader.setRoomImages("trip", false).imagesToModel)
+
+        uploader.removeAttachment("trip", attachment.id)
+        try {
+            member.attachment("trip", attachment.id)
+            error("not refused")
+        } catch (e: NudgeException.Status) {
+            assertEquals(410.toUShort(), e.status)
+        }
     }
 
     @Test

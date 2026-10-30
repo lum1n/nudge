@@ -146,8 +146,16 @@ pub struct UserItem {
     pub press: Option<Press>,
 }
 
-/// A file sent with a message (ADR 24).
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+/// Largest attachment, in bytes.
+pub const ATTACHMENT_MAX_BYTES: u64 = 10 * 1024 * 1024;
+/// Most attachments one message names.
+pub const ATTACHMENTS_PER_MESSAGE: usize = 8;
+/// How long the long side of a photo may be: clients scale larger ones down before uploading.
+pub const ATTACHMENT_IMAGE_MAX_SIDE: u32 = 2048;
+
+/// A file sent with a message (ADR 24). Its bytes come from
+/// `GET /rooms/<room>/attachments/<id>`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Attachment {
     /// `a1`, `a2`, … within its room.
     pub id: String,
@@ -774,6 +782,12 @@ pub struct CreateRoomRequest {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RenameRoomRequest {
     pub name: String,
+}
+
+/// Whether the model gets the images attached in a room as they are (ADR 24).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RoomImagesRequest {
+    pub allowed: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

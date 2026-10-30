@@ -11,6 +11,8 @@ struct RoomView: View {
     /// How its robot looks.
     let look: RobotLook
     @State private var observed: ObservedRoom?
+    /// The files picked for the next message, uploaded as they are picked.
+    @State private var attachments: AttachmentDrafts?
     @State private var draft = ""
     @State private var secret = false
     @State private var showing: Sheet?
@@ -70,6 +72,7 @@ struct RoomView: View {
             .environment(\.pressCard, { callId, card, button, values in
                 try await client.press(room: roomId, callId: callId, card: card, button: button, values: values)
             })
+            .environment(\.attachmentSource, AttachmentSource(client: client, room: roomId))
             .alert("Something went wrong", isPresented: Binding(get: { problem != nil }, set: { if !$0 { problem = nil } })) {
                 Button("OK") { problem = nil }
             } message: {
@@ -78,7 +81,10 @@ struct RoomView: View {
             // Let go of when the view goes, not on disappear: in a collapsed split view, the
             // room opened again can appear before it disappeared from the last time, which
             // left it with nothing observed and loading for good.
-            .onAppear { if observed == nil { observed = client.observeRoomState(roomId) } }
+            .onAppear {
+                if observed == nil { observed = client.observeRoomState(roomId) }
+                if attachments == nil { attachments = AttachmentDrafts(client: client, room: roomId) }
+            }
             .onChange(of: RoomMood.lastAnswerMark(state?.timeline ?? [])) { before, after in
                 afterglow = RoomMood.afterglow(from: before, to: after)
             }
@@ -144,8 +150,12 @@ struct RoomView: View {
                             } else if let status = state?.live?.status {
                                 LiveStatusView(status: status)
                             }
+                            if let attachments {
+                                AttachmentChips(drafts: attachments, imagesToModel: state?.room?.imagesToModel == true)
+                            }
                             Composer(
                                 draft: $draft, running: state?.live?.running == true, dictation: dictation,
+                                attachments: attachments,
                                 // Only in a shared room is there anyone to keep a message from.
                                 secret: state?.room?.kind == .personal ? nil : $secret,
                                 send: { text in Task { await send(text) } },
@@ -188,7 +198,9 @@ struct RoomView: View {
                     }
                     ForEach(queued, id: \.id) { message in
                         let mine = message.author == nil || message.author?.id == me
-                        MessageBubble(text: message.text, mine: mine, author: mine ? nil : message.author?.displayName)
+                        MessageBubble(
+                            text: message.text.isEmpty && !message.attachments.isEmpty ? attachmentsLine(message.attachments) : message.text,
+                            mine: mine, author: mine ? nil : message.author?.displayName)
                             .opacity(0.6)
                             .overlay(alignment: .bottomTrailing) {
                                 Text(message.mode == .steer ? "next" : "queued")
@@ -256,11 +268,13 @@ struct RoomView: View {
 
     private func send(_ text: String) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard attachments?.uploading != true else { return }
+        let files = attachments?.take() ?? []
+        guard !trimmed.isEmpty || !files.isEmpty else { return }
         draft = ""
         let isPrivate = secret && state?.room?.kind != .personal
         // A refused message stays in `pending`, marked failed, with Retry and Dismiss.
-        _ = try? await client.send(room: roomId, text: trimmed, whenBusy: nil, private: isPrivate)
+        _ = try? await client.send(room: roomId, text: trimmed, whenBusy: nil, private: isPrivate, attachments: files)
     }
 
     private func attempt(_ action: () async throws -> Void) async {
@@ -280,6 +294,8 @@ struct Composer: View {
     let running: Bool
     /// The mic's: its room's, which the robot follows.
     let dictation: Dictation
+    /// The files picked for the next message; nil until the room has them.
+    var attachments: AttachmentDrafts?
     /// Whether the next message is private; nil where there is nobody to keep it from.
     var secret: Binding<Bool>?
     let send: (String) -> Void
@@ -296,9 +312,16 @@ struct Composer: View {
     @State private var problem: String?
 
     private var empty: Bool { draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    /// Stop in place of Send: while the assistant answers, with nothing typed or attached.
+    private var showsStop: Bool { running && draft.isEmpty && (attachments?.drafts.isEmpty ?? true) }
+    /// Nothing to send: no text and no file ready, or a file still uploading.
+    private var nothingToSend: Bool {
+        (empty && (attachments?.ready.isEmpty ?? true)) || attachments?.uploading == true
+    }
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
+            if let attachments { AttachButton(drafts: attachments) }
             if let secret {
                 Toggle(isOn: secret) {
                     Image(systemName: secret.wrappedValue ? "lock.fill" : "lock.open").frame(width: 24, height: 24)
@@ -328,7 +351,7 @@ struct Composer: View {
             .padding(.leading, 16)
             .padding(.trailing, 6)
             .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 22))
-            if running && draft.isEmpty {
+            if showsStop {
                 Button(action: stop) {
                     Image(systemName: "stop.fill").frame(width: 24, height: 24)
                 }
@@ -346,12 +369,12 @@ struct Composer: View {
                 .buttonStyle(.glassProminent)
                 .buttonBorderShape(.circle)
                 .controlSize(.large)
-                .disabled(empty)
+                .disabled(nothingToSend)
                 .glassEffectID("action", in: glass)
                 .accessibilityLabel("Send")
             }
         }
-        .animation(.smooth, value: running && draft.isEmpty)
+        .animation(.smooth, value: showsStop)
         .onChange(of: dictation.text) { _, heard in
             if dictating { write(heard) }
         }
@@ -528,7 +551,10 @@ struct PendingRow: View {
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 4) {
-            MessageBubble(text: message.text, mine: true, author: nil).opacity(0.6)
+            MessageBubble(
+                text: message.text.isEmpty && !message.attachments.isEmpty ? attachmentsLine(message.attachments) : message.text,
+                mine: true, author: nil
+            ).opacity(0.6)
             switch message.state {
             case .sending:
                 Label("Sending", systemImage: "arrow.up.circle").font(.caption).foregroundStyle(.secondary)

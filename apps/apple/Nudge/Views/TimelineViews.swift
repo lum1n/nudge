@@ -14,13 +14,22 @@ struct TimelineRow: View {
     var body: some View {
         switch item {
         // Someone else's private message: the server sent it empty, so it is a line, not a bubble.
-        case .user(_, let text, _, _, _, _, let privateTo?) where text.isEmpty:
+        case .user(_, let text, _, _, _, _, let privateTo?, let attachments) where text.isEmpty && attachments.isEmpty:
             PrivateLine(text: "\(privateTo.displayName) sent a private message")
-        case .user(_, let text, let author, let sentAt, _, _, let privateTo):
+        case .user(_, let text, let author, let sentAt, _, _, let privateTo, let attachments):
             let mine = author == nil || author?.id == me
             VStack(alignment: mine ? .trailing : .leading, spacing: 2) {
                 if privateTo != nil { OnlyYou() }
-                MessageBubble(text: text, mine: mine, author: mine ? nil : author?.displayName, sentAt: sentAt)
+                if !attachments.isEmpty {
+                    // The name goes over the files, the bubble under them without it.
+                    if !mine, let author {
+                        Text(author.displayName).font(.caption).foregroundStyle(.secondary)
+                    }
+                    MessageAttachments(attachments: attachments, mine: mine)
+                }
+                if !text.isEmpty || attachments.isEmpty {
+                    MessageBubble(text: text, mine: mine, author: mine || !attachments.isEmpty ? nil : author?.displayName, sentAt: sentAt)
+                }
             }
             .frame(maxWidth: .infinity, alignment: mine ? .trailing : .leading)
         case .nudge, .approval:

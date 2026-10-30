@@ -52,7 +52,7 @@ final class TranscriptTests: XCTestCase {
             calendar.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour))!.timeIntervalSince1970 * 1000
         }
         let user = { (id: String, sentAt: Double?) in
-            TimelineItem.user(id: id, text: id, author: nil, sentAt: sentAt, clientId: nil, requestId: nil, privateTo: nil)
+            TimelineItem.user(id: id, text: id, author: nil, sentAt: sentAt, clientId: nil, requestId: nil, privateTo: nil, attachments: [])
         }
         let answer = { (id: String, startedAt: Double?) in
             TimelineItem.answer(id: id, status: .done, error: nil, parts: [.text(text: id)], startedAt: startedAt, promptedBy: nil, privateTo: nil)

@@ -58,6 +58,16 @@ describe("toThreadMessageLike", () => {
     expect(toThreadMessageLike(message, "bo")).toMatchObject({
       metadata: { custom: { author: "Ann", mine: false } },
     });
+    const attachment = {
+      id: "a1",
+      name: "map.pdf",
+      mime: "application/pdf",
+      size: 9,
+      kind: "file" as const,
+    };
+    expect(toThreadMessageLike({ ...message, attachments: [attachment] }, "ann")).toMatchObject({
+      metadata: { custom: { attachments: [attachment] } },
+    });
   });
 
   it("says what prompted an answer to a nudge or a watch", () => {
@@ -274,6 +284,25 @@ describe("buildQueueAdapter", () => {
     );
     expect(adapter.items).toMatchObject([{ id: "r1", prompt: "c" }]);
     expect(adapter.steerItems).toMatchObject([{ id: "r2", prompt: "d" }]);
+  });
+
+  it("shows a message of files alone by their names", () => {
+    const receipt = {
+      id: "a1",
+      name: "receipt.jpg",
+      mime: "image/jpeg",
+      size: 2048,
+      kind: "image" as const,
+    };
+    const adapter = buildQueueAdapter(
+      [{ id: 1, mode: "followUp", text: "", nudge: false, attachments: [receipt] }],
+      [{ requestId: "r1", text: "", attachments: [receipt] }],
+      dispatch,
+    );
+    expect(adapter.items).toMatchObject([
+      { id: "1", prompt: "📎 receipt.jpg" },
+      { id: "r1", prompt: "📎 receipt.jpg" },
+    ]);
   });
 
   it("dispatches enqueue and steer to the given lane", () => {

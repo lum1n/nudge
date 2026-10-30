@@ -20,7 +20,7 @@ class RoomMoodTest {
     }
 
     private val now = 1_800_000_000_000.0
-    private val said = listOf<TimelineItem>(TimelineItem.User("m1", "hi", null, now - 1000, null, null, null))
+    private val said = listOf<TimelineItem>(TimelineItem.User("m1", "hi", null, now - 1000, null, null, null, emptyList()))
     private val quiet = Live(running = false, status = null)
     private val running = Live(running = true, status = null)
 

@@ -57,7 +57,7 @@ class TranscriptTest {
     fun dayStartsMarkTheFirstTimedItemOfEachDay() {
         val zone = ZoneId.of("Europe/Oslo")
         fun at(day: Int, hour: Int) = ZonedDateTime.of(2026, 10, day, hour, 0, 0, 0, zone).toInstant().toEpochMilli().toDouble()
-        fun user(id: String, sentAt: Double?) = TimelineItem.User(id, id, null, sentAt, null, null, null)
+        fun user(id: String, sentAt: Double?) = TimelineItem.User(id, id, null, sentAt, null, null, null, emptyList())
         fun answer(id: String, startedAt: Double?) =
             TimelineItem.Answer(id, AnswerStatus.DONE, null, listOf(Part.Text(id)), startedAt, null, null)
         val items = listOf(

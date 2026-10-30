@@ -64,6 +64,8 @@ pub struct SendOptions {
     pub when_busy: Option<WhenBusy>,
     /// Only the sender sees the message and the answer to it.
     pub private: bool,
+    /// Uploaded with `Api::upload_attachment` and not sent yet; the text may then be empty.
+    pub attachments: Vec<Attachment>,
     /// A fresh one when absent.
     pub request_id: Option<String>,
 }
@@ -260,6 +262,7 @@ impl NudgeClient {
             text: text.to_owned(),
             when_busy: options.when_busy,
             private: options.private,
+            attachments: options.attachments,
             created_at: now_ms(),
             error: None,
         };
@@ -292,6 +295,7 @@ impl NudgeClient {
                     text: pending.text,
                     when_busy: pending.when_busy,
                     private: pending.private,
+                    attachments: pending.attachments,
                     created_at: now_ms(),
                     error: None,
                 },
@@ -392,7 +396,8 @@ impl Inner {
             request_id: message.request_id.clone(),
             when_busy: message.when_busy,
             private: message.private.then_some(true),
-            attachments: None,
+            attachments: (!message.attachments.is_empty())
+                .then(|| message.attachments.iter().map(|a| a.id.clone()).collect()),
         };
         let result = self.api.send(&message.room, &body).await;
         self.posting.lock().unwrap().remove(&message.request_id);
@@ -469,6 +474,7 @@ fn pending(message: &Outgoing) -> PendingMessage {
         text: message.text.clone(),
         when_busy: message.when_busy,
         private: message.private,
+        attachments: message.attachments.clone(),
         state: match &message.error {
             Some(error) => PendingState::Failed {
                 error: error.clone(),

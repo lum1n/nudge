@@ -299,6 +299,43 @@ final class ClientTests: XCTestCase {
         XCTAssertEqual(timeline.map(\.id), ["b", "c", "e"])
     }
 
+    func testSendsAnAttachmentAndLetsTheRoomSendImages() async throws {
+        let ann = try client(MemoryTokens(server.ann))
+        let bo = try client(MemoryTokens(server.bo))
+        let drafts = AttachmentDrafts(client: ann, room: "trip")
+        let png = Data([0x89, 0x50, 0x4E, 0x47, 1, 2, 3])
+        await drafts.add(name: "receipt.png", mime: "image/png", data: png)
+        XCTAssertTrue(drafts.hasImages)
+        let attachments = drafts.take()
+        XCTAssertEqual(attachments.map(\.kind), [.image])
+        XCTAssertTrue(drafts.drafts.isEmpty)
+
+        let room = bo.observeRoomState("trip")
+        _ = try await ann.send(room: "trip", text: "", whenBusy: nil, attachments: attachments)
+        let shown = try await within {
+            try await room.first { state in
+                state.timeline.contains { if case .user(_, _, _, _, _, _, _, let sent) = $0 { !sent.isEmpty } else { false } }
+            }
+        }
+        guard case .user(_, _, _, _, _, _, _, let sent) = shown.timeline.first(where: { if case .user = $0 { true } else { false } })
+        else { return XCTFail() }
+        XCTAssertEqual(sent, attachments)
+        let data = try await AttachmentStore.shared.data(bo, room: "trip", id: sent[0].id)
+        XCTAssertEqual(data, png)
+
+        let allowed = try await bo.setRoomImages(room: "trip", allowed: true)
+        XCTAssertTrue(allowed.imagesToModel)
+        _ = try await within { try await room.first { $0.room?.imagesToModel == true } }
+
+        try await ann.removeAttachment(room: "trip", id: sent[0].id)
+        do {
+            _ = try await bo.attachment(room: "trip", id: sent[0].id)
+            XCTFail("a removed attachment downloads")
+        } catch let error as NudgeError {
+            XCTAssertTrue(error.isGone)
+        }
+    }
+
     func testPairingAndAStreamedAnswer() async throws {
         let assistants = try await listAssistants(server: server.url)
         XCTAssertEqual(assistants.map(\.name), ["robin", "team"])
@@ -335,7 +372,7 @@ final class ClientTests: XCTestCase {
         }
         XCTAssertTrue(texts.last!.hasPrefix("Hello! This answer arrives"))
         XCTAssertGreaterThan(Set(texts).count, 2, "streamed in several states")
-        XCTAssertEqual(done.timeline.compactMap { if case .user(_, let text, _, _, _, _, _) = $0 { text } else { nil } }, ["Hello there"])
+        XCTAssertEqual(done.timeline.compactMap { if case .user(_, let text, _, _, _, _, _, _) = $0 { text } else { nil } }, ["Hello there"])
         XCTAssertTrue(done.pending.isEmpty)
 
         let fact = try await admin.remember(room: "trip", text: "Bo likes trains")
