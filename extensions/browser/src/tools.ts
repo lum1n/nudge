@@ -7,6 +7,7 @@ import {
   pinAction,
   samePinnedAction,
 } from "./gate.ts";
+import { describePageTools, pinPageTool } from "./webmcp.ts";
 
 /** The part of a browser session the tools use; tests pass a fake. */
 export type Browser = Pick<
@@ -26,6 +27,9 @@ export type Browser = Pick<
   | "login"
   | "describe"
   | "inspect"
+  | "pageHost"
+  | "pageTools"
+  | "callPageTool"
 >;
 
 export interface BrowserTool<T extends TSchema = TSchema> {
@@ -164,6 +168,7 @@ export const browserTools: BrowserTool[] = [
           Type.Literal("browser_click"),
           Type.Literal("browser_type"),
           Type.Literal("browser_press"),
+          Type.Literal("browser_call_page_tool"),
         ],
         { description: "The tool you will do it with." },
       ),
@@ -174,18 +179,72 @@ export const browserTools: BrowserTool[] = [
         }),
       ),
       key: Type.Optional(Type.String({ description: "With browser_press: the key, like Enter." })),
+      pageTool: Type.Optional(
+        Type.String({ description: "With browser_call_page_tool: the page tool's name." }),
+      ),
+      arguments: Type.Optional(
+        Type.Record(Type.String(), Type.Unknown(), {
+          description:
+            "With browser_call_page_tool: exactly the arguments you will call it with; the approval covers only these.",
+        }),
+      ),
     }),
     observes: true,
     ends: "needs-confirmation",
     run: async (s, a, approval) => {
       // What the user approves is pinned now, while the element is in front of us.
-      if (a.tool !== undefined)
+      if (a.tool === "browser_call_page_tool")
+        approval.asked = pinPageTool(s.pageHost(), a.pageTool ?? "", a.arguments ?? {});
+      else if (a.tool !== undefined)
         approval.asked = pinAction(
           a.tool,
           await s.inspect(a.ref),
           a.tool === "browser_press" ? (a.key ?? "") : undefined,
         );
       return `Waiting for the user to approve: ${a.action}`;
+    },
+  }),
+  tool({
+    name: "browser_page_tools",
+    description:
+      "List the tools the current page offers agents itself (WebMCP): each one's name, what it does, its input schema, and whether it only reads. When a page has a tool for the task, calling it is faster and surer than clicking through the page.",
+    parameters: Type.Object({}),
+    observes: true,
+    run: async (s) => describePageTools(s.pageHost(), await s.pageTools()),
+  }),
+  tool({
+    name: "browser_call_page_tool",
+    description:
+      "Call one of the current page's own tools (see browser_page_tools) with arguments that match its input schema. A tool that may change things (one that doesn't only read) is held for the user's approval like a click on Pay: call browser_confirm with this tool, its name and the exact arguments first.",
+    parameters: Type.Object({
+      name: Type.String({ minLength: 1, description: "The page tool's name." }),
+      arguments: Type.Optional(
+        Type.Record(Type.String(), Type.Unknown(), {
+          description: "The tool's input, matching its schema.",
+        }),
+      ),
+    }),
+    run: async (s, a, approval) => {
+      const tools = await s.pageTools();
+      const found = tools.find((t) => t.name === a.name);
+      if (found === undefined)
+        throw new ActionError(
+          tools.length === 0
+            ? "This page offers no tools of its own. Use the page as usual."
+            : `The page has no tool "${a.name}". It has: ${tools.map((t) => t.name).join(", ")}.`,
+        );
+      const input = a.arguments ?? {};
+      // The page says whether a tool only reads; anything else waits for the user, pinned to these arguments.
+      if (!found.readOnly) {
+        const pinned = pinPageTool(s.pageHost(), found.name, input);
+        if (approval.approved && samePinnedAction(approval.approved, pinned))
+          approval.approved = undefined;
+        else
+          throw new ActionError(
+            `Not done: the page's tool "${found.name}" may change things, so the user has to approve it.${approval.approved ? " The user approved a different action, not this one." : ""} Call browser_confirm with tool browser_call_page_tool, pageTool "${found.name}", exactly these arguments, and what it commits them to.`,
+          );
+      }
+      return s.callPageTool(found.name, input);
     },
   }),
   tool({
@@ -294,6 +353,10 @@ export function progressLine(
       return `Asking you to log in on ${text("site")}…`;
     case "browser_confirm":
       return "Asking you to approve the next step…";
+    case "browser_page_tools":
+      return "Looking at the page's own tools…";
+    case "browser_call_page_tool":
+      return `Using the page's ${quote(text("name"))} tool…`;
     case "browser_tabs":
       return text("action") === "switch"
         ? "Switching tabs…"

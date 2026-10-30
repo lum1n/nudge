@@ -1,6 +1,7 @@
 import { ActionError } from "../src/browser.ts";
 import type { ActionTarget } from "../src/gate.ts";
 import type { Browser } from "../src/tools.ts";
+import type { PageTool } from "../src/webmcp.ts";
 
 /** A plain button, as `inspect` reads it; tests change what they need. */
 export function target(overrides: Partial<ActionTarget> = {}): ActionTarget {
@@ -26,6 +27,8 @@ export function target(overrides: Partial<ActionTarget> = {}): ActionTarget {
 export function fakeBrowser(
   page = (n: number) => `URL: https://example.no/${n}\n\n- heading "Page ${n}" [level=1]`,
   targets: Record<string, ActionTarget> = {},
+  /** What the page offers through WebMCP. */
+  pageTools: PageTool[] = [],
 ) {
   const calls: string[] = [];
   let n = 0;
@@ -56,6 +59,12 @@ export function fakeBrowser(
     takeNotes: () => [],
     describe: (ref) => `button "Button ${ref}" [${ref}]`,
     inspect: async (ref) => targets[ref ?? "focus"] ?? target({ name: `Button ${ref}` }),
+    pageHost: () => "example.no",
+    pageTools: async () => pageTools,
+    callPageTool: async (name, input) => {
+      calls.push(`page tool ${name} ${JSON.stringify(input)}`);
+      return `${name} done.`;
+    },
     login: async () => {
       calls.push("login");
       return "Filled in the saved login for example.no and submitted it.";
