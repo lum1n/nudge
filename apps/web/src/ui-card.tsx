@@ -1,6 +1,8 @@
 import type { Player, UiBlock, UiButton, UiCard as Card, UiField } from "@nudge/client";
 import { type ReactNode, useEffect, useState } from "react";
 import { clientFor } from "./api.ts";
+import { CardChart } from "./card-chart.tsx";
+import { CardMap } from "./card-map.tsx";
 import { m } from "./i18n/index.ts";
 
 export { cardIn } from "./cards.ts";
@@ -160,7 +162,11 @@ function Field(props: {
         />
       ) : (
         <input
-          type={field.type === "number" ? "number" : "text"}
+          type={
+            field.type === "number" || field.type === "date" || field.type === "time"
+              ? field.type
+              : "text"
+          }
           value={value === undefined ? "" : String(value)}
           placeholder={field.placeholder}
           disabled={disabled}
@@ -242,6 +248,96 @@ function Block(props: {
       return <AttachmentImage {...props} id={block.attachment} alt={block.alt} />;
     case "divider":
       return <hr className="border-stone-200" />;
+    case "map":
+      return <CardMap block={block} />;
+    case "chart":
+      return <CardChart block={block} />;
+    case "stats":
+      return (
+        <dl className="grid grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] gap-2">
+          {block.items.map((item, index) => (
+            <div key={index} className="rounded bg-stone-50 px-2 py-1.5">
+              <dt className="text-xs text-stone-500">{item.label}</dt>
+              <dd className="text-lg font-semibold tabular-nums">{item.value}</dd>
+              {item.change !== undefined && (
+                <dd
+                  className={`text-xs ${
+                    item.tone === "good"
+                      ? "text-green-700"
+                      : item.tone === "bad"
+                        ? "text-red-700"
+                        : "text-stone-500"
+                  }`}
+                >
+                  {item.change}
+                </dd>
+              )}
+            </div>
+          ))}
+        </dl>
+      );
+    case "progress":
+      return (
+        <ul className="flex flex-col gap-1.5">
+          {block.items.map((item, index) => {
+            const share = item.value / (item.max ?? 100);
+            return (
+              <li key={index} className="flex flex-col gap-0.5">
+                <div className="flex justify-between gap-2">
+                  <span>{item.label}</span>
+                  <span className="text-stone-500 tabular-nums">
+                    {item.note ?? `${Math.round(share * 100)}%`}
+                  </span>
+                </div>
+                <div
+                  className="h-1.5 overflow-hidden rounded-full bg-stone-200"
+                  role="progressbar"
+                  aria-valuenow={item.value}
+                  aria-valuemax={item.max ?? 100}
+                  aria-label={item.label}
+                >
+                  <div
+                    className={`h-full rounded-full ${share > 1 ? "bg-amber-600" : "bg-sky-700"}`}
+                    style={{ width: `${Math.max(0, Math.min(1, share)) * 100}%` }}
+                  />
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      );
+    case "timeline":
+      return (
+        <ol className="flex flex-col">
+          {block.items.map((item, index) => (
+            <li key={index} className="flex gap-2">
+              <div className="flex flex-col items-center">
+                <span
+                  className={`mt-1 size-2.5 shrink-0 rounded-full border-2 ${
+                    item.state === "done"
+                      ? "border-sky-700 bg-sky-700"
+                      : item.state === "current"
+                        ? "border-sky-700 bg-white ring-2 ring-sky-200"
+                        : "border-stone-300 bg-white"
+                  }`}
+                />
+                {index < block.items.length - 1 && <span className="w-px flex-1 bg-stone-300" />}
+              </div>
+              <div className={`pb-2 ${item.state === "upcoming" ? "text-stone-500" : ""}`}>
+                <div className={item.state === "current" ? "font-medium" : ""}>
+                  {item.time !== undefined && (
+                    <span className="mr-2 text-stone-500 tabular-nums">{item.time}</span>
+                  )}
+                  {item.title}
+                </div>
+                {item.subtitle !== undefined && (
+                  <div className="text-xs text-stone-500">{item.subtitle}</div>
+                )}
+              </div>
+            </li>
+          ))}
+        </ol>
+      );
     default:
       // A block this app doesn't know yet.
       return null;

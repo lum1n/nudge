@@ -46,4 +46,54 @@ describe("cards", () => {
     expect(() => pressText(card, "go", { who: "Ann", extra: 1 })).toThrow(/No field "extra"/);
     expect(() => pressText(card, "stop")).toThrow(/No button "stop"/);
   });
+
+  it("checks what the schema can't say about maps and charts", () => {
+    const one = (block: object) => cardProblem({ v: 1, blocks: [block] } as UiCard);
+    expect(
+      one({ type: "map", markers: [{ lat: 59.9, lon: 10.7, label: "Oslo" }] }),
+    ).toBeUndefined();
+    expect(one({ type: "map" })).toMatch(/markers or a path/);
+    expect(one({ type: "map", markers: [{ lat: 91, lon: 0, label: "x" }] })).toMatch(
+      /^\/blocks\/0/,
+    );
+    const chart = { type: "chart", kind: "bar", labels: ["Jan", "Feb"] };
+    expect(one({ ...chart, series: [{ name: "kr", values: [1, null] }] })).toBeUndefined();
+    expect(one({ ...chart, series: [{ name: "kr", values: [1] }] })).toMatch(/1 values for 2/);
+    expect(
+      one({
+        ...chart,
+        kind: "pie",
+        series: [
+          { name: "a", values: [1, 2] },
+          { name: "b", values: [1, 2] },
+        ],
+      }),
+    ).toMatch(/one series/);
+    expect(one({ ...chart, kind: "pie", series: [{ name: "a", values: [1, -2] }] })).toMatch(
+      /negative/,
+    );
+    expect(
+      one({ type: "stats", items: [{ label: "Spent", value: "4 200 kr", tone: "bad" }] }),
+    ).toBeUndefined();
+    expect(one({ type: "progress", items: [{ label: "Saved", value: 3, max: 0 }] })).toMatch(
+      /^\/blocks\/0/,
+    );
+  });
+
+  it("takes days and times as they are sent", () => {
+    const when: UiCard = {
+      v: 1,
+      title: "When",
+      fields: [
+        { name: "day", label: "Day", type: "date" },
+        { name: "at", label: "At", type: "time" },
+      ],
+      buttons: [{ id: "ok", label: "OK" }],
+    };
+    expect(pressText(when, "ok", { day: "2026-11-02", at: "18:30" })).toBe(
+      'Pressed "OK" on "When"\nDay: 2026-11-02\nAt: 18:30',
+    );
+    expect(() => pressText(when, "ok", { day: "2026-02-30", at: "18:30" })).toThrow(/a day/);
+    expect(() => pressText(when, "ok", { day: "2026-11-02", at: "24:00" })).toThrow(/a time/);
+  });
 });

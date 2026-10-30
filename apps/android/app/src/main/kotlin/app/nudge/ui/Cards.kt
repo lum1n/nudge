@@ -9,7 +9,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import android.text.format.DateFormat
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.ui.platform.LocalContext
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -159,6 +171,11 @@ private fun Block(block: UiBlock) {
         // Attachments aren't fetched in the app yet: what the image shows, in words.
         is UiBlock.Image -> Text(block.alt, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         UiBlock.Divider -> HorizontalDivider()
+        is UiBlock.Places -> CardMap(block)
+        is UiBlock.Chart -> CardChart(block)
+        is UiBlock.Stats -> CardStats(block)
+        is UiBlock.Progress -> CardProgress(block)
+        is UiBlock.Timeline -> CardTimeline(block)
     }
 }
 
@@ -187,6 +204,7 @@ private fun Field(field: UiField, value: UiValue?, enabled: Boolean, onChange: (
                 }
             }
         }
+        "date", "time" -> WhenField(field, label, (value as? UiValue.Text)?.text, enabled) { onChange(UiValue.Text(it)) }
         else -> {
             // A number field keeps what is typed; text that isn't a number counts as empty.
             var text by remember { mutableStateOf((value as? UiValue.Text)?.text ?: "") }
@@ -209,5 +227,45 @@ private fun Field(field: UiField, value: UiValue?, enabled: Boolean, onChange: (
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+    }
+}
+
+/** A day or a time of day, picked in a dialog and sent as `YYYY-MM-DD` or `HH:MM`. */
+@Composable
+private fun WhenField(field: UiField, label: String, value: String?, enabled: Boolean, onChange: (String) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Column {
+        Text(label, style = MaterialTheme.typography.labelMedium)
+        OutlinedButton({ open = true }, enabled = enabled) { Text(value ?: field.placeholder ?: stringResource(R.string.room_card_choose)) }
+    }
+    if (!open) return
+    if (field.type == "date") {
+        val state = rememberDatePickerState(
+            initialSelectedDateMillis = value?.let { runCatching { LocalDate.parse(it).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli() }.getOrNull() },
+        )
+        DatePickerDialog(
+            onDismissRequest = { open = false },
+            confirmButton = {
+                TextButton({
+                    state.selectedDateMillis?.let { onChange(Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate().toString()) }
+                    open = false
+                }) { Text(stringResource(android.R.string.ok)) }
+            },
+            dismissButton = { TextButton({ open = false }) { Text(stringResource(android.R.string.cancel)) } },
+        ) { DatePicker(state) }
+    } else {
+        val (hour, minute) = value?.split(":")?.mapNotNull { it.toIntOrNull() }?.takeIf { it.size == 2 } ?: listOf(12, 0)
+        val state = rememberTimePickerState(hour, minute, is24Hour = DateFormat.is24HourFormat(LocalContext.current))
+        AlertDialog(
+            onDismissRequest = { open = false },
+            confirmButton = {
+                TextButton({
+                    onChange("%02d:%02d".format(state.hour, state.minute))
+                    open = false
+                }) { Text(stringResource(android.R.string.ok)) }
+            },
+            dismissButton = { TextButton({ open = false }) { Text(stringResource(android.R.string.cancel)) } },
+            text = { TimePicker(state) },
+        )
     }
 }

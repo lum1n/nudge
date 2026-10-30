@@ -39,10 +39,17 @@ public enum UiBlock: Decodable, Equatable, Sendable {
     /// One of the room's attachments, by id.
     case image(attachment: String, alt: String)
     case divider
+    /// Places on a map, and a line through `path` such as a route; the app picks the map.
+    case map(markers: [UiMarker], path: [UiPoint])
+    /// `bar`, `line`, `area` or `pie`: a value per label in each series, nil for a gap.
+    case chart(UiChart)
+    case stats([UiStat])
+    case progress([UiProgressItem])
+    case timeline([UiStep])
 
     struct Pair: Decodable { let label: String; let value: String }
     struct Item: Decodable { let title: String; let subtitle: String? }
-    enum CodingKeys: String, CodingKey { case type, text, markdown, pairs, items, columns, rows, attachment, alt }
+    enum CodingKeys: String, CodingKey { case type, text, markdown, pairs, items, columns, rows, attachment, alt, markers, path }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -56,6 +63,14 @@ public enum UiBlock: Decodable, Equatable, Sendable {
         case "image":
             self = .image(attachment: try container.decode(String.self, forKey: .attachment), alt: try container.decode(String.self, forKey: .alt))
         case "divider": self = .divider
+        case "map":
+            self = .map(
+                markers: try container.decodeIfPresent([UiMarker].self, forKey: .markers) ?? [],
+                path: try container.decodeIfPresent([UiPoint].self, forKey: .path) ?? [])
+        case "chart": self = .chart(try UiChart(from: decoder))
+        case "stats": self = .stats(try container.decode([UiStat].self, forKey: .items))
+        case "progress": self = .progress(try container.decode([UiProgressItem].self, forKey: .items))
+        case "timeline": self = .timeline(try container.decode([UiStep].self, forKey: .items))
         default:
             throw DecodingError.dataCorruptedError(forKey: .type, in: container, debugDescription: "A block this app doesn't know")
         }
@@ -69,15 +84,80 @@ public enum UiBlock: Decodable, Equatable, Sendable {
         case (.table(let c1, let r1), .table(let c2, let r2)): c1 == c2 && r1 == r2
         case (.image(let a1, let t1), .image(let a2, let t2)): a1 == a2 && t1 == t2
         case (.divider, .divider): true
+        case (.map(let m1, let p1), .map(let m2, let p2)): m1 == m2 && p1 == p2
+        case (.chart(let x), .chart(let y)): x == y
+        case (.stats(let x), .stats(let y)): x == y
+        case (.progress(let x), .progress(let y)): x == y
+        case (.timeline(let x), .timeline(let y)): x == y
         default: false
         }
     }
 }
 
+public struct UiPoint: Decodable, Equatable, Sendable {
+    public let lat: Double
+    public let lon: Double
+}
+
+public struct UiMarker: Decodable, Equatable, Sendable {
+    public let lat: Double
+    public let lon: Double
+    public let label: String
+}
+
+public struct UiChart: Decodable, Equatable, Sendable {
+    /// `bar`, `line`, `area` or `pie`.
+    public let kind: String
+    public let labels: [String]
+    public let series: [Series]
+    /// What the values count, such as `kr`.
+    public let unit: String?
+
+    public struct Series: Decodable, Equatable, Sendable {
+        public let name: String
+        public let values: [Double?]
+    }
+}
+
+public struct UiStat: Decodable, Equatable, Sendable {
+    public let label: String
+    public let value: String
+    /// What changed, such as `+12%`.
+    public let change: String?
+    /// `good`, `bad`, `neutral`, or nil.
+    public let tone: String?
+}
+
+public struct UiProgressItem: Decodable, Equatable, Sendable {
+    public let label: String
+    public let value: Double
+    /// What full is.
+    public let max: Double
+    public let note: String?
+
+    enum CodingKeys: String, CodingKey { case label, value, max, note }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        label = try container.decode(String.self, forKey: .label)
+        value = try container.decode(Double.self, forKey: .value)
+        max = try container.decodeIfPresent(Double.self, forKey: .max) ?? 100
+        note = try container.decodeIfPresent(String.self, forKey: .note)
+    }
+}
+
+public struct UiStep: Decodable, Equatable, Sendable {
+    public let title: String
+    public let time: String?
+    public let subtitle: String?
+    /// `done`, `current`, `upcoming`, or nil.
+    public let state: String?
+}
+
 public struct UiField: Decodable, Equatable, Sendable {
     public let name: String
     public let label: String
-    /// `text`, `number`, `boolean` or `choice`.
+    /// `text`, `number`, `boolean`, `choice`, `date` (`YYYY-MM-DD`) or `time` (`HH:MM`).
     public let type: String
     public let options: [String]
     public let placeholder: String?

@@ -38,4 +38,26 @@ class CardsTest {
         assertEquals("""{"guests":4.0,"kids":false}""", card.valuesFor(book, mapOf("guests" to UiValue.Number(4.0))).getOrThrow())
         assertNull(card.valuesFor(card.buttons[1], emptyMap()).getOrThrow())
     }
+
+    @Test
+    fun readsMapsChartsAndTheOtherNewBlocks() {
+        val card = tool("""
+            {"ui":{"v":1,"blocks":[
+            {"type":"map","markers":[{"lat":59.91,"lon":10.75,"label":"Oslo S"}],"path":[{"lat":59.9,"lon":10.7},{"lat":60,"lon":10.8}]},
+            {"type":"chart","kind":"line","labels":["Jan","Feb"],"series":[{"name":"kr","values":[3,null]}],"unit":"kr"},
+            {"type":"stats","items":[{"label":"Spent","value":"4 200 kr","change":"+12%","tone":"bad"}]},
+            {"type":"progress","items":[{"label":"Saved","value":3,"max":5}]},
+            {"type":"timeline","items":[{"title":"Left","state":"done"}]}]}}
+        """.trimIndent()).card!!
+        assertEquals(
+            listOf(
+                UiBlock.Places(listOf(UiBlock.Places.Marker(59.91, 10.75, "Oslo S")), listOf(UiBlock.Places.Point(59.9, 10.7), UiBlock.Places.Point(60.0, 10.8))),
+                UiBlock.Chart("line", listOf("Jan", "Feb"), listOf(UiBlock.Chart.Series("kr", listOf(3.0, null))), "kr"),
+                UiBlock.Stats(listOf(UiBlock.Stats.Stat("Spent", "4 200 kr", "+12%", "bad"))),
+                UiBlock.Progress(listOf(UiBlock.Progress.Bar("Saved", 3.0, 5.0))),
+                UiBlock.Timeline(listOf(UiBlock.Timeline.Step("Left", state = "done"))),
+            ),
+            card.blocks,
+        )
+    }
 }

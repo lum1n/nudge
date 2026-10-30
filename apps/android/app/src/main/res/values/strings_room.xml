@@ -209,4 +209,5 @@
     <string name="room_card_optional">%1$s (optional)</string>
     <string name="room_card_choose">Choose…</string>
     <string name="room_card_missing">Fill in “%1$s”</string>
+    <string name="room_card_map">Map</string>
 </resources>
