@@ -14,4 +14,4 @@ ADR 27 made cards and ADR 29 gave them maps and charts. Using them showed what w
 
 **Charts can be read as a table.** Each app has a button under a chart that shows its values as a table instead, for reading them exactly and for screen readers.
 
-**The native apps show images.** The FFI's `attachmentImage(room, id)` fetches an attachment's bytes with the client's token, and refuses one that isn't an image, so an app only ever decodes images from it. Android and Apple show a card's `image` block from it, and its `alt` text while it loads or when it can't.
+**The native apps show images.** Android and Apple show a card's `image` block from the room's attachments, fetched and kept as the apps do for messages, and its `alt` text while it loads or when it can't.
