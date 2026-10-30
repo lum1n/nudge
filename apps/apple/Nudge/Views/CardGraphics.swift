@@ -1,4 +1,7 @@
 import Charts
+#if os(iOS)
+import EventKitUI
+#endif
 import MapKit
 import Nudge
 import SwiftUI
@@ -67,6 +70,7 @@ struct CardMapView: View {
 struct CardChartView: View {
     let chart: UiChart
     @Environment(\.colorScheme) private var scheme
+    @State private var table = false
 
     private struct Point: Identifiable {
         let id: Int
@@ -94,6 +98,34 @@ struct CardChartView: View {
     }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if table { valuesTable } else { plot }
+            Button(table ? "Show the chart" : "Show as a table") { table.toggle() }.font(.caption).buttonStyle(.borderless)
+        }
+    }
+
+    /// The values as a table, for reading them exactly.
+    private var valuesTable: some View {
+        ScrollView(.horizontal) {
+            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 4) {
+                GridRow {
+                    Text("")
+                    ForEach(Array(chart.series.enumerated()), id: \.offset) { Text($1.name).fontWeight(.semibold) }
+                }
+                Divider()
+                ForEach(Array(chart.labels.enumerated()), id: \.offset) { row, label in
+                    GridRow {
+                        Text(label).foregroundStyle(.secondary)
+                        ForEach(Array(chart.series.enumerated()), id: \.offset) { _, series in
+                            Text(row < series.values.count ? series.values[row].map(said) ?? "–" : "–").monospacedDigit()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var plot: some View {
         let colors = seriesColors(scheme)
         if chart.kind == "pie" {
             pie(colors)
@@ -230,5 +262,205 @@ struct CardTimelineView: View {
                 .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+}
+
+/// A calendar event, with a button that adds it to the calendar: the system's editor on iOS, which
+/// needs no access to the calendar, and Calendar's own import of the event on the Mac.
+struct CardEventView: View {
+    let event: UiEvent
+    @State private var adding = false
+
+    private var when: String {
+        guard let interval = event.interval else { return event.start }
+        if event.allDay {
+            let last = interval.end.addingTimeInterval(-1)
+            return Calendar.current.isDate(interval.start, inSameDayAs: last)
+                ? interval.start.formatted(date: .complete, time: .omitted)
+                : (interval.start..<last).formatted(.interval.day().month(.wide).year().weekday(.wide))
+        }
+        return (interval.start..<interval.end).formatted(.interval.day().month(.wide).year().weekday(.wide).hour().minute())
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(event.title).font(.subheadline.weight(.semibold))
+            Text(when).foregroundStyle(.secondary)
+            if let location = event.location { Text(location).foregroundStyle(.secondary) }
+            if let notes = event.notes { Text(notes).font(.caption).foregroundStyle(.secondary) }
+            Button("Add to calendar", systemImage: "calendar.badge.plus", action: add).buttonStyle(.glass).padding(.top, 4)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 10))
+        #if os(iOS)
+        .sheet(isPresented: $adding) { EventEditor(event: event) }
+        #endif
+    }
+
+    private func add() {
+        #if os(iOS)
+        adding = true
+        #else
+        // Calendar imports an .ics it is handed, asking which calendar.
+        let url = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).ics")
+        if (try? ics.write(to: url, atomically: true, encoding: .utf8)) != nil { NSWorkspace.shared.open(url) }
+        #endif
+    }
+
+    #if os(macOS)
+    private var ics: String {
+        guard let interval = event.interval else { return "" }
+        let utc = ISO8601DateFormatter()
+        utc.formatOptions = [.withYear, .withMonth, .withDay, .withTime, .withTimeZone]
+        let stamp = { (date: Date) in utc.string(from: date).replacingOccurrences(of: "-", with: "").replacingOccurrences(of: ":", with: "") }
+        let day = { (date: Date) in
+            let parts = Calendar.current.dateComponents([.year, .month, .day], from: date)
+            return String(format: "%04d%02d%02d", parts.year!, parts.month!, parts.day!)
+        }
+        let text = { (value: String) in
+            value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: ";", with: "\\;")
+                .replacingOccurrences(of: ",", with: "\\,").replacingOccurrences(of: "\n", with: "\\n")
+        }
+        var lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Nudge//Cards//EN", "BEGIN:VEVENT",
+                     "UID:\(UUID().uuidString)@nudge", "DTSTAMP:\(stamp(.now))"]
+        if event.allDay {
+            lines += ["DTSTART;VALUE=DATE:\(day(interval.start))", "DTEND;VALUE=DATE:\(day(interval.end))"]
+        } else {
+            lines += ["DTSTART:\(stamp(interval.start))", "DTEND:\(stamp(interval.end))"]
+        }
+        lines.append("SUMMARY:\(text(event.title))")
+        if let location = event.location { lines.append("LOCATION:\(text(location))") }
+        if let notes = event.notes { lines.append("DESCRIPTION:\(text(notes))") }
+        lines += ["END:VEVENT", "END:VCALENDAR"]
+        return lines.joined(separator: "\r\n") + "\r\n"
+    }
+    #endif
+}
+
+#if os(iOS)
+/// The system's event editor, filled in; it adds to the calendar without the app asking for access.
+private struct EventEditor: UIViewControllerRepresentable {
+    let event: UiEvent
+    @Environment(\.dismiss) private var dismiss
+
+    func makeCoordinator() -> Coordinator { Coordinator(dismiss: dismiss) }
+
+    func makeUIViewController(context: Context) -> EKEventEditViewController {
+        let store = EKEventStore()
+        let item = EKEvent(eventStore: store)
+        item.title = event.title
+        item.isAllDay = event.allDay
+        if let interval = event.interval {
+            item.startDate = interval.start
+            // An all-day event's end is its last day.
+            item.endDate = event.allDay ? interval.end.addingTimeInterval(-1) : interval.end
+        }
+        item.location = event.location
+        item.notes = event.notes
+        let editor = EKEventEditViewController()
+        editor.eventStore = store
+        editor.event = item
+        editor.editViewDelegate = context.coordinator
+        return editor
+    }
+
+    func updateUIViewController(_ controller: EKEventEditViewController, context: Context) {}
+
+    final class Coordinator: NSObject, EKEventEditViewDelegate {
+        let dismiss: DismissAction
+        init(dismiss: DismissAction) { self.dismiss = dismiss }
+        func eventEditViewController(_ controller: EKEventEditViewController, didCompleteWith action: EKEventEditViewAction) {
+            dismiss()
+        }
+    }
+}
+#endif
+
+/// Boxes in rows by where the arrows lead (columns when it goes right), as the web app lays them out.
+struct CardDiagramView: View {
+    let diagram: UiDiagram
+
+    private let boxWidth: CGFloat = 132
+    private let boxHeight: CGFloat = 40
+    private let gap: CGFloat = 20
+    private let rankGap: CGFloat = 44
+
+    var body: some View {
+        let places = diagram.layout()
+        let across = diagram.direction == "right"
+        let ranks = (places.values.map(\.rank).max() ?? 0) + 1
+        var perRank: [Int: Int] = [:]
+        for place in places.values { perRank[place.rank, default: 0] += 1 }
+        let widest = perRank.values.max() ?? 1
+        let span = { (count: Int, box: CGFloat, between: CGFloat) in CGFloat(count) * box + CGFloat(count - 1) * between }
+        let spread = across ? span(widest, boxHeight, gap) : span(widest, boxWidth, gap)
+        let size = across ? CGSize(width: span(ranks, boxWidth, rankGap), height: spread) : CGSize(width: spread, height: span(ranks, boxHeight, rankGap))
+        let center = { (id: String) -> CGPoint in
+            let place = places[id]!
+            let count = perRank[place.rank]!
+            let inRank = across ? span(count, boxHeight, gap) : span(count, boxWidth, gap)
+            let offset = (spread - inRank) / 2 + CGFloat(place.order) * ((across ? boxHeight : boxWidth) + gap)
+            let step = CGFloat(place.rank) * ((across ? boxWidth : boxHeight) + rankGap)
+            return across
+                ? CGPoint(x: step + boxWidth / 2, y: offset + boxHeight / 2)
+                : CGPoint(x: offset + boxWidth / 2, y: step + boxHeight / 2)
+        }
+        let label = { (id: String) in diagram.nodes.first { $0.id == id }?.label ?? id }
+        ScrollView(.horizontal) {
+            ZStack(alignment: .topLeading) {
+                Canvas { context, _ in
+                    for edge in diagram.edges where edge.from != edge.to {
+                        let (start, end) = ends(center(edge.from), center(edge.to), across: across)
+                        var line = Path()
+                        line.move(to: start)
+                        line.addLine(to: end)
+                        context.stroke(line, with: .style(.secondary), lineWidth: 1.5)
+                        let angle = atan2(end.y - start.y, end.x - start.x)
+                        var head = Path()
+                        head.move(to: end)
+                        head.addLine(to: CGPoint(x: end.x - 7 * cos(angle - 0.45), y: end.y - 7 * sin(angle - 0.45)))
+                        head.addLine(to: CGPoint(x: end.x - 7 * cos(angle + 0.45), y: end.y - 7 * sin(angle + 0.45)))
+                        head.closeSubpath()
+                        context.fill(head, with: .style(.secondary))
+                    }
+                }
+                .frame(width: size.width, height: size.height)
+                ForEach(Array(diagram.edges.enumerated()), id: \.offset) { _, edge in
+                    if let text = edge.label, edge.from != edge.to {
+                        let (start, end) = ends(center(edge.from), center(edge.to), across: across)
+                        Text(text).font(.caption2).foregroundStyle(.secondary).padding(.horizontal, 2)
+                            .background(.background)
+                            .position(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
+                    }
+                }
+                ForEach(diagram.nodes, id: \.id) { node in
+                    Text(node.label)
+                        .font(.caption)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .padding(.horizontal, 4)
+                        .frame(width: boxWidth, height: boxHeight)
+                        .background(.quaternary.opacity(0.6), in: .rect(cornerRadius: 6))
+                        .overlay { RoundedRectangle(cornerRadius: 6).stroke(.secondary.opacity(0.6)) }
+                        .position(center(node.id))
+                }
+            }
+            .frame(width: size.width, height: size.height)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(diagram.edges.map { "\(label($0.from)) to \(label($0.to))" }.joined(separator: ", "))
+    }
+
+    /// From the edge of one box to the facing edge of the other.
+    private func ends(_ from: CGPoint, _ to: CGPoint, across: Bool) -> (CGPoint, CGPoint) {
+        if across {
+            if to.x == from.x { return (CGPoint(x: from.x, y: from.y + boxHeight / 2), CGPoint(x: to.x, y: to.y - boxHeight / 2)) }
+            let sign: CGFloat = to.x > from.x ? 1 : -1
+            return (CGPoint(x: from.x + sign * boxWidth / 2, y: from.y), CGPoint(x: to.x - sign * boxWidth / 2, y: to.y))
+        }
+        if to.y == from.y { return (CGPoint(x: from.x + boxWidth / 2, y: from.y), CGPoint(x: to.x - boxWidth / 2, y: to.y)) }
+        let sign: CGFloat = to.y > from.y ? 1 : -1
+        return (CGPoint(x: from.x, y: from.y + sign * boxHeight / 2), CGPoint(x: to.x, y: to.y - sign * boxHeight / 2))
     }
 }

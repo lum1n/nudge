@@ -60,4 +60,28 @@ class CardsTest {
             card.blocks,
         )
     }
+
+    @Test
+    fun readsEventsDiagramsLinksAndTheNewFields() {
+        val card = tool("""
+            {"ui":{"v":1,"blocks":[
+            {"type":"event","title":"Dinner","start":"2026-11-03"},
+            {"type":"diagram","nodes":[{"id":"a","label":"A"},{"id":"b","label":"B"},{"id":"c","label":"C"}],
+             "edges":[{"from":"a","to":"c"},{"from":"b","to":"c"},{"from":"c","to":"a"}]}],
+            "fields":[{"name":"t","label":"T","type":"choices","options":["x","y"]},{"name":"s","label":"S","type":"range","min":2,"max":9}],
+            "buttons":[{"id":"go","label":"Go"},{"id":"site","label":"Site","url":"https://example.com"}]}}
+        """.trimIndent()).card!!
+        assertTrue((card.blocks[0] as UiBlock.Event).allDay)
+        val places = (card.blocks[1] as UiBlock.Diagram).layout()
+        // a and b start rows; c comes after both; the arrow back from c to a is the cycle broken.
+        assertEquals(UiBlock.Diagram.Place(0, 0), places["a"])
+        assertEquals(UiBlock.Diagram.Place(0, 1), places["b"])
+        assertEquals(UiBlock.Diagram.Place(1, 0), places["c"])
+        assertEquals("https://example.com", card.buttons[1].url)
+        assertEquals(
+            """{"t":["y"],"s":2.0}""",
+            card.valuesFor(card.buttons[0], mapOf("t" to UiValue.Choices(listOf("y")))).getOrThrow(),
+        )
+        assertTrue(card.valuesFor(card.buttons[0], mapOf("t" to UiValue.Choices(emptyList()))).exceptionOrNull() is MissingField)
+    }
 }

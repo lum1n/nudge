@@ -66,6 +66,10 @@ export const room = {
     askedForApproval: "Asked for approval",
     /** A card a tool shows in the chat (ADR 27). */
     card: {
+      openLink: (host: string) => `Open ${host}?`,
+      addToCalendar: "Add to calendar",
+      showTable: "Show as a table",
+      showChart: "Show the chart",
       map: "Map",
       openMap: "Open the map",
       pressedBy: (button: string, who: string) => `${who} pressed “${button}”`,

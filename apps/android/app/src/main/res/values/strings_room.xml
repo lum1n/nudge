@@ -232,4 +232,9 @@
     <string name="room_card_choose">Choose…</string>
     <string name="room_card_missing">Fill in “%1$s”</string>
     <string name="room_card_map">Map</string>
+    <string name="room_card_open_link">Open %1$s?</string>
+    <string name="room_card_open">Open</string>
+    <string name="room_card_add_to_calendar">Add to calendar</string>
+    <string name="room_card_show_table">Show as a table</string>
+    <string name="room_card_show_chart">Show the chart</string>
 </resources>

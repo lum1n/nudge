@@ -2,12 +2,14 @@ import type { Player, UiBlock, UiButton, UiCard as Card, UiField } from "@nudge/
 import { type ReactNode, useEffect, useState } from "react";
 import { clientFor } from "./api.ts";
 import { CardChart } from "./card-chart.tsx";
+import { CardDiagram } from "./card-diagram.tsx";
+import { CardEvent } from "./card-event.tsx";
 import { CardMap } from "./card-map.tsx";
 import { m } from "./i18n/index.ts";
 
 export { cardIn } from "./cards.ts";
 
-type Values = Record<string, string | number | boolean>;
+type Values = Record<string, string | number | boolean | string[]>;
 
 /**
  * A card a tool showed in the chat: its blocks, fields and buttons, drawn with plain controls.
@@ -31,6 +33,7 @@ export function UiCardView(props: {
 
   async function press(button: UiButton) {
     setError(undefined);
+    if (button.url !== undefined) return open(button.url);
     const sent = button.skipsFields === true ? undefined : filled(fields, values);
     if (typeof sent === "string") return setError(m.room.chat.card.missing(sent));
     setBusy(true);
@@ -67,7 +70,8 @@ export function UiCardView(props: {
             <button
               key={button.id}
               type="button"
-              disabled={busy || done}
+              // A link opens however often, also on a card that was pressed.
+              disabled={button.url === undefined && (busy || done)}
               onClick={() => void press(button)}
               className={`rounded px-2 py-0.5 disabled:opacity-50 ${
                 button.style === "primary"
@@ -78,6 +82,7 @@ export function UiCardView(props: {
               } ${pressed?.button === button.id ? "ring-2 ring-stone-500" : ""}`}
             >
               {button.label}
+              {button.url !== undefined && <span aria-hidden> ↗</span>}
             </button>
           ))}
         </div>
@@ -92,12 +97,21 @@ export function UiCardView(props: {
   );
 }
 
+/** Opens a link button's page once the reader says yes to its site (ADR 30). */
+function open(url: string) {
+  const host = new URL(url).host;
+  if (window.confirm(m.room.chat.card.openLink(host)))
+    window.open(url, "_blank", "noopener,noreferrer");
+}
+
 /** The values to send, or the label of a required field left empty. */
 function filled(fields: readonly UiField[], values: Values): Values | string {
   const sent: Values = {};
   for (const field of fields) {
-    const value = values[field.name] ?? (field.type === "boolean" ? false : undefined);
-    if (value === undefined || value === "") {
+    const value =
+      values[field.name] ??
+      (field.type === "boolean" ? false : field.type === "range" ? (field.min ?? 0) : undefined);
+    if (value === undefined || value === "" || (Array.isArray(value) && value.length === 0)) {
       if (field.optional !== true) return field.label;
       continue;
     }
@@ -108,9 +122,9 @@ function filled(fields: readonly UiField[], values: Values): Values | string {
 
 function Field(props: {
   field: UiField;
-  value: string | number | boolean | undefined;
+  value: Values[string] | undefined;
   disabled: boolean;
-  onChange: (value: string | number | boolean) => void;
+  onChange: (value: Values[string]) => void;
 }) {
   const { field, value, disabled, onChange } = props;
   const title = (
@@ -122,6 +136,56 @@ function Field(props: {
     </span>
   );
   const input = "rounded border border-stone-300 bg-white px-2 py-1";
+  if (field.type === "choices") {
+    const picked = Array.isArray(value) ? value : [];
+    return (
+      <fieldset className="flex flex-col gap-0.5">
+        <legend>{title}</legend>
+        <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+          {(field.options ?? []).map((option) => (
+            <label key={option} className="flex items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={picked.includes(option)}
+                disabled={disabled}
+                onChange={(event) =>
+                  onChange(
+                    event.target.checked
+                      ? (field.options ?? []).filter(
+                          (one) => one === option || picked.includes(one),
+                        )
+                      : picked.filter((one) => one !== option),
+                  )
+                }
+              />
+              {option}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+    );
+  }
+  if (field.type === "range") {
+    const [min, max] = [field.min ?? 0, field.max ?? 100];
+    const current = typeof value === "number" ? value : min;
+    return (
+      <label className="flex flex-col gap-0.5">
+        <span className="flex justify-between">
+          {title}
+          <span className="text-stone-600 tabular-nums">{current}</span>
+        </span>
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={field.step ?? 1}
+          value={current}
+          disabled={disabled}
+          onChange={(event) => onChange(Number(event.target.value))}
+        />
+      </label>
+    );
+  }
   if (field.type === "boolean")
     return (
       <label className="flex items-center gap-2">
@@ -252,6 +316,10 @@ function Block(props: {
       return <CardMap block={block} />;
     case "chart":
       return <CardChart block={block} />;
+    case "event":
+      return <CardEvent block={block} />;
+    case "diagram":
+      return <CardDiagram block={block} />;
     case "stats":
       return (
         <dl className="grid grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] gap-2">

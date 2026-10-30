@@ -1,6 +1,25 @@
 package app.nudge.ui
 
 import android.content.ActivityNotFoundException
+import android.provider.CalendarContract
+import android.text.format.DateUtils
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
+import java.time.LocalDate
+import java.time.OffsetDateTime
+import java.time.ZoneId
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.icu.text.CompactDecimalFormat
@@ -231,9 +250,43 @@ fun CardMap(block: UiBlock.Places) {
 private val compact = CompactDecimalFormat.getInstance(Locale.getDefault(), CompactDecimalFormat.CompactStyle.SHORT).apply { maximumFractionDigits = 1 }
 private val full: NumberFormat = NumberFormat.getNumberInstance().apply { maximumFractionDigits = 2 }
 
-/** A card's chart: bars, lines, areas or a donut, with a legend for more than one series. */
+/** A card's chart, and a button to read its values as a table instead. */
 @Composable
 fun CardChart(block: UiBlock.Chart) {
+    var table by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        if (table) ChartTable(block) else ChartPlot(block)
+        TextButton({ table = !table }, contentPadding = PaddingValues(horizontal = 0.dp)) {
+            Text(stringResource(if (table) R.string.room_card_show_chart else R.string.room_card_show_table))
+        }
+    }
+}
+
+/** The chart's values as a table, for reading them exactly or with TalkBack. */
+@Composable
+private fun ChartTable(block: UiBlock.Chart) {
+    val unit = block.unit?.let { " $it" } ?: ""
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    Column(Modifier.horizontalScroll(rememberScrollState())) {
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text("", Modifier.widthIn(min = 64.dp))
+            block.series.forEach { Text(it.name, fontWeight = FontWeight.SemiBold, modifier = Modifier.widthIn(min = 64.dp)) }
+        }
+        HorizontalDivider()
+        block.labels.forEachIndexed { row, label ->
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text(label, color = muted, modifier = Modifier.widthIn(min = 64.dp))
+                block.series.forEach { series ->
+                    Text(series.values.getOrNull(row)?.let { "${full.format(it)}$unit" } ?: "–", modifier = Modifier.widthIn(min = 64.dp))
+                }
+            }
+        }
+    }
+}
+
+/** Bars, lines, areas or a donut, with a legend for more than one series. */
+@Composable
+private fun ChartPlot(block: UiBlock.Chart) {
     val colors = seriesColors()
     val unit = block.unit?.let { " $it" } ?: ""
     val described = block.labels.indices.joinToString("; ") { index ->
@@ -483,6 +536,132 @@ fun CardTimeline(block: UiBlock.Timeline) {
                     }
                     step.subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
+            }
+        }
+    }
+}
+
+/** A calendar event, with a button that hands it to the calendar app to add. */
+@Composable
+fun CardEvent(block: UiBlock.Event) {
+    val context = LocalContext.current
+    val zone = ZoneId.systemDefault()
+    // A day is that day wherever the reader is; a time is the moment it names.
+    val start = if (block.allDay) LocalDate.parse(block.start).atStartOfDay(zone) else OffsetDateTime.parse(block.start).atZoneSameInstant(zone)
+    val end = block.end?.let { if (block.allDay) LocalDate.parse(it).atStartOfDay(zone) else OffsetDateTime.parse(it).atZoneSameInstant(zone) }
+    val when_ = run {
+        val flags = DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_WEEKDAY or DateUtils.FORMAT_SHOW_YEAR or
+            (if (block.allDay) 0 else DateUtils.FORMAT_SHOW_TIME)
+        val from = start.toInstant().toEpochMilli()
+        // An all-day range ends at the start of its last day, which formatDateRange takes as that day.
+        val to = end?.toInstant()?.toEpochMilli()?.let { if (block.allDay) it + 1 else it } ?: from
+        DateUtils.formatDateRange(context, from, to, flags)
+    }
+    Surface(color = MaterialTheme.colorScheme.surfaceContainerHighest, shape = MaterialTheme.shapes.medium) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(block.title, style = MaterialTheme.typography.titleSmall)
+            Text(when_, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            block.location?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            block.notes?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            OutlinedButton({
+                val intent = Intent(Intent.ACTION_INSERT, CalendarContract.Events.CONTENT_URI)
+                    .putExtra(CalendarContract.Events.TITLE, block.title)
+                    .putExtra(CalendarContract.EXTRA_EVENT_ALL_DAY, block.allDay)
+                    .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, start.toInstant().toEpochMilli())
+                    .putExtra(
+                        CalendarContract.EXTRA_EVENT_END_TIME,
+                        (end ?: if (block.allDay) start else start.plusHours(1)).let { if (block.allDay) it.plusDays(1) else it }.toInstant().toEpochMilli(),
+                    )
+                block.location?.let { intent.putExtra(CalendarContract.Events.EVENT_LOCATION, it) }
+                block.notes?.let { intent.putExtra(CalendarContract.Events.DESCRIPTION, it) }
+                try {
+                    context.startActivity(intent)
+                } catch (_: ActivityNotFoundException) {
+                }
+            }) { Text(stringResource(R.string.room_card_add_to_calendar)) }
+        }
+    }
+}
+
+/** Boxes in rows by where the arrows lead (columns when it goes right), as the web app lays them out. */
+@Composable
+fun CardDiagram(block: UiBlock.Diagram) {
+    val places = remember(block) { block.layout() }
+    val across = block.direction == "right"
+    val boxWidth = 132.dp
+    val boxHeight = 40.dp
+    val gap = 20.dp
+    val rankGap = 44.dp
+    val ranks = places.values.maxOf { it.rank } + 1
+    val perRank = places.values.groupingBy { it.rank }.eachCount()
+    val widest = perRank.values.max()
+    fun span(count: Int, box: Dp, between: Dp) = box * count + between * (count - 1)
+    val spread = if (across) span(widest, boxHeight, gap) else span(widest, boxWidth, gap)
+    val width = if (across) span(ranks, boxWidth, rankGap) else spread
+    val height = if (across) spread else span(ranks, boxHeight, rankGap)
+    val fill = MaterialTheme.colorScheme.surfaceContainerHighest
+    val stroke = MaterialTheme.colorScheme.outline
+    val ink = MaterialTheme.colorScheme.onSurface
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val surface = MaterialTheme.colorScheme.surfaceContainerHigh
+    val measurer = rememberTextMeasurer()
+    val described = block.edges.joinToString { edge ->
+        "${block.nodes.first { it.id == edge.from }.label} → ${block.nodes.first { it.id == edge.to }.label}"
+    }.ifEmpty { block.nodes.joinToString { it.label } }
+    Box(Modifier.horizontalScroll(rememberScrollState())) {
+        Canvas(Modifier.width(width).height(height).semantics { contentDescription = described }) {
+            fun topLeft(id: String): Offset {
+                val place = places.getValue(id)
+                val count = perRank.getValue(place.rank)
+                val inRank = if (across) span(count, boxHeight, gap) else span(count, boxWidth, gap)
+                val offset = (spread - inRank) / 2 + (if (across) boxHeight + gap else boxWidth + gap) * place.order
+                val step = (if (across) boxWidth + rankGap else boxHeight + rankGap) * place.rank
+                return if (across) Offset(step.toPx(), offset.toPx()) else Offset(offset.toPx(), step.toPx())
+            }
+            val w = boxWidth.toPx()
+            val h = boxHeight.toPx()
+            for (edge in block.edges) {
+                if (edge.from == edge.to) continue
+                val from = topLeft(edge.from) + Offset(w / 2, h / 2)
+                val to = topLeft(edge.to) + Offset(w / 2, h / 2)
+                // From the edge of one box to the facing edge of the other.
+                val (start, end) = if (across) {
+                    if (to.x == from.x) Pair(from + Offset(0f, h / 2), to - Offset(0f, h / 2))
+                    else { val sign = if (to.x > from.x) 1 else -1; Pair(from + Offset(sign * w / 2, 0f), to - Offset(sign * w / 2, 0f)) }
+                } else {
+                    if (to.y == from.y) Pair(from + Offset(w / 2, 0f), to - Offset(w / 2, 0f))
+                    else { val sign = if (to.y > from.y) 1 else -1; Pair(from + Offset(0f, sign * h / 2), to - Offset(0f, sign * h / 2)) }
+                }
+                drawLine(muted, start, end, 1.5.dp.toPx())
+                val angle = kotlin.math.atan2(end.y - start.y, end.x - start.x)
+                val head = 7.dp.toPx()
+                val arrow = Path().apply {
+                    moveTo(end.x, end.y)
+                    lineTo(end.x - head * cos(angle - 0.45f), end.y - head * sin(angle - 0.45f))
+                    lineTo(end.x - head * cos(angle + 0.45f), end.y - head * sin(angle + 0.45f))
+                    close()
+                }
+                drawPath(arrow, muted)
+                edge.label?.let { label ->
+                    val text = measurer.measure(label, TextStyle(color = muted, fontSize = 11.sp))
+                    val middle = Offset((start.x + end.x) / 2, (start.y + end.y) / 2)
+                    val corner = middle - Offset(text.size.width / 2f, text.size.height / 2f)
+                    drawRect(surface, corner, Size(text.size.width.toFloat(), text.size.height.toFloat()))
+                    drawText(text, topLeft = corner)
+                }
+            }
+            for (node in block.nodes) {
+                val corner = topLeft(node.id)
+                drawRoundRect(fill, corner, Size(w, h), CornerRadius(6.dp.toPx()))
+                drawRoundRect(stroke, corner, Size(w, h), CornerRadius(6.dp.toPx()), style = Stroke(1.dp.toPx()))
+                val text = measurer.measure(
+                    node.label,
+                    TextStyle(color = ink, fontSize = 12.sp, textAlign = TextAlign.Center),
+                    overflow = TextOverflow.Ellipsis,
+                    maxLines = 2,
+                    constraints = Constraints(maxWidth = (w - 8.dp.toPx()).toInt()),
+                )
+                drawText(text, topLeft = corner + Offset((w - text.size.width) / 2, (h - text.size.height) / 2))
             }
         }
     }

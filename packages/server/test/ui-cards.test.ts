@@ -199,4 +199,38 @@ describe("cards in the chat (ADR 27)", () => {
     const answer = shown[0] as Extract<TimelineItem, { type: "answer" }>;
     expect((answer.parts[0] as ToolPart).details).toEqual({ keep: 1 });
   });
+
+  it("shows a card again with what an update gives, and its buttons work again (ADR 30)", async () => {
+    await ask("Ann", "Book us a table");
+    const part = await cardPart();
+    const path = `/rooms/trip/ui/${part.callId}`;
+    expect((await call("POST", path, tokens.Bo!, { button: "none" })).status).toBe(202);
+    await idle();
+    expect((await cardPart()).pressed).toBeDefined();
+
+    const room = await nudge.rooms.get("trip", context);
+    const conversationId = room!.conversationId as Parameters<Nudge["ui"]["update"]>[0];
+    await expect(
+      nudge.ui.update(conversationId, "nope", { v: 1, title: "x" }, context),
+    ).rejects.toThrow(/No card/);
+    await expect(nudge.ui.update(conversationId, part.callId, { v: 1 }, context)).rejects.toThrow(
+      /title or a block/,
+    );
+    await nudge.ui.update(
+      conversationId,
+      part.callId,
+      { v: 1, ...TIMES, title: "Only 20:30 is left", buttons: [TIMES.buttons[1]!] } as never,
+      context,
+    );
+
+    const shown = await cardPart();
+    expect((shown.details as { ui: { title: string } }).ui.title).toBe("Only 20:30 is left");
+    expect(shown.pressed).toBeUndefined();
+    expect(
+      (await call("POST", path, tokens.Ann!, { button: "early", values: { guests: 2 } })).status,
+    ).toBe(400);
+    expect(
+      (await call("POST", path, tokens.Ann!, { button: "late", values: { guests: 2 } })).status,
+    ).toBe(202);
+  });
 });

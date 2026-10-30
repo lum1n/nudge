@@ -33,9 +33,13 @@ struct CardView: View {
             if !card.buttons.isEmpty {
                 HStack {
                     ForEach(card.buttons) { button in
-                        Button(button.label, role: button.style == "danger" ? .destructive : nil) { press(button) }
-                            .buttonStyle(button.style == "primary" ? AnyPrimitiveButtonStyle(.glassProminent) : AnyPrimitiveButtonStyle(.glass))
-                            .disabled(busy || done || pressCard == nil)
+                        if let url = button.url {
+                            LinkButton(label: button.label, url: url)
+                        } else {
+                            Button(button.label, role: button.style == "danger" ? .destructive : nil) { press(button) }
+                                .buttonStyle(button.style == "primary" ? AnyPrimitiveButtonStyle(.glassProminent) : AnyPrimitiveButtonStyle(.glass))
+                                .disabled(busy || done || pressCard == nil)
+                        }
                     }
                 }
             }
@@ -68,6 +72,50 @@ struct CardView: View {
             } catch {
                 problem = error.localizedDescription
             }
+        }
+    }
+}
+
+/// A button that opens its page once the reader says yes to the site (ADR 30); nothing reaches the room.
+private struct LinkButton: View {
+    let label: String
+    let url: URL
+    @Environment(\.openURL) private var openURL
+    @State private var asking = false
+
+    var body: some View {
+        Button { asking = true } label: { Label(label, systemImage: "arrow.up.forward.square") }
+            .buttonStyle(.glass)
+            .confirmationDialog("Open \(url.host() ?? url.absoluteString)?", isPresented: $asking, titleVisibility: .visible) {
+                Button("Open") { openURL(url) }
+            } message: {
+                Text(url.absoluteString)
+            }
+    }
+}
+
+/// An image attachment, fetched through the room; its words until it is there, or when it can't be.
+private struct CardImage: View {
+    let attachment: String
+    let alt: String
+    @Environment(\.attachmentSource) private var source
+    @State private var image: Image?
+
+    var body: some View {
+        Group {
+            if let image {
+                image.resizable().scaledToFit().frame(maxHeight: 320).clipShape(.rect(cornerRadius: 10)).accessibilityLabel(alt)
+            } else {
+                Text(alt).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .task(id: attachment) {
+            guard let source, let data = try? await source.data(attachment) else { return }
+            #if os(iOS)
+            if let picture = UIImage(data: data) { image = Image(uiImage: picture) }
+            #else
+            if let picture = NSImage(data: data) { image = Image(nsImage: picture) }
+            #endif
         }
     }
 }
@@ -121,9 +169,8 @@ private struct BlockView: View {
                     }
                 }
             }
-        case .image(_, let alt):
-            // Attachments aren't fetched in the app yet: what the image shows, in words.
-            Text(alt).font(.caption).foregroundStyle(.secondary)
+        case .image(let attachment, let alt):
+            CardImage(attachment: attachment, alt: alt)
         case .divider:
             Divider()
         case .map(let markers, let path):
@@ -136,6 +183,10 @@ private struct BlockView: View {
             CardProgressView(items: items)
         case .timeline(let steps):
             CardTimelineView(steps: steps)
+        case .event(let event):
+            CardEventView(event: event)
+        case .diagram(let diagram):
+            CardDiagramView(diagram: diagram)
         }
     }
 }
@@ -167,6 +218,26 @@ private struct FieldView: View {
             ) {
                 Text("Choose…").tag("")
                 ForEach(field.options, id: \.self) { Text($0).tag($0) }
+            }
+        case "choices":
+            VStack(alignment: .leading, spacing: 4) {
+                Text(label)
+                ForEach(field.options, id: \.self) { option in
+                    Toggle(option, isOn: Binding(
+                        get: { if case .choices(let picked) = value { picked.contains(option) } else { false } },
+                        set: { on in
+                            let picked = if case .choices(let picked) = value { picked } else { [String]() }
+                            // In the card's order, as the other apps send them.
+                            value = .choices(field.options.filter { $0 == option ? on : picked.contains($0) })
+                        }))
+                }
+            }
+        case "range":
+            let current = if case .number(let number) = value { number } else { field.min }
+            VStack(alignment: .leading, spacing: 2) {
+                LabeledContent(label) { Text(current.formatted()).monospacedDigit() }
+                Slider(value: Binding(get: { current }, set: { value = .number($0) }), in: field.min...Swift.max(field.min, field.max), step: field.step)
+                    .accessibilityLabel(label)
             }
         case "date", "time":
             let format = field.type == "date" ? "yyyy-MM-dd" : "HH:mm"

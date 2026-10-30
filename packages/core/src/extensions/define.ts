@@ -77,6 +77,8 @@ export type ExtensionAssistant = Pick<
   | "approvals"
   | "attachments"
   | "changes"
+  // Cards in the chat: updating one a tool showed (ADR 30).
+  | "ui"
   // Which extensions are on, and in which rooms.
   | "extensions"
   | "extensionEnabled"

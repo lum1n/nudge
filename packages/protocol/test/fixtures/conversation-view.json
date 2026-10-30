@@ -24,15 +24,15 @@
               "text": "Remember that I like tea",
               "playerId": "ann",
               "displayName": "Ann",
-              "clientId": "client-b631a43f-8c62-49ae-856e-90ff3acc3afd",
+              "clientId": "client-d3a97777-7d09-47a6-be6e-01b8d496b891",
               "requestId": "1",
-              "sentAt": 1793381180612
+              "sentAt": 1793382951659
             },
             "model": [
               {
                 "role": "user",
-                "content": "Ann (18:26): Remember that I like tea",
-                "timestamp": 1793381180613
+                "content": "Ann (18:55): Remember that I like tea",
+                "timestamp": 1793382951659
               }
             ],
             "id": 15,
@@ -52,16 +52,16 @@
           {
             "id": 18,
             "mode": "followUp",
-            "content": "Bo (18:26): I like coffee",
+            "content": "Bo (18:55): I like coffee",
             "entry": {
               "kind": "nudge.message",
               "data": {
                 "text": "I like coffee",
                 "playerId": "bo",
                 "displayName": "Bo",
-                "clientId": "client-2a352793-7cdf-4a93-9402-515fe6a8ab19",
+                "clientId": "client-fd8b4491-5e6e-4149-802e-887bff012e35",
                 "requestId": "1",
-                "sentAt": 1793381180616
+                "sentAt": 1793382951662
               }
             }
           }
@@ -154,7 +154,7 @@
                   },
                   {
                     "name": "show_ui",
-                    "description": "Show a card in the chat with blocks (heading, markdown text, key-value pairs, a list, a table, an image attachment by id, a divider, a map, a chart, stats, progress bars, a timeline), fields to fill in and up to 6 buttons. Use it when people pick between a few options, fill in several values, or compare things side by side; not for plain answers, which stay text. A `map` shows places by lat/lon with a label each, and a `path` for a route. A `chart` is `bar` (comparing amounts), `line` or `area` (change over time) or `pie` (parts of one whole, one series, up to 8 slices); give a value per label in each series, and keep two measures of different scale in two charts. `stats` is a few headline numbers with what changed; `progress` is how far along things are; `timeline` is steps in order. Fields may also be a `date` (YYYY-MM-DD) or a `time` (HH:MM). Nobody has to press: they may also just write. A press comes back as a message such as `Pressed \"Book\" on \"Times\"` with a line per field; answer it as you would that message. Buttons work once unless `once` is false. `who: \"asker\"` lets only who you answer press. Fields' values reach you, so never ask for passwords or keys with them. Don't repeat the card's content in your text.",
+                    "description": "Show a card in the chat with blocks (heading, markdown text, key-value pairs, a list, a table, an image attachment by id, a divider, a map, a chart, stats, progress bars, a timeline), fields to fill in and up to 6 buttons. Use it when people pick between a few options, fill in several values, or compare things side by side; not for plain answers, which stay text. A `map` shows places by lat/lon with a label each, and a `path` for a route. A `chart` is `bar` (comparing amounts), `line` or `area` (change over time) or `pie` (parts of one whole, one series, up to 8 slices); give a value per label in each series, and keep two measures of different scale in two charts. `stats` is a few headline numbers with what changed; `progress` is how far along things are; `timeline` is steps in order. An `event` is something for a calendar (start and end as a day, or a time with its offset such as 2026-11-03T18:00+01:00), which people can add to theirs. A `diagram` is boxes (`nodes`) joined by arrows (`edges`), laid out for you. Fields may also be a `date` (YYYY-MM-DD), a `time` (HH:MM), `choices` (any of its options, a list) or a `range` (a number from `min` to `max` on a slider). A button with a `url` opens that page after asking, and doesn't come back to you. Nobody has to press: they may also just write. A press comes back as a message such as `Pressed \"Book\" on \"Times\"` with a line per field; answer it as you would that message. Buttons work once unless `once` is false. `who: \"asker\"` lets only who you answer press. Fields' values reach you, so never ask for passwords or keys with them. Don't repeat the card's content in your text.",
                     "parameters": {
                       "type": "object",
                       "properties": {
@@ -624,6 +624,150 @@
                               },
                               {
                                 "type": "object",
+                                "required": ["type", "title", "start"],
+                                "properties": {
+                                  "type": {
+                                    "anyOf": [
+                                      { "type": "string", "const": "event" },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  },
+                                  "title": {
+                                    "anyOf": [
+                                      { "type": "string", "maxLength": 200 },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  },
+                                  "start": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}(T[0-9]{2}:[0-9]{2}(:[0-9]{2})?(Z|[+-][0-9]{2}:[0-9]{2}))?$"
+                                      },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  },
+                                  "end": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}(T[0-9]{2}:[0-9]{2}(:[0-9]{2})?(Z|[+-][0-9]{2}:[0-9]{2}))?$"
+                                      },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  },
+                                  "location": {
+                                    "anyOf": [
+                                      { "type": "string", "maxLength": 300 },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  },
+                                  "notes": {
+                                    "anyOf": [
+                                      { "type": "string", "maxLength": 1000 },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "required": ["type", "nodes"],
+                                "properties": {
+                                  "type": {
+                                    "anyOf": [
+                                      { "type": "string", "const": "diagram" },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  },
+                                  "nodes": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "required": ["id", "label"],
+                                      "properties": {
+                                        "id": {
+                                          "anyOf": [
+                                            {
+                                              "type": "string",
+                                              "pattern": "^[A-Za-z0-9_-]{1,40}$"
+                                            },
+                                            { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                          ],
+                                          "x-nudge-placeholder": true
+                                        },
+                                        "label": {
+                                          "anyOf": [
+                                            { "type": "string", "maxLength": 80 },
+                                            { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                          ],
+                                          "x-nudge-placeholder": true
+                                        }
+                                      }
+                                    },
+                                    "minItems": 1,
+                                    "maxItems": 30
+                                  },
+                                  "edges": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "required": ["from", "to"],
+                                      "properties": {
+                                        "from": {
+                                          "anyOf": [
+                                            {
+                                              "type": "string",
+                                              "pattern": "^[A-Za-z0-9_-]{1,40}$"
+                                            },
+                                            { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                          ],
+                                          "x-nudge-placeholder": true
+                                        },
+                                        "to": {
+                                          "anyOf": [
+                                            {
+                                              "type": "string",
+                                              "pattern": "^[A-Za-z0-9_-]{1,40}$"
+                                            },
+                                            { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                          ],
+                                          "x-nudge-placeholder": true
+                                        },
+                                        "label": {
+                                          "anyOf": [
+                                            { "type": "string", "maxLength": 40 },
+                                            { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                          ],
+                                          "x-nudge-placeholder": true
+                                        }
+                                      }
+                                    },
+                                    "maxItems": 60
+                                  },
+                                  "direction": {
+                                    "anyOf": [
+                                      {
+                                        "anyOf": [
+                                          { "type": "string", "const": "down" },
+                                          { "type": "string", "const": "right" }
+                                        ]
+                                      },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
                                 "required": ["type", "items"],
                                 "properties": {
                                   "type": {
@@ -713,7 +857,9 @@
                                       { "type": "string", "const": "boolean" },
                                       { "type": "string", "const": "choice" },
                                       { "type": "string", "const": "date" },
-                                      { "type": "string", "const": "time" }
+                                      { "type": "string", "const": "time" },
+                                      { "type": "string", "const": "choices" },
+                                      { "type": "string", "const": "range" }
                                     ]
                                   },
                                   { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
@@ -749,6 +895,27 @@
                               "optional": {
                                 "anyOf": [
                                   { "type": "boolean" },
+                                  { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                ],
+                                "x-nudge-placeholder": true
+                              },
+                              "min": {
+                                "anyOf": [
+                                  { "type": "number" },
+                                  { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                ],
+                                "x-nudge-placeholder": true
+                              },
+                              "max": {
+                                "anyOf": [
+                                  { "type": "number" },
+                                  { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                ],
+                                "x-nudge-placeholder": true
+                              },
+                              "step": {
+                                "anyOf": [
+                                  { "type": "number", "exclusiveMinimum": 0 },
                                   { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
                                 ],
                                 "x-nudge-placeholder": true
@@ -795,6 +962,17 @@
                                   { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
                                 ],
                                 "x-nudge-placeholder": true
+                              },
+                              "url": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^https://[^\\s]+$",
+                                    "maxLength": 2000
+                                  },
+                                  { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                ],
+                                "x-nudge-placeholder": true
                               }
                             }
                           },
@@ -821,9 +999,881 @@
                         }
                       }
                     }
+                  },
+                  {
+                    "name": "update_ui",
+                    "description": "Show a card you showed earlier with `show_ui` again, changed: the card in the chat becomes this one, such as the next step of a delivery, a new total, or a list with an item ticked off. `call_id` is that show_ui call's id. Give the whole card, not just what changed. Its buttons work again. Use it to keep one card current instead of showing a new one each time; show a new card for something new.",
+                    "parameters": {
+                      "type": "object",
+                      "required": ["call_id", "card"],
+                      "properties": {
+                        "call_id": {
+                          "type": "string",
+                          "description": "The id of the show_ui call that showed the card."
+                        },
+                        "card": {
+                          "type": "object",
+                          "properties": {
+                            "title": {
+                              "anyOf": [
+                                { "type": "string", "maxLength": 200 },
+                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                              ],
+                              "x-nudge-placeholder": true
+                            },
+                            "blocks": {
+                              "type": "array",
+                              "items": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "required": ["type", "text"],
+                                    "properties": {
+                                      "type": {
+                                        "anyOf": [
+                                          { "type": "string", "const": "heading" },
+                                          { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                        ],
+                                        "x-nudge-placeholder": true
+                                      },
+                                      "text": {
+                                        "anyOf": [
+                                          { "type": "string", "maxLength": 200 },
+                                          { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                        ],
+                                        "x-nudge-placeholder": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "object",
+                                    "required": ["type", "markdown"],
+                                    "properties": {
+                                      "type": {
+                                        "anyOf": [
+                                          { "type": "string", "const": "text" },
+                                          { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                        ],
+                                        "x-nudge-placeholder": true
+                                      },
+                                      "markdown": {
+                                        "anyOf": [
+                                          { "type": "string", "maxLength": 4000 },
+                                          { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                        ],
+                                        "x-nudge-placeholder": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "object",
+                                    "required": ["type", "pairs"],
+                                    "properties": {
+                                      "type": {
+                                        "anyOf": [
+                                          { "type": "string", "const": "kv" },
+                                          { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                        ],
+                                        "x-nudge-placeholder": true
+                                      },
+                                      "pairs": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "required": ["label", "value"],
+                                          "properties": {
+                                            "label": {
+                                              "anyOf": [
+                                                { "type": "string", "maxLength": 100 },
+                                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                              ],
+                                              "x-nudge-placeholder": true
+                                            },
+                                            "value": {
+                                              "anyOf": [
+                                                { "type": "string", "maxLength": 500 },
+                                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                              ],
+                                              "x-nudge-placeholder": true
+                                            }
+                                          }
+                                        },
+                                        "maxItems": 20
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "object",
+                                    "required": ["type", "items"],
+                                    "properties": {
+                                      "type": {
+                                        "anyOf": [
+                                          { "type": "string", "const": "list" },
+                                          { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                        ],
+                                        "x-nudge-placeholder": true
+                                      },
+                                      "items": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "required": ["title"],
+                                          "properties": {
+                                            "title": {
+                                              "anyOf": [
+                                                { "type": "string", "maxLength": 200 },
+                                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                              ],
+                                              "x-nudge-placeholder": true
+                                            },
+                                            "subtitle": {
+                                              "anyOf": [
+                                                { "type": "string", "maxLength": 500 },
+                                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                              ],
+                                              "x-nudge-placeholder": true
+                                            }
+                                          }
+                                        },
+                                        "maxItems": 30
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "object",
+                                    "required": ["type", "columns", "rows"],
+                                    "properties": {
+                                      "type": {
+                                        "anyOf": [
+                                          { "type": "string", "const": "table" },
+                                          { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                        ],
+                                        "x-nudge-placeholder": true
+                                      },
+                                      "columns": {
+                                        "type": "array",
+                                        "items": {
+                                          "anyOf": [
+                                            { "type": "string", "maxLength": 100 },
+                                            { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                          ],
+                                          "x-nudge-placeholder": true
+                                        },
+                                        "minItems": 1,
+                                        "maxItems": 8
+                                      },
+                                      "rows": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "array",
+                                          "items": {
+                                            "anyOf": [
+                                              { "type": "string", "maxLength": 300 },
+                                              { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                            ],
+                                            "x-nudge-placeholder": true
+                                          },
+                                          "maxItems": 8
+                                        },
+                                        "maxItems": 50
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "object",
+                                    "required": ["type", "attachment", "alt"],
+                                    "properties": {
+                                      "type": {
+                                        "anyOf": [
+                                          { "type": "string", "const": "image" },
+                                          { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                        ],
+                                        "x-nudge-placeholder": true
+                                      },
+                                      "attachment": {
+                                        "anyOf": [
+                                          { "type": "string", "pattern": "^a[0-9]+$" },
+                                          { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                        ],
+                                        "x-nudge-placeholder": true
+                                      },
+                                      "alt": {
+                                        "anyOf": [
+                                          { "type": "string", "maxLength": 300 },
+                                          { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                        ],
+                                        "x-nudge-placeholder": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "object",
+                                    "required": ["type"],
+                                    "properties": {
+                                      "type": {
+                                        "anyOf": [
+                                          { "type": "string", "const": "divider" },
+                                          { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                        ],
+                                        "x-nudge-placeholder": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "object",
+                                    "required": ["type"],
+                                    "properties": {
+                                      "type": {
+                                        "anyOf": [
+                                          { "type": "string", "const": "map" },
+                                          { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                        ],
+                                        "x-nudge-placeholder": true
+                                      },
+                                      "markers": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "required": ["lat", "lon", "label"],
+                                          "properties": {
+                                            "lat": {
+                                              "anyOf": [
+                                                { "type": "number", "minimum": -90, "maximum": 90 },
+                                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                              ],
+                                              "x-nudge-placeholder": true
+                                            },
+                                            "lon": {
+                                              "anyOf": [
+                                                {
+                                                  "type": "number",
+                                                  "minimum": -180,
+                                                  "maximum": 180
+                                                },
+                                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                              ],
+                                              "x-nudge-placeholder": true
+                                            },
+                                            "label": {
+                                              "anyOf": [
+                                                { "type": "string", "maxLength": 100 },
+                                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                              ],
+                                              "x-nudge-placeholder": true
+                                            }
+                                          }
+                                        },
+                                        "maxItems": 20
+                                      },
+                                      "path": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "required": ["lat", "lon"],
+                                          "properties": {
+                                            "lat": {
+                                              "anyOf": [
+                                                { "type": "number", "minimum": -90, "maximum": 90 },
+                                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                              ],
+                                              "x-nudge-placeholder": true
+                                            },
+                                            "lon": {
+                                              "anyOf": [
+                                                {
+                                                  "type": "number",
+                                                  "minimum": -180,
+                                                  "maximum": 180
+                                                },
+                                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                              ],
+                                              "x-nudge-placeholder": true
+                                            }
+                                          }
+                                        },
+                                        "minItems": 2,
+                                        "maxItems": 200
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "object",
+                                    "required": ["type", "kind", "labels", "series"],
+                                    "properties": {
+                                      "type": {
+                                        "anyOf": [
+                                          { "type": "string", "const": "chart" },
+                                          { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                        ],
+                                        "x-nudge-placeholder": true
+                                      },
+                                      "kind": {
+                                        "anyOf": [
+                                          {
+                                            "anyOf": [
+                                              { "type": "string", "const": "bar" },
+                                              { "type": "string", "const": "line" },
+                                              { "type": "string", "const": "area" },
+                                              { "type": "string", "const": "pie" }
+                                            ]
+                                          },
+                                          { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                        ],
+                                        "x-nudge-placeholder": true
+                                      },
+                                      "labels": {
+                                        "type": "array",
+                                        "items": {
+                                          "anyOf": [
+                                            { "type": "string", "maxLength": 40 },
+                                            { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                          ],
+                                          "x-nudge-placeholder": true
+                                        },
+                                        "minItems": 1,
+                                        "maxItems": 60
+                                      },
+                                      "series": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "required": ["name", "values"],
+                                          "properties": {
+                                            "name": {
+                                              "anyOf": [
+                                                { "type": "string", "maxLength": 60 },
+                                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                              ],
+                                              "x-nudge-placeholder": true
+                                            },
+                                            "values": {
+                                              "type": "array",
+                                              "items": {
+                                                "anyOf": [
+                                                  {
+                                                    "anyOf": [
+                                                      { "type": "number" },
+                                                      {
+                                                        "type": "string",
+                                                        "pattern": "⟦[A-Z]+\\d+⟧"
+                                                      }
+                                                    ],
+                                                    "x-nudge-placeholder": true
+                                                  },
+                                                  { "type": "null" }
+                                                ]
+                                              },
+                                              "maxItems": 60
+                                            }
+                                          }
+                                        },
+                                        "minItems": 1,
+                                        "maxItems": 6
+                                      },
+                                      "unit": {
+                                        "anyOf": [
+                                          { "type": "string", "maxLength": 20 },
+                                          { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                        ],
+                                        "x-nudge-placeholder": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "object",
+                                    "required": ["type", "items"],
+                                    "properties": {
+                                      "type": {
+                                        "anyOf": [
+                                          { "type": "string", "const": "stats" },
+                                          { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                        ],
+                                        "x-nudge-placeholder": true
+                                      },
+                                      "items": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "required": ["label", "value"],
+                                          "properties": {
+                                            "label": {
+                                              "anyOf": [
+                                                { "type": "string", "maxLength": 60 },
+                                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                              ],
+                                              "x-nudge-placeholder": true
+                                            },
+                                            "value": {
+                                              "anyOf": [
+                                                { "type": "string", "maxLength": 40 },
+                                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                              ],
+                                              "x-nudge-placeholder": true
+                                            },
+                                            "change": {
+                                              "anyOf": [
+                                                { "type": "string", "maxLength": 40 },
+                                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                              ],
+                                              "x-nudge-placeholder": true
+                                            },
+                                            "tone": {
+                                              "anyOf": [
+                                                {
+                                                  "anyOf": [
+                                                    { "type": "string", "const": "good" },
+                                                    { "type": "string", "const": "bad" },
+                                                    { "type": "string", "const": "neutral" }
+                                                  ]
+                                                },
+                                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                              ],
+                                              "x-nudge-placeholder": true
+                                            }
+                                          }
+                                        },
+                                        "minItems": 1,
+                                        "maxItems": 6
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "object",
+                                    "required": ["type", "items"],
+                                    "properties": {
+                                      "type": {
+                                        "anyOf": [
+                                          { "type": "string", "const": "progress" },
+                                          { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                        ],
+                                        "x-nudge-placeholder": true
+                                      },
+                                      "items": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "required": ["label", "value"],
+                                          "properties": {
+                                            "label": {
+                                              "anyOf": [
+                                                { "type": "string", "maxLength": 100 },
+                                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                              ],
+                                              "x-nudge-placeholder": true
+                                            },
+                                            "value": {
+                                              "anyOf": [
+                                                { "type": "number" },
+                                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                              ],
+                                              "x-nudge-placeholder": true
+                                            },
+                                            "max": {
+                                              "anyOf": [
+                                                { "type": "number", "exclusiveMinimum": 0 },
+                                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                              ],
+                                              "x-nudge-placeholder": true
+                                            },
+                                            "note": {
+                                              "anyOf": [
+                                                { "type": "string", "maxLength": 60 },
+                                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                              ],
+                                              "x-nudge-placeholder": true
+                                            }
+                                          }
+                                        },
+                                        "minItems": 1,
+                                        "maxItems": 10
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "object",
+                                    "required": ["type", "title", "start"],
+                                    "properties": {
+                                      "type": {
+                                        "anyOf": [
+                                          { "type": "string", "const": "event" },
+                                          { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                        ],
+                                        "x-nudge-placeholder": true
+                                      },
+                                      "title": {
+                                        "anyOf": [
+                                          { "type": "string", "maxLength": 200 },
+                                          { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                        ],
+                                        "x-nudge-placeholder": true
+                                      },
+                                      "start": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string",
+                                            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}(T[0-9]{2}:[0-9]{2}(:[0-9]{2})?(Z|[+-][0-9]{2}:[0-9]{2}))?$"
+                                          },
+                                          { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                        ],
+                                        "x-nudge-placeholder": true
+                                      },
+                                      "end": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string",
+                                            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}(T[0-9]{2}:[0-9]{2}(:[0-9]{2})?(Z|[+-][0-9]{2}:[0-9]{2}))?$"
+                                          },
+                                          { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                        ],
+                                        "x-nudge-placeholder": true
+                                      },
+                                      "location": {
+                                        "anyOf": [
+                                          { "type": "string", "maxLength": 300 },
+                                          { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                        ],
+                                        "x-nudge-placeholder": true
+                                      },
+                                      "notes": {
+                                        "anyOf": [
+                                          { "type": "string", "maxLength": 1000 },
+                                          { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                        ],
+                                        "x-nudge-placeholder": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "object",
+                                    "required": ["type", "nodes"],
+                                    "properties": {
+                                      "type": {
+                                        "anyOf": [
+                                          { "type": "string", "const": "diagram" },
+                                          { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                        ],
+                                        "x-nudge-placeholder": true
+                                      },
+                                      "nodes": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "required": ["id", "label"],
+                                          "properties": {
+                                            "id": {
+                                              "anyOf": [
+                                                {
+                                                  "type": "string",
+                                                  "pattern": "^[A-Za-z0-9_-]{1,40}$"
+                                                },
+                                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                              ],
+                                              "x-nudge-placeholder": true
+                                            },
+                                            "label": {
+                                              "anyOf": [
+                                                { "type": "string", "maxLength": 80 },
+                                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                              ],
+                                              "x-nudge-placeholder": true
+                                            }
+                                          }
+                                        },
+                                        "minItems": 1,
+                                        "maxItems": 30
+                                      },
+                                      "edges": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "required": ["from", "to"],
+                                          "properties": {
+                                            "from": {
+                                              "anyOf": [
+                                                {
+                                                  "type": "string",
+                                                  "pattern": "^[A-Za-z0-9_-]{1,40}$"
+                                                },
+                                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                              ],
+                                              "x-nudge-placeholder": true
+                                            },
+                                            "to": {
+                                              "anyOf": [
+                                                {
+                                                  "type": "string",
+                                                  "pattern": "^[A-Za-z0-9_-]{1,40}$"
+                                                },
+                                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                              ],
+                                              "x-nudge-placeholder": true
+                                            },
+                                            "label": {
+                                              "anyOf": [
+                                                { "type": "string", "maxLength": 40 },
+                                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                              ],
+                                              "x-nudge-placeholder": true
+                                            }
+                                          }
+                                        },
+                                        "maxItems": 60
+                                      },
+                                      "direction": {
+                                        "anyOf": [
+                                          {
+                                            "anyOf": [
+                                              { "type": "string", "const": "down" },
+                                              { "type": "string", "const": "right" }
+                                            ]
+                                          },
+                                          { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                        ],
+                                        "x-nudge-placeholder": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "object",
+                                    "required": ["type", "items"],
+                                    "properties": {
+                                      "type": {
+                                        "anyOf": [
+                                          { "type": "string", "const": "timeline" },
+                                          { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                        ],
+                                        "x-nudge-placeholder": true
+                                      },
+                                      "items": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "required": ["title"],
+                                          "properties": {
+                                            "title": {
+                                              "anyOf": [
+                                                { "type": "string", "maxLength": 200 },
+                                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                              ],
+                                              "x-nudge-placeholder": true
+                                            },
+                                            "time": {
+                                              "anyOf": [
+                                                { "type": "string", "maxLength": 60 },
+                                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                              ],
+                                              "x-nudge-placeholder": true
+                                            },
+                                            "subtitle": {
+                                              "anyOf": [
+                                                { "type": "string", "maxLength": 300 },
+                                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                              ],
+                                              "x-nudge-placeholder": true
+                                            },
+                                            "state": {
+                                              "anyOf": [
+                                                {
+                                                  "anyOf": [
+                                                    { "type": "string", "const": "done" },
+                                                    { "type": "string", "const": "current" },
+                                                    { "type": "string", "const": "upcoming" }
+                                                  ]
+                                                },
+                                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                              ],
+                                              "x-nudge-placeholder": true
+                                            }
+                                          }
+                                        },
+                                        "minItems": 1,
+                                        "maxItems": 20
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              "maxItems": 30
+                            },
+                            "fields": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "required": ["name", "label", "type"],
+                                "properties": {
+                                  "name": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "pattern": "^[A-Za-z][A-Za-z0-9_]{0,39}$"
+                                      },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  },
+                                  "label": {
+                                    "anyOf": [
+                                      { "type": "string", "maxLength": 100 },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  },
+                                  "type": {
+                                    "anyOf": [
+                                      {
+                                        "anyOf": [
+                                          { "type": "string", "const": "text" },
+                                          { "type": "string", "const": "number" },
+                                          { "type": "string", "const": "boolean" },
+                                          { "type": "string", "const": "choice" },
+                                          { "type": "string", "const": "date" },
+                                          { "type": "string", "const": "time" },
+                                          { "type": "string", "const": "choices" },
+                                          { "type": "string", "const": "range" }
+                                        ]
+                                      },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  },
+                                  "options": {
+                                    "type": "array",
+                                    "items": {
+                                      "anyOf": [
+                                        { "type": "string", "maxLength": 100 },
+                                        { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                      ],
+                                      "x-nudge-placeholder": true
+                                    },
+                                    "minItems": 1,
+                                    "maxItems": 20
+                                  },
+                                  "placeholder": {
+                                    "anyOf": [
+                                      { "type": "string", "maxLength": 200 },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  },
+                                  "multiline": {
+                                    "anyOf": [
+                                      { "type": "boolean" },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  },
+                                  "optional": {
+                                    "anyOf": [
+                                      { "type": "boolean" },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  },
+                                  "min": {
+                                    "anyOf": [
+                                      { "type": "number" },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  },
+                                  "max": {
+                                    "anyOf": [
+                                      { "type": "number" },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  },
+                                  "step": {
+                                    "anyOf": [
+                                      { "type": "number", "exclusiveMinimum": 0 },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  }
+                                }
+                              },
+                              "maxItems": 10
+                            },
+                            "buttons": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "required": ["id", "label"],
+                                "properties": {
+                                  "id": {
+                                    "anyOf": [
+                                      { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,40}$" },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  },
+                                  "label": {
+                                    "anyOf": [
+                                      { "type": "string", "maxLength": 60 },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  },
+                                  "style": {
+                                    "anyOf": [
+                                      {
+                                        "anyOf": [
+                                          { "type": "string", "const": "primary" },
+                                          { "type": "string", "const": "danger" }
+                                        ]
+                                      },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  },
+                                  "skipsFields": {
+                                    "anyOf": [
+                                      { "type": "boolean" },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  },
+                                  "url": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "pattern": "^https://[^\\s]+$",
+                                        "maxLength": 2000
+                                      },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  }
+                                }
+                              },
+                              "maxItems": 6
+                            },
+                            "once": {
+                              "anyOf": [
+                                { "type": "boolean" },
+                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                              ],
+                              "x-nudge-placeholder": true
+                            },
+                            "who": {
+                              "anyOf": [
+                                {
+                                  "anyOf": [
+                                    { "type": "string", "const": "room" },
+                                    { "type": "string", "const": "asker" }
+                                  ]
+                                },
+                                { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                              ],
+                              "x-nudge-placeholder": true
+                            }
+                          }
+                        }
+                      }
+                    }
                   }
                 ],
-                "timestamp": 1793381180619
+                "timestamp": 1793382951665
               }
             ],
             "kind": "pi.system",
@@ -842,19 +1892,19 @@
         "value": {
           "role": "assistant",
           "content": [{ "type": "thinking", "thinking": "" }],
-          "api": "faux:1793381180594:z5ac0q0146g",
+          "api": "faux:1793382951640:0mrx1dxjrjl",
           "provider": "faux",
           "model": "faux-1",
           "usage": {
-            "input": 2655,
+            "input": 4930,
             "output": 18,
             "cacheRead": 0,
-            "cacheWrite": 2655,
-            "totalTokens": 5328,
+            "cacheWrite": 4930,
+            "totalTokens": 9878,
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
           },
           "stopReason": "pending",
-          "timestamp": 1793381180594
+          "timestamp": 1793382951640
         }
       }
     ],
@@ -869,24 +1919,11 @@
         "path": ["docs", "pi.live", "generation", "message", "content"],
         "index": 1,
         "remove": 0,
-        "insert": [{ "type": "text", "text": "I'll note th" }]
-      }
-    ],
-    [
-      {
-        "op": "append",
-        "path": ["docs", "pi.live", "generation", "message", "content", 1, "text"],
-        "text": "at."
-      },
-      {
-        "op": "splice",
-        "path": ["docs", "pi.live", "generation", "message", "content"],
-        "index": 2,
-        "remove": 0,
         "insert": [
+          { "type": "text", "text": "I'll note that." },
           {
             "type": "toolCall",
-            "id": "tool:1793381180594:nk8ys8ni9uj",
+            "id": "tool:1793382951640:f0t0nbvubtq",
             "name": "remember",
             "arguments": {}
           }
@@ -909,24 +1946,24 @@
                   { "type": "text", "text": "I'll note that." },
                   {
                     "type": "toolCall",
-                    "id": "tool:1793381180594:nk8ys8ni9uj",
+                    "id": "tool:1793382951640:f0t0nbvubtq",
                     "name": "remember",
                     "arguments": { "fact": "Ann likes tea" }
                   }
                 ],
-                "api": "faux:1793381180594:z5ac0q0146g",
+                "api": "faux:1793382951640:0mrx1dxjrjl",
                 "provider": "faux",
                 "model": "faux-1",
                 "usage": {
-                  "input": 2655,
+                  "input": 4930,
                   "output": 18,
                   "cacheRead": 0,
-                  "cacheWrite": 2655,
-                  "totalTokens": 5328,
+                  "cacheWrite": 4930,
+                  "totalTokens": 9878,
                   "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
                 },
                 "stopReason": "toolUse",
-                "timestamp": 1793381180594
+                "timestamp": 1793382951640
               }
             ],
             "kind": "pi.assistant",
@@ -942,7 +1979,7 @@
         "path": ["docs", "pi.live", "tools"],
         "value": [
           {
-            "callId": "tool:1793381180594:nk8ys8ni9uj",
+            "callId": "tool:1793382951640:f0t0nbvubtq",
             "name": "remember",
             "taskId": 21,
             "status": "pending"
@@ -953,11 +1990,11 @@
         "op": "set",
         "path": ["docs", "pi.usage", "models", "faux/faux-1"],
         "value": {
-          "input": 2655,
+          "input": 4930,
           "output": 18,
           "cacheRead": 0,
-          "cacheWrite": 2655,
-          "totalTokens": 5328,
+          "cacheWrite": 4930,
+          "totalTokens": 9878,
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
         }
       }
@@ -974,12 +2011,12 @@
             "model": [
               {
                 "role": "toolResult",
-                "toolCallId": "tool:1793381180594:nk8ys8ni9uj",
+                "toolCallId": "tool:1793382951640:f0t0nbvubtq",
                 "toolName": "remember",
                 "content": [{ "type": "text", "text": "Remembered m1." }],
                 "isError": false,
                 "durationMs": 1,
-                "timestamp": 1793381180702
+                "timestamp": 1793382951751
               }
             ],
             "data": { "diagnostics": [] },
@@ -1017,7 +2054,7 @@
                   "members": null,
                   "time": null
                 },
-                "timestamp": 1793381180704
+                "timestamp": 1793382951753
               }
             ],
             "kind": "pi.system",
@@ -1039,7 +2076,7 @@
                   "memory": "<memory>\nWhat you were asked to remember in this conversation:\n- m1: Ann likes tea\n</memory>",
                   "time": "<time>\nToday is Friday, 30 October 2026, in the time zone Europe/Oslo. Each message says the time it was sent; the latest one is the time now.\n</time>"
                 },
-                "timestamp": 1793381180704
+                "timestamp": 1793382951753
               }
             ],
             "kind": "pi.system",
@@ -1058,19 +2095,19 @@
         "value": {
           "role": "assistant",
           "content": [{ "type": "text", "text": "Noted: Ann likes" }],
-          "api": "faux:1793381180594:z5ac0q0146g",
+          "api": "faux:1793382951640:0mrx1dxjrjl",
           "provider": "faux",
           "model": "faux-1",
           "usage": {
             "input": 533,
             "output": 6,
-            "cacheRead": 2655,
+            "cacheRead": 4930,
             "cacheWrite": 534,
-            "totalTokens": 3728,
+            "totalTokens": 6003,
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
           },
           "stopReason": "pending",
-          "timestamp": 1793381180594
+          "timestamp": 1793382951640
         }
       }
     ],
@@ -1086,19 +2123,19 @@
               {
                 "role": "assistant",
                 "content": [{ "type": "text", "text": "Noted: Ann likes tea." }],
-                "api": "faux:1793381180594:z5ac0q0146g",
+                "api": "faux:1793382951640:0mrx1dxjrjl",
                 "provider": "faux",
                 "model": "faux-1",
                 "usage": {
                   "input": 533,
                   "output": 6,
-                  "cacheRead": 2655,
+                  "cacheRead": 4930,
                   "cacheWrite": 534,
-                  "totalTokens": 3728,
+                  "totalTokens": 6003,
                   "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
                 },
                 "stopReason": "stop",
-                "timestamp": 1793381180594
+                "timestamp": 1793382951640
               }
             ],
             "kind": "pi.assistant",
@@ -1112,12 +2149,12 @@
               "text": "I like coffee",
               "playerId": "bo",
               "displayName": "Bo",
-              "clientId": "client-2a352793-7cdf-4a93-9402-515fe6a8ab19",
+              "clientId": "client-fd8b4491-5e6e-4149-802e-887bff012e35",
               "requestId": "1",
-              "sentAt": 1793381180616
+              "sentAt": 1793382951662
             },
             "model": [
-              { "role": "user", "content": "Bo (18:26): I like coffee", "timestamp": 1793381180735 }
+              { "role": "user", "content": "Bo (18:55): I like coffee", "timestamp": 1793382951786 }
             ],
             "id": 28,
             "conversationId": 9,
@@ -1138,23 +2175,23 @@
       {
         "op": "set",
         "path": ["docs", "pi.usage", "models", "faux/faux-1", "input"],
-        "value": 3188
+        "value": 5463
       },
       { "op": "set", "path": ["docs", "pi.usage", "models", "faux/faux-1", "output"], "value": 24 },
       {
         "op": "set",
         "path": ["docs", "pi.usage", "models", "faux/faux-1", "cacheRead"],
-        "value": 2655
+        "value": 4930
       },
       {
         "op": "set",
         "path": ["docs", "pi.usage", "models", "faux/faux-1", "cacheWrite"],
-        "value": 3189
+        "value": 5464
       },
       {
         "op": "set",
         "path": ["docs", "pi.usage", "models", "faux/faux-1", "totalTokens"],
-        "value": 9056
+        "value": 15881
       }
     ],
     [{ "op": "set", "path": ["docs", "pi.live", "generation"], "value": { "attempt": 1 } }],
@@ -1164,20 +2201,20 @@
         "path": ["docs", "pi.live", "generation", "message"],
         "value": {
           "role": "assistant",
-          "content": [{ "type": "text", "text": "And Bo likes cof" }],
-          "api": "faux:1793381180594:z5ac0q0146g",
+          "content": [{ "type": "text", "text": "And Bo likes" }],
+          "api": "faux:1793382951640:0mrx1dxjrjl",
           "provider": "faux",
           "model": "faux-1",
           "usage": {
             "input": 17,
             "output": 5,
-            "cacheRead": 3188,
+            "cacheRead": 5463,
             "cacheWrite": 17,
-            "totalTokens": 3227,
+            "totalTokens": 5502,
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
           },
           "stopReason": "pending",
-          "timestamp": 1793381180594
+          "timestamp": 1793382951640
         }
       }
     ],
@@ -1193,19 +2230,19 @@
               {
                 "role": "assistant",
                 "content": [{ "type": "text", "text": "And Bo likes coffee." }],
-                "api": "faux:1793381180594:z5ac0q0146g",
+                "api": "faux:1793382951640:0mrx1dxjrjl",
                 "provider": "faux",
                 "model": "faux-1",
                 "usage": {
                   "input": 17,
                   "output": 5,
-                  "cacheRead": 3188,
+                  "cacheRead": 5463,
                   "cacheWrite": 17,
-                  "totalTokens": 3227,
+                  "totalTokens": 5502,
                   "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
                 },
                 "stopReason": "stop",
-                "timestamp": 1793381180594
+                "timestamp": 1793382951640
               }
             ],
             "kind": "pi.assistant",
@@ -1220,23 +2257,23 @@
       {
         "op": "set",
         "path": ["docs", "pi.usage", "models", "faux/faux-1", "input"],
-        "value": 3205
+        "value": 5480
       },
       { "op": "set", "path": ["docs", "pi.usage", "models", "faux/faux-1", "output"], "value": 29 },
       {
         "op": "set",
         "path": ["docs", "pi.usage", "models", "faux/faux-1", "cacheRead"],
-        "value": 5843
+        "value": 10393
       },
       {
         "op": "set",
         "path": ["docs", "pi.usage", "models", "faux/faux-1", "cacheWrite"],
-        "value": 3206
+        "value": 5481
       },
       {
         "op": "set",
         "path": ["docs", "pi.usage", "models", "faux/faux-1", "totalTokens"],
-        "value": 12283
+        "value": 21383
       }
     ],
     [
@@ -1248,12 +2285,12 @@
         "insert": [
           {
             "kind": "nudge.fire",
-            "data": { "nudgeId": "31", "message": "Kettle", "fireAt": 1793381180814 },
+            "data": { "nudgeId": "31", "message": "Kettle", "fireAt": 1793382951866 },
             "model": [
               {
                 "role": "user",
                 "content": "A nudge you scheduled is due now: Kettle\nSay it to the room now, in your own words. Nothing needs scheduling.",
-                "timestamp": 1793381180815
+                "timestamp": 1793382951868
               }
             ],
             "id": 33,
@@ -1271,19 +2308,19 @@
         "value": {
           "role": "assistant",
           "content": [{ "type": "text", "text": "" }],
-          "api": "faux:1793381180594:z5ac0q0146g",
+          "api": "faux:1793382951640:0mrx1dxjrjl",
           "provider": "faux",
           "model": "faux-1",
           "usage": {
             "input": 37,
             "output": 7,
-            "cacheRead": 3205,
+            "cacheRead": 5480,
             "cacheWrite": 37,
-            "totalTokens": 3286,
+            "totalTokens": 5561,
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
           },
           "stopReason": "pending",
-          "timestamp": 1793381180594
+          "timestamp": 1793382951640
         }
       }
     ],
@@ -1299,19 +2336,19 @@
               {
                 "role": "assistant",
                 "content": [{ "type": "text", "text": "Time to put the kettle on!" }],
-                "api": "faux:1793381180594:z5ac0q0146g",
+                "api": "faux:1793382951640:0mrx1dxjrjl",
                 "provider": "faux",
                 "model": "faux-1",
                 "usage": {
                   "input": 37,
                   "output": 7,
-                  "cacheRead": 3205,
+                  "cacheRead": 5480,
                   "cacheWrite": 37,
-                  "totalTokens": 3286,
+                  "totalTokens": 5561,
                   "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
                 },
                 "stopReason": "stop",
-                "timestamp": 1793381180594
+                "timestamp": 1793382951640
               }
             ],
             "kind": "pi.assistant",
@@ -1326,23 +2363,23 @@
       {
         "op": "set",
         "path": ["docs", "pi.usage", "models", "faux/faux-1", "input"],
-        "value": 3242
+        "value": 5517
       },
       { "op": "set", "path": ["docs", "pi.usage", "models", "faux/faux-1", "output"], "value": 36 },
       {
         "op": "set",
         "path": ["docs", "pi.usage", "models", "faux/faux-1", "cacheRead"],
-        "value": 9048
+        "value": 15873
       },
       {
         "op": "set",
         "path": ["docs", "pi.usage", "models", "faux/faux-1", "cacheWrite"],
-        "value": 3243
+        "value": 5518
       },
       {
         "op": "set",
         "path": ["docs", "pi.usage", "models", "faux/faux-1", "totalTokens"],
-        "value": 15569
+        "value": 26944
       }
     ]
   ]

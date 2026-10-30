@@ -69,4 +69,28 @@ final class CardTests: XCTestCase {
         guard case .timeline(let steps) = card.blocks[4] else { return XCTFail("not a timeline") }
         XCTAssertEqual(steps[0].state, "done")
     }
+
+    func testReadsEventsDiagramsLinksAndTheNewFields() throws {
+        let card = try XCTUnwrap(tool(#"""
+            {"ui":{"v":1,"blocks":[
+            {"type":"event","title":"Dinner","start":"2026-11-03T18:00+01:00"},
+            {"type":"diagram","nodes":[{"id":"a","label":"A"},{"id":"b","label":"B"},{"id":"c","label":"C"}],
+             "edges":[{"from":"a","to":"c"},{"from":"b","to":"c"},{"from":"c","to":"a"}]}],
+            "fields":[{"name":"t","label":"T","type":"choices","options":["x","y"]},{"name":"s","label":"S","type":"range","min":2,"max":9}],
+            "buttons":[{"id":"go","label":"Go"},{"id":"site","label":"Site","url":"https://example.com"},{"id":"bad","label":"Bad","url":"http://example.com"}]}}
+            """#).card)
+        guard case .event(let event) = card.blocks[0] else { return XCTFail("not an event") }
+        XCTAssertFalse(event.allDay)
+        XCTAssertEqual(event.interval?.duration, 3600)
+        guard case .diagram(let diagram) = card.blocks[1] else { return XCTFail("not a diagram") }
+        let places = diagram.layout()
+        XCTAssertEqual(places["a"], UiDiagram.Place(rank: 0, order: 0))
+        XCTAssertEqual(places["b"], UiDiagram.Place(rank: 0, order: 1))
+        XCTAssertEqual(places["c"], UiDiagram.Place(rank: 1, order: 0))
+        XCTAssertEqual(card.buttons[1].url?.host, "example.com")
+        XCTAssertNil(card.buttons[2].url)
+        let sent = try XCTUnwrap(card.valuesJson(for: card.buttons[0], values: ["t": .choices(["y"])]))
+        XCTAssertEqual(JSONValue(json: sent), .object(["s": .number(2), "t": .array([.string("y")])]))
+        XCTAssertThrowsError(try card.valuesJson(for: card.buttons[0], values: ["t": .choices([])]))
+    }
 }
