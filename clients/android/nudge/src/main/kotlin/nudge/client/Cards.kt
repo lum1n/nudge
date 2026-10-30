@@ -59,13 +59,56 @@ sealed interface UiBlock {
 
     @Serializable @SerialName("divider")
     data object Divider : UiBlock
+
+    /** Places on a map, and a line through [path] such as a route; the app picks the map. */
+    @Serializable @SerialName("map")
+    data class Places(val markers: List<Marker> = emptyList(), val path: List<Point> = emptyList()) : UiBlock {
+        @Serializable
+        data class Marker(val lat: Double, val lon: Double, val label: String)
+
+        @Serializable
+        data class Point(val lat: Double, val lon: Double)
+    }
+
+    /** `bar`, `line`, `area` or `pie`: a value per label in each series, null for a gap. */
+    @Serializable @SerialName("chart")
+    data class Chart(
+        val kind: String,
+        val labels: List<String>,
+        val series: List<Series>,
+        val unit: String? = null,
+    ) : UiBlock {
+        @Serializable
+        data class Series(val name: String, val values: List<Double?>)
+    }
+
+    /** Headline numbers; [Stat.tone] is `good`, `bad`, `neutral` or null. */
+    @Serializable @SerialName("stats")
+    data class Stats(val items: List<Stat>) : UiBlock {
+        @Serializable
+        data class Stat(val label: String, val value: String, val change: String? = null, val tone: String? = null)
+    }
+
+    /** How far along things are; [Bar.max] is what full is. */
+    @Serializable @SerialName("progress")
+    data class Progress(val items: List<Bar>) : UiBlock {
+        @Serializable
+        data class Bar(val label: String, val value: Double, val max: Double = 100.0, val note: String? = null)
+    }
+
+    /** Steps in order; [Step.state] is `done`, `current`, `upcoming` or null. */
+    @Serializable @SerialName("timeline")
+    data class Timeline(val items: List<Step>) : UiBlock {
+        @Serializable
+        data class Step(val title: String, val time: String? = null, val subtitle: String? = null, val state: String? = null)
+    }
 }
 
 @Serializable
 data class UiField(
     val name: String,
     val label: String,
-    /** `text`, `number`, `boolean` or `choice`. */
+    /** `text`, `number`, `boolean`, `choice`, `date` (`YYYY-MM-DD`) or `time` (`HH:MM`). */
     val type: String,
     val options: List<String> = emptyList(),
     val placeholder: String? = null,

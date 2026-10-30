@@ -66,6 +66,8 @@ export const room = {
     askedForApproval: "Asked for approval",
     /** A card a tool shows in the chat (ADR 27). */
     card: {
+      map: "Map",
+      openMap: "Open the map",
       pressedBy: (button: string, who: string) => `${who} pressed “${button}”`,
       optional: " (optional)",
       yes: "Yes",

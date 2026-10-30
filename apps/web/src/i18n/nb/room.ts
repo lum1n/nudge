@@ -62,6 +62,8 @@ export const room: Messages["room"] = {
     openBrowser: "Åpne rommets nettleser for å logge inn",
     askedForApproval: "Ba om godkjenning",
     card: {
+      map: "Kart",
+      openMap: "Åpne kartet",
       pressedBy: (button, who) => `${who} trykket «${button}»`,
       optional: " (valgfritt)",
       yes: "Ja",

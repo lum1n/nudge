@@ -126,6 +126,16 @@ private struct BlockView: View {
             Text(alt).font(.caption).foregroundStyle(.secondary)
         case .divider:
             Divider()
+        case .map(let markers, let path):
+            CardMapView(markers: markers, path: path)
+        case .chart(let chart):
+            CardChartView(chart: chart)
+        case .stats(let stats):
+            CardStatsView(stats: stats)
+        case .progress(let items):
+            CardProgressView(items: items)
+        case .timeline(let steps):
+            CardTimelineView(steps: steps)
         }
     }
 }
@@ -133,6 +143,14 @@ private struct BlockView: View {
 private struct FieldView: View {
     let field: UiField
     @Binding var value: UiValue?
+
+    /// Days and times as cards send them, in the device's own time zone.
+    private static func formatter(_ format: String) -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = format
+        return formatter
+    }
 
     private var label: String { field.optional ? String(localized: "\(field.label) (optional)") : field.label }
 
@@ -149,6 +167,19 @@ private struct FieldView: View {
             ) {
                 Text("Choose…").tag("")
                 ForEach(field.options, id: \.self) { Text($0).tag($0) }
+            }
+        case "date", "time":
+            let format = field.type == "date" ? "yyyy-MM-dd" : "HH:mm"
+            if case .text(let text) = value, let date = Self.formatter(format).date(from: text) {
+                DatePicker(
+                    label,
+                    selection: Binding(get: { date }, set: { value = .text(Self.formatter(format).string(from: $0)) }),
+                    displayedComponents: field.type == "date" ? .date : .hourAndMinute)
+            } else {
+                LabeledContent(label) {
+                    // Nothing is picked until they pick, so a required field isn't filled in for them.
+                    Button(field.placeholder ?? String(localized: "Choose…")) { value = .text(Self.formatter(format).string(from: .now)) }
+                }
             }
         default:
             TextField(label, text: Binding(

@@ -24,15 +24,15 @@
               "text": "Remember that I like tea",
               "playerId": "ann",
               "displayName": "Ann",
-              "clientId": "client-c8854b6e-f80b-4015-84b8-3d2bb857aef1",
+              "clientId": "client-b631a43f-8c62-49ae-856e-90ff3acc3afd",
               "requestId": "1",
-              "sentAt": 1793373391915
+              "sentAt": 1793381180612
             },
             "model": [
               {
                 "role": "user",
-                "content": "Ann (16:16): Remember that I like tea",
-                "timestamp": 1793373391915
+                "content": "Ann (18:26): Remember that I like tea",
+                "timestamp": 1793381180613
               }
             ],
             "id": 15,
@@ -52,16 +52,16 @@
           {
             "id": 18,
             "mode": "followUp",
-            "content": "Bo (16:16): I like coffee",
+            "content": "Bo (18:26): I like coffee",
             "entry": {
               "kind": "nudge.message",
               "data": {
                 "text": "I like coffee",
                 "playerId": "bo",
                 "displayName": "Bo",
-                "clientId": "client-69c68aa3-7416-4fd3-bc42-9521b756f4a5",
+                "clientId": "client-2a352793-7cdf-4a93-9402-515fe6a8ab19",
                 "requestId": "1",
-                "sentAt": 1793373391919
+                "sentAt": 1793381180616
               }
             }
           }
@@ -154,7 +154,7 @@
                   },
                   {
                     "name": "show_ui",
-                    "description": "Show a card in the chat with blocks (heading, markdown text, key-value pairs, a list, a table, an image attachment by id, a divider), fields to fill in and up to 6 buttons. Use it when people pick between a few options, fill in several values, or compare things side by side; not for plain answers, which stay text. Nobody has to press: they may also just write. A press comes back as a message such as `Pressed \"Book\" on \"Times\"` with a line per field; answer it as you would that message. Buttons work once unless `once` is false. `who: \"asker\"` lets only who you answer press. Fields' values reach you, so never ask for passwords or keys with them. Don't repeat the card's content in your text.",
+                    "description": "Show a card in the chat with blocks (heading, markdown text, key-value pairs, a list, a table, an image attachment by id, a divider, a map, a chart, stats, progress bars, a timeline), fields to fill in and up to 6 buttons. Use it when people pick between a few options, fill in several values, or compare things side by side; not for plain answers, which stay text. A `map` shows places by lat/lon with a label each, and a `path` for a route. A `chart` is `bar` (comparing amounts), `line` or `area` (change over time) or `pie` (parts of one whole, one series, up to 8 slices); give a value per label in each series, and keep two measures of different scale in two charts. `stats` is a few headline numbers with what changed; `progress` is how far along things are; `timeline` is steps in order. Fields may also be a `date` (YYYY-MM-DD) or a `time` (HH:MM). Nobody has to press: they may also just write. A press comes back as a message such as `Pressed \"Book\" on \"Times\"` with a line per field; answer it as you would that message. Buttons work once unless `once` is false. `who: \"asker\"` lets only who you answer press. Fields' values reach you, so never ask for passwords or keys with them. Don't repeat the card's content in your text.",
                     "parameters": {
                       "type": "object",
                       "properties": {
@@ -362,6 +362,323 @@
                                     "x-nudge-placeholder": true
                                   }
                                 }
+                              },
+                              {
+                                "type": "object",
+                                "required": ["type"],
+                                "properties": {
+                                  "type": {
+                                    "anyOf": [
+                                      { "type": "string", "const": "map" },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  },
+                                  "markers": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "required": ["lat", "lon", "label"],
+                                      "properties": {
+                                        "lat": {
+                                          "anyOf": [
+                                            { "type": "number", "minimum": -90, "maximum": 90 },
+                                            { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                          ],
+                                          "x-nudge-placeholder": true
+                                        },
+                                        "lon": {
+                                          "anyOf": [
+                                            { "type": "number", "minimum": -180, "maximum": 180 },
+                                            { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                          ],
+                                          "x-nudge-placeholder": true
+                                        },
+                                        "label": {
+                                          "anyOf": [
+                                            { "type": "string", "maxLength": 100 },
+                                            { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                          ],
+                                          "x-nudge-placeholder": true
+                                        }
+                                      }
+                                    },
+                                    "maxItems": 20
+                                  },
+                                  "path": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "required": ["lat", "lon"],
+                                      "properties": {
+                                        "lat": {
+                                          "anyOf": [
+                                            { "type": "number", "minimum": -90, "maximum": 90 },
+                                            { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                          ],
+                                          "x-nudge-placeholder": true
+                                        },
+                                        "lon": {
+                                          "anyOf": [
+                                            { "type": "number", "minimum": -180, "maximum": 180 },
+                                            { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                          ],
+                                          "x-nudge-placeholder": true
+                                        }
+                                      }
+                                    },
+                                    "minItems": 2,
+                                    "maxItems": 200
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "required": ["type", "kind", "labels", "series"],
+                                "properties": {
+                                  "type": {
+                                    "anyOf": [
+                                      { "type": "string", "const": "chart" },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  },
+                                  "kind": {
+                                    "anyOf": [
+                                      {
+                                        "anyOf": [
+                                          { "type": "string", "const": "bar" },
+                                          { "type": "string", "const": "line" },
+                                          { "type": "string", "const": "area" },
+                                          { "type": "string", "const": "pie" }
+                                        ]
+                                      },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  },
+                                  "labels": {
+                                    "type": "array",
+                                    "items": {
+                                      "anyOf": [
+                                        { "type": "string", "maxLength": 40 },
+                                        { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                      ],
+                                      "x-nudge-placeholder": true
+                                    },
+                                    "minItems": 1,
+                                    "maxItems": 60
+                                  },
+                                  "series": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "required": ["name", "values"],
+                                      "properties": {
+                                        "name": {
+                                          "anyOf": [
+                                            { "type": "string", "maxLength": 60 },
+                                            { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                          ],
+                                          "x-nudge-placeholder": true
+                                        },
+                                        "values": {
+                                          "type": "array",
+                                          "items": {
+                                            "anyOf": [
+                                              {
+                                                "anyOf": [
+                                                  { "type": "number" },
+                                                  { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                                ],
+                                                "x-nudge-placeholder": true
+                                              },
+                                              { "type": "null" }
+                                            ]
+                                          },
+                                          "maxItems": 60
+                                        }
+                                      }
+                                    },
+                                    "minItems": 1,
+                                    "maxItems": 6
+                                  },
+                                  "unit": {
+                                    "anyOf": [
+                                      { "type": "string", "maxLength": 20 },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "required": ["type", "items"],
+                                "properties": {
+                                  "type": {
+                                    "anyOf": [
+                                      { "type": "string", "const": "stats" },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  },
+                                  "items": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "required": ["label", "value"],
+                                      "properties": {
+                                        "label": {
+                                          "anyOf": [
+                                            { "type": "string", "maxLength": 60 },
+                                            { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                          ],
+                                          "x-nudge-placeholder": true
+                                        },
+                                        "value": {
+                                          "anyOf": [
+                                            { "type": "string", "maxLength": 40 },
+                                            { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                          ],
+                                          "x-nudge-placeholder": true
+                                        },
+                                        "change": {
+                                          "anyOf": [
+                                            { "type": "string", "maxLength": 40 },
+                                            { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                          ],
+                                          "x-nudge-placeholder": true
+                                        },
+                                        "tone": {
+                                          "anyOf": [
+                                            {
+                                              "anyOf": [
+                                                { "type": "string", "const": "good" },
+                                                { "type": "string", "const": "bad" },
+                                                { "type": "string", "const": "neutral" }
+                                              ]
+                                            },
+                                            { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                          ],
+                                          "x-nudge-placeholder": true
+                                        }
+                                      }
+                                    },
+                                    "minItems": 1,
+                                    "maxItems": 6
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "required": ["type", "items"],
+                                "properties": {
+                                  "type": {
+                                    "anyOf": [
+                                      { "type": "string", "const": "progress" },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  },
+                                  "items": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "required": ["label", "value"],
+                                      "properties": {
+                                        "label": {
+                                          "anyOf": [
+                                            { "type": "string", "maxLength": 100 },
+                                            { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                          ],
+                                          "x-nudge-placeholder": true
+                                        },
+                                        "value": {
+                                          "anyOf": [
+                                            { "type": "number" },
+                                            { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                          ],
+                                          "x-nudge-placeholder": true
+                                        },
+                                        "max": {
+                                          "anyOf": [
+                                            { "type": "number", "exclusiveMinimum": 0 },
+                                            { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                          ],
+                                          "x-nudge-placeholder": true
+                                        },
+                                        "note": {
+                                          "anyOf": [
+                                            { "type": "string", "maxLength": 60 },
+                                            { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                          ],
+                                          "x-nudge-placeholder": true
+                                        }
+                                      }
+                                    },
+                                    "minItems": 1,
+                                    "maxItems": 10
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "required": ["type", "items"],
+                                "properties": {
+                                  "type": {
+                                    "anyOf": [
+                                      { "type": "string", "const": "timeline" },
+                                      { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                    ],
+                                    "x-nudge-placeholder": true
+                                  },
+                                  "items": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "required": ["title"],
+                                      "properties": {
+                                        "title": {
+                                          "anyOf": [
+                                            { "type": "string", "maxLength": 200 },
+                                            { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                          ],
+                                          "x-nudge-placeholder": true
+                                        },
+                                        "time": {
+                                          "anyOf": [
+                                            { "type": "string", "maxLength": 60 },
+                                            { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                          ],
+                                          "x-nudge-placeholder": true
+                                        },
+                                        "subtitle": {
+                                          "anyOf": [
+                                            { "type": "string", "maxLength": 300 },
+                                            { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                          ],
+                                          "x-nudge-placeholder": true
+                                        },
+                                        "state": {
+                                          "anyOf": [
+                                            {
+                                              "anyOf": [
+                                                { "type": "string", "const": "done" },
+                                                { "type": "string", "const": "current" },
+                                                { "type": "string", "const": "upcoming" }
+                                              ]
+                                            },
+                                            { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
+                                          ],
+                                          "x-nudge-placeholder": true
+                                        }
+                                      }
+                                    },
+                                    "minItems": 1,
+                                    "maxItems": 20
+                                  }
+                                }
                               }
                             ]
                           },
@@ -394,7 +711,9 @@
                                       { "type": "string", "const": "text" },
                                       { "type": "string", "const": "number" },
                                       { "type": "string", "const": "boolean" },
-                                      { "type": "string", "const": "choice" }
+                                      { "type": "string", "const": "choice" },
+                                      { "type": "string", "const": "date" },
+                                      { "type": "string", "const": "time" }
                                     ]
                                   },
                                   { "type": "string", "pattern": "⟦[A-Z]+\\d+⟧" }
@@ -504,7 +823,7 @@
                     }
                   }
                 ],
-                "timestamp": 1793373391921
+                "timestamp": 1793381180619
               }
             ],
             "kind": "pi.system",
@@ -522,39 +841,52 @@
         "path": ["docs", "pi.live", "generation", "message"],
         "value": {
           "role": "assistant",
-          "content": [{ "type": "thinking", "thinking": "Ann wants this k" }],
-          "api": "faux:1793373391896:3f2xrqc3smh",
+          "content": [{ "type": "thinking", "thinking": "" }],
+          "api": "faux:1793381180594:z5ac0q0146g",
           "provider": "faux",
           "model": "faux-1",
           "usage": {
-            "input": 1865,
+            "input": 2655,
             "output": 18,
             "cacheRead": 0,
-            "cacheWrite": 1865,
-            "totalTokens": 3748,
+            "cacheWrite": 2655,
+            "totalTokens": 5328,
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
           },
           "stopReason": "pending",
-          "timestamp": 1793373391896
+          "timestamp": 1793381180594
         }
       }
     ],
     [
       {
-        "op": "append",
+        "op": "set",
         "path": ["docs", "pi.live", "generation", "message", "content", 0, "thinking"],
-        "text": "ept."
+        "value": "Ann wants this kept."
       },
       {
         "op": "splice",
         "path": ["docs", "pi.live", "generation", "message", "content"],
         "index": 1,
         "remove": 0,
+        "insert": [{ "type": "text", "text": "I'll note th" }]
+      }
+    ],
+    [
+      {
+        "op": "append",
+        "path": ["docs", "pi.live", "generation", "message", "content", 1, "text"],
+        "text": "at."
+      },
+      {
+        "op": "splice",
+        "path": ["docs", "pi.live", "generation", "message", "content"],
+        "index": 2,
+        "remove": 0,
         "insert": [
-          { "type": "text", "text": "I'll note that." },
           {
             "type": "toolCall",
-            "id": "tool:1793373391896:siynaff2yjt",
+            "id": "tool:1793381180594:nk8ys8ni9uj",
             "name": "remember",
             "arguments": {}
           }
@@ -577,24 +909,24 @@
                   { "type": "text", "text": "I'll note that." },
                   {
                     "type": "toolCall",
-                    "id": "tool:1793373391896:siynaff2yjt",
+                    "id": "tool:1793381180594:nk8ys8ni9uj",
                     "name": "remember",
                     "arguments": { "fact": "Ann likes tea" }
                   }
                 ],
-                "api": "faux:1793373391896:3f2xrqc3smh",
+                "api": "faux:1793381180594:z5ac0q0146g",
                 "provider": "faux",
                 "model": "faux-1",
                 "usage": {
-                  "input": 1865,
+                  "input": 2655,
                   "output": 18,
                   "cacheRead": 0,
-                  "cacheWrite": 1865,
-                  "totalTokens": 3748,
+                  "cacheWrite": 2655,
+                  "totalTokens": 5328,
                   "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
                 },
                 "stopReason": "toolUse",
-                "timestamp": 1793373391896
+                "timestamp": 1793381180594
               }
             ],
             "kind": "pi.assistant",
@@ -610,7 +942,7 @@
         "path": ["docs", "pi.live", "tools"],
         "value": [
           {
-            "callId": "tool:1793373391896:siynaff2yjt",
+            "callId": "tool:1793381180594:nk8ys8ni9uj",
             "name": "remember",
             "taskId": 21,
             "status": "pending"
@@ -621,11 +953,11 @@
         "op": "set",
         "path": ["docs", "pi.usage", "models", "faux/faux-1"],
         "value": {
-          "input": 1865,
+          "input": 2655,
           "output": 18,
           "cacheRead": 0,
-          "cacheWrite": 1865,
-          "totalTokens": 3748,
+          "cacheWrite": 2655,
+          "totalTokens": 5328,
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
         }
       }
@@ -642,12 +974,12 @@
             "model": [
               {
                 "role": "toolResult",
-                "toolCallId": "tool:1793373391896:siynaff2yjt",
+                "toolCallId": "tool:1793381180594:nk8ys8ni9uj",
                 "toolName": "remember",
                 "content": [{ "type": "text", "text": "Remembered m1." }],
                 "isError": false,
                 "durationMs": 1,
-                "timestamp": 1793373392005
+                "timestamp": 1793381180702
               }
             ],
             "data": { "diagnostics": [] },
@@ -685,7 +1017,7 @@
                   "members": null,
                   "time": null
                 },
-                "timestamp": 1793373392007
+                "timestamp": 1793381180704
               }
             ],
             "kind": "pi.system",
@@ -707,7 +1039,7 @@
                   "memory": "<memory>\nWhat you were asked to remember in this conversation:\n- m1: Ann likes tea\n</memory>",
                   "time": "<time>\nToday is Friday, 30 October 2026, in the time zone Europe/Oslo. Each message says the time it was sent; the latest one is the time now.\n</time>"
                 },
-                "timestamp": 1793373392007
+                "timestamp": 1793381180704
               }
             ],
             "kind": "pi.system",
@@ -726,19 +1058,19 @@
         "value": {
           "role": "assistant",
           "content": [{ "type": "text", "text": "Noted: Ann likes" }],
-          "api": "faux:1793373391896:3f2xrqc3smh",
+          "api": "faux:1793381180594:z5ac0q0146g",
           "provider": "faux",
           "model": "faux-1",
           "usage": {
             "input": 533,
             "output": 6,
-            "cacheRead": 1865,
+            "cacheRead": 2655,
             "cacheWrite": 534,
-            "totalTokens": 2938,
+            "totalTokens": 3728,
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
           },
           "stopReason": "pending",
-          "timestamp": 1793373391896
+          "timestamp": 1793381180594
         }
       }
     ],
@@ -754,19 +1086,19 @@
               {
                 "role": "assistant",
                 "content": [{ "type": "text", "text": "Noted: Ann likes tea." }],
-                "api": "faux:1793373391896:3f2xrqc3smh",
+                "api": "faux:1793381180594:z5ac0q0146g",
                 "provider": "faux",
                 "model": "faux-1",
                 "usage": {
                   "input": 533,
                   "output": 6,
-                  "cacheRead": 1865,
+                  "cacheRead": 2655,
                   "cacheWrite": 534,
-                  "totalTokens": 2938,
+                  "totalTokens": 3728,
                   "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
                 },
                 "stopReason": "stop",
-                "timestamp": 1793373391896
+                "timestamp": 1793381180594
               }
             ],
             "kind": "pi.assistant",
@@ -780,12 +1112,12 @@
               "text": "I like coffee",
               "playerId": "bo",
               "displayName": "Bo",
-              "clientId": "client-69c68aa3-7416-4fd3-bc42-9521b756f4a5",
+              "clientId": "client-2a352793-7cdf-4a93-9402-515fe6a8ab19",
               "requestId": "1",
-              "sentAt": 1793373391919
+              "sentAt": 1793381180616
             },
             "model": [
-              { "role": "user", "content": "Bo (16:16): I like coffee", "timestamp": 1793373392039 }
+              { "role": "user", "content": "Bo (18:26): I like coffee", "timestamp": 1793381180735 }
             ],
             "id": 28,
             "conversationId": 9,
@@ -806,23 +1138,23 @@
       {
         "op": "set",
         "path": ["docs", "pi.usage", "models", "faux/faux-1", "input"],
-        "value": 2398
+        "value": 3188
       },
       { "op": "set", "path": ["docs", "pi.usage", "models", "faux/faux-1", "output"], "value": 24 },
       {
         "op": "set",
         "path": ["docs", "pi.usage", "models", "faux/faux-1", "cacheRead"],
-        "value": 1865
+        "value": 2655
       },
       {
         "op": "set",
         "path": ["docs", "pi.usage", "models", "faux/faux-1", "cacheWrite"],
-        "value": 2399
+        "value": 3189
       },
       {
         "op": "set",
         "path": ["docs", "pi.usage", "models", "faux/faux-1", "totalTokens"],
-        "value": 6686
+        "value": 9056
       }
     ],
     [{ "op": "set", "path": ["docs", "pi.live", "generation"], "value": { "attempt": 1 } }],
@@ -833,19 +1165,19 @@
         "value": {
           "role": "assistant",
           "content": [{ "type": "text", "text": "And Bo likes cof" }],
-          "api": "faux:1793373391896:3f2xrqc3smh",
+          "api": "faux:1793381180594:z5ac0q0146g",
           "provider": "faux",
           "model": "faux-1",
           "usage": {
             "input": 17,
             "output": 5,
-            "cacheRead": 2398,
+            "cacheRead": 3188,
             "cacheWrite": 17,
-            "totalTokens": 2437,
+            "totalTokens": 3227,
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
           },
           "stopReason": "pending",
-          "timestamp": 1793373391896
+          "timestamp": 1793381180594
         }
       }
     ],
@@ -861,19 +1193,19 @@
               {
                 "role": "assistant",
                 "content": [{ "type": "text", "text": "And Bo likes coffee." }],
-                "api": "faux:1793373391896:3f2xrqc3smh",
+                "api": "faux:1793381180594:z5ac0q0146g",
                 "provider": "faux",
                 "model": "faux-1",
                 "usage": {
                   "input": 17,
                   "output": 5,
-                  "cacheRead": 2398,
+                  "cacheRead": 3188,
                   "cacheWrite": 17,
-                  "totalTokens": 2437,
+                  "totalTokens": 3227,
                   "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
                 },
                 "stopReason": "stop",
-                "timestamp": 1793373391896
+                "timestamp": 1793381180594
               }
             ],
             "kind": "pi.assistant",
@@ -888,23 +1220,23 @@
       {
         "op": "set",
         "path": ["docs", "pi.usage", "models", "faux/faux-1", "input"],
-        "value": 2415
+        "value": 3205
       },
       { "op": "set", "path": ["docs", "pi.usage", "models", "faux/faux-1", "output"], "value": 29 },
       {
         "op": "set",
         "path": ["docs", "pi.usage", "models", "faux/faux-1", "cacheRead"],
-        "value": 4263
+        "value": 5843
       },
       {
         "op": "set",
         "path": ["docs", "pi.usage", "models", "faux/faux-1", "cacheWrite"],
-        "value": 2416
+        "value": 3206
       },
       {
         "op": "set",
         "path": ["docs", "pi.usage", "models", "faux/faux-1", "totalTokens"],
-        "value": 9123
+        "value": 12283
       }
     ],
     [
@@ -916,12 +1248,12 @@
         "insert": [
           {
             "kind": "nudge.fire",
-            "data": { "nudgeId": "31", "message": "Kettle", "fireAt": 1793373392117 },
+            "data": { "nudgeId": "31", "message": "Kettle", "fireAt": 1793381180814 },
             "model": [
               {
                 "role": "user",
                 "content": "A nudge you scheduled is due now: Kettle\nSay it to the room now, in your own words. Nothing needs scheduling.",
-                "timestamp": 1793373392118
+                "timestamp": 1793381180815
               }
             ],
             "id": 33,
@@ -939,19 +1271,19 @@
         "value": {
           "role": "assistant",
           "content": [{ "type": "text", "text": "" }],
-          "api": "faux:1793373391896:3f2xrqc3smh",
+          "api": "faux:1793381180594:z5ac0q0146g",
           "provider": "faux",
           "model": "faux-1",
           "usage": {
             "input": 37,
             "output": 7,
-            "cacheRead": 2415,
+            "cacheRead": 3205,
             "cacheWrite": 37,
-            "totalTokens": 2496,
+            "totalTokens": 3286,
             "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
           },
           "stopReason": "pending",
-          "timestamp": 1793373391896
+          "timestamp": 1793381180594
         }
       }
     ],
@@ -967,19 +1299,19 @@
               {
                 "role": "assistant",
                 "content": [{ "type": "text", "text": "Time to put the kettle on!" }],
-                "api": "faux:1793373391896:3f2xrqc3smh",
+                "api": "faux:1793381180594:z5ac0q0146g",
                 "provider": "faux",
                 "model": "faux-1",
                 "usage": {
                   "input": 37,
                   "output": 7,
-                  "cacheRead": 2415,
+                  "cacheRead": 3205,
                   "cacheWrite": 37,
-                  "totalTokens": 2496,
+                  "totalTokens": 3286,
                   "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0 }
                 },
                 "stopReason": "stop",
-                "timestamp": 1793373391896
+                "timestamp": 1793381180594
               }
             ],
             "kind": "pi.assistant",
@@ -994,23 +1326,23 @@
       {
         "op": "set",
         "path": ["docs", "pi.usage", "models", "faux/faux-1", "input"],
-        "value": 2452
+        "value": 3242
       },
       { "op": "set", "path": ["docs", "pi.usage", "models", "faux/faux-1", "output"], "value": 36 },
       {
         "op": "set",
         "path": ["docs", "pi.usage", "models", "faux/faux-1", "cacheRead"],
-        "value": 6678
+        "value": 9048
       },
       {
         "op": "set",
         "path": ["docs", "pi.usage", "models", "faux/faux-1", "cacheWrite"],
-        "value": 2453
+        "value": 3243
       },
       {
         "op": "set",
         "path": ["docs", "pi.usage", "models", "faux/faux-1", "totalTokens"],
-        "value": 11619
+        "value": 15569
       }
     ]
   ]

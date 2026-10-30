@@ -5,10 +5,7 @@
   "$defs": {
     "Player": {
       "type": "object",
-      "required": [
-        "id",
-        "displayName"
-      ],
+      "required": ["id", "displayName"],
       "properties": {
         "id": {
           "type": "string"
@@ -25,10 +22,7 @@
       "anyOf": [
         {
           "type": "object",
-          "required": [
-            "type",
-            "text"
-          ],
+          "required": ["type", "text"],
           "properties": {
             "type": {
               "type": "string",
@@ -42,10 +36,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "markdown"
-          ],
+          "required": ["type", "markdown"],
           "properties": {
             "type": {
               "type": "string",
@@ -59,10 +50,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "pairs"
-          ],
+          "required": ["type", "pairs"],
           "properties": {
             "type": {
               "type": "string",
@@ -72,10 +60,7 @@
               "type": "array",
               "items": {
                 "type": "object",
-                "required": [
-                  "label",
-                  "value"
-                ],
+                "required": ["label", "value"],
                 "properties": {
                   "label": {
                     "type": "string",
@@ -93,10 +78,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "items"
-          ],
+          "required": ["type", "items"],
           "properties": {
             "type": {
               "type": "string",
@@ -106,9 +88,7 @@
               "type": "array",
               "items": {
                 "type": "object",
-                "required": [
-                  "title"
-                ],
+                "required": ["title"],
                 "properties": {
                   "title": {
                     "type": "string",
@@ -126,11 +106,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "columns",
-            "rows"
-          ],
+          "required": ["type", "columns", "rows"],
           "properties": {
             "type": {
               "type": "string",
@@ -161,11 +137,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "attachment",
-            "alt"
-          ],
+          "required": ["type", "attachment", "alt"],
           "properties": {
             "type": {
               "type": "string",
@@ -183,13 +155,272 @@
         },
         {
           "type": "object",
-          "required": [
-            "type"
-          ],
+          "required": ["type"],
           "properties": {
             "type": {
               "type": "string",
               "const": "divider"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "map"
+            },
+            "markers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["lat", "lon", "label"],
+                "properties": {
+                  "lat": {
+                    "type": "number",
+                    "minimum": -90,
+                    "maximum": 90
+                  },
+                  "lon": {
+                    "type": "number",
+                    "minimum": -180,
+                    "maximum": 180
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 100
+                  }
+                }
+              },
+              "maxItems": 20
+            },
+            "path": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["lat", "lon"],
+                "properties": {
+                  "lat": {
+                    "type": "number",
+                    "minimum": -90,
+                    "maximum": 90
+                  },
+                  "lon": {
+                    "type": "number",
+                    "minimum": -180,
+                    "maximum": 180
+                  }
+                }
+              },
+              "minItems": 2,
+              "maxItems": 200
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "kind", "labels", "series"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "chart"
+            },
+            "kind": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "bar"
+                },
+                {
+                  "type": "string",
+                  "const": "line"
+                },
+                {
+                  "type": "string",
+                  "const": "area"
+                },
+                {
+                  "type": "string",
+                  "const": "pie"
+                }
+              ]
+            },
+            "labels": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 40
+              },
+              "minItems": 1,
+              "maxItems": 60
+            },
+            "series": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["name", "values"],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "values": {
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "maxItems": 60
+                  }
+                }
+              },
+              "minItems": 1,
+              "maxItems": 6
+            },
+            "unit": {
+              "type": "string",
+              "maxLength": 20
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "items"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "stats"
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["label", "value"],
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "value": {
+                    "type": "string",
+                    "maxLength": 40
+                  },
+                  "change": {
+                    "type": "string",
+                    "maxLength": 40
+                  },
+                  "tone": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "good"
+                      },
+                      {
+                        "type": "string",
+                        "const": "bad"
+                      },
+                      {
+                        "type": "string",
+                        "const": "neutral"
+                      }
+                    ]
+                  }
+                }
+              },
+              "minItems": 1,
+              "maxItems": 6
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "items"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "progress"
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["label", "value"],
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "value": {
+                    "type": "number"
+                  },
+                  "max": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "note": {
+                    "type": "string",
+                    "maxLength": 60
+                  }
+                }
+              },
+              "minItems": 1,
+              "maxItems": 10
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "items"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "timeline"
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["title"],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "time": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "subtitle": {
+                    "type": "string",
+                    "maxLength": 300
+                  },
+                  "state": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "done"
+                      },
+                      {
+                        "type": "string",
+                        "const": "current"
+                      },
+                      {
+                        "type": "string",
+                        "const": "upcoming"
+                      }
+                    ]
+                  }
+                }
+              },
+              "minItems": 1,
+              "maxItems": 20
             }
           }
         }
@@ -197,11 +428,7 @@
     },
     "UiField": {
       "type": "object",
-      "required": [
-        "name",
-        "label",
-        "type"
-      ],
+      "required": ["name", "label", "type"],
       "properties": {
         "name": {
           "type": "string",
@@ -228,6 +455,14 @@
             {
               "type": "string",
               "const": "choice"
+            },
+            {
+              "type": "string",
+              "const": "date"
+            },
+            {
+              "type": "string",
+              "const": "time"
             }
           ]
         },
@@ -254,10 +489,7 @@
     },
     "UiButton": {
       "type": "object",
-      "required": [
-        "id",
-        "label"
-      ],
+      "required": ["id", "label"],
       "properties": {
         "id": {
           "type": "string",
@@ -286,9 +518,7 @@
     },
     "UiCard": {
       "type": "object",
-      "required": [
-        "v"
-      ],
+      "required": ["v"],
       "properties": {
         "v": {
           "type": "number",
@@ -304,10 +534,7 @@
             "anyOf": [
               {
                 "type": "object",
-                "required": [
-                  "type",
-                  "text"
-                ],
+                "required": ["type", "text"],
                 "properties": {
                   "type": {
                     "type": "string",
@@ -321,10 +548,7 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type",
-                  "markdown"
-                ],
+                "required": ["type", "markdown"],
                 "properties": {
                   "type": {
                     "type": "string",
@@ -338,10 +562,7 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type",
-                  "pairs"
-                ],
+                "required": ["type", "pairs"],
                 "properties": {
                   "type": {
                     "type": "string",
@@ -351,10 +572,7 @@
                     "type": "array",
                     "items": {
                       "type": "object",
-                      "required": [
-                        "label",
-                        "value"
-                      ],
+                      "required": ["label", "value"],
                       "properties": {
                         "label": {
                           "type": "string",
@@ -372,10 +590,7 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type",
-                  "items"
-                ],
+                "required": ["type", "items"],
                 "properties": {
                   "type": {
                     "type": "string",
@@ -385,9 +600,7 @@
                     "type": "array",
                     "items": {
                       "type": "object",
-                      "required": [
-                        "title"
-                      ],
+                      "required": ["title"],
                       "properties": {
                         "title": {
                           "type": "string",
@@ -405,11 +618,7 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type",
-                  "columns",
-                  "rows"
-                ],
+                "required": ["type", "columns", "rows"],
                 "properties": {
                   "type": {
                     "type": "string",
@@ -440,11 +649,7 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type",
-                  "attachment",
-                  "alt"
-                ],
+                "required": ["type", "attachment", "alt"],
                 "properties": {
                   "type": {
                     "type": "string",
@@ -462,13 +667,272 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type"
-                ],
+                "required": ["type"],
                 "properties": {
                   "type": {
                     "type": "string",
                     "const": "divider"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "map"
+                  },
+                  "markers": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["lat", "lon", "label"],
+                      "properties": {
+                        "lat": {
+                          "type": "number",
+                          "minimum": -90,
+                          "maximum": 90
+                        },
+                        "lon": {
+                          "type": "number",
+                          "minimum": -180,
+                          "maximum": 180
+                        },
+                        "label": {
+                          "type": "string",
+                          "maxLength": 100
+                        }
+                      }
+                    },
+                    "maxItems": 20
+                  },
+                  "path": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["lat", "lon"],
+                      "properties": {
+                        "lat": {
+                          "type": "number",
+                          "minimum": -90,
+                          "maximum": 90
+                        },
+                        "lon": {
+                          "type": "number",
+                          "minimum": -180,
+                          "maximum": 180
+                        }
+                      }
+                    },
+                    "minItems": 2,
+                    "maxItems": 200
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": ["type", "kind", "labels", "series"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "chart"
+                  },
+                  "kind": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "bar"
+                      },
+                      {
+                        "type": "string",
+                        "const": "line"
+                      },
+                      {
+                        "type": "string",
+                        "const": "area"
+                      },
+                      {
+                        "type": "string",
+                        "const": "pie"
+                      }
+                    ]
+                  },
+                  "labels": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 40
+                    },
+                    "minItems": 1,
+                    "maxItems": 60
+                  },
+                  "series": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["name", "values"],
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "maxLength": 60
+                        },
+                        "values": {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "maxItems": 60
+                        }
+                      }
+                    },
+                    "minItems": 1,
+                    "maxItems": 6
+                  },
+                  "unit": {
+                    "type": "string",
+                    "maxLength": 20
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": ["type", "items"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "stats"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["label", "value"],
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "maxLength": 60
+                        },
+                        "value": {
+                          "type": "string",
+                          "maxLength": 40
+                        },
+                        "change": {
+                          "type": "string",
+                          "maxLength": 40
+                        },
+                        "tone": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "const": "good"
+                            },
+                            {
+                              "type": "string",
+                              "const": "bad"
+                            },
+                            {
+                              "type": "string",
+                              "const": "neutral"
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "minItems": 1,
+                    "maxItems": 6
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": ["type", "items"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "progress"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["label", "value"],
+                      "properties": {
+                        "label": {
+                          "type": "string",
+                          "maxLength": 100
+                        },
+                        "value": {
+                          "type": "number"
+                        },
+                        "max": {
+                          "type": "number",
+                          "exclusiveMinimum": 0
+                        },
+                        "note": {
+                          "type": "string",
+                          "maxLength": 60
+                        }
+                      }
+                    },
+                    "minItems": 1,
+                    "maxItems": 10
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": ["type", "items"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "timeline"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["title"],
+                      "properties": {
+                        "title": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "time": {
+                          "type": "string",
+                          "maxLength": 60
+                        },
+                        "subtitle": {
+                          "type": "string",
+                          "maxLength": 300
+                        },
+                        "state": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "const": "done"
+                            },
+                            {
+                              "type": "string",
+                              "const": "current"
+                            },
+                            {
+                              "type": "string",
+                              "const": "upcoming"
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "minItems": 1,
+                    "maxItems": 20
                   }
                 }
               }
@@ -480,11 +944,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "name",
-              "label",
-              "type"
-            ],
+            "required": ["name", "label", "type"],
             "properties": {
               "name": {
                 "type": "string",
@@ -511,6 +971,14 @@
                   {
                     "type": "string",
                     "const": "choice"
+                  },
+                  {
+                    "type": "string",
+                    "const": "date"
+                  },
+                  {
+                    "type": "string",
+                    "const": "time"
                   }
                 ]
               },
@@ -541,10 +1009,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "id",
-              "label"
-            ],
+            "required": ["id", "label"],
             "properties": {
               "id": {
                 "type": "string",
@@ -592,9 +1057,7 @@
     },
     "UiPressRequest": {
       "type": "object",
-      "required": [
-        "button"
-      ],
+      "required": ["button"],
       "properties": {
         "button": {
           "type": "string",
@@ -643,12 +1106,7 @@
     },
     "Room": {
       "type": "object",
-      "required": [
-        "id",
-        "kind",
-        "name",
-        "members"
-      ],
+      "required": ["id", "kind", "name", "members"],
       "properties": {
         "id": {
           "type": "string"
@@ -676,10 +1134,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "id",
-              "displayName"
-            ],
+            "required": ["id", "displayName"],
             "properties": {
               "id": {
                 "type": "string"
@@ -724,13 +1179,7 @@
     },
     "ToolPart": {
       "type": "object",
-      "required": [
-        "type",
-        "callId",
-        "name",
-        "args",
-        "status"
-      ],
+      "required": ["type", "callId", "name", "args", "status"],
       "properties": {
         "type": {
           "type": "string",
@@ -773,20 +1222,14 @@
         "details": {},
         "pressed": {
           "type": "object",
-          "required": [
-            "button",
-            "by"
-          ],
+          "required": ["button", "by"],
           "properties": {
             "button": {
               "type": "string"
             },
             "by": {
               "type": "object",
-              "required": [
-                "id",
-                "displayName"
-              ],
+              "required": ["id", "displayName"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -813,10 +1256,7 @@
       "anyOf": [
         {
           "type": "object",
-          "required": [
-            "type",
-            "text"
-          ],
+          "required": ["type", "text"],
           "properties": {
             "type": {
               "type": "string",
@@ -829,10 +1269,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "text"
-          ],
+          "required": ["type", "text"],
           "properties": {
             "type": {
               "type": "string",
@@ -845,13 +1282,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "callId",
-            "name",
-            "args",
-            "status"
-          ],
+          "required": ["type", "callId", "name", "args", "status"],
           "properties": {
             "type": {
               "type": "string",
@@ -894,20 +1325,14 @@
             "details": {},
             "pressed": {
               "type": "object",
-              "required": [
-                "button",
-                "by"
-              ],
+              "required": ["button", "by"],
               "properties": {
                 "button": {
                   "type": "string"
                 },
                 "by": {
                   "type": "object",
-                  "required": [
-                    "id",
-                    "displayName"
-                  ],
+                  "required": ["id", "displayName"],
                   "properties": {
                     "id": {
                       "type": "string"
@@ -936,11 +1361,7 @@
       "anyOf": [
         {
           "type": "object",
-          "required": [
-            "type",
-            "id",
-            "text"
-          ],
+          "required": ["type", "id", "text"],
           "properties": {
             "type": {
               "type": "string",
@@ -954,10 +1375,7 @@
             },
             "author": {
               "type": "object",
-              "required": [
-                "id",
-                "displayName"
-              ],
+              "required": ["id", "displayName"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -981,10 +1399,7 @@
             },
             "privateTo": {
               "type": "object",
-              "required": [
-                "id",
-                "displayName"
-              ],
+              "required": ["id", "displayName"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -1001,13 +1416,7 @@
               "type": "array",
               "items": {
                 "type": "object",
-                "required": [
-                  "id",
-                  "name",
-                  "mime",
-                  "size",
-                  "kind"
-                ],
+                "required": ["id", "name", "mime", "size", "kind"],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -1039,10 +1448,7 @@
             },
             "press": {
               "type": "object",
-              "required": [
-                "callId",
-                "button"
-              ],
+              "required": ["callId", "button"],
               "properties": {
                 "callId": {
                   "type": "string"
@@ -1056,12 +1462,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "id",
-            "text",
-            "firedAt"
-          ],
+          "required": ["type", "id", "text", "firedAt"],
           "properties": {
             "type": {
               "type": "string",
@@ -1078,10 +1479,7 @@
             },
             "privateTo": {
               "type": "object",
-              "required": [
-                "id",
-                "displayName"
-              ],
+              "required": ["id", "displayName"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -1098,13 +1496,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "id",
-            "approvalId",
-            "summary",
-            "status"
-          ],
+          "required": ["type", "id", "approvalId", "summary", "status"],
           "properties": {
             "type": {
               "type": "string",
@@ -1148,10 +1540,7 @@
             },
             "privateTo": {
               "type": "object",
-              "required": [
-                "id",
-                "displayName"
-              ],
+              "required": ["id", "displayName"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -1168,12 +1557,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "id",
-            "status",
-            "parts"
-          ],
+          "required": ["type", "id", "status", "parts"],
           "properties": {
             "type": {
               "type": "string",
@@ -1211,10 +1595,7 @@
                 "anyOf": [
                   {
                     "type": "object",
-                    "required": [
-                      "type",
-                      "text"
-                    ],
+                    "required": ["type", "text"],
                     "properties": {
                       "type": {
                         "type": "string",
@@ -1227,10 +1608,7 @@
                   },
                   {
                     "type": "object",
-                    "required": [
-                      "type",
-                      "text"
-                    ],
+                    "required": ["type", "text"],
                     "properties": {
                       "type": {
                         "type": "string",
@@ -1243,13 +1621,7 @@
                   },
                   {
                     "type": "object",
-                    "required": [
-                      "type",
-                      "callId",
-                      "name",
-                      "args",
-                      "status"
-                    ],
+                    "required": ["type", "callId", "name", "args", "status"],
                     "properties": {
                       "type": {
                         "type": "string",
@@ -1292,20 +1664,14 @@
                       "details": {},
                       "pressed": {
                         "type": "object",
-                        "required": [
-                          "button",
-                          "by"
-                        ],
+                        "required": ["button", "by"],
                         "properties": {
                           "button": {
                             "type": "string"
                           },
                           "by": {
                             "type": "object",
-                            "required": [
-                              "id",
-                              "displayName"
-                            ],
+                            "required": ["id", "displayName"],
                             "properties": {
                               "id": {
                                 "type": "string"
@@ -1348,10 +1714,7 @@
             },
             "privateTo": {
               "type": "object",
-              "required": [
-                "id",
-                "displayName"
-              ],
+              "required": ["id", "displayName"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -1368,11 +1731,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "id",
-            "kind"
-          ],
+          "required": ["type", "id", "kind"],
           "properties": {
             "type": {
               "type": "string",
@@ -1401,12 +1760,7 @@
       "anyOf": [
         {
           "type": "object",
-          "required": [
-            "kind",
-            "attempt",
-            "at",
-            "error"
-          ],
+          "required": ["kind", "attempt", "at", "error"],
           "properties": {
             "kind": {
               "type": "string",
@@ -1425,9 +1779,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "kind"
-          ],
+          "required": ["kind"],
           "properties": {
             "kind": {
               "type": "string",
@@ -1437,10 +1789,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "kind",
-            "error"
-          ],
+          "required": ["kind", "error"],
           "properties": {
             "kind": {
               "type": "string",
@@ -1455,12 +1804,7 @@
     },
     "QueuedMessage": {
       "type": "object",
-      "required": [
-        "id",
-        "mode",
-        "text",
-        "nudge"
-      ],
+      "required": ["id", "mode", "text", "nudge"],
       "properties": {
         "id": {
           "type": "integer"
@@ -1482,10 +1826,7 @@
         },
         "author": {
           "type": "object",
-          "required": [
-            "id",
-            "displayName"
-          ],
+          "required": ["id", "displayName"],
           "properties": {
             "id": {
               "type": "string"
@@ -1509,10 +1850,7 @@
         },
         "privateTo": {
           "type": "object",
-          "required": [
-            "id",
-            "displayName"
-          ],
+          "required": ["id", "displayName"],
           "properties": {
             "id": {
               "type": "string"
@@ -1529,13 +1867,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "id",
-              "name",
-              "mime",
-              "size",
-              "kind"
-            ],
+            "required": ["id", "name", "mime", "size", "kind"],
             "properties": {
               "id": {
                 "type": "string"
@@ -1569,11 +1901,7 @@
     },
     "ApprovalInput": {
       "type": "object",
-      "required": [
-        "name",
-        "label",
-        "secret"
-      ],
+      "required": ["name", "label", "secret"],
       "properties": {
         "name": {
           "type": "string"
@@ -1596,10 +1924,7 @@
       "anyOf": [
         {
           "type": "object",
-          "required": [
-            "type",
-            "name"
-          ],
+          "required": ["type", "name"],
           "properties": {
             "type": {
               "type": "string",
@@ -1618,10 +1943,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "name"
-          ],
+          "required": ["type", "name"],
           "properties": {
             "type": {
               "type": "string",
@@ -1636,12 +1958,7 @@
     },
     "Approval": {
       "type": "object",
-      "required": [
-        "id",
-        "summary",
-        "status",
-        "requestedAt"
-      ],
+      "required": ["id", "summary", "status", "requestedAt"],
       "properties": {
         "id": {
           "type": "string"
@@ -1678,10 +1995,7 @@
         },
         "decidedBy": {
           "type": "object",
-          "required": [
-            "id",
-            "displayName"
-          ],
+          "required": ["id", "displayName"],
           "properties": {
             "id": {
               "type": "string"
@@ -1702,10 +2016,7 @@
         },
         "privateTo": {
           "type": "object",
-          "required": [
-            "id",
-            "displayName"
-          ],
+          "required": ["id", "displayName"],
           "properties": {
             "id": {
               "type": "string"
@@ -1725,11 +2036,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "name",
-              "label",
-              "secret"
-            ],
+            "required": ["name", "label", "secret"],
             "properties": {
               "name": {
                 "type": "string"
@@ -1753,10 +2060,7 @@
           "anyOf": [
             {
               "type": "object",
-              "required": [
-                "type",
-                "name"
-              ],
+              "required": ["type", "name"],
               "properties": {
                 "type": {
                   "type": "string",
@@ -1775,10 +2079,7 @@
             },
             {
               "type": "object",
-              "required": [
-                "type",
-                "name"
-              ],
+              "required": ["type", "name"],
               "properties": {
                 "type": {
                   "type": "string",
@@ -1795,11 +2096,7 @@
     },
     "Fact": {
       "type": "object",
-      "required": [
-        "id",
-        "text",
-        "createdAt"
-      ],
+      "required": ["id", "text", "createdAt"],
       "properties": {
         "id": {
           "type": "string"
@@ -1812,10 +2109,7 @@
         },
         "by": {
           "type": "object",
-          "required": [
-            "id",
-            "displayName"
-          ],
+          "required": ["id", "displayName"],
           "properties": {
             "id": {
               "type": "string"
@@ -1830,10 +2124,7 @@
         },
         "owner": {
           "type": "object",
-          "required": [
-            "id",
-            "displayName"
-          ],
+          "required": ["id", "displayName"],
           "properties": {
             "id": {
               "type": "string"
@@ -1848,10 +2139,7 @@
         },
         "privateTo": {
           "type": "object",
-          "required": [
-            "id",
-            "displayName"
-          ],
+          "required": ["id", "displayName"],
           "properties": {
             "id": {
               "type": "string"
@@ -1868,11 +2156,7 @@
     },
     "RoomNudge": {
       "type": "object",
-      "required": [
-        "id",
-        "message",
-        "fireAt"
-      ],
+      "required": ["id", "message", "fireAt"],
       "properties": {
         "id": {
           "type": "string"
@@ -1888,10 +2172,7 @@
         },
         "privateTo": {
           "type": "object",
-          "required": [
-            "id",
-            "displayName"
-          ],
+          "required": ["id", "displayName"],
           "properties": {
             "id": {
               "type": "string"
@@ -1921,12 +2202,7 @@
       "properties": {
         "room": {
           "type": "object",
-          "required": [
-            "id",
-            "kind",
-            "name",
-            "members"
-          ],
+          "required": ["id", "kind", "name", "members"],
           "properties": {
             "id": {
               "type": "string"
@@ -1954,10 +2230,7 @@
               "type": "array",
               "items": {
                 "type": "object",
-                "required": [
-                  "id",
-                  "displayName"
-                ],
+                "required": ["id", "displayName"],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -1982,11 +2255,7 @@
             "anyOf": [
               {
                 "type": "object",
-                "required": [
-                  "type",
-                  "id",
-                  "text"
-                ],
+                "required": ["type", "id", "text"],
                 "properties": {
                   "type": {
                     "type": "string",
@@ -2000,10 +2269,7 @@
                   },
                   "author": {
                     "type": "object",
-                    "required": [
-                      "id",
-                      "displayName"
-                    ],
+                    "required": ["id", "displayName"],
                     "properties": {
                       "id": {
                         "type": "string"
@@ -2027,10 +2293,7 @@
                   },
                   "privateTo": {
                     "type": "object",
-                    "required": [
-                      "id",
-                      "displayName"
-                    ],
+                    "required": ["id", "displayName"],
                     "properties": {
                       "id": {
                         "type": "string"
@@ -2047,13 +2310,7 @@
                     "type": "array",
                     "items": {
                       "type": "object",
-                      "required": [
-                        "id",
-                        "name",
-                        "mime",
-                        "size",
-                        "kind"
-                      ],
+                      "required": ["id", "name", "mime", "size", "kind"],
                       "properties": {
                         "id": {
                           "type": "string"
@@ -2085,10 +2342,7 @@
                   },
                   "press": {
                     "type": "object",
-                    "required": [
-                      "callId",
-                      "button"
-                    ],
+                    "required": ["callId", "button"],
                     "properties": {
                       "callId": {
                         "type": "string"
@@ -2102,12 +2356,7 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type",
-                  "id",
-                  "text",
-                  "firedAt"
-                ],
+                "required": ["type", "id", "text", "firedAt"],
                 "properties": {
                   "type": {
                     "type": "string",
@@ -2124,10 +2373,7 @@
                   },
                   "privateTo": {
                     "type": "object",
-                    "required": [
-                      "id",
-                      "displayName"
-                    ],
+                    "required": ["id", "displayName"],
                     "properties": {
                       "id": {
                         "type": "string"
@@ -2144,13 +2390,7 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type",
-                  "id",
-                  "approvalId",
-                  "summary",
-                  "status"
-                ],
+                "required": ["type", "id", "approvalId", "summary", "status"],
                 "properties": {
                   "type": {
                     "type": "string",
@@ -2194,10 +2434,7 @@
                   },
                   "privateTo": {
                     "type": "object",
-                    "required": [
-                      "id",
-                      "displayName"
-                    ],
+                    "required": ["id", "displayName"],
                     "properties": {
                       "id": {
                         "type": "string"
@@ -2214,12 +2451,7 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type",
-                  "id",
-                  "status",
-                  "parts"
-                ],
+                "required": ["type", "id", "status", "parts"],
                 "properties": {
                   "type": {
                     "type": "string",
@@ -2257,10 +2489,7 @@
                       "anyOf": [
                         {
                           "type": "object",
-                          "required": [
-                            "type",
-                            "text"
-                          ],
+                          "required": ["type", "text"],
                           "properties": {
                             "type": {
                               "type": "string",
@@ -2273,10 +2502,7 @@
                         },
                         {
                           "type": "object",
-                          "required": [
-                            "type",
-                            "text"
-                          ],
+                          "required": ["type", "text"],
                           "properties": {
                             "type": {
                               "type": "string",
@@ -2289,13 +2515,7 @@
                         },
                         {
                           "type": "object",
-                          "required": [
-                            "type",
-                            "callId",
-                            "name",
-                            "args",
-                            "status"
-                          ],
+                          "required": ["type", "callId", "name", "args", "status"],
                           "properties": {
                             "type": {
                               "type": "string",
@@ -2338,20 +2558,14 @@
                             "details": {},
                             "pressed": {
                               "type": "object",
-                              "required": [
-                                "button",
-                                "by"
-                              ],
+                              "required": ["button", "by"],
                               "properties": {
                                 "button": {
                                   "type": "string"
                                 },
                                 "by": {
                                   "type": "object",
-                                  "required": [
-                                    "id",
-                                    "displayName"
-                                  ],
+                                  "required": ["id", "displayName"],
                                   "properties": {
                                     "id": {
                                       "type": "string"
@@ -2394,10 +2608,7 @@
                   },
                   "privateTo": {
                     "type": "object",
-                    "required": [
-                      "id",
-                      "displayName"
-                    ],
+                    "required": ["id", "displayName"],
                     "properties": {
                       "id": {
                         "type": "string"
@@ -2414,11 +2625,7 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type",
-                  "id",
-                  "kind"
-                ],
+                "required": ["type", "id", "kind"],
                 "properties": {
                   "type": {
                     "type": "string",
@@ -2449,9 +2656,7 @@
         },
         "live": {
           "type": "object",
-          "required": [
-            "running"
-          ],
+          "required": ["running"],
           "properties": {
             "running": {
               "type": "boolean"
@@ -2460,12 +2665,7 @@
               "anyOf": [
                 {
                   "type": "object",
-                  "required": [
-                    "kind",
-                    "attempt",
-                    "at",
-                    "error"
-                  ],
+                  "required": ["kind", "attempt", "at", "error"],
                   "properties": {
                     "kind": {
                       "type": "string",
@@ -2484,9 +2684,7 @@
                 },
                 {
                   "type": "object",
-                  "required": [
-                    "kind"
-                  ],
+                  "required": ["kind"],
                   "properties": {
                     "kind": {
                       "type": "string",
@@ -2496,10 +2694,7 @@
                 },
                 {
                   "type": "object",
-                  "required": [
-                    "kind",
-                    "error"
-                  ],
+                  "required": ["kind", "error"],
                   "properties": {
                     "kind": {
                       "type": "string",
@@ -2518,12 +2713,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "id",
-              "mode",
-              "text",
-              "nudge"
-            ],
+            "required": ["id", "mode", "text", "nudge"],
             "properties": {
               "id": {
                 "type": "integer"
@@ -2545,10 +2735,7 @@
               },
               "author": {
                 "type": "object",
-                "required": [
-                  "id",
-                  "displayName"
-                ],
+                "required": ["id", "displayName"],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -2572,10 +2759,7 @@
               },
               "privateTo": {
                 "type": "object",
-                "required": [
-                  "id",
-                  "displayName"
-                ],
+                "required": ["id", "displayName"],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -2592,13 +2776,7 @@
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "required": [
-                    "id",
-                    "name",
-                    "mime",
-                    "size",
-                    "kind"
-                  ],
+                  "required": ["id", "name", "mime", "size", "kind"],
                   "properties": {
                     "id": {
                       "type": "string"
@@ -2635,12 +2813,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "id",
-              "summary",
-              "status",
-              "requestedAt"
-            ],
+            "required": ["id", "summary", "status", "requestedAt"],
             "properties": {
               "id": {
                 "type": "string"
@@ -2677,10 +2850,7 @@
               },
               "decidedBy": {
                 "type": "object",
-                "required": [
-                  "id",
-                  "displayName"
-                ],
+                "required": ["id", "displayName"],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -2701,10 +2871,7 @@
               },
               "privateTo": {
                 "type": "object",
-                "required": [
-                  "id",
-                  "displayName"
-                ],
+                "required": ["id", "displayName"],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -2724,11 +2891,7 @@
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "required": [
-                    "name",
-                    "label",
-                    "secret"
-                  ],
+                  "required": ["name", "label", "secret"],
                   "properties": {
                     "name": {
                       "type": "string"
@@ -2752,10 +2915,7 @@
                 "anyOf": [
                   {
                     "type": "object",
-                    "required": [
-                      "type",
-                      "name"
-                    ],
+                    "required": ["type", "name"],
                     "properties": {
                       "type": {
                         "type": "string",
@@ -2774,10 +2934,7 @@
                   },
                   {
                     "type": "object",
-                    "required": [
-                      "type",
-                      "name"
-                    ],
+                    "required": ["type", "name"],
                     "properties": {
                       "type": {
                         "type": "string",
@@ -2797,11 +2954,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "id",
-              "text",
-              "createdAt"
-            ],
+            "required": ["id", "text", "createdAt"],
             "properties": {
               "id": {
                 "type": "string"
@@ -2814,10 +2967,7 @@
               },
               "by": {
                 "type": "object",
-                "required": [
-                  "id",
-                  "displayName"
-                ],
+                "required": ["id", "displayName"],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -2832,10 +2982,7 @@
               },
               "owner": {
                 "type": "object",
-                "required": [
-                  "id",
-                  "displayName"
-                ],
+                "required": ["id", "displayName"],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -2850,10 +2997,7 @@
               },
               "privateTo": {
                 "type": "object",
-                "required": [
-                  "id",
-                  "displayName"
-                ],
+                "required": ["id", "displayName"],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -2873,11 +3017,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "id",
-              "message",
-              "fireAt"
-            ],
+            "required": ["id", "message", "fireAt"],
             "properties": {
               "id": {
                 "type": "string"
@@ -2893,10 +3033,7 @@
               },
               "privateTo": {
                 "type": "object",
-                "required": [
-                  "id",
-                  "displayName"
-                ],
+                "required": ["id", "displayName"],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -2916,10 +3053,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "id",
-              "displayName"
-            ],
+            "required": ["id", "displayName"],
             "properties": {
               "id": {
                 "type": "string"
@@ -2937,20 +3071,11 @@
     },
     "RoomListEntry": {
       "type": "object",
-      "required": [
-        "room",
-        "running",
-        "pendingApprovals"
-      ],
+      "required": ["room", "running", "pendingApprovals"],
       "properties": {
         "room": {
           "type": "object",
-          "required": [
-            "id",
-            "kind",
-            "name",
-            "members"
-          ],
+          "required": ["id", "kind", "name", "members"],
           "properties": {
             "id": {
               "type": "string"
@@ -2978,10 +3103,7 @@
               "type": "array",
               "items": {
                 "type": "object",
-                "required": [
-                  "id",
-                  "displayName"
-                ],
+                "required": ["id", "displayName"],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -3013,12 +3135,7 @@
     },
     "RoomListNudge": {
       "type": "object",
-      "required": [
-        "id",
-        "roomId",
-        "message",
-        "fireAt"
-      ],
+      "required": ["id", "roomId", "message", "fireAt"],
       "properties": {
         "id": {
           "type": "string"
@@ -3037,10 +3154,7 @@
         },
         "privateTo": {
           "type": "object",
-          "required": [
-            "id",
-            "displayName"
-          ],
+          "required": ["id", "displayName"],
           "properties": {
             "id": {
               "type": "string"
@@ -3057,13 +3171,7 @@
     },
     "Appearance": {
       "type": "object",
-      "required": [
-        "body",
-        "eyes",
-        "sparks",
-        "eyeShape",
-        "accessory"
-      ],
+      "required": ["body", "eyes", "sparks", "eyeShape", "accessory"],
       "properties": {
         "body": {
           "type": "array",
@@ -3130,18 +3238,11 @@
     },
     "RoomListView": {
       "type": "object",
-      "required": [
-        "player",
-        "rooms",
-        "nudges"
-      ],
+      "required": ["player", "rooms", "nudges"],
       "properties": {
         "player": {
           "type": "object",
-          "required": [
-            "id",
-            "displayName"
-          ],
+          "required": ["id", "displayName"],
           "properties": {
             "id": {
               "type": "string"
@@ -3158,20 +3259,11 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "room",
-              "running",
-              "pendingApprovals"
-            ],
+            "required": ["room", "running", "pendingApprovals"],
             "properties": {
               "room": {
                 "type": "object",
-                "required": [
-                  "id",
-                  "kind",
-                  "name",
-                  "members"
-                ],
+                "required": ["id", "kind", "name", "members"],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -3199,10 +3291,7 @@
                     "type": "array",
                     "items": {
                       "type": "object",
-                      "required": [
-                        "id",
-                        "displayName"
-                      ],
+                      "required": ["id", "displayName"],
                       "properties": {
                         "id": {
                           "type": "string"
@@ -3237,12 +3326,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "id",
-              "roomId",
-              "message",
-              "fireAt"
-            ],
+            "required": ["id", "roomId", "message", "fireAt"],
             "properties": {
               "id": {
                 "type": "string"
@@ -3261,10 +3345,7 @@
               },
               "privateTo": {
                 "type": "object",
-                "required": [
-                  "id",
-                  "displayName"
-                ],
+                "required": ["id", "displayName"],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -3282,13 +3363,7 @@
         },
         "appearance": {
           "type": "object",
-          "required": [
-            "body",
-            "eyes",
-            "sparks",
-            "eyeShape",
-            "accessory"
-          ],
+          "required": ["body", "eyes", "sparks", "eyeShape", "accessory"],
           "properties": {
             "body": {
               "type": "array",
@@ -3373,11 +3448,7 @@
       "anyOf": [
         {
           "type": "object",
-          "required": [
-            "op",
-            "path",
-            "value"
-          ],
+          "required": ["op", "path", "value"],
           "properties": {
             "op": {
               "type": "string",
@@ -3402,10 +3473,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "op",
-            "path"
-          ],
+          "required": ["op", "path"],
           "properties": {
             "op": {
               "type": "string",
@@ -3429,11 +3497,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "op",
-            "path",
-            "text"
-          ],
+          "required": ["op", "path", "text"],
           "properties": {
             "op": {
               "type": "string",
@@ -3460,13 +3524,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "op",
-            "path",
-            "index",
-            "remove",
-            "insert"
-          ],
+          "required": ["op", "path", "index", "remove", "insert"],
           "properties": {
             "op": {
               "type": "string",
@@ -3510,12 +3568,7 @@
       "anyOf": [
         {
           "type": "object",
-          "required": [
-            "type",
-            "protocol",
-            "token",
-            "client"
-          ],
+          "required": ["type", "protocol", "token", "client"],
           "properties": {
             "type": {
               "type": "string",
@@ -3530,11 +3583,7 @@
             },
             "client": {
               "type": "object",
-              "required": [
-                "name",
-                "version",
-                "platform"
-              ],
+              "required": ["name", "version", "platform"],
               "properties": {
                 "name": {
                   "type": "string"
@@ -3551,10 +3600,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "target"
-          ],
+          "required": ["type", "target"],
           "properties": {
             "type": {
               "type": "string",
@@ -3568,10 +3614,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "target"
-          ],
+          "required": ["type", "target"],
           "properties": {
             "type": {
               "type": "string",
@@ -3585,9 +3628,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type"
-          ],
+          "required": ["type"],
           "properties": {
             "type": {
               "type": "string",
@@ -3601,15 +3642,7 @@
       "anyOf": [
         {
           "type": "object",
-          "required": [
-            "type",
-            "protocol",
-            "server",
-            "epoch",
-            "player",
-            "clientId",
-            "heartbeatMs"
-          ],
+          "required": ["type", "protocol", "server", "epoch", "player", "clientId", "heartbeatMs"],
           "properties": {
             "type": {
               "type": "string",
@@ -3620,9 +3653,7 @@
             },
             "server": {
               "type": "object",
-              "required": [
-                "version"
-              ],
+              "required": ["version"],
               "properties": {
                 "version": {
                   "type": "string"
@@ -3634,10 +3665,7 @@
             },
             "player": {
               "type": "object",
-              "required": [
-                "id",
-                "displayName"
-              ],
+              "required": ["id", "displayName"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -3660,12 +3688,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "target",
-            "seq",
-            "view"
-          ],
+          "required": ["type", "target", "seq", "view"],
           "properties": {
             "type": {
               "type": "string",
@@ -3696,12 +3719,7 @@
                   "properties": {
                     "room": {
                       "type": "object",
-                      "required": [
-                        "id",
-                        "kind",
-                        "name",
-                        "members"
-                      ],
+                      "required": ["id", "kind", "name", "members"],
                       "properties": {
                         "id": {
                           "type": "string"
@@ -3729,10 +3747,7 @@
                           "type": "array",
                           "items": {
                             "type": "object",
-                            "required": [
-                              "id",
-                              "displayName"
-                            ],
+                            "required": ["id", "displayName"],
                             "properties": {
                               "id": {
                                 "type": "string"
@@ -3757,11 +3772,7 @@
                         "anyOf": [
                           {
                             "type": "object",
-                            "required": [
-                              "type",
-                              "id",
-                              "text"
-                            ],
+                            "required": ["type", "id", "text"],
                             "properties": {
                               "type": {
                                 "type": "string",
@@ -3775,10 +3786,7 @@
                               },
                               "author": {
                                 "type": "object",
-                                "required": [
-                                  "id",
-                                  "displayName"
-                                ],
+                                "required": ["id", "displayName"],
                                 "properties": {
                                   "id": {
                                     "type": "string"
@@ -3802,10 +3810,7 @@
                               },
                               "privateTo": {
                                 "type": "object",
-                                "required": [
-                                  "id",
-                                  "displayName"
-                                ],
+                                "required": ["id", "displayName"],
                                 "properties": {
                                   "id": {
                                     "type": "string"
@@ -3822,13 +3827,7 @@
                                 "type": "array",
                                 "items": {
                                   "type": "object",
-                                  "required": [
-                                    "id",
-                                    "name",
-                                    "mime",
-                                    "size",
-                                    "kind"
-                                  ],
+                                  "required": ["id", "name", "mime", "size", "kind"],
                                   "properties": {
                                     "id": {
                                       "type": "string"
@@ -3860,10 +3859,7 @@
                               },
                               "press": {
                                 "type": "object",
-                                "required": [
-                                  "callId",
-                                  "button"
-                                ],
+                                "required": ["callId", "button"],
                                 "properties": {
                                   "callId": {
                                     "type": "string"
@@ -3877,12 +3873,7 @@
                           },
                           {
                             "type": "object",
-                            "required": [
-                              "type",
-                              "id",
-                              "text",
-                              "firedAt"
-                            ],
+                            "required": ["type", "id", "text", "firedAt"],
                             "properties": {
                               "type": {
                                 "type": "string",
@@ -3899,10 +3890,7 @@
                               },
                               "privateTo": {
                                 "type": "object",
-                                "required": [
-                                  "id",
-                                  "displayName"
-                                ],
+                                "required": ["id", "displayName"],
                                 "properties": {
                                   "id": {
                                     "type": "string"
@@ -3919,13 +3907,7 @@
                           },
                           {
                             "type": "object",
-                            "required": [
-                              "type",
-                              "id",
-                              "approvalId",
-                              "summary",
-                              "status"
-                            ],
+                            "required": ["type", "id", "approvalId", "summary", "status"],
                             "properties": {
                               "type": {
                                 "type": "string",
@@ -3969,10 +3951,7 @@
                               },
                               "privateTo": {
                                 "type": "object",
-                                "required": [
-                                  "id",
-                                  "displayName"
-                                ],
+                                "required": ["id", "displayName"],
                                 "properties": {
                                   "id": {
                                     "type": "string"
@@ -3989,12 +3968,7 @@
                           },
                           {
                             "type": "object",
-                            "required": [
-                              "type",
-                              "id",
-                              "status",
-                              "parts"
-                            ],
+                            "required": ["type", "id", "status", "parts"],
                             "properties": {
                               "type": {
                                 "type": "string",
@@ -4032,10 +4006,7 @@
                                   "anyOf": [
                                     {
                                       "type": "object",
-                                      "required": [
-                                        "type",
-                                        "text"
-                                      ],
+                                      "required": ["type", "text"],
                                       "properties": {
                                         "type": {
                                           "type": "string",
@@ -4048,10 +4019,7 @@
                                     },
                                     {
                                       "type": "object",
-                                      "required": [
-                                        "type",
-                                        "text"
-                                      ],
+                                      "required": ["type", "text"],
                                       "properties": {
                                         "type": {
                                           "type": "string",
@@ -4064,13 +4032,7 @@
                                     },
                                     {
                                       "type": "object",
-                                      "required": [
-                                        "type",
-                                        "callId",
-                                        "name",
-                                        "args",
-                                        "status"
-                                      ],
+                                      "required": ["type", "callId", "name", "args", "status"],
                                       "properties": {
                                         "type": {
                                           "type": "string",
@@ -4113,20 +4075,14 @@
                                         "details": {},
                                         "pressed": {
                                           "type": "object",
-                                          "required": [
-                                            "button",
-                                            "by"
-                                          ],
+                                          "required": ["button", "by"],
                                           "properties": {
                                             "button": {
                                               "type": "string"
                                             },
                                             "by": {
                                               "type": "object",
-                                              "required": [
-                                                "id",
-                                                "displayName"
-                                              ],
+                                              "required": ["id", "displayName"],
                                               "properties": {
                                                 "id": {
                                                   "type": "string"
@@ -4169,10 +4125,7 @@
                               },
                               "privateTo": {
                                 "type": "object",
-                                "required": [
-                                  "id",
-                                  "displayName"
-                                ],
+                                "required": ["id", "displayName"],
                                 "properties": {
                                   "id": {
                                     "type": "string"
@@ -4189,11 +4142,7 @@
                           },
                           {
                             "type": "object",
-                            "required": [
-                              "type",
-                              "id",
-                              "kind"
-                            ],
+                            "required": ["type", "id", "kind"],
                             "properties": {
                               "type": {
                                 "type": "string",
@@ -4224,9 +4173,7 @@
                     },
                     "live": {
                       "type": "object",
-                      "required": [
-                        "running"
-                      ],
+                      "required": ["running"],
                       "properties": {
                         "running": {
                           "type": "boolean"
@@ -4235,12 +4182,7 @@
                           "anyOf": [
                             {
                               "type": "object",
-                              "required": [
-                                "kind",
-                                "attempt",
-                                "at",
-                                "error"
-                              ],
+                              "required": ["kind", "attempt", "at", "error"],
                               "properties": {
                                 "kind": {
                                   "type": "string",
@@ -4259,9 +4201,7 @@
                             },
                             {
                               "type": "object",
-                              "required": [
-                                "kind"
-                              ],
+                              "required": ["kind"],
                               "properties": {
                                 "kind": {
                                   "type": "string",
@@ -4271,10 +4211,7 @@
                             },
                             {
                               "type": "object",
-                              "required": [
-                                "kind",
-                                "error"
-                              ],
+                              "required": ["kind", "error"],
                               "properties": {
                                 "kind": {
                                   "type": "string",
@@ -4293,12 +4230,7 @@
                       "type": "array",
                       "items": {
                         "type": "object",
-                        "required": [
-                          "id",
-                          "mode",
-                          "text",
-                          "nudge"
-                        ],
+                        "required": ["id", "mode", "text", "nudge"],
                         "properties": {
                           "id": {
                             "type": "integer"
@@ -4320,10 +4252,7 @@
                           },
                           "author": {
                             "type": "object",
-                            "required": [
-                              "id",
-                              "displayName"
-                            ],
+                            "required": ["id", "displayName"],
                             "properties": {
                               "id": {
                                 "type": "string"
@@ -4347,10 +4276,7 @@
                           },
                           "privateTo": {
                             "type": "object",
-                            "required": [
-                              "id",
-                              "displayName"
-                            ],
+                            "required": ["id", "displayName"],
                             "properties": {
                               "id": {
                                 "type": "string"
@@ -4367,13 +4293,7 @@
                             "type": "array",
                             "items": {
                               "type": "object",
-                              "required": [
-                                "id",
-                                "name",
-                                "mime",
-                                "size",
-                                "kind"
-                              ],
+                              "required": ["id", "name", "mime", "size", "kind"],
                               "properties": {
                                 "id": {
                                   "type": "string"
@@ -4410,12 +4330,7 @@
                       "type": "array",
                       "items": {
                         "type": "object",
-                        "required": [
-                          "id",
-                          "summary",
-                          "status",
-                          "requestedAt"
-                        ],
+                        "required": ["id", "summary", "status", "requestedAt"],
                         "properties": {
                           "id": {
                             "type": "string"
@@ -4452,10 +4367,7 @@
                           },
                           "decidedBy": {
                             "type": "object",
-                            "required": [
-                              "id",
-                              "displayName"
-                            ],
+                            "required": ["id", "displayName"],
                             "properties": {
                               "id": {
                                 "type": "string"
@@ -4476,10 +4388,7 @@
                           },
                           "privateTo": {
                             "type": "object",
-                            "required": [
-                              "id",
-                              "displayName"
-                            ],
+                            "required": ["id", "displayName"],
                             "properties": {
                               "id": {
                                 "type": "string"
@@ -4499,11 +4408,7 @@
                             "type": "array",
                             "items": {
                               "type": "object",
-                              "required": [
-                                "name",
-                                "label",
-                                "secret"
-                              ],
+                              "required": ["name", "label", "secret"],
                               "properties": {
                                 "name": {
                                   "type": "string"
@@ -4527,10 +4432,7 @@
                             "anyOf": [
                               {
                                 "type": "object",
-                                "required": [
-                                  "type",
-                                  "name"
-                                ],
+                                "required": ["type", "name"],
                                 "properties": {
                                   "type": {
                                     "type": "string",
@@ -4549,10 +4451,7 @@
                               },
                               {
                                 "type": "object",
-                                "required": [
-                                  "type",
-                                  "name"
-                                ],
+                                "required": ["type", "name"],
                                 "properties": {
                                   "type": {
                                     "type": "string",
@@ -4572,11 +4471,7 @@
                       "type": "array",
                       "items": {
                         "type": "object",
-                        "required": [
-                          "id",
-                          "text",
-                          "createdAt"
-                        ],
+                        "required": ["id", "text", "createdAt"],
                         "properties": {
                           "id": {
                             "type": "string"
@@ -4589,10 +4484,7 @@
                           },
                           "by": {
                             "type": "object",
-                            "required": [
-                              "id",
-                              "displayName"
-                            ],
+                            "required": ["id", "displayName"],
                             "properties": {
                               "id": {
                                 "type": "string"
@@ -4607,10 +4499,7 @@
                           },
                           "owner": {
                             "type": "object",
-                            "required": [
-                              "id",
-                              "displayName"
-                            ],
+                            "required": ["id", "displayName"],
                             "properties": {
                               "id": {
                                 "type": "string"
@@ -4625,10 +4514,7 @@
                           },
                           "privateTo": {
                             "type": "object",
-                            "required": [
-                              "id",
-                              "displayName"
-                            ],
+                            "required": ["id", "displayName"],
                             "properties": {
                               "id": {
                                 "type": "string"
@@ -4648,11 +4534,7 @@
                       "type": "array",
                       "items": {
                         "type": "object",
-                        "required": [
-                          "id",
-                          "message",
-                          "fireAt"
-                        ],
+                        "required": ["id", "message", "fireAt"],
                         "properties": {
                           "id": {
                             "type": "string"
@@ -4668,10 +4550,7 @@
                           },
                           "privateTo": {
                             "type": "object",
-                            "required": [
-                              "id",
-                              "displayName"
-                            ],
+                            "required": ["id", "displayName"],
                             "properties": {
                               "id": {
                                 "type": "string"
@@ -4691,10 +4570,7 @@
                       "type": "array",
                       "items": {
                         "type": "object",
-                        "required": [
-                          "id",
-                          "displayName"
-                        ],
+                        "required": ["id", "displayName"],
                         "properties": {
                           "id": {
                             "type": "string"
@@ -4712,18 +4588,11 @@
                 },
                 {
                   "type": "object",
-                  "required": [
-                    "player",
-                    "rooms",
-                    "nudges"
-                  ],
+                  "required": ["player", "rooms", "nudges"],
                   "properties": {
                     "player": {
                       "type": "object",
-                      "required": [
-                        "id",
-                        "displayName"
-                      ],
+                      "required": ["id", "displayName"],
                       "properties": {
                         "id": {
                           "type": "string"
@@ -4740,20 +4609,11 @@
                       "type": "array",
                       "items": {
                         "type": "object",
-                        "required": [
-                          "room",
-                          "running",
-                          "pendingApprovals"
-                        ],
+                        "required": ["room", "running", "pendingApprovals"],
                         "properties": {
                           "room": {
                             "type": "object",
-                            "required": [
-                              "id",
-                              "kind",
-                              "name",
-                              "members"
-                            ],
+                            "required": ["id", "kind", "name", "members"],
                             "properties": {
                               "id": {
                                 "type": "string"
@@ -4781,10 +4641,7 @@
                                 "type": "array",
                                 "items": {
                                   "type": "object",
-                                  "required": [
-                                    "id",
-                                    "displayName"
-                                  ],
+                                  "required": ["id", "displayName"],
                                   "properties": {
                                     "id": {
                                       "type": "string"
@@ -4819,12 +4676,7 @@
                       "type": "array",
                       "items": {
                         "type": "object",
-                        "required": [
-                          "id",
-                          "roomId",
-                          "message",
-                          "fireAt"
-                        ],
+                        "required": ["id", "roomId", "message", "fireAt"],
                         "properties": {
                           "id": {
                             "type": "string"
@@ -4843,10 +4695,7 @@
                           },
                           "privateTo": {
                             "type": "object",
-                            "required": [
-                              "id",
-                              "displayName"
-                            ],
+                            "required": ["id", "displayName"],
                             "properties": {
                               "id": {
                                 "type": "string"
@@ -4864,13 +4713,7 @@
                     },
                     "appearance": {
                       "type": "object",
-                      "required": [
-                        "body",
-                        "eyes",
-                        "sparks",
-                        "eyeShape",
-                        "accessory"
-                      ],
+                      "required": ["body", "eyes", "sparks", "eyeShape", "accessory"],
                       "properties": {
                         "body": {
                           "type": "array",
@@ -4943,12 +4786,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "target",
-            "seq",
-            "ops"
-          ],
+          "required": ["type", "target", "seq", "ops"],
           "properties": {
             "type": {
               "type": "string",
@@ -4968,11 +4806,7 @@
                 "anyOf": [
                   {
                     "type": "object",
-                    "required": [
-                      "op",
-                      "path",
-                      "value"
-                    ],
+                    "required": ["op", "path", "value"],
                     "properties": {
                       "op": {
                         "type": "string",
@@ -4997,10 +4831,7 @@
                   },
                   {
                     "type": "object",
-                    "required": [
-                      "op",
-                      "path"
-                    ],
+                    "required": ["op", "path"],
                     "properties": {
                       "op": {
                         "type": "string",
@@ -5024,11 +4855,7 @@
                   },
                   {
                     "type": "object",
-                    "required": [
-                      "op",
-                      "path",
-                      "text"
-                    ],
+                    "required": ["op", "path", "text"],
                     "properties": {
                       "op": {
                         "type": "string",
@@ -5055,13 +4882,7 @@
                   },
                   {
                     "type": "object",
-                    "required": [
-                      "op",
-                      "path",
-                      "index",
-                      "remove",
-                      "insert"
-                    ],
+                    "required": ["op", "path", "index", "remove", "insert"],
                     "properties": {
                       "op": {
                         "type": "string",
@@ -5102,11 +4923,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "target",
-            "reason"
-          ],
+          "required": ["type", "target", "reason"],
           "properties": {
             "type": {
               "type": "string",
@@ -5132,9 +4949,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type"
-          ],
+          "required": ["type"],
           "properties": {
             "type": {
               "type": "string",
@@ -5144,10 +4959,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "message"
-          ],
+          "required": ["type", "message"],
           "properties": {
             "type": {
               "type": "string",
@@ -5162,9 +4974,7 @@
     },
     "ErrorResponse": {
       "type": "object",
-      "required": [
-        "error"
-      ],
+      "required": ["error"],
       "properties": {
         "error": {
           "type": "string"
@@ -5176,18 +4986,13 @@
     },
     "AssistantsResponse": {
       "type": "object",
-      "required": [
-        "assistants"
-      ],
+      "required": ["assistants"],
       "properties": {
         "assistants": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "name",
-              "displayName"
-            ],
+            "required": ["name", "displayName"],
             "properties": {
               "name": {
                 "type": "string"
@@ -5197,13 +5002,7 @@
               },
               "appearance": {
                 "type": "object",
-                "required": [
-                  "body",
-                  "eyes",
-                  "sparks",
-                  "eyeShape",
-                  "accessory"
-                ],
+                "required": ["body", "eyes", "sparks", "eyeShape", "accessory"],
                 "properties": {
                   "body": {
                     "type": "array",
@@ -5275,10 +5074,7 @@
     },
     "ClientInfo": {
       "type": "object",
-      "required": [
-        "name",
-        "platform"
-      ],
+      "required": ["name", "platform"],
       "properties": {
         "name": {
           "type": "string"
@@ -5290,20 +5086,14 @@
     },
     "PairRequest": {
       "type": "object",
-      "required": [
-        "code",
-        "client"
-      ],
+      "required": ["code", "client"],
       "properties": {
         "code": {
           "type": "string"
         },
         "client": {
           "type": "object",
-          "required": [
-            "name",
-            "platform"
-          ],
+          "required": ["name", "platform"],
           "properties": {
             "name": {
               "type": "string"
@@ -5317,11 +5107,7 @@
     },
     "PairResponse": {
       "type": "object",
-      "required": [
-        "token",
-        "clientId",
-        "player"
-      ],
+      "required": ["token", "clientId", "player"],
       "properties": {
         "token": {
           "type": "string"
@@ -5331,10 +5117,7 @@
         },
         "player": {
           "type": "object",
-          "required": [
-            "id",
-            "displayName"
-          ],
+          "required": ["id", "displayName"],
           "properties": {
             "id": {
               "type": "string"
@@ -5351,12 +5134,7 @@
     },
     "SignInResponse": {
       "type": "object",
-      "required": [
-        "id",
-        "secret",
-        "link",
-        "expiresAt"
-      ],
+      "required": ["id", "secret", "link", "expiresAt"],
       "properties": {
         "id": {
           "type": "string"
@@ -5376,9 +5154,7 @@
       "anyOf": [
         {
           "type": "object",
-          "required": [
-            "status"
-          ],
+          "required": ["status"],
           "properties": {
             "status": {
               "type": "string",
@@ -5388,11 +5164,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "status",
-            "assistant",
-            "code"
-          ],
+          "required": ["status", "assistant", "code"],
           "properties": {
             "status": {
               "type": "string",
@@ -5410,18 +5182,11 @@
     },
     "MeResponse": {
       "type": "object",
-      "required": [
-        "player",
-        "clientId",
-        "admin"
-      ],
+      "required": ["player", "clientId", "admin"],
       "properties": {
         "player": {
           "type": "object",
-          "required": [
-            "id",
-            "displayName"
-          ],
+          "required": ["id", "displayName"],
           "properties": {
             "id": {
               "type": "string"
@@ -5444,9 +5209,7 @@
     },
     "CreateRoomRequest": {
       "type": "object",
-      "required": [
-        "name"
-      ],
+      "required": ["name"],
       "properties": {
         "name": {
           "type": "string"
@@ -5461,9 +5224,7 @@
     },
     "RenameRoomRequest": {
       "type": "object",
-      "required": [
-        "name"
-      ],
+      "required": ["name"],
       "properties": {
         "name": {
           "type": "string"
@@ -5488,10 +5249,7 @@
     },
     "MessageRequest": {
       "type": "object",
-      "required": [
-        "text",
-        "requestId"
-      ],
+      "required": ["text", "requestId"],
       "properties": {
         "text": {
           "type": "string"
@@ -5530,9 +5288,7 @@
     },
     "MessageResponse": {
       "type": "object",
-      "required": [
-        "submissionId"
-      ],
+      "required": ["submissionId"],
       "properties": {
         "submissionId": {
           "type": "integer"
@@ -5552,9 +5308,7 @@
     },
     "TimelineResponse": {
       "type": "object",
-      "required": [
-        "items"
-      ],
+      "required": ["items"],
       "properties": {
         "items": {
           "type": "array",
@@ -5562,11 +5316,7 @@
             "anyOf": [
               {
                 "type": "object",
-                "required": [
-                  "type",
-                  "id",
-                  "text"
-                ],
+                "required": ["type", "id", "text"],
                 "properties": {
                   "type": {
                     "type": "string",
@@ -5580,10 +5330,7 @@
                   },
                   "author": {
                     "type": "object",
-                    "required": [
-                      "id",
-                      "displayName"
-                    ],
+                    "required": ["id", "displayName"],
                     "properties": {
                       "id": {
                         "type": "string"
@@ -5607,10 +5354,7 @@
                   },
                   "privateTo": {
                     "type": "object",
-                    "required": [
-                      "id",
-                      "displayName"
-                    ],
+                    "required": ["id", "displayName"],
                     "properties": {
                       "id": {
                         "type": "string"
@@ -5627,13 +5371,7 @@
                     "type": "array",
                     "items": {
                       "type": "object",
-                      "required": [
-                        "id",
-                        "name",
-                        "mime",
-                        "size",
-                        "kind"
-                      ],
+                      "required": ["id", "name", "mime", "size", "kind"],
                       "properties": {
                         "id": {
                           "type": "string"
@@ -5665,10 +5403,7 @@
                   },
                   "press": {
                     "type": "object",
-                    "required": [
-                      "callId",
-                      "button"
-                    ],
+                    "required": ["callId", "button"],
                     "properties": {
                       "callId": {
                         "type": "string"
@@ -5682,12 +5417,7 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type",
-                  "id",
-                  "text",
-                  "firedAt"
-                ],
+                "required": ["type", "id", "text", "firedAt"],
                 "properties": {
                   "type": {
                     "type": "string",
@@ -5704,10 +5434,7 @@
                   },
                   "privateTo": {
                     "type": "object",
-                    "required": [
-                      "id",
-                      "displayName"
-                    ],
+                    "required": ["id", "displayName"],
                     "properties": {
                       "id": {
                         "type": "string"
@@ -5724,13 +5451,7 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type",
-                  "id",
-                  "approvalId",
-                  "summary",
-                  "status"
-                ],
+                "required": ["type", "id", "approvalId", "summary", "status"],
                 "properties": {
                   "type": {
                     "type": "string",
@@ -5774,10 +5495,7 @@
                   },
                   "privateTo": {
                     "type": "object",
-                    "required": [
-                      "id",
-                      "displayName"
-                    ],
+                    "required": ["id", "displayName"],
                     "properties": {
                       "id": {
                         "type": "string"
@@ -5794,12 +5512,7 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type",
-                  "id",
-                  "status",
-                  "parts"
-                ],
+                "required": ["type", "id", "status", "parts"],
                 "properties": {
                   "type": {
                     "type": "string",
@@ -5837,10 +5550,7 @@
                       "anyOf": [
                         {
                           "type": "object",
-                          "required": [
-                            "type",
-                            "text"
-                          ],
+                          "required": ["type", "text"],
                           "properties": {
                             "type": {
                               "type": "string",
@@ -5853,10 +5563,7 @@
                         },
                         {
                           "type": "object",
-                          "required": [
-                            "type",
-                            "text"
-                          ],
+                          "required": ["type", "text"],
                           "properties": {
                             "type": {
                               "type": "string",
@@ -5869,13 +5576,7 @@
                         },
                         {
                           "type": "object",
-                          "required": [
-                            "type",
-                            "callId",
-                            "name",
-                            "args",
-                            "status"
-                          ],
+                          "required": ["type", "callId", "name", "args", "status"],
                           "properties": {
                             "type": {
                               "type": "string",
@@ -5918,20 +5619,14 @@
                             "details": {},
                             "pressed": {
                               "type": "object",
-                              "required": [
-                                "button",
-                                "by"
-                              ],
+                              "required": ["button", "by"],
                               "properties": {
                                 "button": {
                                   "type": "string"
                                 },
                                 "by": {
                                   "type": "object",
-                                  "required": [
-                                    "id",
-                                    "displayName"
-                                  ],
+                                  "required": ["id", "displayName"],
                                   "properties": {
                                     "id": {
                                       "type": "string"
@@ -5974,10 +5669,7 @@
                   },
                   "privateTo": {
                     "type": "object",
-                    "required": [
-                      "id",
-                      "displayName"
-                    ],
+                    "required": ["id", "displayName"],
                     "properties": {
                       "id": {
                         "type": "string"
@@ -5994,11 +5686,7 @@
               },
               {
                 "type": "object",
-                "required": [
-                  "type",
-                  "id",
-                  "kind"
-                ],
+                "required": ["type", "id", "kind"],
                 "properties": {
                   "type": {
                     "type": "string",
@@ -6031,9 +5719,7 @@
     },
     "RememberRequest": {
       "type": "object",
-      "required": [
-        "text"
-      ],
+      "required": ["text"],
       "properties": {
         "text": {
           "type": "string"
@@ -6042,20 +5728,13 @@
     },
     "PlayerMemoryResponse": {
       "type": "object",
-      "required": [
-        "facts",
-        "shared"
-      ],
+      "required": ["facts", "shared"],
       "properties": {
         "facts": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "id",
-              "text",
-              "createdAt"
-            ],
+            "required": ["id", "text", "createdAt"],
             "properties": {
               "id": {
                 "type": "string"
@@ -6068,10 +5747,7 @@
               },
               "by": {
                 "type": "object",
-                "required": [
-                  "id",
-                  "displayName"
-                ],
+                "required": ["id", "displayName"],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -6086,10 +5762,7 @@
               },
               "owner": {
                 "type": "object",
-                "required": [
-                  "id",
-                  "displayName"
-                ],
+                "required": ["id", "displayName"],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -6104,10 +5777,7 @@
               },
               "privateTo": {
                 "type": "object",
-                "required": [
-                  "id",
-                  "displayName"
-                ],
+                "required": ["id", "displayName"],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -6130,9 +5800,7 @@
     },
     "ShareMemoryRequest": {
       "type": "object",
-      "required": [
-        "shared"
-      ],
+      "required": ["shared"],
       "properties": {
         "shared": {
           "type": "boolean"
@@ -6152,9 +5820,7 @@
     },
     "Profile": {
       "type": "object",
-      "required": [
-        "displayName"
-      ],
+      "required": ["displayName"],
       "properties": {
         "displayName": {
           "type": "string"
@@ -6290,10 +5956,7 @@
         },
         "location": {
           "type": "object",
-          "required": [
-            "text",
-            "at"
-          ],
+          "required": ["text", "at"],
           "properties": {
             "text": {
               "type": "string"
@@ -6313,10 +5976,7 @@
     },
     "LocationRequest": {
       "type": "object",
-      "required": [
-        "latitude",
-        "longitude"
-      ],
+      "required": ["latitude", "longitude"],
       "properties": {
         "latitude": {
           "type": "number",
@@ -6381,10 +6041,7 @@
           "anyOf": [
             {
               "type": "object",
-              "required": [
-                "latitude",
-                "longitude"
-              ],
+              "required": ["latitude", "longitude"],
               "properties": {
                 "latitude": {
                   "type": "number",
@@ -6411,9 +6068,7 @@
     },
     "ShareLocationRequest": {
       "type": "object",
-      "required": [
-        "shared"
-      ],
+      "required": ["shared"],
       "properties": {
         "shared": {
           "type": "boolean"
@@ -6422,10 +6077,7 @@
     },
     "PlayerSettingsSchema": {
       "type": "object",
-      "required": [
-        "name",
-        "schema"
-      ],
+      "required": ["name", "schema"],
       "properties": {
         "name": {
           "type": "string"
@@ -6441,18 +6093,13 @@
     },
     "PlayerSettingsResponse": {
       "type": "object",
-      "required": [
-        "extensions"
-      ],
+      "required": ["extensions"],
       "properties": {
         "extensions": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "name",
-              "schema"
-            ],
+            "required": ["name", "schema"],
             "properties": {
               "name": {
                 "type": "string"
@@ -6471,9 +6118,7 @@
     },
     "PushKeyResponse": {
       "type": "object",
-      "required": [
-        "publicKey"
-      ],
+      "required": ["publicKey"],
       "properties": {
         "publicKey": {
           "type": "string"
@@ -6482,20 +6127,14 @@
     },
     "PushSubscribeRequest": {
       "type": "object",
-      "required": [
-        "endpoint",
-        "keys"
-      ],
+      "required": ["endpoint", "keys"],
       "properties": {
         "endpoint": {
           "type": "string"
         },
         "keys": {
           "type": "object",
-          "required": [
-            "p256dh",
-            "auth"
-          ],
+          "required": ["p256dh", "auth"],
           "properties": {
             "p256dh": {
               "type": "string"
@@ -6509,17 +6148,11 @@
     },
     "PushRenewRequest": {
       "type": "object",
-      "required": [
-        "old",
-        "subscription"
-      ],
+      "required": ["old", "subscription"],
       "properties": {
         "old": {
           "type": "object",
-          "required": [
-            "endpoint",
-            "auth"
-          ],
+          "required": ["endpoint", "auth"],
           "properties": {
             "endpoint": {
               "type": "string"
@@ -6531,20 +6164,14 @@
         },
         "subscription": {
           "type": "object",
-          "required": [
-            "endpoint",
-            "keys"
-          ],
+          "required": ["endpoint", "keys"],
           "properties": {
             "endpoint": {
               "type": "string"
             },
             "keys": {
               "type": "object",
-              "required": [
-                "p256dh",
-                "auth"
-              ],
+              "required": ["p256dh", "auth"],
               "properties": {
                 "p256dh": {
                   "type": "string"
@@ -6562,10 +6189,7 @@
       "anyOf": [
         {
           "type": "object",
-          "required": [
-            "platform",
-            "token"
-          ],
+          "required": ["platform", "token"],
           "properties": {
             "platform": {
               "anyOf": [
@@ -6604,12 +6228,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "platform",
-            "relay",
-            "handle",
-            "deviceKey"
-          ],
+          "required": ["platform", "relay", "handle", "deviceKey"],
           "properties": {
             "platform": {
               "type": "string",
@@ -6640,10 +6259,7 @@
     },
     "DevicesResponse": {
       "type": "object",
-      "required": [
-        "apns",
-        "fcm"
-      ],
+      "required": ["apns", "fcm"],
       "properties": {
         "apns": {
           "type": "boolean"
@@ -6661,12 +6277,7 @@
     },
     "ArrivalRegion": {
       "type": "object",
-      "required": [
-        "id",
-        "latitude",
-        "longitude",
-        "radius"
-      ],
+      "required": ["id", "latitude", "longitude", "radius"],
       "properties": {
         "id": {
           "type": "string"
@@ -6684,10 +6295,7 @@
     },
     "ArrivalRegionsResponse": {
       "type": "object",
-      "required": [
-        "version",
-        "regions"
-      ],
+      "required": ["version", "regions"],
       "properties": {
         "version": {
           "type": "number"
@@ -6696,12 +6304,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "id",
-              "latitude",
-              "longitude",
-              "radius"
-            ],
+            "required": ["id", "latitude", "longitude", "radius"],
             "properties": {
               "id": {
                 "type": "string"
@@ -6720,11 +6323,7 @@
         },
         "refresh": {
           "type": "object",
-          "required": [
-            "latitude",
-            "longitude",
-            "radius"
-          ],
+          "required": ["latitude", "longitude", "radius"],
           "properties": {
             "latitude": {
               "type": "number"
@@ -6741,10 +6340,7 @@
     },
     "RegionEventRequest": {
       "type": "object",
-      "required": [
-        "regionId",
-        "event"
-      ],
+      "required": ["regionId", "event"],
       "properties": {
         "regionId": {
           "type": "string"
@@ -6765,9 +6361,7 @@
     },
     "RegionEventResponse": {
       "type": "object",
-      "required": [
-        "fired"
-      ],
+      "required": ["fired"],
       "properties": {
         "fired": {
           "type": "number"
@@ -6776,21 +6370,13 @@
     },
     "PlacesResponse": {
       "type": "object",
-      "required": [
-        "places",
-        "reminders"
-      ],
+      "required": ["places", "reminders"],
       "properties": {
         "places": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "name",
-              "placeholder",
-              "address",
-              "radius"
-            ],
+            "required": ["name", "placeholder", "address", "radius"],
             "properties": {
               "name": {
                 "type": "string"
@@ -6811,13 +6397,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "id",
-              "roomId",
-              "on",
-              "repeat",
-              "message"
-            ],
+            "required": ["id", "roomId", "on", "repeat", "message"],
             "properties": {
               "id": {
                 "type": "string"
@@ -6865,10 +6445,7 @@
     },
     "PlaceRequest": {
       "type": "object",
-      "required": [
-        "server",
-        "assistant"
-      ],
+      "required": ["server", "assistant"],
       "properties": {
         "server": {
           "type": "string"
@@ -6880,12 +6457,7 @@
     },
     "Membership": {
       "type": "object",
-      "required": [
-        "server",
-        "assistant",
-        "since",
-        "carryMemory"
-      ],
+      "required": ["server", "assistant", "since", "carryMemory"],
       "properties": {
         "server": {
           "type": "string"
@@ -6903,10 +6475,7 @@
     },
     "MembershipsResponse": {
       "type": "object",
-      "required": [
-        "address",
-        "memberships"
-      ],
+      "required": ["address", "memberships"],
       "properties": {
         "address": {
           "type": "string"
@@ -6915,12 +6484,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "server",
-              "assistant",
-              "since",
-              "carryMemory"
-            ],
+            "required": ["server", "assistant", "since", "carryMemory"],
             "properties": {
               "server": {
                 "type": "string"
@@ -6941,11 +6505,7 @@
     },
     "CarryMemoryRequest": {
       "type": "object",
-      "required": [
-        "server",
-        "assistant",
-        "carry"
-      ],
+      "required": ["server", "assistant", "carry"],
       "properties": {
         "server": {
           "type": "string"
@@ -6960,13 +6520,7 @@
     },
     "Sealed": {
       "type": "object",
-      "required": [
-        "v",
-        "epk",
-        "iv",
-        "data",
-        "tag"
-      ],
+      "required": ["v", "epk", "iv", "data", "tag"],
       "properties": {
         "v": {
           "type": "number",
@@ -6988,19 +6542,11 @@
     },
     "AssertResponse": {
       "type": "object",
-      "required": [
-        "assertion"
-      ],
+      "required": ["assertion"],
       "properties": {
         "assertion": {
           "type": "object",
-          "required": [
-            "v",
-            "epk",
-            "iv",
-            "data",
-            "tag"
-          ],
+          "required": ["v", "epk", "iv", "data", "tag"],
           "properties": {
             "v": {
               "type": "number",
@@ -7024,19 +6570,11 @@
     },
     "JoinRequest": {
       "type": "object",
-      "required": [
-        "assertion"
-      ],
+      "required": ["assertion"],
       "properties": {
         "assertion": {
           "type": "object",
-          "required": [
-            "v",
-            "epk",
-            "iv",
-            "data",
-            "tag"
-          ],
+          "required": ["v", "epk", "iv", "data", "tag"],
           "properties": {
             "v": {
               "type": "number",
@@ -7060,9 +6598,7 @@
     },
     "ServerRequest": {
       "type": "object",
-      "required": [
-        "server"
-      ],
+      "required": ["server"],
       "properties": {
         "server": {
           "type": "string"
@@ -7071,10 +6607,7 @@
     },
     "OwnedServer": {
       "type": "object",
-      "required": [
-        "server",
-        "since"
-      ],
+      "required": ["server", "since"],
       "properties": {
         "server": {
           "type": "string"
@@ -7086,18 +6619,13 @@
     },
     "OwnedServersResponse": {
       "type": "object",
-      "required": [
-        "servers"
-      ],
+      "required": ["servers"],
       "properties": {
         "servers": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "server",
-              "since"
-            ],
+            "required": ["server", "since"],
             "properties": {
               "server": {
                 "type": "string"
@@ -7112,12 +6640,7 @@
     },
     "A2AClientInfo": {
       "type": "object",
-      "required": [
-        "id",
-        "name",
-        "roomId",
-        "createdAt"
-      ],
+      "required": ["id", "name", "roomId", "createdAt"],
       "properties": {
         "id": {
           "type": "string"
@@ -7135,20 +6658,13 @@
     },
     "A2AClientsResponse": {
       "type": "object",
-      "required": [
-        "clients"
-      ],
+      "required": ["clients"],
       "properties": {
         "clients": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "id",
-              "name",
-              "roomId",
-              "createdAt"
-            ],
+            "required": ["id", "name", "roomId", "createdAt"],
             "properties": {
               "id": {
                 "type": "string"
@@ -7169,9 +6685,7 @@
     },
     "A2AClientRequest": {
       "type": "object",
-      "required": [
-        "name"
-      ],
+      "required": ["name"],
       "properties": {
         "name": {
           "type": "string"
@@ -7180,20 +6694,11 @@
     },
     "A2AClientCreated": {
       "type": "object",
-      "required": [
-        "client",
-        "token",
-        "card"
-      ],
+      "required": ["client", "token", "card"],
       "properties": {
         "client": {
           "type": "object",
-          "required": [
-            "id",
-            "name",
-            "roomId",
-            "createdAt"
-          ],
+          "required": ["id", "name", "roomId", "createdAt"],
           "properties": {
             "id": {
               "type": "string"
@@ -7219,14 +6724,7 @@
     },
     "A2AAgentInfo": {
       "type": "object",
-      "required": [
-        "id",
-        "name",
-        "description",
-        "url",
-        "hasToken",
-        "createdAt"
-      ],
+      "required": ["id", "name", "description", "url", "hasToken", "createdAt"],
       "properties": {
         "id": {
           "type": "string"
@@ -7250,22 +6748,13 @@
     },
     "A2AAgentsResponse": {
       "type": "object",
-      "required": [
-        "agents"
-      ],
+      "required": ["agents"],
       "properties": {
         "agents": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "id",
-              "name",
-              "description",
-              "url",
-              "hasToken",
-              "createdAt"
-            ],
+            "required": ["id", "name", "description", "url", "hasToken", "createdAt"],
             "properties": {
               "id": {
                 "type": "string"
@@ -7292,9 +6781,7 @@
     },
     "A2AAgentRequest": {
       "type": "object",
-      "required": [
-        "url"
-      ],
+      "required": ["url"],
       "properties": {
         "url": {
           "type": "string"
@@ -7306,9 +6793,7 @@
     },
     "InviteRequest": {
       "type": "object",
-      "required": [
-        "address"
-      ],
+      "required": ["address"],
       "properties": {
         "address": {
           "type": "string"
@@ -7317,13 +6802,7 @@
     },
     "Invite": {
       "type": "object",
-      "required": [
-        "id",
-        "address",
-        "by",
-        "createdAt",
-        "expiresAt"
-      ],
+      "required": ["id", "address", "by", "createdAt", "expiresAt"],
       "properties": {
         "id": {
           "type": "string"
@@ -7344,20 +6823,11 @@
     },
     "InviteResponse": {
       "type": "object",
-      "required": [
-        "invite",
-        "link"
-      ],
+      "required": ["invite", "link"],
       "properties": {
         "invite": {
           "type": "object",
-          "required": [
-            "id",
-            "address",
-            "by",
-            "createdAt",
-            "expiresAt"
-          ],
+          "required": ["id", "address", "by", "createdAt", "expiresAt"],
           "properties": {
             "id": {
               "type": "string"
@@ -7383,21 +6853,13 @@
     },
     "InvitesResponse": {
       "type": "object",
-      "required": [
-        "invites"
-      ],
+      "required": ["invites"],
       "properties": {
         "invites": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "id",
-              "address",
-              "by",
-              "createdAt",
-              "expiresAt"
-            ],
+            "required": ["id", "address", "by", "createdAt", "expiresAt"],
             "properties": {
               "id": {
                 "type": "string"
@@ -7421,18 +6883,13 @@
     },
     "ModelViewResponse": {
       "type": "object",
-      "required": [
-        "messages"
-      ],
+      "required": ["messages"],
       "properties": {
         "messages": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "role",
-              "text"
-            ],
+            "required": ["role", "text"],
             "properties": {
               "role": {
                 "anyOf": [
@@ -7464,12 +6921,7 @@
     },
     "MonthUsage": {
       "type": "object",
-      "required": [
-        "month",
-        "total",
-        "players",
-        "rooms"
-      ],
+      "required": ["month", "total", "players", "rooms"],
       "properties": {
         "month": {
           "type": "string",
@@ -7498,12 +6950,7 @@
     },
     "UsageResponse": {
       "type": "object",
-      "required": [
-        "month",
-        "total",
-        "mine",
-        "budget"
-      ],
+      "required": ["month", "total", "mine", "budget"],
       "properties": {
         "month": {
           "type": "string"
@@ -7529,12 +6976,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "month",
-              "total",
-              "players",
-              "rooms"
-            ],
+            "required": ["month", "total", "players", "rooms"],
             "properties": {
               "month": {
                 "type": "string",
@@ -7566,9 +7008,7 @@
     },
     "DecideRequest": {
       "type": "object",
-      "required": [
-        "approve"
-      ],
+      "required": ["approve"],
       "properties": {
         "approve": {
           "type": "boolean"
@@ -7586,11 +7026,7 @@
     },
     "RoomExtension": {
       "type": "object",
-      "required": [
-        "name",
-        "enabled",
-        "byDefault"
-      ],
+      "required": ["name", "enabled", "byDefault"],
       "properties": {
         "name": {
           "type": "string"
@@ -7614,19 +7050,13 @@
     },
     "RoomExtensionsResponse": {
       "type": "object",
-      "required": [
-        "extensions"
-      ],
+      "required": ["extensions"],
       "properties": {
         "extensions": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "name",
-              "enabled",
-              "byDefault"
-            ],
+            "required": ["name", "enabled", "byDefault"],
             "properties": {
               "name": {
                 "type": "string"
@@ -7653,9 +7083,7 @@
     },
     "SetRoomExtensionRequest": {
       "type": "object",
-      "required": [
-        "enabled"
-      ],
+      "required": ["enabled"],
       "properties": {
         "enabled": {
           "anyOf": [
@@ -7671,13 +7099,7 @@
     },
     "ExtensionSetup": {
       "type": "object",
-      "required": [
-        "from",
-        "configured",
-        "enabled",
-        "settings",
-        "missingEnv"
-      ],
+      "required": ["from", "configured", "enabled", "settings", "missingEnv"],
       "properties": {
         "from": {
           "type": "string"
@@ -7740,21 +7162,13 @@
     },
     "ExtensionSetupsResponse": {
       "type": "object",
-      "required": [
-        "extensions"
-      ],
+      "required": ["extensions"],
       "properties": {
         "extensions": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "from",
-              "configured",
-              "enabled",
-              "settings",
-              "missingEnv"
-            ],
+            "required": ["from", "configured", "enabled", "settings", "missingEnv"],
             "properties": {
               "from": {
                 "type": "string"
@@ -7820,18 +7234,13 @@
     },
     "SaveExtensionSetupsRequest": {
       "type": "object",
-      "required": [
-        "extensions"
-      ],
+      "required": ["extensions"],
       "properties": {
         "extensions": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "from",
-              "enabled"
-            ],
+            "required": ["from", "enabled"],
             "properties": {
               "from": {
                 "type": "string"
@@ -7872,9 +7281,7 @@
     },
     "ProtectRequest": {
       "type": "object",
-      "required": [
-        "value"
-      ],
+      "required": ["value"],
       "properties": {
         "value": {
           "type": "string"
@@ -7890,9 +7297,7 @@
     },
     "ProtectResponse": {
       "type": "object",
-      "required": [
-        "placeholder"
-      ],
+      "required": ["placeholder"],
       "properties": {
         "placeholder": {
           "type": "string"
@@ -7901,11 +7306,7 @@
     },
     "PrivateValue": {
       "type": "object",
-      "required": [
-        "placeholder",
-        "kind",
-        "value"
-      ],
+      "required": ["placeholder", "kind", "value"],
       "properties": {
         "placeholder": {
           "type": "string"
@@ -7920,19 +7321,13 @@
     },
     "PrivateValuesResponse": {
       "type": "object",
-      "required": [
-        "values"
-      ],
+      "required": ["values"],
       "properties": {
         "values": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "placeholder",
-              "kind",
-              "value"
-            ],
+            "required": ["placeholder", "kind", "value"],
             "properties": {
               "placeholder": {
                 "type": "string"
@@ -7950,9 +7345,7 @@
     },
     "CreatePlayerRequest": {
       "type": "object",
-      "required": [
-        "displayName"
-      ],
+      "required": ["displayName"],
       "properties": {
         "displayName": {
           "type": "string"
@@ -7961,16 +7354,11 @@
     },
     "PlayerResponse": {
       "type": "object",
-      "required": [
-        "player"
-      ],
+      "required": ["player"],
       "properties": {
         "player": {
           "type": "object",
-          "required": [
-            "id",
-            "displayName"
-          ],
+          "required": ["id", "displayName"],
           "properties": {
             "id": {
               "type": "string"
@@ -7987,9 +7375,7 @@
     },
     "PairingCodeRequest": {
       "type": "object",
-      "required": [
-        "playerId"
-      ],
+      "required": ["playerId"],
       "properties": {
         "playerId": {
           "type": "string"
@@ -7998,11 +7384,7 @@
     },
     "PairingCodeResponse": {
       "type": "object",
-      "required": [
-        "code",
-        "link",
-        "expiresAt"
-      ],
+      "required": ["code", "link", "expiresAt"],
       "properties": {
         "code": {
           "type": "string"
@@ -8017,11 +7399,7 @@
     },
     "TokenInfo": {
       "type": "object",
-      "required": [
-        "clientId",
-        "playerId",
-        "createdAt"
-      ],
+      "required": ["clientId", "playerId", "createdAt"],
       "properties": {
         "clientId": {
           "type": "string"
@@ -8034,10 +7412,7 @@
         },
         "client": {
           "type": "object",
-          "required": [
-            "name",
-            "platform"
-          ],
+          "required": ["name", "platform"],
           "properties": {
             "name": {
               "type": "string"
@@ -8057,19 +7432,13 @@
     },
     "TokensResponse": {
       "type": "object",
-      "required": [
-        "tokens"
-      ],
+      "required": ["tokens"],
       "properties": {
         "tokens": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "clientId",
-              "playerId",
-              "createdAt"
-            ],
+            "required": ["clientId", "playerId", "createdAt"],
             "properties": {
               "clientId": {
                 "type": "string"
@@ -8082,10 +7451,7 @@
               },
               "client": {
                 "type": "object",
-                "required": [
-                  "name",
-                  "platform"
-                ],
+                "required": ["name", "platform"],
                 "properties": {
                   "name": {
                     "type": "string"
@@ -8108,11 +7474,7 @@
     },
     "AdminPlayer": {
       "type": "object",
-      "required": [
-        "id",
-        "displayName",
-        "admin"
-      ],
+      "required": ["id", "displayName", "admin"],
       "properties": {
         "id": {
           "type": "string"
@@ -8127,19 +7489,13 @@
     },
     "PlayersResponse": {
       "type": "object",
-      "required": [
-        "players"
-      ],
+      "required": ["players"],
       "properties": {
         "players": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "id",
-              "displayName",
-              "admin"
-            ],
+            "required": ["id", "displayName", "admin"],
             "properties": {
               "id": {
                 "type": "string"
@@ -8157,21 +7513,13 @@
     },
     "SetAppearanceRequest": {
       "type": "object",
-      "required": [
-        "appearance"
-      ],
+      "required": ["appearance"],
       "properties": {
         "appearance": {
           "anyOf": [
             {
               "type": "object",
-              "required": [
-                "body",
-                "eyes",
-                "sparks",
-                "eyeShape",
-                "accessory"
-              ],
+              "required": ["body", "eyes", "sparks", "eyeShape", "accessory"],
               "properties": {
                 "body": {
                   "type": "array",
@@ -8248,13 +7596,7 @@
       "properties": {
         "appearance": {
           "type": "object",
-          "required": [
-            "body",
-            "eyes",
-            "sparks",
-            "eyeShape",
-            "accessory"
-          ],
+          "required": ["body", "eyes", "sparks", "eyeShape", "accessory"],
           "properties": {
             "body": {
               "type": "array",
@@ -8323,9 +7665,7 @@
     },
     "SetAdminRequest": {
       "type": "object",
-      "required": [
-        "admin"
-      ],
+      "required": ["admin"],
       "properties": {
         "admin": {
           "type": "boolean"
@@ -8334,9 +7674,7 @@
     },
     "IssueTokenRequest": {
       "type": "object",
-      "required": [
-        "playerId"
-      ],
+      "required": ["playerId"],
       "properties": {
         "playerId": {
           "type": "string"
@@ -8348,20 +7686,13 @@
     },
     "RoomsResponse": {
       "type": "object",
-      "required": [
-        "rooms"
-      ],
+      "required": ["rooms"],
       "properties": {
         "rooms": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "id",
-              "kind",
-              "name",
-              "members"
-            ],
+            "required": ["id", "kind", "name", "members"],
             "properties": {
               "id": {
                 "type": "string"
@@ -8389,10 +7720,7 @@
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "required": [
-                    "id",
-                    "displayName"
-                  ],
+                  "required": ["id", "displayName"],
                   "properties": {
                     "id": {
                       "type": "string"
@@ -8416,10 +7744,7 @@
     },
     "AdminCreateRoomRequest": {
       "type": "object",
-      "required": [
-        "name",
-        "members"
-      ],
+      "required": ["name", "members"],
       "properties": {
         "name": {
           "type": "string"
@@ -8434,20 +7759,13 @@
     },
     "NudgesResponse": {
       "type": "object",
-      "required": [
-        "nudges"
-      ],
+      "required": ["nudges"],
       "properties": {
         "nudges": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "id",
-              "roomId",
-              "message",
-              "fireAt"
-            ],
+            "required": ["id", "roomId", "message", "fireAt"],
             "properties": {
               "id": {
                 "type": "string"
@@ -8466,10 +7784,7 @@
               },
               "privateTo": {
                 "type": "object",
-                "required": [
-                  "id",
-                  "displayName"
-                ],
+                "required": ["id", "displayName"],
                 "properties": {
                   "id": {
                     "type": "string"
@@ -8489,10 +7804,7 @@
     },
     "ModelChoice": {
       "type": "object",
-      "required": [
-        "provider",
-        "modelId"
-      ],
+      "required": ["provider", "modelId"],
       "properties": {
         "provider": {
           "type": "string"
@@ -8526,12 +7838,7 @@
     },
     "ServerAssistant": {
       "type": "object",
-      "required": [
-        "name",
-        "displayName",
-        "model",
-        "running"
-      ],
+      "required": ["name", "displayName", "model", "running"],
       "properties": {
         "name": {
           "type": "string"
@@ -8541,10 +7848,7 @@
         },
         "model": {
           "type": "object",
-          "required": [
-            "provider",
-            "modelId"
-          ],
+          "required": ["provider", "modelId"],
           "properties": {
             "provider": {
               "type": "string"
@@ -8621,20 +7925,13 @@
     },
     "ServerAssistantsResponse": {
       "type": "object",
-      "required": [
-        "assistants"
-      ],
+      "required": ["assistants"],
       "properties": {
         "assistants": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "name",
-              "displayName",
-              "model",
-              "running"
-            ],
+            "required": ["name", "displayName", "model", "running"],
             "properties": {
               "name": {
                 "type": "string"
@@ -8644,10 +7941,7 @@
               },
               "model": {
                 "type": "object",
-                "required": [
-                  "provider",
-                  "modelId"
-                ],
+                "required": ["provider", "modelId"],
                 "properties": {
                   "provider": {
                     "type": "string"
@@ -8727,9 +8021,7 @@
     },
     "CreateAssistantRequest": {
       "type": "object",
-      "required": [
-        "name"
-      ],
+      "required": ["name"],
       "properties": {
         "name": {
           "type": "string",
@@ -8742,10 +8034,7 @@
         },
         "model": {
           "type": "object",
-          "required": [
-            "provider",
-            "modelId"
-          ],
+          "required": ["provider", "modelId"],
           "properties": {
             "provider": {
               "type": "string"
@@ -8817,9 +8106,7 @@
         },
         "firstPlayer": {
           "type": "object",
-          "required": [
-            "displayName"
-          ],
+          "required": ["displayName"],
           "properties": {
             "displayName": {
               "type": "string",
@@ -8834,18 +8121,11 @@
     },
     "CreateAssistantResponse": {
       "type": "object",
-      "required": [
-        "assistant"
-      ],
+      "required": ["assistant"],
       "properties": {
         "assistant": {
           "type": "object",
-          "required": [
-            "name",
-            "displayName",
-            "model",
-            "running"
-          ],
+          "required": ["name", "displayName", "model", "running"],
           "properties": {
             "name": {
               "type": "string"
@@ -8855,10 +8135,7 @@
             },
             "model": {
               "type": "object",
-              "required": [
-                "provider",
-                "modelId"
-              ],
+              "required": ["provider", "modelId"],
               "properties": {
                 "provider": {
                   "type": "string"
@@ -8937,11 +8214,7 @@
           "allOf": [
             {
               "type": "object",
-              "required": [
-                "code",
-                "link",
-                "expiresAt"
-              ],
+              "required": ["code", "link", "expiresAt"],
               "properties": {
                 "code": {
                   "type": "string"
@@ -8956,9 +8229,7 @@
             },
             {
               "type": "object",
-              "required": [
-                "playerId"
-              ],
+              "required": ["playerId"],
               "properties": {
                 "playerId": {
                   "type": "string"
@@ -8974,9 +8245,7 @@
     },
     "InviteToAssistantRequest": {
       "type": "object",
-      "required": [
-        "address"
-      ],
+      "required": ["address"],
       "properties": {
         "address": {
           "type": "string"
@@ -8985,9 +8254,7 @@
     },
     "InviteToAssistantResponse": {
       "type": "object",
-      "required": [
-        "joinLink"
-      ],
+      "required": ["joinLink"],
       "properties": {
         "joinLink": {
           "type": "string"
@@ -9012,10 +8279,7 @@
           "anyOf": [
             {
               "type": "object",
-              "required": [
-                "provider",
-                "modelId"
-              ],
+              "required": ["provider", "modelId"],
               "properties": {
                 "provider": {
                   "type": "string"
@@ -9129,9 +8393,7 @@
     },
     "DeleteAssistantResponse": {
       "type": "object",
-      "required": [
-        "backup"
-      ],
+      "required": ["backup"],
       "properties": {
         "backup": {
           "type": "string"
@@ -9140,10 +8402,7 @@
     },
     "ProviderKey": {
       "type": "object",
-      "required": [
-        "provider",
-        "source"
-      ],
+      "required": ["provider", "source"],
       "properties": {
         "provider": {
           "type": "string"
@@ -9178,18 +8437,13 @@
     },
     "ProviderKeysResponse": {
       "type": "object",
-      "required": [
-        "keys"
-      ],
+      "required": ["keys"],
       "properties": {
         "keys": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "provider",
-              "source"
-            ],
+            "required": ["provider", "source"],
             "properties": {
               "provider": {
                 "type": "string"
@@ -9227,9 +8481,7 @@
     },
     "SetProviderKeyRequest": {
       "type": "object",
-      "required": [
-        "key"
-      ],
+      "required": ["key"],
       "properties": {
         "key": {
           "type": "string",
@@ -9245,10 +8497,7 @@
     },
     "ServerOwner": {
       "type": "object",
-      "required": [
-        "id",
-        "addedAt"
-      ],
+      "required": ["id", "addedAt"],
       "properties": {
         "id": {
           "type": "string"
@@ -9269,18 +8518,13 @@
     },
     "ServerOwnersResponse": {
       "type": "object",
-      "required": [
-        "owners"
-      ],
+      "required": ["owners"],
       "properties": {
         "owners": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "id",
-              "addedAt"
-            ],
+            "required": ["id", "addedAt"],
             "properties": {
               "id": {
                 "type": "string"
@@ -9321,19 +8565,14 @@
     },
     "ServerSessionRequest": {
       "type": "object",
-      "required": [
-        "client"
-      ],
+      "required": ["client"],
       "properties": {
         "assistant": {
           "type": "string"
         },
         "client": {
           "type": "object",
-          "required": [
-            "name",
-            "platform"
-          ],
+          "required": ["name", "platform"],
           "properties": {
             "name": {
               "type": "string"
@@ -9345,13 +8584,7 @@
         },
         "assertion": {
           "type": "object",
-          "required": [
-            "v",
-            "epk",
-            "iv",
-            "data",
-            "tag"
-          ],
+          "required": ["v", "epk", "iv", "data", "tag"],
           "properties": {
             "v": {
               "type": "number",
@@ -9375,10 +8608,7 @@
     },
     "ServerKeyResponse": {
       "type": "object",
-      "required": [
-        "signingKey",
-        "encryptionKey"
-      ],
+      "required": ["signingKey", "encryptionKey"],
       "properties": {
         "signingKey": {
           "type": "string"
@@ -9390,11 +8620,7 @@
     },
     "ServerSessionResponse": {
       "type": "object",
-      "required": [
-        "token",
-        "clientId",
-        "owner"
-      ],
+      "required": ["token", "clientId", "owner"],
       "properties": {
         "token": {
           "type": "string"
@@ -9404,10 +8630,7 @@
         },
         "owner": {
           "type": "object",
-          "required": [
-            "id",
-            "addedAt"
-          ],
+          "required": ["id", "addedAt"],
           "properties": {
             "id": {
               "type": "string"
@@ -9430,10 +8653,7 @@
     },
     "UpdateState": {
       "type": "object",
-      "required": [
-        "current",
-        "automatic"
-      ],
+      "required": ["current", "automatic"],
       "properties": {
         "current": {
           "type": "string"
@@ -9454,9 +8674,7 @@
     },
     "SetUpdatesRequest": {
       "type": "object",
-      "required": [
-        "automatic"
-      ],
+      "required": ["automatic"],
       "properties": {
         "automatic": {
           "type": "boolean"
@@ -9465,12 +8683,7 @@
     },
     "GeoRegionStatus": {
       "type": "object",
-      "required": [
-        "id",
-        "name",
-        "by",
-        "state"
-      ],
+      "required": ["id", "name", "by", "state"],
       "properties": {
         "id": {
           "type": "string"
@@ -9536,13 +8749,7 @@
     },
     "GeoStatus": {
       "type": "object",
-      "required": [
-        "state",
-        "follow",
-        "limitGb",
-        "usedBytes",
-        "regions"
-      ],
+      "required": ["state", "follow", "limitGb", "usedBytes", "regions"],
       "properties": {
         "state": {
           "anyOf": [
@@ -9577,12 +8784,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "id",
-              "name",
-              "by",
-              "state"
-            ],
+            "required": ["id", "name", "by", "state"],
             "properties": {
               "id": {
                 "type": "string"
@@ -9672,18 +8874,13 @@
     },
     "GeoRegionsResponse": {
       "type": "object",
-      "required": [
-        "regions"
-      ],
+      "required": ["regions"],
       "properties": {
         "regions": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "id",
-              "name"
-            ],
+            "required": ["id", "name"],
             "properties": {
               "id": {
                 "type": "string"
@@ -9701,9 +8898,7 @@
     },
     "WiredState": {
       "type": "object",
-      "required": [
-        "state"
-      ],
+      "required": ["state"],
       "properties": {
         "state": {
           "anyOf": [
@@ -9740,10 +8935,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "name",
-              "anchor"
-            ],
+            "required": ["name", "anchor"],
             "properties": {
               "name": {
                 "type": "string"
@@ -9779,9 +8971,7 @@
     },
     "WiredJoinRequest": {
       "type": "object",
-      "required": [
-        "invite"
-      ],
+      "required": ["invite"],
       "properties": {
         "invite": {
           "type": "string",
@@ -9799,9 +8989,7 @@
     },
     "WiredRelayRequest": {
       "type": "object",
-      "required": [
-        "url"
-      ],
+      "required": ["url"],
       "properties": {
         "url": {
           "type": "string",
@@ -9811,9 +8999,7 @@
     },
     "WiredRelayResponse": {
       "type": "object",
-      "required": [
-        "invite"
-      ],
+      "required": ["invite"],
       "properties": {
         "invite": {
           "type": "string"
@@ -9822,12 +9008,7 @@
     },
     "ModelErrorShown": {
       "type": "object",
-      "required": [
-        "at",
-        "provider",
-        "model",
-        "message"
-      ],
+      "required": ["at", "provider", "model", "message"],
       "properties": {
         "at": {
           "type": "number"
@@ -9848,21 +9029,14 @@
     },
     "ServerInfoResponse": {
       "type": "object",
-      "required": [
-        "version",
-        "owner",
-        "assistants"
-      ],
+      "required": ["version", "owner", "assistants"],
       "properties": {
         "version": {
           "type": "string"
         },
         "owner": {
           "type": "object",
-          "required": [
-            "id",
-            "addedAt"
-          ],
+          "required": ["id", "addedAt"],
           "properties": {
             "id": {
               "type": "string"
@@ -9885,12 +9059,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "name",
-              "displayName",
-              "model",
-              "running"
-            ],
+            "required": ["name", "displayName", "model", "running"],
             "properties": {
               "name": {
                 "type": "string"
@@ -9900,10 +9069,7 @@
               },
               "model": {
                 "type": "object",
-                "required": [
-                  "provider",
-                  "modelId"
-                ],
+                "required": ["provider", "modelId"],
                 "properties": {
                   "provider": {
                     "type": "string"
@@ -9981,10 +9147,7 @@
         },
         "updates": {
           "type": "object",
-          "required": [
-            "current",
-            "automatic"
-          ],
+          "required": ["current", "automatic"],
           "properties": {
             "current": {
               "type": "string"
@@ -10007,12 +9170,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "at",
-              "provider",
-              "model",
-              "message"
-            ],
+            "required": ["at", "provider", "model", "message"],
             "properties": {
               "at": {
                 "type": "number"
@@ -10036,10 +9194,7 @@
     },
     "HealthResponse": {
       "type": "object",
-      "required": [
-        "ok",
-        "assistants"
-      ],
+      "required": ["ok", "assistants"],
       "properties": {
         "ok": {
           "type": "boolean",
@@ -10057,12 +9212,7 @@
     },
     "SetupProvider": {
       "type": "object",
-      "required": [
-        "id",
-        "name",
-        "models",
-        "recommended"
-      ],
+      "required": ["id", "name", "models", "recommended"],
       "properties": {
         "id": {
           "type": "string"
@@ -10074,10 +9224,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "id",
-              "name"
-            ],
+            "required": ["id", "name"],
             "properties": {
               "id": {
                 "type": "string"
@@ -10095,12 +9242,7 @@
     },
     "SetupLocalServer": {
       "type": "object",
-      "required": [
-        "id",
-        "name",
-        "baseUrl",
-        "models"
-      ],
+      "required": ["id", "name", "baseUrl", "models"],
       "properties": {
         "id": {
           "type": "string"
@@ -10121,11 +9263,7 @@
     },
     "SetupInfoResponse": {
       "type": "object",
-      "required": [
-        "open",
-        "providers",
-        "local"
-      ],
+      "required": ["open", "providers", "local"],
       "properties": {
         "open": {
           "type": "boolean"
@@ -10134,12 +9272,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "id",
-              "name",
-              "models",
-              "recommended"
-            ],
+            "required": ["id", "name", "models", "recommended"],
             "properties": {
               "id": {
                 "type": "string"
@@ -10151,10 +9284,7 @@
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "required": [
-                    "id",
-                    "name"
-                  ],
+                  "required": ["id", "name"],
                   "properties": {
                     "id": {
                       "type": "string"
@@ -10175,12 +9305,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "id",
-              "name",
-              "baseUrl",
-              "models"
-            ],
+            "required": ["id", "name", "baseUrl", "models"],
             "properties": {
               "id": {
                 "type": "string"
@@ -10204,9 +9329,7 @@
     },
     "SetupCodeRequest": {
       "type": "object",
-      "required": [
-        "code"
-      ],
+      "required": ["code"],
       "properties": {
         "code": {
           "type": "string"
@@ -10215,11 +9338,7 @@
     },
     "SetupKeyRequest": {
       "type": "object",
-      "required": [
-        "code",
-        "provider",
-        "key"
-      ],
+      "required": ["code", "provider", "key"],
       "properties": {
         "code": {
           "type": "string"
@@ -10235,23 +9354,14 @@
     },
     "SetupRequest": {
       "type": "object",
-      "required": [
-        "code",
-        "client",
-        "assistant",
-        "model",
-        "you"
-      ],
+      "required": ["code", "client", "assistant", "model", "you"],
       "properties": {
         "code": {
           "type": "string"
         },
         "client": {
           "type": "object",
-          "required": [
-            "name",
-            "platform"
-          ],
+          "required": ["name", "platform"],
           "properties": {
             "name": {
               "type": "string"
@@ -10263,9 +9373,7 @@
         },
         "assistant": {
           "type": "object",
-          "required": [
-            "name"
-          ],
+          "required": ["name"],
           "properties": {
             "name": {
               "type": "string",
@@ -10280,10 +9388,7 @@
         },
         "model": {
           "type": "object",
-          "required": [
-            "provider",
-            "modelId"
-          ],
+          "required": ["provider", "modelId"],
           "properties": {
             "provider": {
               "type": "string"
@@ -10302,9 +9407,7 @@
         },
         "you": {
           "type": "object",
-          "required": [
-            "displayName"
-          ],
+          "required": ["displayName"],
           "properties": {
             "displayName": {
               "type": "string",
@@ -10324,13 +9427,7 @@
         },
         "home": {
           "type": "object",
-          "required": [
-            "v",
-            "epk",
-            "iv",
-            "data",
-            "tag"
-          ],
+          "required": ["v", "epk", "iv", "data", "tag"],
           "properties": {
             "v": {
               "type": "number",
@@ -10354,24 +9451,14 @@
     },
     "SetupResponse": {
       "type": "object",
-      "required": [
-        "assistant",
-        "player",
-        "token",
-        "clientId",
-        "serverToken",
-        "owner"
-      ],
+      "required": ["assistant", "player", "token", "clientId", "serverToken", "owner"],
       "properties": {
         "assistant": {
           "type": "string"
         },
         "player": {
           "type": "object",
-          "required": [
-            "id",
-            "displayName"
-          ],
+          "required": ["id", "displayName"],
           "properties": {
             "id": {
               "type": "string"
@@ -10395,10 +9482,7 @@
         },
         "owner": {
           "type": "object",
-          "required": [
-            "id",
-            "addedAt"
-          ],
+          "required": ["id", "addedAt"],
           "properties": {
             "id": {
               "type": "string"
@@ -10421,9 +9505,7 @@
     },
     "RecoveryKitRequest": {
       "type": "object",
-      "required": [
-        "passphrase"
-      ],
+      "required": ["passphrase"],
       "properties": {
         "passphrase": {
           "type": "string",
@@ -10433,9 +9515,7 @@
     },
     "RecoveryKitResponse": {
       "type": "object",
-      "required": [
-        "kit"
-      ],
+      "required": ["kit"],
       "properties": {
         "kit": {
           "type": "string"
@@ -10446,11 +9526,7 @@
       "anyOf": [
         {
           "type": "object",
-          "required": [
-            "type",
-            "endpoint",
-            "bucket"
-          ],
+          "required": ["type", "endpoint", "bucket"],
           "properties": {
             "type": {
               "type": "string",
@@ -10478,10 +9554,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "url"
-          ],
+          "required": ["type", "url"],
           "properties": {
             "type": {
               "type": "string",
@@ -10497,11 +9570,7 @@
     },
     "BackupState": {
       "type": "object",
-      "required": [
-        "on",
-        "everyHours",
-        "keep"
-      ],
+      "required": ["on", "everyHours", "keep"],
       "properties": {
         "on": {
           "type": "boolean"
@@ -10522,11 +9591,7 @@
           "anyOf": [
             {
               "type": "object",
-              "required": [
-                "type",
-                "endpoint",
-                "bucket"
-              ],
+              "required": ["type", "endpoint", "bucket"],
               "properties": {
                 "type": {
                   "type": "string",
@@ -10554,10 +9619,7 @@
             },
             {
               "type": "object",
-              "required": [
-                "type",
-                "url"
-              ],
+              "required": ["type", "url"],
               "properties": {
                 "type": {
                   "type": "string",
@@ -10573,10 +9635,7 @@
         },
         "credentials": {
           "type": "object",
-          "required": [
-            "user",
-            "from"
-          ],
+          "required": ["user", "from"],
           "properties": {
             "user": {
               "type": "string"
@@ -10610,11 +9669,7 @@
       "anyOf": [
         {
           "type": "object",
-          "required": [
-            "type",
-            "endpoint",
-            "bucket"
-          ],
+          "required": ["type", "endpoint", "bucket"],
           "properties": {
             "type": {
               "type": "string",
@@ -10651,10 +9706,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "url"
-          ],
+          "required": ["type", "url"],
           "properties": {
             "type": {
               "type": "string",
@@ -10679,9 +9731,7 @@
     },
     "BackupNowResponse": {
       "type": "object",
-      "required": [
-        "file"
-      ],
+      "required": ["file"],
       "properties": {
         "file": {
           "type": "string"

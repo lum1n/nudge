@@ -10,9 +10,16 @@ export function createUiTools(): ToolRegistration[] {
     name: "show_ui",
     description:
       "Show a card in the chat with blocks (heading, markdown text, key-value pairs, a list, a " +
-      "table, an image attachment by id, a divider), fields to fill in and up to 6 buttons. Use " +
-      "it when people pick between a few options, fill in several values, or compare things side " +
-      "by side; not for plain answers, which stay text. Nobody has to press: they may also just " +
+      "table, an image attachment by id, a divider, a map, a chart, stats, progress bars, a " +
+      "timeline), fields to fill in and up to 6 buttons. Use it when people pick between a few " +
+      "options, fill in several values, or compare things side by side; not for plain answers, " +
+      "which stay text. A `map` shows places by lat/lon with a label each, and a `path` for a " +
+      "route. A `chart` is `bar` (comparing amounts), `line` or `area` (change over time) or " +
+      "`pie` (parts of one whole, one series, up to 8 slices); give a value per label in each " +
+      "series, and keep two measures of different scale in two charts. `stats` is a few headline " +
+      "numbers with what changed; `progress` is how far along things are; `timeline` is steps " +
+      "in order. Fields may also be a `date` (YYYY-MM-DD) or a `time` (HH:MM). " +
+      "Nobody has to press: they may also just " +
       'write. A press comes back as a message such as `Pressed "Book" on "Times"` with a line ' +
       "per field; answer it as you would that message. Buttons work once unless `once` is false. " +
       '`who: "asker"` lets only who you answer press. Fields\' values reach you, so never ask ' +
