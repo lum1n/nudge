@@ -388,6 +388,7 @@ export class Nudge {
           autonomy: options.autonomy,
           now,
           nudges: () => whenOpen().nudges,
+          ui: () => whenOpen().ui,
           changed: (change) => whenOpen().changes.emit(change),
           turn,
           describe: (name) =>

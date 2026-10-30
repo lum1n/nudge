@@ -16,6 +16,7 @@ import { NudgeTimer } from "../nudges/timer-task.ts";
 import { createNudgeTools } from "../nudges/tools.ts";
 import type { Turn } from "../privacy/turn.ts";
 import { UNTRUSTED_RULE } from "../privacy/untrusted.ts";
+import type { UiPresses } from "../ui/presses.ts";
 import { createUiTools } from "../ui/tools.ts";
 import { BUILTIN_NAME } from "./define.ts";
 
@@ -25,6 +26,8 @@ export type BuiltinOptions = {
   readonly now: () => number;
   /** Resolved at call time: the extension is installed before the assistant opens. */
   readonly nudges: () => Nudges;
+  /** Cards in the chat, for `update_ui`; resolved at call time like `nudges`. */
+  readonly ui?: () => UiPresses;
   /** Told about what the tools change beyond the room, such as a player's own memory. */
   readonly changed?: (change: Change) => void;
   /** The turn a conversation is in, for what shows only in private turns. */
@@ -94,7 +97,7 @@ export function createBuiltinExtension(options: BuiltinOptions): Extension {
     tools: [
       ...createNudgeTools(options),
       ...createMemoryTools(options.now, options.changed),
-      ...createUiTools(),
+      ...createUiTools(options.ui),
     ],
     sections: [
       section(

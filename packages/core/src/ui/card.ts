@@ -17,6 +17,24 @@ export const UI_CARD_MAX_CHARS = 7 * 1024;
 
 const Short = (maxLength: number) => Type.String({ maxLength });
 
+const Point = {
+  lat: Type.Number({ minimum: -90, maximum: 90 }),
+  lon: Type.Number({ minimum: -180, maximum: 180 }),
+};
+
+/** A day, or a time with its offset from UTC. */
+const When = Type.String({
+  pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}(T[0-9]{2}:[0-9]{2}(:[0-9]{2})?(Z|[+-][0-9]{2}:[0-9]{2}))?$",
+});
+
+/** A diagram node's name, which its arrows use. */
+const Id = Type.String({ pattern: "^[A-Za-z0-9_-]{1,40}$" });
+
+/** Most series a chart takes, so that each keeps a colour of its own. */
+export const CHART_MAX_SERIES = 6;
+/** Most slices a pie takes. */
+export const PIE_MAX_SLICES = 8;
+
 export const UiBlock = Type.Union([
   Type.Object({ type: Type.Literal("heading"), text: Short(200) }),
   /** Markdown, as messages have it. */
@@ -43,6 +61,114 @@ export const UiBlock = Type.Union([
     alt: Short(300),
   }),
   Type.Object({ type: Type.Literal("divider") }),
+  /**
+   * Places on a map, with an optional route between them. The app draws its own map around them
+   * from its own map source; the card gives only coordinates, so it names no address to load.
+   */
+  Type.Object({
+    type: Type.Literal("map"),
+    markers: Type.Optional(
+      Type.Array(Type.Object({ ...Point, label: Short(100) }), { maxItems: 20 }),
+    ),
+    /** A line through these points, in order, such as a route or a track. */
+    path: Type.Optional(Type.Array(Type.Object(Point), { minItems: 2, maxItems: 200 })),
+  }),
+  /**
+   * Numbers drawn as a chart. `labels` names each point along the x axis (each slice for a pie),
+   * and each series has a value per label; null leaves a gap.
+   */
+  Type.Object({
+    type: Type.Literal("chart"),
+    kind: Type.Union([
+      Type.Literal("bar"),
+      Type.Literal("line"),
+      Type.Literal("area"),
+      Type.Literal("pie"),
+    ]),
+    labels: Type.Array(Short(40), { minItems: 1, maxItems: 60 }),
+    series: Type.Array(
+      Type.Object({
+        name: Short(60),
+        values: Type.Array(Type.Union([Type.Number(), Type.Null()]), { maxItems: 60 }),
+      }),
+      { minItems: 1, maxItems: CHART_MAX_SERIES },
+    ),
+    /** What the values count, such as `kr` or `°C`. */
+    unit: Type.Optional(Short(20)),
+  }),
+  /** A row of headline numbers, each with what changed and whether that is good. */
+  Type.Object({
+    type: Type.Literal("stats"),
+    items: Type.Array(
+      Type.Object({
+        label: Short(60),
+        value: Short(40),
+        /** What changed, such as `+12%` or `-3 since May`. */
+        change: Type.Optional(Short(40)),
+        tone: Type.Optional(
+          Type.Union([Type.Literal("good"), Type.Literal("bad"), Type.Literal("neutral")]),
+        ),
+      }),
+      { minItems: 1, maxItems: 6 },
+    ),
+  }),
+  /** How far along things are, as bars: a budget spent, a goal reached. */
+  Type.Object({
+    type: Type.Literal("progress"),
+    items: Type.Array(
+      Type.Object({
+        label: Short(100),
+        value: Type.Number(),
+        /** What full is; 100 when absent. */
+        max: Type.Optional(Type.Number({ exclusiveMinimum: 0 })),
+        /** Shown next to it in place of the percentage, such as `3 of 5` or `1 200 kr left`. */
+        note: Type.Optional(Short(60)),
+      }),
+      { minItems: 1, maxItems: 10 },
+    ),
+  }),
+  /**
+   * Something on a calendar, which people can add to theirs. `start` and `end` are a day
+   * (`2026-11-03`, all day) or a time with its offset (`2026-11-03T18:00+01:00`).
+   */
+  Type.Object({
+    type: Type.Literal("event"),
+    title: Short(200),
+    start: When,
+    end: Type.Optional(When),
+    location: Type.Optional(Short(300)),
+    notes: Type.Optional(Short(1000)),
+  }),
+  /**
+   * Boxes joined by arrows: a flow, a plan's steps, who reports to whom. The app lays them out in
+   * rows (`down`, the default) or columns (`right`) by where the arrows lead.
+   */
+  Type.Object({
+    type: Type.Literal("diagram"),
+    nodes: Type.Array(Type.Object({ id: Id, label: Short(80) }), { minItems: 1, maxItems: 30 }),
+    edges: Type.Optional(
+      Type.Array(Type.Object({ from: Id, to: Id, label: Type.Optional(Short(40)) }), {
+        maxItems: 60,
+      }),
+    ),
+    direction: Type.Optional(Type.Union([Type.Literal("down"), Type.Literal("right")])),
+  }),
+  /** Steps or events in order: a trip, a delivery, what a project did and does next. */
+  Type.Object({
+    type: Type.Literal("timeline"),
+    items: Type.Array(
+      Type.Object({
+        title: Short(200),
+        /** When, as people read it: `09:40`, `Tue 3 Nov`. */
+        time: Type.Optional(Short(60)),
+        subtitle: Type.Optional(Short(300)),
+        state: Type.Optional(
+          Type.Union([Type.Literal("done"), Type.Literal("current"), Type.Literal("upcoming")]),
+        ),
+      }),
+      { minItems: 1, maxItems: 20 },
+    ),
+  }),
 ]);
 export type UiBlock = Static<typeof UiBlock>;
 
@@ -56,14 +182,26 @@ export const UiField = Type.Object({
     Type.Literal("number"),
     Type.Literal("boolean"),
     Type.Literal("choice"),
+    /** A day, sent as `YYYY-MM-DD`. */
+    Type.Literal("date"),
+    /** A time of day, sent as `HH:MM`. */
+    Type.Literal("time"),
+    /** Any number of its `options`, sent as a list. */
+    Type.Literal("choices"),
+    /** A number between `min` and `max`, picked on a slider. */
+    Type.Literal("range"),
   ]),
-  /** A `choice`'s options. */
+  /** A `choice`'s or `choices`' options. */
   options: Type.Optional(Type.Array(Short(100), { minItems: 1, maxItems: 20 })),
   placeholder: Type.Optional(Short(200)),
   /** A `text` field of several lines. */
   multiline: Type.Optional(Type.Boolean()),
   /** It may be left empty; required otherwise. */
   optional: Type.Optional(Type.Boolean()),
+  /** A `range`'s ends and step; 0, 100 and 1 when absent. */
+  min: Type.Optional(Type.Number()),
+  max: Type.Optional(Type.Number()),
+  step: Type.Optional(Type.Number({ exclusiveMinimum: 0 })),
 });
 export type UiField = Static<typeof UiField>;
 
@@ -74,6 +212,11 @@ export const UiButton = Type.Object({
   style: Type.Optional(Type.Union([Type.Literal("primary"), Type.Literal("danger")])),
   /** Pressing it sends no field values and needs none filled in, as for "Cancel". */
   skipsFields: Type.Optional(Type.Boolean()),
+  /**
+   * It opens this page instead of answering: the app names the site and asks first, and nothing
+   * reaches the room.
+   */
+  url: Type.Optional(Type.String({ pattern: "^https://[^\\s]+$", maxLength: 2000 })),
 });
 export type UiButton = Static<typeof UiButton>;
 
@@ -95,7 +238,7 @@ export const UiCard = Type.Object({ v: Type.Literal(1), ...content });
 export type UiCard = Static<typeof UiCard>;
 
 /** The values a press sends, by field name. */
-export type UiValues = Readonly<Record<string, string | number | boolean>>;
+export type UiValues = Readonly<Record<string, string | number | boolean | readonly string[]>>;
 
 /** The card in a tool's details, when there is a valid one. */
 export function cardOf(details: unknown): UiCard | undefined {
@@ -111,13 +254,22 @@ export function cardProblem(card: unknown): string | undefined {
     for (const field of card.fields ?? []) {
       if (names.has(field.name)) return `Field "${field.name}" is there twice`;
       names.add(field.name);
-      if (field.type === "choice" && (field.options?.length ?? 0) === 0)
+      if (
+        (field.type === "choice" || field.type === "choices") &&
+        (field.options?.length ?? 0) === 0
+      )
         return `Field "${field.name}" is a choice without options`;
+      if (field.type === "range" && (field.min ?? 0) >= (field.max ?? 100))
+        return `Field "${field.name}" has its min at or above its max`;
     }
     const ids = new Set<string>();
     for (const button of card.buttons ?? []) {
       if (ids.has(button.id)) return `Button "${button.id}" is there twice`;
       ids.add(button.id);
+    }
+    for (const [index, block] of (card.blocks ?? []).entries()) {
+      const problem = blockProblem(block);
+      if (problem !== undefined) return `Block ${index} (${block.type}): ${problem}`;
     }
     if ((card.blocks?.length ?? 0) === 0 && card.title === undefined)
       return "A card needs a title or a block";
@@ -127,6 +279,44 @@ export function cardProblem(card: unknown): string | undefined {
   return error === undefined
     ? "Not a card"
     : `${error.instancePath === "" ? "card" : error.instancePath}: ${error.message}`;
+}
+
+/** What the schema can't say about a block: a map with nothing on it, a chart's uneven series. */
+function blockProblem(block: UiBlock): string | undefined {
+  switch (block.type) {
+    case "map":
+      return (block.markers?.length ?? 0) === 0 && block.path === undefined
+        ? "a map needs markers or a path"
+        : undefined;
+    case "chart": {
+      const uneven = block.series.find((series) => series.values.length !== block.labels.length);
+      if (uneven !== undefined)
+        return `series "${uneven.name}" has ${uneven.values.length} values for ${block.labels.length} labels`;
+      if (block.kind !== "pie") return undefined;
+      if (block.series.length > 1) return "a pie takes one series";
+      if (block.labels.length > PIE_MAX_SLICES) return `a pie takes up to ${PIE_MAX_SLICES} slices`;
+      if (block.series[0]!.values.some((value) => value !== null && value < 0))
+        return "a pie's values can't be negative";
+      return undefined;
+    }
+    case "diagram": {
+      const ids = new Set<string>();
+      for (const node of block.nodes) {
+        if (ids.has(node.id)) return `node "${node.id}" is there twice`;
+        ids.add(node.id);
+      }
+      const loose = (block.edges ?? []).find((edge) => !ids.has(edge.from) || !ids.has(edge.to));
+      return loose === undefined
+        ? undefined
+        : `the arrow from "${loose.from}" to "${loose.to}" names a node that isn't there`;
+    }
+    case "event":
+      return block.end !== undefined && Date.parse(block.end) < Date.parse(block.start)
+        ? "it ends before it starts"
+        : undefined;
+    default:
+      return undefined;
+  }
 }
 
 /** A press the card doesn't allow: an unknown button, or values its fields don't take. */
@@ -141,6 +331,7 @@ export class UiPressInvalid extends Error {
 export function pressText(card: UiCard, buttonId: string, values: UiValues = {}): string {
   const button = card.buttons?.find((found) => found.id === buttonId);
   if (button === undefined) throw new UiPressInvalid(`No button "${buttonId}"`);
+  if (button.url !== undefined) throw new UiPressInvalid(`"${button.label}" opens a link`);
   const on = card.title === undefined ? "" : ` on "${card.title}"`;
   const lines = [`Pressed "${button.label}"${on}`];
   if (button.skipsFields === true) return lines[0]!;
@@ -150,7 +341,7 @@ export function pressText(card: UiCard, buttonId: string, values: UiValues = {})
       throw new UiPressInvalid(`No field "${name}"`);
   for (const field of fields) {
     const value = values[field.name];
-    if (value === undefined || value === "") {
+    if (value === undefined || value === "" || (Array.isArray(value) && value.length === 0)) {
       if (field.optional !== true) throw new UiPressInvalid(`"${field.label}" is required`);
       continue;
     }
@@ -159,8 +350,26 @@ export function pressText(card: UiCard, buttonId: string, values: UiValues = {})
   return lines.join("\n");
 }
 
-function shown(field: UiField, value: string | number | boolean): string {
+function shown(field: UiField, value: UiValues[string]): string {
   switch (field.type) {
+    case "choices": {
+      // An app that doesn't know the type yet sends what was typed, comma separated.
+      const picked = typeof value === "string" ? value.split(",").map((one) => one.trim()) : value;
+      if (
+        !Array.isArray(picked) ||
+        picked.some((one) => typeof one !== "string" || !(field.options ?? []).includes(one))
+      )
+        throw new UiPressInvalid(`"${field.label}" is some of its options`);
+      return [...new Set(picked)].join(", ");
+    }
+    case "range": {
+      // An app that doesn't know the type yet sends what was typed.
+      const number = typeof value === "string" && value.trim() !== "" ? Number(value) : value;
+      const [min, max] = [field.min ?? 0, field.max ?? 100];
+      if (typeof number !== "number" || !Number.isFinite(number) || number < min || number > max)
+        throw new UiPressInvalid(`"${field.label}" is a number from ${min} to ${max}`);
+      return String(number);
+    }
     case "boolean":
       if (typeof value !== "boolean") throw new UiPressInvalid(`"${field.label}" is yes or no`);
       return value ? "yes" : "no";
@@ -172,9 +381,24 @@ function shown(field: UiField, value: string | number | boolean): string {
       if (typeof value !== "string" || !(field.options ?? []).includes(value))
         throw new UiPressInvalid(`"${field.label}" is one of its options`);
       return value;
+    case "date":
+      if (typeof value !== "string" || !isDate(value))
+        throw new UiPressInvalid(`"${field.label}" is a day, as YYYY-MM-DD`);
+      return value;
+    case "time":
+      if (typeof value !== "string" || !/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(value))
+        throw new UiPressInvalid(`"${field.label}" is a time, as HH:MM`);
+      return value;
     case "text":
       if (typeof value !== "string") throw new UiPressInvalid(`"${field.label}" is text`);
       if (value.length > 2000) throw new UiPressInvalid(`"${field.label}" is too long`);
       return field.multiline === true ? `\n${value}` : value;
   }
+}
+
+/** A real day as `YYYY-MM-DD`, so not 2026-02-30. */
+function isDate(value: string): boolean {
+  if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value)) return false;
+  const day = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(day.getTime()) && day.toISOString().startsWith(value);
 }
