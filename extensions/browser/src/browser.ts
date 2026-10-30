@@ -10,6 +10,14 @@ import { chromium, type BrowserContext, type Locator, type Page, type Request } 
 import { type ActionTarget, inspectTarget, siteOf } from "./gate.ts";
 import type { SavedLogin } from "./logins.ts";
 import { compactSnapshot, findLines } from "./snapshot.ts";
+import {
+  callInPage,
+  listInPage,
+  PAGE_TOOL_RESULT_CHARS,
+  PAGE_TOOL_TIMEOUT_MS,
+  type PageTool,
+  WEBMCP_INIT,
+} from "./webmcp.ts";
 
 // Page-side globals for the functions passed to `evaluate`; this package compiles without the DOM lib.
 declare const document: {
@@ -36,6 +44,13 @@ export interface BrowserOptions {
   budget?: number;
   /** Refuse localhost, private and link-local addresses and `.local` names, for pages and their requests. */
   blockPrivateNetwork?: boolean;
+  /**
+   * Record the tools pages offer through WebMCP (`modelContext.registerTool`), standing in for the
+   * API where the browser has none, so the agent can call them. On by default.
+   */
+  webmcp?: boolean;
+  /** Extra Chromium command-line arguments, such as `--enable-features=…` for WebMCP. */
+  args?: readonly string[];
 }
 
 /** A failure the model should read and recover from, not a crash. */
@@ -96,7 +111,12 @@ export class BrowserSession {
       viewport,
       locale: options.locale ?? "nb-NO",
       ...(xvfb ? { env: { ...process.env, DISPLAY: xvfb.display } } : {}),
+      ...(options.args === undefined || options.args.length === 0
+        ? {}
+        : { args: [...options.args] }),
     });
+    // Before any page's scripts, so it sees every tool they register.
+    if (options.webmcp !== false) await context.addInitScript(WEBMCP_INIT);
     if (options.blockPrivateNetwork)
       await context.route("**/*", async (route) =>
         (await reachesPrivate(hostOf(route.request().url())))
@@ -184,14 +204,52 @@ export class BrowserSession {
       if (href) this.learnParams(href, this.current.url());
     }
     const tabs = this.context.pages();
+    const tools = await this.pageTools().catch(() => []);
     const header = [
       `URL: ${this.current.url()}`,
       `Title: ${await this.current.title().catch(() => "")}`,
       tabs.length > 1
         ? `Tabs: ${tabs.length} (current is ${tabs.indexOf(this.current) + 1})`
         : undefined,
+      tools.length > 0
+        ? `Page tools (WebMCP): ${tools.map((tool) => tool.name).join(", ")}; see browser_page_tools`
+        : undefined,
     ].filter(Boolean);
     return [...header, "", snapshot.text].join("\n");
+  }
+
+  /** The host of the current page, such as `www.example.no`; empty when it has none. */
+  pageHost(): string {
+    try {
+      return new URL(this.current.url()).hostname;
+    } catch {
+      return "";
+    }
+  }
+
+  /** The tools the current page registered through WebMCP; none when that is off. */
+  async pageTools(): Promise<PageTool[]> {
+    if (this.options.webmcp === false) return [];
+    // In the page's own world, where its scripts registered them.
+    return (await this.current.evaluate(listInPage, undefined, undefined, false)) ?? [];
+  }
+
+  /** Calls one of the current page's WebMCP tools with `input`, and gives its result as text. */
+  async callPageTool(name: string, input: unknown): Promise<string> {
+    if (this.options.webmcp === false)
+      throw new ActionError("Page tools are turned off in the browser's settings.");
+    const outcome = await this.current.evaluate(
+      callInPage,
+      { name, input, timeoutMs: PAGE_TOOL_TIMEOUT_MS },
+      undefined,
+      false,
+    );
+    if ("error" in outcome)
+      throw new ActionError(`The page's tool "${name}" failed: ${outcome.error}`);
+    const text = scrub(outcome.text, this.scrubbed);
+    return text.length > PAGE_TOOL_RESULT_CHARS
+      ? `${text.slice(0, PAGE_TOOL_RESULT_CHARS)}\n(cut: the result was ${text.length} characters)`
+      : text;
   }
 
   private setCurrent(page: Page): void {
