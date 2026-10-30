@@ -76,7 +76,8 @@ pub struct ToolPart {
     pub result: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub is_error: Option<bool>,
-    /// What the tool returned for UIs, such as the browser's login button.
+    /// What the tool returned for UIs, such as the browser's login button, or a card in `ui`
+    /// (ADR 27).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub details: Option<Value>,
     /// What the tool printed so far, while it runs.
@@ -85,6 +86,24 @@ pub struct ToolPart {
     /// `result` was cut, or `details` left out, for being too long.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub truncated: Option<bool>,
+    /// The latest press on its card, when it has one that was pressed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pressed: Option<Pressed>,
+}
+
+/// A press on a tool's card: which button, and who pressed it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Pressed {
+    pub button: String,
+    pub by: Player,
+}
+
+/// Which button on which tool call's card a message presses.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Press {
+    pub call_id: String,
+    pub button: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -122,6 +141,9 @@ pub struct UserItem {
     /// What it was sent with; left out for those a private message isn't for.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attachments: Option<Vec<Attachment>>,
+    /// It is a press on a tool's card (ADR 27).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub press: Option<Press>,
 }
 
 /// A file sent with a message (ADR 24).
@@ -817,6 +839,18 @@ pub struct DecideRequest {
     /// The approval's inputs by name, when approving; ignored when denying. Never stored.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub inputs: Option<std::collections::HashMap<String, String>>,
+}
+
+/// A press on a tool's card (ADR 27); it reaches the room as the caller's message.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UiPressRequest {
+    pub button: String,
+    /// The card's fields by name; left out for a button that `skipsFields`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub values: Option<serde_json::Map<String, Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_id: Option<String>,
 }
 
 /// An installed extension as one room has it. The built-in one is always on and not listed.

@@ -322,7 +322,30 @@ export {
   MESSAGE_ENTRY,
   type MessageDraft,
   type MessageEntryData,
+  type UiPress,
 } from "./host-api.ts";
+export {
+  cardOf,
+  cardProblem,
+  pressText,
+  UI_CARD_MAX_CHARS,
+  UiBlock,
+  UiButton,
+  UiCard,
+  UiCardContent,
+  UiField,
+  UiPressInvalid,
+  type UiValues,
+} from "./ui/card.ts";
+export {
+  type FoundCard,
+  type PressDraft,
+  UiCardNotFound,
+  UiCardPressed,
+  UiNotYours,
+  UiPresses,
+  UiPressesDoc,
+} from "./ui/presses.ts";
 export {
   canUse,
   type ClientInfo,

@@ -74,6 +74,7 @@ import {
 import { mapStrings, redactContext } from "./privacy/redact.ts";
 import { type ToolValues, withToolValues } from "./privacy/tool-values.ts";
 import { type Owner, turnOf } from "./privacy/turn.ts";
+import { UiPresses } from "./ui/presses.ts";
 import { PLACEHOLDER, Vault, type VaultEntry } from "./privacy/vault.ts";
 import { READABLE_VERSION, VaultDoc } from "./privacy/vault-doc.ts";
 import { openDatabaseStorage } from "./encrypted-storage.ts";
@@ -226,6 +227,8 @@ export class Nudge {
   readonly approvals: Approvals;
   /** The files people attach to messages (ADR 24). */
   readonly attachments: Attachments;
+  /** Presses on the cards tools show in the chat (ADR 27). */
+  readonly ui: UiPresses;
   /** Changes to rooms, memory, nudges and approvals made through the members above. */
   readonly changes = new Changes();
   /** Finished answers and new approvals in every room, for hosts that pass them on. */
@@ -345,6 +348,9 @@ export class Nudge {
       parts.report,
     );
     this.attachments = new Attachments(harness, now);
+    this.ui = new UiPresses(harness, this.rooms, now, (roomId, draft, context) =>
+      this.submit(roomId, draft, context),
+    );
     this.models.attachments = (roomId, id) => this.imageForModel(roomId, id);
   }
 

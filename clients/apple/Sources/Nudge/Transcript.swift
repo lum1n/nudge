@@ -2,7 +2,8 @@ import Foundation
 
 extension Array where Element == TimelineItem {
     /// The chat itself: messages and what the assistant said. Tool calls, thinking, fired nudges
-    /// and ended approvals are left to `activity`, except the browser waiting on a login; pending
+    /// and ended approvals are left to `activity`, except the browser waiting on a login and cards
+    /// (ADR 27); pending
     /// approvals wait in the room's own bar. An answer with nothing left to say drops out once
     /// it is done.
     public var transcript: [TimelineItem] {
@@ -15,7 +16,7 @@ extension Array where Element == TimelineItem {
                     switch $0 {
                     case .text: true
                     case .reasoning: false
-                    case .tool(let tool): tool.needsLogin
+                    case .tool(let tool): tool.needsLogin || tool.card != nil
                     }
                 }
                 // Someone else's private answer comes without parts, and stays as a line saying so.

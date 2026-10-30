@@ -23,7 +23,7 @@
   },
   "scripts": {
     "build": "tsc -b",
-    "schema": "node scripts/schema.ts"
+    "schema": "node --conditions=@nudge/source scripts/schema.ts"
   },
   "dependencies": {
     "@nudge/core": "workspace:*",

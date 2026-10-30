@@ -1,4 +1,7 @@
+import { UiBlock, UiButton, UiCard, UiField } from "@nudge/core/ui-card";
 import { type Static, Type } from "typebox";
+
+export { UiBlock, UiButton, UiCard, UiField };
 
 /**
  * The shapes of protocol v1, as TypeBox schemas and the types they stand for. `docs/protocol/v1.md`
@@ -76,8 +79,13 @@ export const ToolPart = Type.Object({
   /** The result's text, once there is one. */
   result: Type.Optional(Type.String()),
   isError: Type.Optional(Type.Boolean()),
-  /** What the tool returned for UIs, such as the browser's login button. */
+  /**
+   * What the tool returned for UIs, such as the browser's login button. A valid `UiCard` in
+   * `details.ui` is a card to draw (ADR 27); an invalid one is left out.
+   */
   details: Type.Optional(Type.Unknown()),
+  /** The latest press on its card, when it has one that was pressed. */
+  pressed: Type.Optional(Type.Object({ button: Type.String(), by: Player })),
   /** What the tool printed so far, while it runs. */
   output: Type.Optional(Type.String()),
   /** `result` was cut, or `details` left out, for being too long. */
@@ -107,6 +115,8 @@ export const TimelineItem = Type.Union([
     privateTo: Type.Optional(Player),
     /** What it was sent with; left out for those a private message isn't for. */
     attachments: Type.Optional(Type.Array(Attachment)),
+    /** It is a press on a tool's card (ADR 27); `text` says what was pressed and filled in. */
+    press: Type.Optional(Type.Object({ callId: Type.String(), button: Type.String() })),
   }),
   /** A scheduled nudge that fired; the assistant answers it like a message. */
   Type.Object({
@@ -949,6 +959,21 @@ export const DecideRequest = Type.Object({
 });
 export type DecideRequest = Static<typeof DecideRequest>;
 
+/** A press on a tool's card (ADR 27); it reaches the room as the caller's message. */
+export const UiPressRequest = Type.Object({
+  button: Type.String({ maxLength: 40 }),
+  /** The card's fields by name; left out for a button that `skipsFields`. */
+  values: Type.Optional(
+    Type.Record(
+      Type.String(),
+      Type.Union([Type.String({ maxLength: 2000 }), Type.Number(), Type.Boolean()]),
+    ),
+  ),
+  /** As for a message: the same id again finds the first press. */
+  requestId: Type.Optional(Type.String({ maxLength: 200 })),
+});
+export type UiPressRequest = Static<typeof UiPressRequest>;
+
 /** An installed extension as one room has it. The built-in one is always on and not listed. */
 export const RoomExtension = Type.Object({
   name: Type.String(),
@@ -1662,6 +1687,11 @@ export type BackupNowResponse = Static<typeof BackupNowResponse>;
 /** Every named schema, for `schema/v1.json`. */
 export const SCHEMAS = {
   Player,
+  UiBlock,
+  UiField,
+  UiButton,
+  UiCard,
+  UiPressRequest,
   RoomKind,
   Room,
   ApprovalStatus,

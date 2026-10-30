@@ -430,6 +430,33 @@ export class Api {
     });
   }
 
+  /**
+   * Presses `button` on the card tool call `callId` showed (ADR 27), with the card's fields by
+   * name; the press reaches the room as the caller's message.
+   */
+  pressCard(
+    room: string,
+    callId: string,
+    button: string,
+    values?: Readonly<Record<string, string | number | boolean>>,
+  ): Promise<MessageResponse> {
+    return this.request("POST", `${roomPath(room)}/ui/${encodeURIComponent(callId)}`, {
+      button,
+      ...(values === undefined ? {} : { values }),
+    });
+  }
+
+  /** An attachment's bytes, such as an image a card shows (ADR 24). */
+  async attachment(room: string, id: string): Promise<Blob> {
+    const token = this.tokens.get();
+    const response = await this.fetcher(
+      `${this.base}${roomPath(room)}/attachments/${encodeURIComponent(id)}`,
+      token === undefined ? {} : { headers: { authorization: `Bearer ${token}` } },
+    );
+    if (!response.ok) await read(response);
+    return response.blob();
+  }
+
   async roomExtensions(room: string): Promise<RoomExtension[]> {
     return (await this.request<RoomExtensionsResponse>("GET", `${roomPath(room)}/extensions`))
       .extensions;
