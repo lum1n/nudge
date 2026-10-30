@@ -27,6 +27,10 @@ import {
   type ProfileUpdate,
   type Room as CoreRoom,
   type TokenRecord,
+  UiCardNotFound,
+  UiCardPressed,
+  UiNotYours,
+  UiPressInvalid,
 } from "@nudge/core";
 import {
   AdminCreateRoomRequest,
@@ -36,6 +40,7 @@ import {
   CreatePlayerRequest,
   CreateRoomRequest,
   DecideRequest,
+  UiPressRequest,
   decodeCursor,
   type ExtensionSetup,
   type ExtensionSetupsResponse,
@@ -745,6 +750,35 @@ export function restRoutes(options: RestOptions): Hono {
       if (error instanceof ApprovalNotFound) throw new HttpError(404, error.message);
       if (error instanceof AlreadyDecided) throw new HttpError(409, error.message);
       if (error instanceof AdminOnly) throw new HttpError(403, error.message);
+      throw error;
+    }
+  });
+
+  // A press on a tool's card (ADR 27) becomes the caller's message, as one sent would.
+  api.post("/rooms/:room/ui/:call", async (c) => {
+    const room = await usableRoom(c);
+    const body = await readJson(c, UiPressRequest);
+    const { player, clientId } = c.var.credential;
+    try {
+      const submission = await c.var.nudge.ui.press(
+        room.id,
+        c.req.param("call"),
+        {
+          by: { playerId: player.id, displayName: player.displayName, clientId },
+          button: body.button,
+          ...(body.values === undefined ? {} : { values: body.values }),
+          ...(body.requestId === undefined ? {} : { requestId: body.requestId }),
+        },
+        context,
+      );
+      return c.json({ submissionId: submission.id } satisfies MessageResponse, 202);
+    } catch (error) {
+      if (error instanceof UiCardNotFound) throw new HttpError(404, error.message);
+      if (error instanceof UiNotYours) throw new HttpError(403, error.message);
+      if (error instanceof UiCardPressed) throw new HttpError(409, error.message);
+      if (error instanceof UiPressInvalid) throw new HttpError(400, error.message);
+      if (error instanceof BudgetReached)
+        throw new HttpError(429, error.message, ERROR_CODE.budgetSpent);
       throw error;
     }
   });

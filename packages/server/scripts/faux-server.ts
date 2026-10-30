@@ -140,6 +140,40 @@ const respond: FauxResponseFactory = (request) => {
     );
   if (/please pay/i.test(text))
     return fauxAssistantMessage([fauxToolCall("pay", { amount: 10 })], { stopReason: "toolUse" });
+  // A card in the chat (ADR 27); a press on it comes back as "Pressed …".
+  if (/show me a card/i.test(text))
+    return fauxAssistantMessage(
+      [
+        fauxToolCall("show_ui", {
+          title: "Pick a time",
+          blocks: [
+            { type: "text", markdown: "Two tables are free at **Lille Bistro**." },
+            { type: "kv", pairs: [{ label: "Where", value: "Grünerløkka" }] },
+            {
+              type: "table",
+              columns: ["Time", "Seats"],
+              rows: [
+                ["18:00", "4"],
+                ["20:30", "2"],
+              ],
+            },
+          ],
+          fields: [
+            { name: "guests", label: "Guests", type: "number" },
+            { name: "seating", label: "Seating", type: "choice", options: ["Inside", "Outside"] },
+            { name: "note", label: "Note", type: "text", optional: true },
+          ],
+          buttons: [
+            { id: "early", label: "18:00", style: "primary" },
+            { id: "late", label: "20:30" },
+            { id: "none", label: "Neither", skipsFields: true },
+          ],
+        }),
+      ],
+      { stopReason: "toolUse" },
+    );
+  if (/^\S+ \(\d\d:\d\d\): Pressed /.test(text))
+    return fauxAssistantMessage(`Got it: ${text.slice(text.indexOf("Pressed"))}`);
   if (/remind me/i.test(text))
     return fauxAssistantMessage(
       [fauxToolCall("schedule_nudge", { message: "Water the plants", in_minutes: 60 })],

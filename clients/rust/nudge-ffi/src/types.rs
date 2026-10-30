@@ -53,7 +53,8 @@ pub struct ToolPart {
     pub status: ToolStatus,
     pub result: Option<String>,
     pub is_error: Option<bool>,
-    /// What the tool returned for UIs, as JSON.
+    /// What the tool returned for UIs, as JSON. A card's latest press is in it as `pressed`,
+    /// `{ button, by: { id, displayName } }` (ADR 27).
     pub details_json: Option<String>,
     pub output: Option<String>,
     pub truncated: Option<bool>,
@@ -579,13 +580,25 @@ fn part(part: &p::Part) -> Option<Part> {
                 },
                 result: tool.result.clone(),
                 is_error: tool.is_error,
-                details_json: tool.details.as_ref().map(ToString::to_string),
+                details_json: details_with_press(tool),
                 output: tool.output.clone(),
                 truncated: tool.truncated,
             },
         },
         p::Part::Unknown => return None,
     })
+}
+
+/// A tool's details as JSON, with its card's latest press added as `pressed`.
+fn details_with_press(tool: &p::ToolPart) -> Option<String> {
+    let mut details = tool.details.clone()?;
+    if let (Some(pressed), Some(object)) = (&tool.pressed, details.as_object_mut()) {
+        object.insert(
+            "pressed".into(),
+            serde_json::to_value(pressed).unwrap_or(serde_json::Value::Null),
+        );
+    }
+    Some(details.to_string())
 }
 
 /// The item for UIs; `None` for one of a type this client doesn't know.

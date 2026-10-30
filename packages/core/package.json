@@ -27,6 +27,11 @@
       "types": "./dist/codemode.d.ts",
       "default": "./dist/codemode.js"
     },
+    "./ui-card": {
+      "@nudge/source": "./src/ui/card.ts",
+      "types": "./dist/ui/card.d.ts",
+      "default": "./dist/ui/card.js"
+    },
     "./cloudflare": {
       "@nudge/source": "./src/cloudflare.ts",
       "types": "./dist/cloudflare.d.ts",

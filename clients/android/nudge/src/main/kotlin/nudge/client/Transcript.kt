@@ -43,7 +43,7 @@ fun List<TimelineItem>.dayStarts(zone: ZoneId = ZoneId.systemDefault()): Map<Str
 
 /**
  * The chat itself: messages and what the assistant said. Tool calls, thinking, fired nudges and
- * ended approvals are left to [activity], except the browser waiting on a login; pending approvals
+ * ended approvals are left to [activity], except the browser waiting on a login and cards (ADR 27); pending approvals
  * wait in the room's own bar. An answer with nothing left to say drops out once it is done.
  */
 val List<TimelineItem>.transcript: List<TimelineItem>
@@ -51,7 +51,7 @@ val List<TimelineItem>.transcript: List<TimelineItem>
         when (item) {
             is TimelineItem.Nudge, is TimelineItem.Approval -> null
             is TimelineItem.Answer -> {
-                val kept = item.parts.filter { it is Part.Text || (it is Part.Tool && it.tool.needsLogin) }
+                val kept = item.parts.filter { it is Part.Text || (it is Part.Tool && (it.tool.needsLogin || it.tool.card != null)) }
                 // Someone else's private answer comes without parts, and stays as a line saying so.
                 val othersPrivate = item.privateTo != null && item.parts.isEmpty()
                 if (kept.isEmpty() && item.status == AnswerStatus.DONE && !othersPrivate) null else item.copy(parts = kept)

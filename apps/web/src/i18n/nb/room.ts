@@ -61,6 +61,13 @@ export const room: Messages["room"] = {
     whatItsDoing: "hva den gjør",
     openBrowser: "Åpne rommets nettleser for å logge inn",
     askedForApproval: "Ba om godkjenning",
+    card: {
+      pressedBy: (button, who) => `${who} trykket «${button}»`,
+      optional: " (valgfritt)",
+      yes: "Ja",
+      choose: "Velg …",
+      missing: (label) => `Fyll inn «${label}»`,
+    },
     promptedBy: { nudge: "Påminnelse", watch: "Overvåking" },
   },
   presence: {

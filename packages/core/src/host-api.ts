@@ -39,7 +39,12 @@ export type MessageDraft = {
    * be empty. Needs an author.
    */
   readonly attachments?: readonly string[];
+  /** The message is a press on a tool's card (ADR 27). */
+  readonly press?: UiPress;
 };
+
+/** Which button on which tool call's card a message presses. */
+export type UiPress = { readonly callId: string; readonly button: string };
 
 export const MESSAGE_ENTRY = "nudge.message";
 
@@ -55,6 +60,8 @@ export type MessageEntryData = {
   readonly private?: true;
   /** What it was sent with, names with placeholders. */
   readonly attachments?: AttachmentInfo[];
+  /** See `MessageDraft.press`. */
+  readonly press?: UiPress;
 };
 
 export async function submitMessage(
@@ -112,6 +119,9 @@ export async function submitMessage(
                 ...(attachments.length === 0
                   ? {}
                   : { attachments: attachments.map((attachment) => ({ ...attachment })) }),
+                ...(draft.press === undefined
+                  ? {}
+                  : { press: { callId: draft.press.callId, button: draft.press.button } }),
               } satisfies MessageEntryData,
             },
     },

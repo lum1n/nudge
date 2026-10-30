@@ -1,3 +1,4 @@
+import { cardOf } from "@nudge/core/ui-card";
 import {
   addressOf,
   type Approval as CoreApproval,
@@ -238,10 +239,15 @@ function items(
 ): TimelineItem[] {
   const keep = options.keep ?? ((_id, _sources, build) => build());
   const results = new Map<string, EntryRecord>();
+  // The latest press on each card, by tool call id.
+  const presses = new Map<string, EntryRecord>();
   for (const entry of entries)
     if (entry.kind === "pi.tool-result") {
       const id = toolResult(entry)?.toolCallId;
       if (id !== undefined) results.set(id, entry);
+    } else if (entry.kind === MESSAGE_ENTRY) {
+      const press = (entry.data as MessageEntryData).press;
+      if (press !== undefined) presses.set(press.callId, entry);
     }
 
   const timeline: TimelineItem[] = [];
@@ -255,13 +261,14 @@ function items(
     const generated = live?.generation?.message as AssistantMessage | undefined;
     if (answer.length === 0 && generated === undefined && !(live?.tools?.length ?? 0)) return;
     const answerEntries = answer;
-    const callResults = answerEntries.flatMap((entry) =>
-      toolCalls(entry).map((call) => results.get(call.id)),
-    );
+    const calls = answerEntries.flatMap((entry) => toolCalls(entry));
+    const callResults = calls.map((call) => results.get(call.id));
+    const callPresses = calls.map((call) => presses.get(call.id));
     const sources = [
       before,
       ...answerEntries,
       ...callResults,
+      ...callPresses,
       generated,
       live?.tools,
       live !== undefined,
@@ -271,7 +278,7 @@ function items(
     const prompt = before === undefined ? undefined : promptedBy(before);
     timeline.push(
       keep(id, sources, () => {
-        const built = buildAnswer(id, answerEntries, results, live, generated);
+        const built = buildAnswer(id, answerEntries, results, presses, live, generated);
         return {
           ...built,
           ...(prompt === undefined ? {} : { promptedBy: prompt }),
@@ -318,6 +325,9 @@ function entryItem(id: string, entry: EntryRecord): TimelineItem {
         ...(data.requestId === undefined ? {} : { requestId: data.requestId }),
         ...privately(entry),
         ...attachmentsOf(data),
+        ...(data.press === undefined
+          ? {}
+          : { press: { callId: data.press.callId, button: data.press.button } }),
       };
     }
     case FIRE_ENTRY: {
@@ -393,6 +403,7 @@ function buildAnswer(
   id: string,
   entries: readonly EntryRecord[],
   results: ReadonlyMap<string, EntryRecord>,
+  presses: ReadonlyMap<string, EntryRecord>,
   live: LiveState | undefined,
   generated: AssistantMessage | undefined,
 ): TimelineItem {
@@ -406,13 +417,13 @@ function buildAnswer(
         first ??= message;
         last = message;
         for (const content of message.content) {
-          const part = toPart(content, results, slots);
+          const part = toPart(content, results, presses, slots);
           if (part !== undefined) parts.push(part);
         }
       }
   if (generated !== undefined)
     for (const content of generated.content) {
-      const part = toPart(content, results, slots);
+      const part = toPart(content, results, presses, slots);
       if (part !== undefined) parts.push(part);
     }
   // When it started: its first model response; a live one's first token, before that's saved.
@@ -433,6 +444,7 @@ function buildAnswer(
 function toPart(
   content: Content,
   results: ReadonlyMap<string, EntryRecord>,
+  presses: ReadonlyMap<string, EntryRecord>,
   slots: ReadonlyMap<string, ToolSlot>,
 ): Part | undefined {
   switch (content.type) {
@@ -453,15 +465,30 @@ function toPart(
       };
       if (result === undefined)
         return slot?.output === undefined ? part : { ...part, output: slot.output };
-      return { ...part, ...cut(text(result.content), result.details), isError: result.isError };
+      const shown = {
+        ...part,
+        ...cut(text(result.content), result.details),
+        isError: result.isError,
+      };
+      const press = presses.get(content.id)?.data as MessageEntryData | undefined;
+      return press?.press === undefined || cardOf(shown.details) === undefined
+        ? shown
+        : {
+            ...shown,
+            pressed: {
+              button: press.press.button,
+              by: { id: press.playerId, displayName: press.displayName },
+            },
+          };
     }
     default:
       return undefined;
   }
 }
 
-/** A tool's result and details, cut down to what a view carries. */
-function cut(result: string, details: unknown): Partial<ToolPart> {
+/** A tool's result and details, cut down to what a view carries; an invalid card left out. */
+function cut(result: string, given: unknown): Partial<ToolPart> {
+  const details = withValidCard(given);
   const long = result.length > TOOL_OUTPUT_LIMIT;
   const keepDetails =
     details !== undefined && (JSON.stringify(details)?.length ?? 0) <= TOOL_OUTPUT_LIMIT;
@@ -470,6 +497,14 @@ function cut(result: string, details: unknown): Partial<ToolPart> {
     ...(keepDetails ? { details } : {}),
     ...(long || (details !== undefined && !keepDetails) ? { truncated: true } : {}),
   };
+}
+
+/** Details without their `ui` when it isn't a card clients can draw. */
+function withValidCard(details: unknown): unknown {
+  if (typeof details !== "object" || details === null || !("ui" in details)) return details;
+  if (cardOf(details) !== undefined) return details;
+  const { ui: _, ...rest } = details as Record<string, unknown>;
+  return rest;
 }
 
 function queued(item: InboxItem): QueuedMessage[] {

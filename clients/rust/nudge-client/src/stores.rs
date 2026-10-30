@@ -655,6 +655,7 @@ mod tests {
             request_id: None,
             private_to: None,
             attachments: None,
+            press: None,
         })
     }
 

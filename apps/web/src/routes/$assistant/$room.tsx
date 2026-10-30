@@ -16,6 +16,7 @@ import { MarkdownTextPrimitive } from "@assistant-ui/react-markdown";
 import type {
   Approval,
   PendingMessage,
+  Player,
   RoomState,
   RoomStore,
   RoomView,
@@ -57,6 +58,7 @@ import {
 import { allowDictation, dictationAllowed, dictationFor, speechLanguage } from "../../dictation.ts";
 import { dateLocale, m } from "../../i18n/index.ts";
 import { assistantsQuery, meQuery } from "../../queries.ts";
+import { cardIn, UiCardView } from "../../ui-card.tsx";
 
 export const Route = createFileRoute("/$assistant/$room")({ component: Room });
 
@@ -909,6 +911,36 @@ function withHidden(text: string): ReactNode[] {
   return out;
 }
 
+/** Inline markdown in a card's text block: bold, italics, code and links, with hidden values as chips. */
+const INLINE = /\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`|\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g;
+
+function CardMarkdown({ text }: { text: string }) {
+  const out: ReactNode[] = [];
+  let last = 0;
+  for (const match of text.matchAll(INLINE)) {
+    out.push(...withHidden(text.slice(last, match.index)));
+    const [, bold, italic, code, label, href] = match;
+    const key = match.index;
+    if (bold !== undefined) out.push(<strong key={key}>{withHidden(bold)}</strong>);
+    else if (italic !== undefined) out.push(<em key={key}>{withHidden(italic)}</em>);
+    else if (code !== undefined)
+      out.push(
+        <code key={key} className="rounded bg-stone-200 px-1">
+          {code}
+        </code>,
+      );
+    else
+      out.push(
+        <a key={key} href={href} target="_blank" rel="noreferrer noopener" className="underline">
+          {withHidden(label!)}
+        </a>,
+      );
+    last = match.index + match[0].length;
+  }
+  out.push(...withHidden(text.slice(last)));
+  return <p className="whitespace-pre-wrap">{out}</p>;
+}
+
 function TextPart() {
   const { text } = useMessagePartText();
   return <p className="whitespace-pre-wrap">{withHidden(text)}</p>;
@@ -942,9 +974,21 @@ function MarkdownText() {
   );
 }
 
-/** What `transcript` keeps of a tool: a login the browser waits for, or a pending approval. */
-function ToolCallPart({ toolName, artifact }: ToolCallMessagePartProps) {
+/** What `transcript` keeps of a tool: a login the browser waits for, an approval, or a card. */
+function ToolCallPart({ toolName, toolCallId, artifact }: ToolCallMessagePartProps) {
   const { assistant, room } = Route.useParams();
+  const card = cardIn(artifact);
+  if (card !== undefined)
+    return (
+      <UiCardView
+        assistant={assistant}
+        room={room}
+        callId={toolCallId}
+        card={card}
+        pressed={(artifact as { pressed?: { button: string; by: Player } }).pressed}
+        markdown={(text) => <CardMarkdown text={text} />}
+      />
+    );
   if (toolName === "browse" && (artifact as { needsLogin?: boolean } | undefined)?.needsLogin)
     return (
       <p className="my-1 text-sm">

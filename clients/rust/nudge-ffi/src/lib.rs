@@ -894,6 +894,32 @@ impl NudgeClient {
         )
     }
 
+    /// Presses `button` on the card tool call `call_id` showed (ADR 27). `values_json` is a JSON
+    /// object of the card's fields by name, left out for a button that skips them.
+    #[uniffi::method(default(values_json = None))]
+    pub async fn press_card(
+        &self,
+        room: String,
+        call_id: String,
+        button: String,
+        values_json: Option<String>,
+    ) -> Result<(), NudgeError> {
+        let values = match values_json {
+            None => None,
+            Some(json) => match serde_json::from_str::<serde_json::Value>(&json) {
+                Ok(serde_json::Value::Object(map)) => Some(map),
+                _ => {
+                    return Err(NudgeError::Decode {
+                        detail: "values_json is not a JSON object".into(),
+                    });
+                }
+            },
+        };
+        let api = self.client.api().clone();
+        run(async move { api.press_card(&room, &call_id, &button, values).await }).await?;
+        Ok(())
+    }
+
     pub async fn cancel_nudge(&self, nudge_id: String) -> Result<(), NudgeError> {
         let api = self.client.api().clone();
         Ok(run(async move { api.cancel_nudge(&nudge_id).await }).await?)
