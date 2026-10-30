@@ -61,6 +61,21 @@ const ExtensionSchema = Type.Object({
   ),
 });
 
+/**
+ * Extra instructions: free text, or key/value pairs such as `{ "tools": "Search before asking." }`
+ * that say how to go about a problem, which tools to use and the like.
+ */
+const InstructionsSchema = Type.Union([Type.String(), Type.Record(Type.String(), Type.String())]);
+export type Instructions = Static<typeof InstructionsSchema>;
+
+/** Instructions as the text the system prompt has: key/value pairs become a `key: value` line each. */
+export function renderInstructions(instructions: Instructions): string {
+  if (typeof instructions === "string") return instructions;
+  return Object.entries(instructions)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join("\n");
+}
+
 const AssistantSchema = Type.Object({
   /** URL-safe name; also the default display name. */
   name: Type.String({ pattern: "^[a-z0-9][a-z0-9-]*$" }),
@@ -70,7 +85,7 @@ const AssistantSchema = Type.Object({
   model: Type.Optional(ModelRefSchema),
   /** IANA time zone the assistant tells time in. Default: the host's. */
   timeZone: Type.Optional(Type.String()),
-  instructions: Type.Optional(Type.String()),
+  instructions: Type.Optional(InstructionsSchema),
   /** How much it says: "concise" (the default), "balanced" or "detailed". */
   style: Type.Optional(StyleSchema),
   /** How much it decides itself before asking: "cautious", "balanced" (the default) or "independent". */
