@@ -25,6 +25,7 @@ import {
   turnOf,
   Type,
 } from "@nudge/core";
+import { placesCard } from "./card.ts";
 import { kindOf } from "./kinds.ts";
 import {
   admit,
@@ -326,16 +327,25 @@ export function createPlacesExtension(options: PlacesExtensionOptions = {}) {
         description: "List the places the person you are talking to saved, by placeholder.",
         parameters: Type.Object({}),
         replay: "safe",
-        execute: async (_args, _api, context) => {
+        execute: async (_args, api, context) => {
           const player = actor();
           if (player === undefined) return text("Only a person has places.", true);
           const state = await read(player.playerId, context);
           if (state.places.length === 0) return text("No places saved.");
-          return text(
+          const lines = text(
             state.places
               .map((place) => `- ${place.name}: ${place.placeholder} (within ${place.radius} m)`)
               .join("\n"),
           );
+          // A map shows where the places are, so it is only for eyes that may know: a map in a
+          // room would tell everyone there where someone lives.
+          const room = await roomOf(api, api.conversationId, context);
+          const alone =
+            currentTurn().privateTo !== undefined ||
+            room.kind === "personal" ||
+            (await nudge().personal.sharingIn(room.id, context)).includes(player.playerId);
+          const card = alone ? placesCard(state.places) : undefined;
+          return card === undefined ? lines : { ...lines, details: { ui: card } };
         },
       });
 
