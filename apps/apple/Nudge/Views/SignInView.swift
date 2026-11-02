@@ -5,6 +5,7 @@ import SwiftUI
 /// People and devices in the Android app or on the web, or with `nudge pair <player>`. A `nudge://pair` link fills all three.
 struct SignInView: View {
     @Environment(AppModel.self) private var model
+    @Environment(WindowState.self) private var window
     @State private var server = ""
     @State private var code = ""
     @State private var assistants: [Assistant] = []
@@ -88,7 +89,7 @@ struct SignInView: View {
             }
             .navigationTitle("Nudge")
             .onChange(of: server) { assistants = []; assistant = nil }
-            .task(id: model.pendingLink) { await fill(from: model.pendingLink) }
+            .task(id: window.pendingLink) { await fill(from: window.pendingLink) }
         }
         #if os(macOS)
         .frame(minWidth: 420, idealWidth: 480, minHeight: 440)
@@ -101,7 +102,7 @@ struct SignInView: View {
         code = link.code
         await findAssistants()
         if assistants.contains(where: { $0.name == link.assistant }) { assistant = link.assistant }
-        model.pendingLink = nil
+        window.pendingLink = nil
     }
 
     private func findAssistants() async {
@@ -170,6 +171,7 @@ private func isLocal(_ address: String) -> Bool {
 /// takes the link.
 struct SwitchAccountView: View {
     @Environment(AppModel.self) private var model
+    @Environment(WindowState.self) private var window
     @Environment(\.dismiss) private var dismiss
     let link: PairingLink
 
@@ -188,7 +190,7 @@ struct SwitchAccountView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
-                        model.pendingLink = nil
+                        window.pendingLink = nil
                         dismiss()
                     }
                 }

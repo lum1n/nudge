@@ -3,9 +3,12 @@ import SwiftUI
 
 /// The player's rooms beside the open one: a sidebar on the Mac and the iPad, a stack on the
 /// iPhone. The home's rooms come first, then those of each assistant joined from it. A room's
-/// context menu renames it.
+/// context menu renames it, or opens it in a window of its own where the device has several.
 struct RoomsView: View {
     @Environment(AppModel.self) private var model
+    @Environment(WindowState.self) private var window
+    /// The window's room, kept when the system closes the window and brings it back.
+    @SceneStorage("selectedRoom") private var storedRoom: RoomRef?
     let session: Session
     /// Where a new shared room is being made.
     @State private var creating: Session?
@@ -17,9 +20,9 @@ struct RoomsView: View {
     private var account: Account { session.account }
 
     var body: some View {
-        @Bindable var model = model
+        @Bindable var window = window
         NavigationSplitView {
-            List(selection: $model.selectedRoom) {
+            List(selection: $window.selectedRoom) {
                 if let banner = connectionBanner(session.connection.value) {
                     Label(banner, systemImage: "wifi.exclamationmark")
                         .font(.footnote)
@@ -83,14 +86,14 @@ struct RoomsView: View {
             .navigationSplitViewColumnWidth(min: 220, ideal: 260)
             #endif
         } detail: {
-            if let room = model.selectedRoom, let at = model.session(for: room.account) {
+            if let room = window.selectedRoom, let at = model.session(for: room.account) {
                 RoomView(client: at.client, roomId: room.room, me: at.me?.player.id, assistant: at.account.assistantName, look: at.look).id(room)
             } else {
                 ContentUnavailableView("Pick a room", systemImage: "bubble.left.and.bubble.right")
             }
         }
         .sheet(item: $creating) { at in
-            NewRoomView(client: at.client) { model.selectedRoom = RoomRef(account: at.account.keychainAccount, room: $0) }
+            NewRoomView(client: at.client) { window.selectedRoom = RoomRef(account: at.account.keychainAccount, room: $0) }
         }
         .sheet(isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             if let renaming { RenameRoomView(client: renaming.session.client, room: renaming.room) }
@@ -98,6 +101,10 @@ struct RoomsView: View {
         .sheet(isPresented: $settings) {
             SettingsView(client: client, account: account)
         }
+        .onAppear {
+            if window.selectedRoom == nil { window.selectedRoom = storedRoom }
+        }
+        .onChange(of: window.selectedRoom) { _, room in storedRoom = room }
     }
 
     private func rooms(of session: Session) -> [RoomListEntry] {
@@ -116,7 +123,7 @@ struct RoomsView: View {
 
     private func openPersonalRoom(_ at: Session) async {
         do {
-            model.selectedRoom = RoomRef(account: at.account.keychainAccount, room: try await at.client.personalRoom().id)
+            window.selectedRoom = RoomRef(account: at.account.keychainAccount, room: try await at.client.personalRoom().id)
         } catch {
             problem = explain(error)
         }
@@ -125,14 +132,22 @@ struct RoomsView: View {
 
 /// One signed-in assistant's rooms, newest news first, each tagged with where it is.
 private struct RoomRows: View {
+    @Environment(\.openWindow) private var openWindow
+    /// False on the iPhone Duo's outer display and on other iPhones; true on its inner display,
+    /// the iPad and the Mac.
+    @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
     let session: Session
     let rename: (Room) -> Void
 
     var body: some View {
         ForEach(rooms, id: \.room.id) { room in
+            let ref = RoomRef(account: session.account.keychainAccount, room: room.room.id)
             RoomRow(room: room, me: session.me?.player.id)
-                .tag(RoomRef(account: session.account.keychainAccount, room: room.room.id))
+                .tag(ref)
                 .contextMenu {
+                    if supportsMultipleWindows {
+                        Button("Open in New Window", systemImage: "macwindow.badge.plus") { openWindow(value: ref) }
+                    }
                     // Only admins rename the lobby.
                     if room.room.kind != .lobby || session.me?.admin == true {
                         Button("Rename…", systemImage: "pencil") { rename(room.room) }

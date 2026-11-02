@@ -1,11 +1,11 @@
 # Nudge for iPhone, iPad and Mac
 
-The Nudge app for iOS 26 and macOS 26 (and later), in SwiftUI, on the Swift package in [`clients/apple`](../../clients/apple) (the Rust core through UniFFI). Bundle id `app.nudge.dev`.
+The Nudge app for iOS 27.1 and macOS 26 (and later), in SwiftUI, on the Swift package in [`clients/apple`](../../clients/apple) (the Rust core through UniFFI). Bundle id `app.nudge.dev`.
 
 - Sign in with a pairing code (`nudge pair <player>` on the server) or by opening a `nudge://pair?…` link. The token goes in the keychain.
 - No server yet: "Make one on exe.dev" (signing in to exe.dev in the app: it asks for your email and mails a link that adds the app's own key to your account; key and token stay in the keychain) or "Set up one I started" runs the setup wizard (ADR 11): its address, the one-time setup code, the assistant's name, a model with your key or one running on the server, your name and nightly backups. The app signs in to the new assistant as your home and to the server as its owner; set up while signed in already, the new assistant is joined from home instead, you its admin and the server's owner. That needs federation at home, which the app checks first and can turn on.
 - Settings → Servers, for the servers you own (the app signs in as owner of its home's server when you are one): each one's assistants (edit, delete, join from home, or new: for you, joined from home, or someone else's home with their pairing link), its model keys, automatic updates, the recovery kit, removing one made on exe.dev, and making another there.
-- Rooms: a sidebar on the Mac and the iPad, a list on the iPhone. Each row shows when the assistant is answering and how many actions wait for approval.
+- Rooms: a sidebar on the Mac, the iPad and the iPhone Duo's inner display, a list on the iPhone. A room's context menu opens it in a window of its own where the device has several, and each window keeps its own room. Each row shows when the assistant is answering and how many actions wait for approval.
 - A `nudge://sign-in` link, from the QR code on the web UI's sign-in page, asks and then signs that browser in as you.
 - Signed in at home, the app joins other assistants too: a `nudge://join` link from an admin there asks first, and the assistants joined from home on another device follow on their own. Their rooms are listed under each one's name. Settings shows your address, where you joined (take your own memory there or not, leave from the context menu) and your profile: picture, name, time zone, language, notifications and extensions' settings.
 - A room: the timeline as it streams (text, thinking, tool calls), approvals to approve or deny, fired nudges, messages on their way (with Retry and Dismiss when one fails), Stop, and earlier messages on demand. Views and unsent messages are cached, so the app opens offline and sends what waited once it's back.
@@ -21,7 +21,7 @@ The Nudge app for iOS 26 and macOS 26 (and later), in SwiftUI, on the Swift pack
 
 ## Build
 
-On a Mac with Xcode 26, [XcodeGen](https://github.com/yonaskolb/XcodeGen) 2.45.1 or later (`brew install xcodegen`), CMake (`brew install cmake`, for whisper.cpp) and Rust from [rustup](https://rustup.rs):
+On a Mac with Xcode 27.1, [XcodeGen](https://github.com/yonaskolb/XcodeGen) 2.45.1 or later (`brew install xcodegen`), CMake (`brew install cmake`, for whisper.cpp) and Rust from [rustup](https://rustup.rs):
 
 ```bash
 scripts/setup.sh
@@ -30,6 +30,17 @@ scripts/setup.sh
 It adds the Apple Rust targets that are missing, builds the Rust core for iOS, the simulator and macOS (`clients/apple/scripts/build.sh --xcframework`), writes `Nudge.xcodeproj` from `project.yml` and opens it. Run it again after the Rust core changes; after adding files or changing `project.yml`, `scripts/setup.sh --project-only` only writes the project. `--no-open` leaves Xcode closed. Pick your team under Signing & Capabilities (or set `DEVELOPMENT_TEAM` in `project.yml`); the Nudge-iOS and Nudge-macOS schemes build the two apps.
 
 To try it without a real model: `pnpm build` in the repository, then `node packages/server/scripts/faux-server.ts`. It prints the server's address and a pairing code for Bo; the simulator and the Mac reach it at that address.
+
+## iPhone Duo
+
+The app adapts as the iPhone Duo opens and closes:
+
+- Closed, the outer display is a compact iPhone: the room list is a stack, the system bars move to the side, and the activity and the browser open as sheets.
+- Open, the inner display is regular width: the sidebar sits beside the room, and the activity or the browser opens beside the transcript in an `ArrangementView`. Folded like a book, each gets its own half; closed again, the browser goes back to a sheet.
+- Folded like a laptop or a tent in an empty room, the robot sits on the upper half and the composer on the lower one. The robot leans back with the hinge (an effect, never layout).
+- On the inner display, "Open in New Window" in a room's context menu opens a second window. A notification is held back only for a room shown in a window in front; the sockets stay open while any window is.
+
+Try it with the iPhone Duo simulator in Xcode 27.1 (its controls open, close and fold it), Split View beside Safari, and iPhone Mirroring on macOS 27. App Store Connect needs screenshots of both displays for the "Made for iPhone Duo" badge: 1398×2034 (outer) and 2007×2853 (inner).
 
 ## Languages
 

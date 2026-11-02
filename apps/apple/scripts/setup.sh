@@ -25,7 +25,7 @@ fail() { echo "$1" >&2; exit 1; }
 
 [[ "$(uname)" == Darwin ]] || fail "This needs a Mac with Xcode; on Linux, clients/apple/scripts/build.sh builds the Swift package alone."
 xcodebuild -version >/dev/null 2>&1 ||
-  fail "No Xcode: install Xcode 26 from the App Store, then run: sudo xcode-select -s /Applications/Xcode.app"
+  fail "No Xcode: install Xcode 27.1 from the App Store, then run: sudo xcode-select -s /Applications/Xcode.app"
 command -v xcodegen >/dev/null || fail "No XcodeGen: brew install xcodegen"
 # 2.45.1 is the first to take the app icon from Icon Composer (Nudge/AppIcon.icon).
 xcodegen_version="$(xcodegen --version | grep -Eo '[0-9]+(\.[0-9]+)+' | head -1)"
@@ -61,6 +61,6 @@ fi
 
 cd "$here"
 xcodegen generate --quiet
-echo "Wrote $here/Nudge.xcodeproj. Pick your team under Signing & Capabilities (or set DEVELOPMENT_TEAM in project.yml), then build Nudge-iOS or Nudge-macOS."
+echo "Wrote $here/Nudge.xcodeproj. Pick your team under Signing & Capabilities (or set DEVELOPMENT_TEAM in project.yml), then build Nudge-iOS (try it on the iPhone Duo simulator) or Nudge-macOS."
 [[ "$open" == yes ]] && open Nudge.xcodeproj
 exit 0

@@ -7,7 +7,8 @@ options:
   # English source strings; Nudge/Localizable.xcstrings adds Norwegian (bokmål).
   developmentLanguage: en
   deploymentTarget:
-    iOS: "26.0"
+    # 27.1 for the iPhone Duo: its fold arrangements, reserved regions and hinge.
+    iOS: "27.1"
     macOS: "26.0"
   createIntermediateGroups: true
 settings:
@@ -70,10 +71,14 @@ targets:
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         UIBackgroundModes: [remote-notification]
+        # Several windows, each on its own room: the iPad, and the iPhone Duo's inner display.
         UIApplicationSceneManifest:
-          UIApplicationSupportsMultipleScenes: false
+          UIApplicationSupportsMultipleScenes: true
+        # All of them: an app that multitasks must, and the iPhone Duo's inner display ignores
+        # the list anyway.
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         UISupportedInterfaceOrientations~ipad:
