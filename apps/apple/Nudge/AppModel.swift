@@ -4,6 +4,7 @@
 import Foundation
 import Nudge
 import Observation
+import SwiftUI
 
 /// An assistant the app is signed in to: the home is kept in the user defaults, the assistants
 /// joined from it too, and the tokens in the keychain.
@@ -26,10 +27,37 @@ struct Account: Codable, Equatable, Hashable {
     }
 }
 
-/// A room of one of the signed-in assistants.
-struct RoomRef: Hashable {
+/// A room of one of the signed-in assistants. As a string, for `@SceneStorage` and for the
+/// windows that open on one room: the account and the room, split by a unit separator.
+struct RoomRef: Hashable, Codable, RawRepresentable {
     var account: String
     var room: String
+
+    init(account: String, room: String) {
+        self.account = account
+        self.room = room
+    }
+
+    init?(rawValue: String) {
+        let parts = rawValue.split(separator: "\u{1F}", maxSplits: 1, omittingEmptySubsequences: false)
+        guard parts.count == 2, !parts[1].isEmpty else { return nil }
+        self.init(account: String(parts[0]), room: String(parts[1]))
+    }
+
+    var rawValue: String { "\(account)\u{1F}\(room)" }
+
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        guard let ref = RoomRef(rawValue: raw) else {
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Not a room: \(raw)"))
+        }
+        self = ref
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
 /// A signed-in assistant with its client and the views every screen needs.
@@ -81,14 +109,12 @@ final class AppModel {
     private(set) var memberships: Memberships?
     /// Whether the home has federation: false once it said it hasn't, nil until it said.
     private(set) var homeFederation: Bool?
-    /// The room on screen, also chosen by tapping a notification.
-    var selectedRoom: RoomRef?
-    /// A pairing link opened while signed out, or for another server.
-    var pendingLink: PairingLink?
-    /// A join link: an admin elsewhere invited the player.
-    var pendingJoin: JoinLink?
-    /// A sign-in link from the QR code of a browser that shows the web UI.
-    var pendingSignIn: SignInLink?
+    /// The app's open windows, each with its own room.
+    private(set) var windows: [WindowState] = []
+    /// A room a notification opened before any window was there, for the first one.
+    @ObservationIgnored private var pendingOpen: RoomRef?
+    /// Whether the sockets are open; nil until a window said.
+    @ObservationIgnored private var active: Bool?
     /// Why the app signed out on its own, for the sign-in screen.
     var signedOutBecause: String?
     /// The servers this device owns, and the exe.dev token it makes new ones with.
@@ -518,7 +544,7 @@ final class AppModel {
         self.places = []
         memberships = nil
         homeFederation = nil
-        selectedRoom = nil
+        for window in windows { window.selectedRoom = nil }
         signedOutBecause = reason
         defaults.removeObject(forKey: Self.accountKey)
         defaults.removeObject(forKey: Self.placesKey)
@@ -526,8 +552,39 @@ final class AppModel {
         await forget(session)
     }
 
+    /// A window opened: it takes the room a notification opened before it was there.
+    func register(_ window: WindowState) {
+        guard !windows.contains(where: { $0 === window }) else { return }
+        windows.append(window)
+        if let pendingOpen {
+            window.selectedRoom = pendingOpen
+            self.pendingOpen = nil
+        }
+    }
+
+    /// A window closed: the sockets stay open while another is still on screen.
+    func unregister(_ window: WindowState) {
+        windows.removeAll { $0 === window }
+        setActive(isActive)
+    }
+
+    /// Whether any window is on screen, or about to be.
+    var isActive: Bool { windows.contains { $0.phase != .background } }
+
+    /// The rooms shown in windows the player has in front of them.
+    var visibleRooms: Set<RoomRef> {
+        Set(windows.filter { $0.phase == .active }.compactMap(\.selectedRoom))
+    }
+
+    /// The window a tapped notification opens its room in: the one in front.
+    private var frontWindow: WindowState? {
+        windows.first { $0.phase == .active } ?? windows.first { $0.phase == .inactive } ?? windows.first
+    }
+
     /// The socket is closed while the app is in the background, so the server pushes instead.
     func setActive(_ active: Bool) {
+        guard self.active != active else { return }
+        self.active = active
         for session in sessions {
             if active {
                 session.client.connect()
@@ -560,22 +617,27 @@ final class AppModel {
     /// A tapped notification: open its room, at the assistant it came from.
     func open(account: String?, assistant: String?, room: String?) {
         guard let room, let session = session(forPush: account, assistant: assistant) else { return }
-        selectedRoom = RoomRef(account: session.account.keychainAccount, room: room)
+        let ref = RoomRef(account: session.account.keychainAccount, room: room)
+        if let window = frontWindow {
+            window.selectedRoom = ref
+        } else {
+            pendingOpen = ref
+        }
     }
 
-    /// Whether the room a notification is about is on screen.
+    /// Whether the room a notification is about is on screen, in any window in front.
     func showing(account: String?, assistant: String?, room: String?) -> Bool {
-        guard let room, let shown = selectedRoom, shown.room == room else { return false }
-        return session(forPush: account, assistant: assistant)?.account.keychainAccount == shown.account
+        guard let room, let session = session(forPush: account, assistant: assistant) else { return false }
+        return visibleRooms.contains(RoomRef(account: session.account.keychainAccount, room: room))
     }
 
     /// A `nudge://pair` link: sign in with it, or ask first when signed in elsewhere. A
     /// `nudge://join` link: ask to join that assistant from home. A `nudge://sign-in` link: ask to
-    /// sign in the browser that shows it.
-    func handle(_ url: URL) {
-        if let link = PairingLink(url) { pendingLink = link }
-        if let link = JoinLink(url) { pendingJoin = link }
-        if let link = SignInLink(url) { pendingSignIn = link }
+    /// sign in the browser that shows it. The window the link opened in asks.
+    func handle(_ url: URL, in window: WindowState) {
+        if let link = PairingLink(url) { window.pendingLink = link }
+        if let link = JoinLink(url) { window.pendingJoin = link }
+        if let link = SignInLink(url) { window.pendingSignIn = link }
     }
 
     /// Signs in the browser that shows `link`'s QR code as the player, at an assistant on the server

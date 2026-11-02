@@ -984,6 +984,16 @@
         }
       }
     },
+    "Close" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lukk"
+          }
+        }
+      }
+    },
     "Colours" : {
       "localizations" : {
         "nb" : {
@@ -3170,6 +3180,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bare du ser"
+          }
+        }
+      }
+    },
+    "Open in New Window" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Åpne i nytt vindu"
           }
         }
       }

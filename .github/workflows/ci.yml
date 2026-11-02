@@ -2,7 +2,8 @@
 # workflow_call) before release.yml bundles and signs a tag.
 #   - TypeScript: typecheck, lint and test (`pnpm check`), and the push relay's bundle,
 #   - the Rust client: `cargo test`, its server tests against the built packages,
-#   - the Android app: a debug build, without the native libraries (cargo-ndk).
+#   - the Android app: a debug build, without the native libraries (cargo-ndk),
+#   - the Apple app: an iOS simulator build with Xcode 27.1, the only place the SwiftUI compiles.
 name: ci
 
 on:
@@ -74,3 +75,26 @@ jobs:
           workspaces: clients/rust
       - run: ./gradlew :app:assembleDebug -Pnudge.native=false
         working-directory: apps/android
+
+  apple:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "27.1"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios,aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: clients/rust
+      - run: brew install xcodegen
+      - run: clients/apple/scripts/build.sh --xcframework
+      - run: xcodegen generate --quiet
+        working-directory: apps/apple
+      # Unsigned: CI has no team. The simulator build covers the iPhone Duo's APIs.
+      - run: >-
+          xcodebuild build -project Nudge.xcodeproj -scheme Nudge-iOS
+          -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO
+        working-directory: apps/apple

@@ -24,6 +24,26 @@ struct RoomView: View {
     @State private var afterglow: Mood?
     /// The time, again every minute: enough to notice the room going quiet.
     @State private var now = Date.now
+    /// The browser beside the transcript, where there is room for it.
+    @State private var browserBeside = false
+    /// Folded like a laptop or a tent: the fold runs across the room.
+    @State private var tabletop = false
+    /// How far the robot leans back with the hinge: effects only, never layout.
+    @State private var lean = Angle.zero
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
+
+    /// Where the activity and the browser open beside the transcript rather than over it: on iOS
+    /// at regular width, such as the iPhone Duo's inner display and the iPad. On the Mac the
+    /// activity is an inspector, and the browser a sheet.
+    private var beside: Bool {
+        #if os(iOS)
+        sizeClass == .regular
+        #else
+        false
+        #endif
+    }
 
     /// Whose location the assistant knows here, for everyone in the room to see; empty for none.
     private var locationNote: String {
@@ -39,7 +59,13 @@ struct RoomView: View {
     }
 
     var body: some View {
-        content
+        arranged
+            #if os(iOS)
+            // The fold, while there is one: it runs across the room when folded like a laptop.
+            .onGeometryChange(for: Bool.self) { proxy in
+                proxy.reservedRegions(kind: .division).contains { $0.frame.width > $0.frame.height }
+            } action: { tabletop = $0 }
+            #endif
             .navigationTitle(state?.room?.name ?? "")
             .navigationSubtitle(locationNote)
             #if os(iOS)
@@ -58,8 +84,9 @@ struct RoomView: View {
                 case .browser: PanelSheet { BrowserView(client: client, roomId: roomId) }
                 }
             }
-            // Behind the transcript: from the right on macOS, a sheet on iOS.
-            .inspector(isPresented: $activity) {
+            // Behind the transcript: from the right on macOS, a sheet on a compact iPhone. Beside
+            // it on a wide one, in the arrangement.
+            .inspector(isPresented: Binding(get: { activity && !beside }, set: { activity = $0 })) {
                 ActivityView(observed: observed)
                     .inspectorColumnWidth(min: 300, ideal: 380, max: 560)
                     #if os(iOS)
@@ -67,7 +94,16 @@ struct RoomView: View {
                     .presentationDragIndicator(.visible)
                     #endif
             }
-            .environment(\.openBrowser, { showing = .browser })
+            .environment(\.openBrowser, {
+                if beside { browserBeside = true } else { showing = .browser }
+            })
+            // Closed, the iPhone Duo is compact again: the browser goes back to a sheet.
+            .onChange(of: beside) { _, beside in
+                if !beside && browserBeside {
+                    browserBeside = false
+                    showing = .browser
+                }
+            }
             .environment(\.openActivity, { activity = true })
             .environment(\.pressCard, { callId, card, button, values in
                 try await client.press(room: roomId, callId: callId, card: card, button: button, values: values)
@@ -123,50 +159,129 @@ struct RoomView: View {
         transcript.isEmpty && queued.isEmpty && (state?.pending.isEmpty ?? true)
     }
 
+    /// The room with the activity or the browser beside it, where there is room: flat, a split;
+    /// folded like a book, each on its own half. Without a panel, or compact, just the room.
+    @ViewBuilder private var arranged: some View {
+        #if os(iOS)
+        if panelBeside {
+            ArrangementView {
+                content
+            } secondary: {
+                panel
+            }
+            .arrangementViewStyle(.split)
+        } else {
+            content
+        }
+        #else
+        content
+        #endif
+    }
+
+    /// The activity or the browser is open beside the transcript.
+    private var panelBeside: Bool { beside && (activity || browserBeside) }
+
+    /// The panel beside the transcript, with a button to close it: the activity has the room's
+    /// Activity button for that.
+    @ViewBuilder private var panel: some View {
+        if browserBeside {
+            VStack(spacing: 0) {
+                HStack {
+                    Text("Browser").font(.headline)
+                    Spacer()
+                    Button("Close", systemImage: "xmark") { browserBeside = false }
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(.glass)
+                }
+                .padding([.horizontal, .top])
+                BrowserView(client: client, roomId: roomId)
+            }
+        } else {
+            ActivityView(observed: observed)
+        }
+    }
+
     @ViewBuilder private var content: some View {
         if let state, state.status == .gone {
             ContentUnavailableView(
                 state.reason == .removed ? "You left this room" : "No such room",
                 systemImage: "questionmark.bubble")
+        } else if tabletop && empty && state?.room != nil && !panelBeside {
+            #if os(iOS)
+            // Folded like a laptop or a tent, with nothing said yet: the robot on the upper half,
+            // to see from a distance, and the composer on the lower one, to touch.
+            ArrangementView {
+                greeting
+            } secondary: {
+                VStack {
+                    Spacer(minLength: 0)
+                    bar
+                }
+            }
+            .arrangementViewStyle(.split.axes(.vertical))
+            #endif
         } else {
             // The timeline scrolls under a floating glass bar: what waits for approval, the live
             // status, and the composer, sampled as one glass surface.
             timeline
-                .safeAreaBar(edge: .bottom) {
-                    GlassEffectContainer(spacing: 8) {
-                        VStack(spacing: 8) {
-                            // Asked for by a tool and waiting: the activity shows them once decided.
-                            ForEach(state?.approvals.filter { $0.status == .pending } ?? [], id: \.id) { approval in
-                                // Its own errors show on the card, which stays to try again.
-                                PendingApprovalCard(approval: approval) { approve, inputs in
-                                    _ = try await client.decide(
-                                        room: roomId, approvalId: approval.id, approve: approve, inputs: inputs)
-                                }
-                            }
-                            if !empty {
-                                Presence(
-                                    mood: mood, look: look, level: level, status: state?.live?.status,
-                                    label: RoomMood.label(mood, timeline: state?.timeline ?? [], live: state?.live))
-                            } else if let status = state?.live?.status {
-                                LiveStatusView(status: status)
-                            }
-                            if let attachments {
-                                AttachmentChips(drafts: attachments, imagesToModel: state?.room?.imagesToModel == true)
-                            }
-                            Composer(
-                                draft: $draft, running: state?.live?.running == true, dictation: dictation,
-                                attachments: attachments,
-                                // Only in a shared room is there anyone to keep a message from.
-                                secret: state?.room?.kind == .personal ? nil : $secret,
-                                send: { text in Task { await send(text) } },
-                                stop: { Task { await attempt { try await client.abort(room: roomId) } } })
-                        }
-                        .padding(.horizontal)
-                        .padding(.bottom, 8)
-                    }
-                    .animation(.smooth, value: state?.approvals.map(\.status))
-                }
+                .safeAreaBar(edge: .bottom) { bar }
         }
+    }
+
+    /// The empty room's big robot, leaning with the hinge.
+    private var greeting: some View {
+        VStack(spacing: 12) {
+            AvatarView(mood: mood, appearance: look, size: 160, level: level)
+                .rotation3DEffect(lean, axis: (x: 1, y: 0, z: 0), perspective: 0.4)
+            Text("Say hello to \(assistant).").foregroundStyle(.secondary)
+        }
+        #if os(iOS)
+        .onHingeChange { _, context in
+            // No hinge: a device that doesn't fold.
+            if let hinge = context.hinge, hinge.status == .partiallyOpen {
+                // Up to 20° back as the phone closes from flat (180°) towards 90°.
+                lean = .degrees(min(max((180 - hinge.angle.degrees) / 90, 0), 1) * 20)
+            } else {
+                lean = .zero
+            }
+        }
+        #endif
+    }
+
+    /// What waits for approval, the live status, and the composer.
+    private var bar: some View {
+        GlassEffectContainer(spacing: 8) {
+            VStack(spacing: 8) {
+                // Asked for by a tool and waiting: the activity shows them once decided.
+                ForEach(state?.approvals.filter { $0.status == .pending } ?? [], id: \.id) { approval in
+                    // Its own errors show on the card, which stays to try again.
+                    PendingApprovalCard(approval: approval) { approve, inputs in
+                        _ = try await client.decide(
+                            room: roomId, approvalId: approval.id, approve: approve, inputs: inputs)
+                    }
+                }
+                if !empty {
+                    Presence(
+                        mood: mood, look: look, level: level, status: state?.live?.status,
+                        label: RoomMood.label(mood, timeline: state?.timeline ?? [], live: state?.live))
+                } else if let status = state?.live?.status {
+                    LiveStatusView(status: status)
+                }
+                if let attachments {
+                    AttachmentChips(drafts: attachments, imagesToModel: state?.room?.imagesToModel == true)
+                }
+                Composer(
+                    draft: $draft, running: state?.live?.running == true, dictation: dictation,
+                    attachments: attachments,
+                    // Only in a shared room is there anyone to keep a message from.
+                    secret: state?.room?.kind == .personal ? nil : $secret,
+                    send: { text in Task { await send(text) } },
+                    stop: { Task { await attempt { try await client.abort(room: roomId) } } })
+            }
+            .padding(.horizontal)
+            .padding(.bottom, 8)
+        }
+        .animation(.smooth, value: state?.approvals.map(\.status))
     }
 
     private var timeline: some View {
@@ -226,10 +341,7 @@ struct RoomView: View {
                 if state == nil || (state?.room == nil && state?.status == .syncing) {
                     ProgressView()
                 } else if empty {
-                    VStack(spacing: 12) {
-                        AvatarView(mood: mood, appearance: look, size: 160, level: level)
-                        Text("Say hello to \(assistant).").foregroundStyle(.secondary)
-                    }
+                    greeting
                 }
             }
         }

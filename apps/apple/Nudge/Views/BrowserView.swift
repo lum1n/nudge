@@ -215,7 +215,7 @@ private struct Page: View {
         } else {
             Text("Waiting for the page…")
                 .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, minHeight: 240)
+                .frame(maxWidth: .infinity, minHeight: 240, maxHeight: .infinity)
         }
     }
 

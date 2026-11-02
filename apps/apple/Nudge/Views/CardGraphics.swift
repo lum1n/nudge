@@ -35,7 +35,7 @@ struct CardMapView: View {
                     Marker(marker.label, monogram: Text("\(index + 1)"), coordinate: CLLocationCoordinate2D(latitude: marker.lat, longitude: marker.lon))
                 }
             }
-            .frame(height: 200)
+            .scaledHeight(ratio: 2, min: 200, max: 360)
             .clipShape(.rect(cornerRadius: 10))
             .onTapGesture(perform: open)
             .accessibilityLabel(markers.map(\.label).joined(separator: ", "))
@@ -158,7 +158,7 @@ struct CardChartView: View {
             // Labels in the order the card gives them, and as few as fit.
             .chartXScale(domain: uniqueLabels)
             .chartXAxis { AxisMarks(values: .automatic(desiredCount: 6)) }
-            .frame(height: 180)
+            .scaledHeight(ratio: 2.2, min: 180, max: 320)
         }
     }
 
@@ -462,5 +462,27 @@ struct CardDiagramView: View {
         if to.y == from.y { return (CGPoint(x: from.x + boxWidth / 2, y: from.y), CGPoint(x: to.x - boxWidth / 2, y: to.y)) }
         let sign: CGFloat = to.y > from.y ? 1 : -1
         return (CGPoint(x: from.x, y: from.y + sign * boxHeight / 2), CGPoint(x: to.x, y: to.y - sign * boxHeight / 2))
+    }
+}
+
+/// A height that grows with the width there is, between `min` and `max`: a map or a chart on the
+/// iPhone Duo's inner display, an iPad or a wide Mac window isn't a thin strip.
+private struct ScaledHeight: ViewModifier {
+    let ratio: CGFloat
+    let min: CGFloat
+    let max: CGFloat
+    @State private var width: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .frame(height: Swift.min(Swift.max(width / ratio, min), max))
+            .frame(maxWidth: .infinity)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+    }
+}
+
+extension View {
+    fileprivate func scaledHeight(ratio: CGFloat, min: CGFloat, max: CGFloat) -> some View {
+        modifier(ScaledHeight(ratio: ratio, min: min, max: max))
     }
 }
