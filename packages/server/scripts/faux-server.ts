@@ -218,6 +218,73 @@ const respond: FauxResponseFactory = (request) => {
       ],
       { stopReason: "toolUse" },
     );
+  // Links, choices, a slider, an event, a diagram and a card updated in place (ADR 30). Pressing
+  // "Next" makes the model show the same card again, changed, with `update_ui`.
+  if (/show me a live card/i.test(text))
+    return fauxAssistantMessage(
+      [
+        fauxToolCall(
+          "show_ui",
+          {
+            title: "Delivery",
+            blocks: [
+              { type: "text", markdown: "Your parcel is **packed**." },
+              { type: "image", attachment: "a1", alt: "The parcel" },
+              {
+                type: "event",
+                title: "Pickup at the depot",
+                start: "2026-11-03T18:00+01:00",
+                end: "2026-11-03T18:30+01:00",
+                location: "Depot, Oslo",
+                notes: "Bring ID",
+              },
+              {
+                type: "diagram",
+                nodes: [
+                  { id: "a", label: "Packed" },
+                  { id: "b", label: "Shipped" },
+                  { id: "c", label: "Delivered" },
+                ],
+                edges: [
+                  { from: "a", to: "b", label: "today" },
+                  { from: "b", to: "c" },
+                ],
+              },
+            ],
+            fields: [
+              {
+                name: "extras",
+                label: "Extras",
+                type: "choices",
+                options: ["Gift wrap", "Insurance", "Signature"],
+                optional: true,
+              },
+              { name: "tip", label: "Tip", type: "range", min: 0, max: 50, step: 5 },
+            ],
+            buttons: [
+              { id: "next", label: "Next", style: "primary" },
+              { id: "site", label: "Track online", url: "https://example.com/track" },
+            ],
+          },
+          { id: "live1" },
+        ),
+      ],
+      { stopReason: "toolUse" },
+    );
+  if (/^\S+ \(\d\d:\d\d\): Pressed "Next"/.test(text))
+    return fauxAssistantMessage(
+      [
+        fauxToolCall("update_ui", {
+          call_id: "live1",
+          card: {
+            title: "Delivery",
+            blocks: [{ type: "text", markdown: "Your parcel is **shipped**." }],
+            buttons: [{ id: "done", label: "Thanks" }],
+          },
+        }),
+      ],
+      { stopReason: "toolUse" },
+    );
   if (/^\S+ \(\d\d:\d\d\): Pressed /.test(text))
     return fauxAssistantMessage(`Got it: ${text.slice(text.indexOf("Pressed"))}`);
   if (/remind me/i.test(text))
