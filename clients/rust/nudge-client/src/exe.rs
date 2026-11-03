@@ -251,13 +251,21 @@ impl ExeDev {
         Ok(vm_of(&answer).unwrap_or_else(|| ExeVm::named(name)))
     }
 
-    /// Adds an SSH public key to the person's exe.dev account. One that is there already is fine.
-    pub async fn add_ssh_key(&self, public_key: &str) -> Result<(), ExeError> {
+    /// Adds an SSH public key to the person's exe.dev account, or with `vm` for that VM only. One
+    /// that is there already is fine.
+    pub async fn add_ssh_key(&self, public_key: &str, vm: Option<&str>) -> Result<(), ExeError> {
         let key = public_key.trim();
         if key.is_empty() || key.chars().any(|c| c == '\'' || c.is_control()) {
             return Err(ExeError::Invalid("Not an SSH public key".into()));
         }
-        match self.exec(&format!("ssh-key add '{key}'")).await {
+        let scope = match vm {
+            Some(vm) => {
+                check_name(vm)?;
+                format!(" --vm={vm}")
+            }
+            None => String::new(),
+        };
+        match self.exec(&format!("ssh-key add{scope} '{key}'")).await {
             Ok(_) => Ok(()),
             Err(ExeError::Command(message) | ExeError::Status { message, .. })
                 if message.to_ascii_lowercase().contains("already") =>
@@ -271,9 +279,15 @@ impl ExeDev {
     /// Does what an approval asks of the device before it is approved, and returns the inputs
     /// to approve it with: for `exe.new`, `vm` and `sshHost` (and `sshUser` when exe.dev named
     /// one, `sshKeyError` when the key couldn't be added); nothing for `exe.rm`.
+    ///
+    /// `exe.new` makes the VM, or takes the one of that name there is already (asked again after
+    /// the key failed), then adds the key for that VM only. `key_token` adds it when given
+    /// (`mint_exe_key_token`): the app's own token expires and may not run `ssh`, and exe.dev
+    /// won't add a key with such a token, or the key couldn't log in.
     pub async fn run_client_action(
         &self,
         action: &ClientAction,
+        key_token: Option<&str>,
     ) -> Result<HashMap<String, String>, ExeError> {
         let mut inputs = HashMap::new();
         match action {
@@ -283,13 +297,29 @@ impl ExeDev {
                 ssh_key,
             } => {
                 check_name(name)?;
+                let vm = match self.new_vm(name, image.as_deref()).await {
+                    Ok(vm) => vm,
+                    Err(error @ ExeError::Command(_)) => self
+                        .list()
+                        .await
+                        .ok()
+                        .and_then(|vms| vms.into_iter().find(|vm| &vm.name == name))
+                        .ok_or(error)?,
+                    Err(error) => return Err(error),
+                };
                 if let Some(key) = ssh_key.as_deref().filter(|key| !key.trim().is_empty()) {
-                    // The VM is still worth making: the handler hears why the key isn't there.
-                    if let Err(error) = self.add_ssh_key(key).await {
+                    let adder = match key_token {
+                        Some(token) => ExeDev {
+                            token: token.trim().to_owned(),
+                            ..self.clone()
+                        },
+                        None => self.clone(),
+                    };
+                    // The VM is still worth having: the handler hears why the key isn't there.
+                    if let Err(error) = adder.add_ssh_key(key, Some(&vm.name)).await {
                         inputs.insert("sshKeyError".to_owned(), error.to_string());
                     }
                 }
-                let vm = self.new_vm(name, image.as_deref()).await?;
                 let host = vm
                     .ssh_host
                     .clone()

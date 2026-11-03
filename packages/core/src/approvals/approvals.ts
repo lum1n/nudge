@@ -118,6 +118,11 @@ export type ApprovalDraft = {
   readonly inputs?: readonly ApprovalInput[];
   /** What the app does on the device before it approves; see `ClientAction`. */
   readonly clientAction?: ClientAction;
+  /**
+   * One pending approval of this kind and payload is enough: asking again, as a model may in a
+   * loop, gives back the one waiting instead of another.
+   */
+  readonly once?: boolean;
 };
 
 /** What an approved action's handler gets. */
@@ -182,18 +187,30 @@ export async function requestApproval(
   const summary = draft.summary.trim();
   if (summary === "") throw new Error("An approval needs a summary");
   const state = await tx.doc(ApprovalsDoc, roomId, null);
-  if (state.items.filter((item) => item.status === "pending").length >= MAX_PENDING)
-    throw new Error(`This conversation has ${MAX_PENDING} approvals waiting already`);
   // Kept with placeholders like the transcript; the handler gets the values back.
   const turn = currentTurn();
   const { privateTo, redact = (text: string) => text } = turn;
+  const payload = mapStrings(draft.payload, redact);
+  if (draft.once === true) {
+    const same = JSON.stringify(payload);
+    const waiting = state.items.find(
+      (item) =>
+        item.status === "pending" &&
+        item.extension === draft.extension &&
+        item.kind === draft.kind &&
+        JSON.stringify(item.payload) === same,
+    );
+    if (waiting !== undefined) return JSON.parse(JSON.stringify(waiting)) as Approval;
+  }
+  if (state.items.filter((item) => item.status === "pending").length >= MAX_PENDING)
+    throw new Error(`This conversation has ${MAX_PENDING} approvals waiting already`);
   const requestedBy = actingFor(turn);
   const approval: Approval = {
     id: `a${state.next}`,
     extension: draft.extension,
     kind: draft.kind,
     summary: redact(summary),
-    payload: mapStrings(draft.payload, redact),
+    payload,
     requestedAt: now,
     status: "pending",
   };

@@ -29,7 +29,8 @@ pub use exe::{
     wait_for_setup,
 };
 pub use exe_login::{
-    EXE_HOST_KEY, EXE_TOKEN_COMMANDS, ExeKey, ExeLogin, ExeScreen, mint_exe_token, new_exe_key,
+    EXE_HOST_KEY, EXE_KEY_TOKEN_COMMANDS, EXE_TOKEN_COMMANDS, ExeKey, ExeLogin, ExeScreen,
+    mint_exe_key_token, mint_exe_token, new_exe_key,
 };
 pub use nudge_protocol as protocol;
 pub use panel::{PanelListener, PanelSocket, PanelStatus, panel_url};

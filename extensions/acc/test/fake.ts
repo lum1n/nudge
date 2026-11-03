@@ -66,6 +66,8 @@ export class FakeAcc implements AccBackend {
   onExec:
     | ((script: string) => { stdout?: string; stderr?: string; exitCode?: number } | undefined)
     | undefined;
+  /** Hosts refuse the assistant's key, as an exe.dev VM does before the key is added for it. */
+  refuseKeys = false;
   private ids = 0;
 
   /** Configs of the hosts made, `"local"` for this machine. */
@@ -87,6 +89,8 @@ export class FakeAcc implements AccBackend {
   private make(config: SshConfig): AccHost {
     return {
       connect: async () => {
+        if (this.refuseKeys)
+          throw Object.assign(new Error("key refused"), { code: "AuthRejected" });
         if (
           "fingerprints" in config.hostKey &&
           !config.hostKey.fingerprints.includes(this.fingerprint)

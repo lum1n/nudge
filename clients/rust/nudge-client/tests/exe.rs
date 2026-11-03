@@ -337,9 +337,10 @@ async fn a_wired_server_gets_homes_invite_at_launch() {
     );
 }
 
-/// An approval's client action: the project's key is added (one there already is fine), the VM
-/// made, and the inputs to approve with come back; removing runs `rm`. Names that aren't safe in
-/// a command never reach exe.dev.
+/// An approval's client action: the VM is made first, then the project's key is added for that
+/// VM only, with the one-off key token when there is one; a VM of that name there already (asked
+/// again after the key failed) is taken. Removing runs `rm`. Names that aren't safe in a command
+/// never reach exe.dev.
 #[tokio::test]
 async fn runs_client_actions_and_returns_the_inputs() {
     let commands = Arc::new(Mutex::new(Vec::<String>::new()));
@@ -347,32 +348,73 @@ async fn runs_client_actions_and_returns_the_inputs() {
     let url = format!("http://{}", listener.local_addr().unwrap());
     {
         let commands = commands.clone();
-        serve_http(listener, move |_, body| {
-            commands.lock().unwrap().push(body.clone());
-            Box::pin(async move {
-                if body.starts_with("ssh-key add 'ssh-ed25519 OLD") {
-                    (422, r#"{"error":"key already exists"}"#.to_owned())
-                } else if body.starts_with("ssh-key add") {
-                    (422, r#"{"error":"bad key"}"#.to_owned())
-                } else if body.starts_with("new ") {
-                    (
-                        200,
-                        r#"{"vm_name":"proj-1","ssh_dest":"ssh dev@proj-1.exe.xyz"}"#.to_owned(),
-                    )
-                } else {
-                    (200, "{}".to_owned())
-                }
-            })
+        tokio::spawn(async move {
+            while let Ok((stream, _)) = listener.accept().await {
+                let commands = commands.clone();
+                tokio::spawn(async move {
+                    let mut reader = BufReader::new(stream);
+                    let (mut length, mut token) = (0, String::new());
+                    let mut request = String::new();
+                    reader.read_line(&mut request).await.unwrap();
+                    loop {
+                        let mut line = String::new();
+                        reader.read_line(&mut line).await.unwrap();
+                        let lower = line.to_ascii_lowercase();
+                        if let Some(value) = lower.strip_prefix("content-length:") {
+                            length = value.trim().parse().unwrap();
+                        } else if lower.starts_with("authorization:") {
+                            token = line.trim().rsplit(' ').next().unwrap().to_owned();
+                        } else if line.trim().is_empty() {
+                            break;
+                        }
+                    }
+                    let mut body = vec![0; length];
+                    reader.read_exact(&mut body).await.unwrap();
+                    let body = String::from_utf8(body).unwrap();
+                    commands.lock().unwrap().push(format!("{token}: {body}"));
+                    let (status, text) = if body.contains("'ssh-ed25519 OLD") {
+                        (422, r#"{"error":"this SSH key is already associated"}"#)
+                    } else if body.starts_with("ssh-key add") {
+                        (422, r#"{"error":"bad key"}"#)
+                    } else if body.starts_with("new --json --name taken") {
+                        (422, r#"{"error":"name in use"}"#)
+                    } else if body.starts_with("new ") {
+                        (
+                            200,
+                            r#"{"vm_name":"proj-1","ssh_dest":"ssh dev@proj-1.exe.xyz"}"#,
+                        )
+                    } else if body.starts_with("ls") {
+                        (
+                            200,
+                            r#"{"vms":[{"vm_name":"taken","ssh_dest":"taken.exe.xyz"}]}"#,
+                        )
+                    } else {
+                        (200, "{}")
+                    };
+                    let response = format!(
+                        "HTTP/1.1 {status} OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{text}",
+                        text.len()
+                    );
+                    reader
+                        .into_inner()
+                        .write_all(response.as_bytes())
+                        .await
+                        .unwrap();
+                });
+            }
         });
     }
-    let exe = ExeDev::with_base(&url, "exe1.token").unwrap();
+    let exe = ExeDev::with_base(&url, "app").unwrap();
 
     let inputs = exe
-        .run_client_action(&ClientAction::ExeNew {
-            name: "proj-1".into(),
-            image: Some("ubuntu:24.04".into()),
-            ssh_key: Some("ssh-ed25519 OLD nudge".into()),
-        })
+        .run_client_action(
+            &ClientAction::ExeNew {
+                name: "proj-1".into(),
+                image: Some("ubuntu:24.04".into()),
+                ssh_key: Some("ssh-ed25519 OLD nudge".into()),
+            },
+            Some("keytoken"),
+        )
         .await
         .unwrap();
     assert_eq!(inputs["vm"], "proj-1");
@@ -381,19 +423,27 @@ async fn runs_client_actions_and_returns_the_inputs() {
     assert!(!inputs.contains_key("sshKeyError"));
 
     let inputs = exe
-        .run_client_action(&ClientAction::ExeNew {
-            name: "proj-1".into(),
-            image: None,
-            ssh_key: Some("ssh-ed25519 NEW nudge".into()),
-        })
+        .run_client_action(
+            &ClientAction::ExeNew {
+                name: "taken".into(),
+                image: None,
+                ssh_key: Some("ssh-ed25519 NEW nudge".into()),
+            },
+            None,
+        )
         .await
         .unwrap();
+    assert_eq!(inputs["vm"], "taken");
+    assert_eq!(inputs["sshHost"], "taken.exe.xyz");
     assert!(inputs["sshKeyError"].contains("bad key"), "{inputs:?}");
 
     let removed = exe
-        .run_client_action(&ClientAction::ExeRm {
-            name: "proj-1".into(),
-        })
+        .run_client_action(
+            &ClientAction::ExeRm {
+                name: "proj-1".into(),
+            },
+            None,
+        )
         .await
         .unwrap();
     assert!(removed.is_empty());
@@ -408,22 +458,23 @@ async fn runs_client_actions_and_returns_the_inputs() {
             ssh_key: None,
         },
     ] {
-        let refused = exe.run_client_action(&action).await;
+        let refused = exe.run_client_action(&action, None).await;
         assert!(matches!(refused, Err(ExeError::Invalid(_))), "{refused:?}");
     }
     assert!(matches!(
-        exe.add_ssh_key("ssh-ed25519 A'B").await,
+        exe.add_ssh_key("ssh-ed25519 A'B", None).await,
         Err(ExeError::Invalid(_))
     ));
 
     assert_eq!(
         *commands.lock().unwrap(),
         [
-            "ssh-key add 'ssh-ed25519 OLD nudge'",
-            "new --json --name proj-1 --image ubuntu:24.04",
-            "ssh-key add 'ssh-ed25519 NEW nudge'",
-            "new --json --name proj-1",
-            "rm proj-1",
+            "app: new --json --name proj-1 --image ubuntu:24.04",
+            "keytoken: ssh-key add --vm=proj-1 'ssh-ed25519 OLD nudge'",
+            "app: new --json --name taken",
+            "app: ls --json",
+            "app: ssh-key add --vm=taken 'ssh-ed25519 NEW nudge'",
+            "app: rm proj-1",
         ]
     );
 }

@@ -263,6 +263,29 @@ describe("approvals", () => {
     await nudge.close(context);
   });
 
+  it("gives back the one waiting when asked again for the same thing once", async () => {
+    const { options } = setup([], []);
+    const nudge = await createNudge(options, context);
+    const ask = (to: string, once: boolean) =>
+      nudge.harness.commit(
+        (tx) =>
+          requestApproval(
+            tx,
+            LOBBY,
+            { extension: "mailer", kind: "send", summary: `Mail ${to}`, payload: { to }, once },
+            0,
+          ),
+        context,
+      );
+    const first = await ask("bo", true);
+    expect((await ask("bo", true)).id).toBe(first.id);
+    expect((await ask("kari", true)).id).not.toBe(first.id);
+    expect((await ask("bo", false)).id).not.toBe(first.id);
+    await nudge.approvals.decide(LOBBY, first.id, { approve: false, by }, context);
+    expect((await ask("bo", true)).id).not.toBe(first.id);
+    await nudge.close(context);
+  });
+
   it("does nothing when denied, and reports a failing action", async () => {
     const sent: string[] = [];
     const refused: string[] = [];

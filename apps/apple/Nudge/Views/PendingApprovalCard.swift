@@ -24,7 +24,8 @@ struct PendingApprovalCard: View {
                 .font(.caption.bold())
                 .foregroundStyle(.orange)
             Text(hidingValues(approval.summary))
-            ForEach(approval.inputs, id: \.name) { input in
+            // With a client action, the app fills the inputs in itself, such as the VM it made.
+            ForEach(approval.clientAction == nil ? approval.inputs : [], id: \.name) { input in
                 VStack(alignment: .leading, spacing: 4) {
                     let label = input.optional ? String(localized: "\(input.label) (optional)") : input.label
                     Group {
@@ -83,7 +84,7 @@ struct PendingApprovalCard: View {
 
     /// A required input left empty.
     private var missing: Bool {
-        approval.inputs.contains { !$0.optional && (values[$0.name] ?? "").trimmingCharacters(in: .whitespaces).isEmpty }
+        approval.clientAction == nil && approval.inputs.contains { !$0.optional && (values[$0.name] ?? "").trimmingCharacters(in: .whitespaces).isEmpty }
     }
 
     private var approveTitle: LocalizedStringKey {
@@ -123,7 +124,8 @@ struct PendingApprovalCard: View {
                         case .exeNew: String(localized: "Making the VM…")
                         case .exeRm: String(localized: "Deleting the VM…")
                         }
-                        actionInputs = try await ExeClient(token: token).runClientAction(action: action)
+                        actionInputs = try await ExeClient(token: token)
+                            .runClientAction(action: action, privateKey: try? model.servers.exeKey())
                     }
                     inputs.merge(actionInputs ?? [:]) { _, done in done }
                 }

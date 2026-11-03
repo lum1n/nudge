@@ -30,9 +30,12 @@ pub const EXE_TOKEN_COMMANDS: &[&str] = &[
     "share show",
     "share port",
     "share set-public",
-    // Projects' client actions add the project's SSH key before they make its VM.
-    "ssh-key add",
 ];
+
+/// What the one-off token that adds a project's key may run (`mint_exe_key_token`). A key added
+/// with a token gets the token's commands, so `ssh` is what lets the project's key log in; `--vm`
+/// then keeps it to that one VM.
+pub const EXE_KEY_TOKEN_COMMANDS: &[&str] = &["ssh-key add", "ssh"];
 
 /// How often the screen is passed on at most, while it changes.
 const SCREEN_EVERY: Duration = Duration::from_millis(80);
@@ -62,8 +65,18 @@ pub fn new_exe_key() -> Result<ExeKey, ExeError> {
 /// the permissions as JSON, and their SSH signature in the `v0@exe.dev` namespace, each base64url.
 /// `expires` is a Unix time; without one the token doesn't expire.
 pub fn mint_exe_token(private_key: &str, expires: Option<u64>) -> Result<String, ExeError> {
+    mint(private_key, EXE_TOKEN_COMMANDS, expires)
+}
+
+/// A token for adding a project's key, used once and dropped. It can't expire: exe.dev won't add
+/// a key that outlives the token adding it, and the project's key has no end.
+pub fn mint_exe_key_token(private_key: &str) -> Result<String, ExeError> {
+    mint(private_key, EXE_KEY_TOKEN_COMMANDS, None)
+}
+
+fn mint(private_key: &str, cmds: &[&str], expires: Option<u64>) -> Result<String, ExeError> {
     let key = PrivateKey::from_openssh(private_key).map_err(key_error)?;
-    let mut permissions = json!({ "cmds": EXE_TOKEN_COMMANDS });
+    let mut permissions = json!({ "cmds": cmds });
     if let Some(expires) = expires {
         permissions["exp"] = expires.into();
     }
@@ -282,5 +295,16 @@ mod tests {
                 &signature,
             )
             .unwrap();
+    }
+
+    /// The key token never expires, and may only add keys and log in with them.
+    #[test]
+    fn mints_a_key_token_without_an_end() {
+        let key = new_exe_key().unwrap();
+        let token = mint_exe_key_token(&key.private_key).unwrap();
+        let part = token.split('.').nth(1).unwrap();
+        let permissions: serde_json::Value =
+            serde_json::from_slice(&URL_SAFE_NO_PAD.decode(part).unwrap()).unwrap();
+        assert_eq!(permissions, json!({ "cmds": ["ssh-key add", "ssh"] }));
     }
 }
