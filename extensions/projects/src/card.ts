@@ -75,7 +75,8 @@ export function projectCard(
         note: `${finished} of ${own.length}`,
       };
     }),
-    ...(project.budgetUsd === undefined
+    // A bar needs something to be full of: a budget of 0 has no bar, only the numbers above.
+    ...(project.budgetUsd === undefined || project.budgetUsd <= 0
       ? []
       : [
           {

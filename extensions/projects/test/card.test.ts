@@ -61,4 +61,10 @@ describe("projectCard", () => {
     expect(timeline.items[0]!.title).toContain("t6");
     expect(timeline.items.at(-1)!.title).toContain("t25");
   });
+
+  it("stays a valid card with a budget of 0", () => {
+    const card = projectCard(planned(2, 0), 1);
+    expect(cardProblem(card)).toBeUndefined();
+    expect(JSON.stringify(card)).not.toContain('"Budget"');
+  });
 });
