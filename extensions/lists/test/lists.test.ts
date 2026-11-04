@@ -7,7 +7,7 @@ import {
   fauxToolCall,
 } from "@nudge/core/testing";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { listsExtension, type PanelOutput } from "../src/index.ts";
+import { ListsDoc, listsExtension, type PanelOutput } from "../src/index.ts";
 
 const context = BACKGROUND_CONTEXT;
 const by = { playerId: "ann", displayName: "Ann" };
@@ -109,6 +109,31 @@ describe("lists", () => {
     expect(await say("forget the eggs")).toBe("Removed: eggs.");
     expect(await say("clean up the list")).toBe("Cleared 1 done items.");
     expect(await say("what's on it?")).toBe("shopping: (empty)");
+  });
+
+  it("drops a deleted room's lists and closes its panels", async () => {
+    const room = await nudge.rooms.createShared({ id: "trip", name: "Trip", members: [] }, context);
+    const player = (await nudge.players.get("ann", context))!;
+    const frames: PanelOutput[] = [];
+    let closed = false;
+    const session = await nudge.roomSocket("lists")!(
+      { room, player, admin: false },
+      {
+        send: (data) => frames.push(JSON.parse(data) as PanelOutput),
+        close: () => {
+          closed = true;
+        },
+      },
+    );
+    session.receive(JSON.stringify({ type: "add", list: "packing", text: "passport" }));
+    await until(() => frames.some((f) => f.type === "ok"));
+    expect((await nudge.harness.snapshot(ListsDoc, "trip", context))?.lists).toHaveProperty(
+      "packing",
+    );
+
+    await nudge.deleteRoom("trip", context);
+    expect((await nudge.harness.snapshot(ListsDoc, "trip", context))?.lists).toEqual({});
+    expect(closed).toBe(true);
   });
 
   it("shows the lists in a panel, live both ways", async () => {

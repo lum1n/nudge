@@ -52,6 +52,14 @@ export class LoginStore {
     return data[scope].length < before;
   }
 
+  /** Forgets every login saved in a scope, such as a deleted room's. */
+  forgetAll(scope: string): void {
+    const data = this.load();
+    if (data[scope] === undefined) return;
+    delete data[scope];
+    this.write(data);
+  }
+
   private load(): Stored {
     if (this.data !== undefined) return this.data;
     if (this.file === undefined || !existsSync(this.file)) return (this.data = {});

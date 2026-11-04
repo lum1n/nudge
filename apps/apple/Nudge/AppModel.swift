@@ -576,6 +576,14 @@ final class AppModel {
         Set(windows.filter { $0.phase == .active }.compactMap(\.selectedRoom))
     }
 
+    /// Deletes a shared room for everyone; the windows on it leave it. The room list drops it
+    /// once the server has.
+    func deleteRoom(_ room: String, at session: Session) async throws {
+        try await session.client.deleteRoom(room: room)
+        let ref = RoomRef(account: session.account.keychainAccount, room: room)
+        for window in windows where window.selectedRoom == ref { window.selectedRoom = nil }
+    }
+
     /// The window a tapped notification opens its room in: the one in front.
     private var frontWindow: WindowState? {
         windows.first { $0.phase == .active } ?? windows.first { $0.phase == .inactive } ?? windows.first

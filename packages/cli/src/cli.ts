@@ -6,6 +6,7 @@ import {
   nudges,
   pair,
   reload,
+  deleteRoom,
   renameRoom,
   revoke,
   room,
@@ -46,6 +47,7 @@ Commands:
   room [name]        Create a shared room with --members, or list the rooms
   room rename <id> <name>
                      Give a room a new name; its id stays
+  room delete <id>   Delete a shared room for good: its messages, memory and attachments
   nudges             List the scheduled nudges of every room
   usage              Model spend by month, player and room, and the budget
   connectors [room]  List the APIs a room can call (default: the lobby)
@@ -201,6 +203,13 @@ export async function main(argv: string[]): Promise<number> {
         if (id === undefined || words.length === 0)
           throw new UsageError("Usage: nudge room rename <id> <name>");
         await renameRoom({ ...access, room: id, name: words.join(" ") });
+        return 0;
+      }
+      if (argument === "delete") {
+        const [id, ...more] = rest;
+        if (id === undefined || more.length > 0)
+          throw new UsageError("Usage: nudge room delete <id>");
+        await deleteRoom({ ...access, room: id });
         return 0;
       }
       const members = values.members

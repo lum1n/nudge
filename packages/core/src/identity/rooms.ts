@@ -1,5 +1,5 @@
 import type { Context } from "@earendil-works/chord";
-import type { AgentChange, ConversationId, Harness } from "@earendil-works/pi-durable";
+import type { AgentChange, ConversationId, Harness, Tx } from "@earendil-works/pi-durable";
 import type { Change } from "../changes.ts";
 import { canUse, DirectoryDoc, freeId, LOBBY, type Player, type Room, slug } from "./directory.ts";
 
@@ -69,9 +69,17 @@ export class Rooms {
       if (directory?.players[member] === undefined) throw new Error(`No player "${member}"`);
     if (draft.id !== undefined && !/^[a-z0-9][a-z0-9-]*$/.test(draft.id))
       throw new Error(`Room id "${draft.id}" is not lower-case letters, digits and dashes`);
+    if (draft.id !== undefined && directory?.deletedRooms?.[draft.id] !== undefined)
+      throw new Error(`Room id "${draft.id}" belonged to a deleted room; pick another`);
     const id =
       draft.id ??
-      freeId(slug(draft.name, "room"), (id) => id === LOBBY || id in (directory?.rooms ?? {}));
+      freeId(
+        slug(draft.name, "room"),
+        (id) =>
+          id === LOBBY ||
+          id in (directory?.rooms ?? {}) ||
+          directory?.deletedRooms?.[id] !== undefined,
+      );
     return this.create(
       { id, kind: "shared", name: draft.name, members: [...new Set(draft.members)] },
       context,
@@ -94,6 +102,33 @@ export class Rooms {
     }, context);
     this.changed({ kind: "rooms" });
     return room;
+  }
+
+  /**
+   * Deletes a shared room: its directory entry and side conversations go, and its id is never
+   * given out again. `purge` runs in the same commit, for the room's other documents. Pi Durable
+   * can't delete a conversation, so the transcripts stay in storage, unreachable. The lobby and
+   * personal rooms can't be deleted.
+   */
+  async delete(
+    id: string,
+    context: Context,
+    purge: (tx: Tx) => Promise<void> = async () => {},
+  ): Promise<void> {
+    await this.harness.commit(async (tx) => {
+      const directory = await tx.doc(DirectoryDoc);
+      const room = directory.rooms[id];
+      if (room === undefined) throw new Error(`No room "${id}"`);
+      if (room.kind !== "shared") throw new Error(`The ${room.kind} room can't be deleted`);
+      await purge(tx);
+      delete directory.rooms[id];
+      for (const [conversationId, side] of Object.entries(directory.sides ?? {}))
+        if (side.roomId === id) delete directory.sides![conversationId];
+      // Assigned, then written through the document: `??=` would hand back the plain object.
+      if (directory.deletedRooms === undefined) directory.deletedRooms = {};
+      directory.deletedRooms[id] = this.now();
+    }, context);
+    this.changed({ kind: "rooms" });
   }
 
   /** Lets the model see the images attached in the room, or stops it (ADR 24). */

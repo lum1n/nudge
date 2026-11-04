@@ -114,6 +114,9 @@
     <string name="room_rename">Gi nytt navn</string>
     <string name="room_create">Opprett</string>
     <string name="room_rename_title">Gi rommet nytt navn</string>
+    <string name="room_delete_room">Slett …</string>
+    <string name="room_delete_title">Slette «%1$s»?</string>
+    <string name="room_delete_body">Rommet, meldingene, minnet og vedleggene slettes for alle. Det kan ikke angres.</string>
     <string name="room_pick">Velg et rom</string>
 
     <string name="room_info_title">Om dette rommet</string>

@@ -556,6 +556,49 @@ describe("peers", { timeout: 30_000 }, () => {
     errors.length = 0;
   });
 
+  it("stops a deleted room's threads, and ends the link whose room it was", async () => {
+    await start(
+      (request, last) => {
+        if (asked(last, /Link with team/)) return linkScript(request, last);
+        if (asked(last, /ask them/i))
+          return fauxAssistantMessage(
+            [fauxToolCall("talk_to_assistant", { assistant: "team", goal: "Ask something" })],
+            { stopReason: "toolUse" },
+          );
+        if (last.includes("Send your first message with say"))
+          return fauxAssistantMessage([fauxToolCall("say", { text: "Hello?" })], {
+            stopReason: "toolUse",
+          });
+        return fauxAssistantMessage([fauxText("Okay.")]);
+      },
+      () => fauxAssistantMessage([fauxText("Okay.")]),
+    );
+    await link();
+    await home.rooms.createShared(
+      { id: "plans", name: "Plans", members: [vegard.playerId] },
+      context,
+    );
+    // Their inbox takes nothing, so the thread waits for a reply.
+    dropping.add(AWAY);
+    await say(home, "Ask them something", vegard, "plans");
+    await until(async () =>
+      Object.values((await stateOf(home)).threads).some((thread) => thread.awaiting),
+    );
+    const thread = Object.values((await stateOf(home)).threads)[0]!;
+
+    await home.deleteRoom("plans", context);
+    expect((await stateOf(home)).threads).toEqual({});
+    const timer = await home.harness.getTask(Number(thread.taskId) as never, context);
+    expect(timer?.state.status).toBe("terminal");
+    dropping.delete(AWAY);
+
+    // The link's room on the other side goes: the link ends on both sides.
+    const theirs = Object.values((await stateOf(away)).links)[0]!;
+    await away.deleteRoom(theirs.roomId!, context);
+    expect((await stateOf(away)).links).toEqual({});
+    await until(async () => Object.keys((await stateOf(home)).links).length === 0);
+  });
+
   describe("replies on their way", () => {
     let heard = 0;
     /** Home asks one thing, and finishes on the first reply it reads. */

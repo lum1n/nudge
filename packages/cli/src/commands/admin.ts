@@ -354,6 +354,18 @@ export async function renameRoom(
   );
 }
 
+/** Deletes a shared room for good, with its messages, memory and attachments. */
+export async function deleteRoom(
+  options: AdminOptions & ServerAccess & { readonly room: string },
+): Promise<void> {
+  await withAssistantOrServer(
+    options,
+    (nudge) => nudge.deleteRoom(options.room, context),
+    (server) => server.call("DELETE", `/rooms/${encodeURIComponent(options.room)}`),
+  );
+  console.log(`Deleted room "${options.room}".`);
+}
+
 /** Lists every pending nudge, with its room. */
 export async function nudges(options: AdminOptions & ServerAccess): Promise<void> {
   const print = (pending: readonly RoomListNudge[]) => {

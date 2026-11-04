@@ -139,6 +139,11 @@ export async function dropFact(tx: Tx, roomId: string, id: string): Promise<bool
   return drop(await tx.doc(MemoryDoc, roomId, null), id);
 }
 
+/** Forgets everything in a room's memory inside a commit, for a room being deleted. */
+export async function purgeRoomMemory(tx: Tx, roomId: string): Promise<void> {
+  (await tx.doc(MemoryDoc, roomId, null)).facts = [];
+}
+
 /** Drops a fact from a player's own memory inside a commit. */
 export async function dropPlayerFact(tx: Tx, playerId: string, id: string): Promise<boolean> {
   return drop(await tx.doc(PlayerMemoryDoc, playerId, null), id);

@@ -1,4 +1,5 @@
 import {
+  BACKGROUND_CONTEXT,
   currentTurn,
   defineNudgeExtension,
   defineTool,
@@ -61,7 +62,7 @@ export function rssExtension(options: RssOptions = {}) {
   return defineNudgeExtension({
     name: "rss",
     version: VERSION,
-    apiVersion: "1.0",
+    apiVersion: "1.1",
     description: "RSS and Atom feeds the assistant checks first when asked for news.",
     settings: Settings,
     setup: (host) => {
@@ -242,6 +243,12 @@ export function rssExtension(options: RssOptions = {}) {
 
       return {
         tools: [add, readsOnly(list), remove, returnsUntrusted(readsOnly(read))],
+        // A deleted room's feeds go with it; feeds from the settings stay there.
+        onRoomDeleted: async (roomId: string) => {
+          await host.documents().commit(async (tx) => {
+            (await tx.doc(FeedsDoc, roomId, null)).feeds = [];
+          }, BACKGROUND_CONTEXT);
+        },
         // The news: places and names in stories stay readable, as in a web search (ADR 22).
         publicTools: [read.name],
         sections: [

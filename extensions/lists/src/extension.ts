@@ -8,6 +8,7 @@ import {
   keepsPlaceholders,
   readsOnly,
   roomOf,
+  type RoomSocket,
   type RoomSocketHandler,
   section,
   Type,
@@ -45,7 +46,7 @@ export type PanelInput = { ref?: string } & (
 
 /** Every open panel, per room, so a change from anywhere reaches them all. */
 class Panels {
-  private readonly viewers = new Map<string, Set<(data: string) => void>>();
+  private readonly viewers = new Map<string, Set<RoomSocket>>();
 
   constructor(
     private readonly documents: () => ExtensionDocuments,
@@ -69,18 +70,24 @@ class Panels {
         type: "lists",
         lists: await this.lists(roomId),
       } satisfies PanelOutput);
-      for (const send of viewers) send(frame);
+      for (const socket of viewers) socket.send(frame);
     } catch {
       // The next change sends them again.
     }
   }
 
+  /** Closes a deleted room's open panels. */
+  closeRoom(roomId: string): void {
+    const viewers = this.viewers.get(roomId);
+    this.viewers.delete(roomId);
+    for (const socket of viewers ?? []) socket.close(1000, "The room was deleted");
+  }
+
   readonly roomSocket: RoomSocketHandler = async ({ room, player }, socket) => {
-    const send = (data: string) => socket.send(data);
     const reply = (output: PanelOutput) => socket.send(JSON.stringify(output));
     let viewers = this.viewers.get(room.id);
     if (viewers === undefined) this.viewers.set(room.id, (viewers = new Set()));
-    viewers.add(send);
+    viewers.add(socket);
     reply({ type: "lists", lists: await this.lists(room.id) });
     let queue = Promise.resolve();
     return {
@@ -103,7 +110,7 @@ class Panels {
         });
       },
       close: () => {
-        viewers.delete(send);
+        viewers.delete(socket);
         if (viewers.size === 0) this.viewers.delete(room.id);
       },
     };
@@ -145,7 +152,7 @@ class Panels {
 export const listsExtension = defineNudgeExtension({
   name: "lists",
   version: VERSION,
-  apiVersion: "1.0",
+  apiVersion: "1.1",
   description:
     "Shared lists per room, such as shopping and to-dos, for the model and in the web UI.",
   setup: (host) => {
@@ -282,6 +289,13 @@ export const listsExtension = defineNudgeExtension({
         keepsPlaceholders(tool),
       ),
       roomSocket: panels.roomSocket,
+      // A deleted room's lists go with it, and its open panels close.
+      onRoomDeleted: async (roomId: string) => {
+        await host.documents().commit(async (tx) => {
+          (await tx.doc(ListsDoc, roomId, null)).lists = {};
+        }, BACKGROUND_CONTEXT);
+        panels.closeRoom(roomId);
+      },
       sections: [
         section("lists", async (input, context) => {
           const room = await roomOf(input.read, input.conversationId, context).catch(

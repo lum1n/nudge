@@ -218,6 +218,20 @@ describe("NudgeClient against a server", () => {
     room.release();
   });
 
+  it("deletes a room, which leaves the room list", async () => {
+    await nudge.rooms.createShared({ id: "club", name: "Club", members: ["ann"] }, context);
+    const { client } = clientFor(annToken);
+    const rooms = client.roomList();
+    client.open();
+    const listed = () =>
+      (rooms.store.getState().view?.rooms ?? []).some((row) => row.room.id === "club");
+    await eventually(listed);
+    await client.api.deleteRoom("club");
+    await eventually(() => !listed());
+    await expect(client.api.deleteRoom("lobby")).rejects.toMatchObject({ status: 403 });
+    rooms.release();
+  });
+
   it("loads earlier items back to the start, joining the room view", async () => {
     for (let n = 0; n < 60; n++)
       await nudge.submit("trip", { text: `Message ${n}`, requestId: `m${n}` }, context);

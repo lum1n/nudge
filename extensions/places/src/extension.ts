@@ -123,7 +123,7 @@ export function createPlacesExtension(options: PlacesExtensionOptions = {}) {
   return defineNudgeExtension({
     name: NAME,
     version: VERSION,
-    apiVersion: "1.0",
+    apiVersion: "1.1",
     description:
       "Places: reminders when you get somewhere, and addresses and routes from the server's own map service. The model sees places as ⟦PLACE:home⟧, never addresses or coordinates.",
     settings: Settings,
@@ -813,6 +813,19 @@ export function createPlacesExtension(options: PlacesExtensionOptions = {}) {
           if (!now.has(region)) await crossed(playerId, region, "exit", context);
       };
 
+      /** A deleted room's reminders are dropped, so devices stop watching for them. */
+      const onRoomDeleted = async (roomId: string) => {
+        const context = BACKGROUND_CONTEXT;
+        for (const player of await nudge().players.list(context)) {
+          const state = await read(player.id, context);
+          if (!state.reminders.some((r) => r.roomId === roomId)) continue;
+          await change(player.id, context, (state) => {
+            state.reminders = state.reminders.filter((r) => r.roomId !== roomId);
+            state.version += 1;
+          });
+        }
+      };
+
       /** Only where the player lives: guests' homes keep where they are (ADR 14). */
       const homeOnly = (caller: { player?: { home?: unknown } }) =>
         caller.player === undefined || caller.player.home !== undefined
@@ -1008,6 +1021,7 @@ export function createPlacesExtension(options: PlacesExtensionOptions = {}) {
         ],
         routes: [regionsRoute, eventsRoute, placesRoute, forgetPlaceRoute, cancelRoute],
         onLocation,
+        onRoomDeleted,
         sections: [
           section("places", async (input, context) => {
             const directory = await input.read.snapshot(DirectoryDoc, context);

@@ -223,6 +223,17 @@ export type ExtensionParts = Omit<Extension, "name"> & {
    */
   readonly onLocation?: (playerId: string, location: LocationUpdate) => void | Promise<void>;
   /**
+   * Hears that a room was deleted, after it is gone, so the extension drops what it keeps for it
+   * and stops anything that would still act there. Every installed extension hears it, on in the
+   * room or not, with the ids of the conversations that were the room's (its own, then its side
+   * conversations), for what is kept by conversation. The id is never reused. A throw or rejection
+   * is reported.
+   */
+  readonly onRoomDeleted?: (
+    roomId: string,
+    conversationIds: readonly number[],
+  ) => void | Promise<void>;
+  /**
    * How many ended tasks of a kind to keep per owner, by kind, for tasks started again and again,
    * such as one a timer starts on every check: Pi Durable would keep them all for good. When the
    * assistant opens, older ones are deleted with the tasks they owned and their documents.
@@ -285,7 +296,7 @@ const NAME = /^[a-z][a-z0-9-]*$/;
  * or goes away, the minor when something is added. An extension names the one it was written
  * against as its `apiVersion`.
  */
-export const EXTENSION_API_VERSION = "1.0";
+export const EXTENSION_API_VERSION = "1.1";
 
 const API_VERSION = /^(\d+)\.(\d+)$/;
 
@@ -364,6 +375,10 @@ export type SetUpExtension = {
   readonly denials?: Readonly<Record<string, ApprovalDenialHandler>>;
   readonly onRoomEvent?: (event: RoomEvent) => void | Promise<void>;
   readonly onLocation?: (playerId: string, location: LocationUpdate) => void | Promise<void>;
+  readonly onRoomDeleted?: (
+    roomId: string,
+    conversationIds: readonly number[],
+  ) => void | Promise<void>;
   readonly keepEnded?: Readonly<Record<string, number>>;
   readonly close?: () => void | Promise<void>;
   readonly retire?: (context: Context) => void | Promise<void>;
@@ -431,6 +446,7 @@ export async function setUpExtension(
     denials,
     onRoomEvent,
     onLocation,
+    onRoomDeleted,
     keepEnded,
     close,
     retire,
@@ -460,6 +476,7 @@ export async function setUpExtension(
     ...(roomSocket === undefined ? {} : { roomSocket }),
     ...(onRoomEvent === undefined ? {} : { onRoomEvent }),
     ...(onLocation === undefined ? {} : { onLocation }),
+    ...(onRoomDeleted === undefined ? {} : { onRoomDeleted }),
     ...(keepEnded === undefined ? {} : { keepEnded }),
     ...(close === undefined ? {} : { close }),
     ...(retire === undefined ? {} : { retire }),

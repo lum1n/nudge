@@ -605,6 +605,13 @@ impl NudgeClient {
             .into())
     }
 
+    /// Deletes a shared room, with its messages, memory and attachments, for everyone. Its
+    /// members or an admin may; never the lobby or a personal room.
+    pub async fn delete_room(&self, room: String) -> Result<(), NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.delete_room(&room).await }).await?)
+    }
+
     /// The caller's personal room, made on first use.
     pub async fn personal_room(&self) -> Result<Room, NudgeError> {
         let api = self.client.api().clone();

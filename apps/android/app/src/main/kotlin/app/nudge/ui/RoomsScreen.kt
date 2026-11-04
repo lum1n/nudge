@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.CloudOff
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.Group
@@ -77,7 +78,8 @@ private class Section(val session: Session, val roomList: RoomListUpdate?, val m
 
 /**
  * The player's rooms at home, then those of each assistant they joined, a FAB menu for new rooms
- * at home or at one of those, and a long press to rename one.
+ * at home or at one of those, and a long press to rename one or delete a shared one. `deleted` is
+ * told of a room once the server has deleted it, to leave it if it is open.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -87,6 +89,7 @@ fun RoomsScreen(
     selected: RoomRef?,
     open: (RoomRef) -> Unit,
     settings: () -> Unit,
+    deleted: (RoomRef) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val sections = (listOf(session) + places).map { at ->
@@ -104,6 +107,7 @@ fun RoomsScreen(
     /** Where a new shared room is being made. */
     var creating by remember { mutableStateOf<Session?>(null) }
     var renaming by remember { mutableStateOf<Pair<Session, Room>?>(null) }
+    var deleting by remember { mutableStateOf<Pair<Session, Room>?>(null) }
     var problem by remember { mutableStateOf<String?>(null) }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
@@ -206,6 +210,12 @@ fun RoomsScreen(
                             } else {
                                 null
                             },
+                            // Never the lobby or a personal room.
+                            delete = if (room.room.kind == RoomKind.SHARED) {
+                                { deleting = section.session to room.room }
+                            } else {
+                                null
+                            },
                         )
                     }
                 }
@@ -217,6 +227,9 @@ fun RoomsScreen(
         NewRoomDialog(at, close = { creating = null }, created = { open(RoomRef(at.account.key, it)) })
     }
     renaming?.let { (at, room) -> RenameRoomDialog(at, room, close = { renaming = null }) }
+    deleting?.let { (at, room) ->
+        DeleteRoomDialog(at, room, close = { deleting = null }, deleted = { deleted(RoomRef(at.account.key, room.id)) })
+    }
     problem?.let { message ->
         AlertDialog(
             onDismissRequest = { problem = null },
@@ -278,6 +291,7 @@ private fun RoomRow(
     count: Int,
     onClick: () -> Unit,
     rename: (() -> Unit)?,
+    delete: (() -> Unit)?,
 ) {
     val others = room.room.members.filter { it.id != me }.joinToString { it.displayName }
     var menu by remember { mutableStateOf(false) }
@@ -285,8 +299,8 @@ private fun RoomRow(
         SegmentedListItem(
             selected = selected,
             onClick = onClick,
-            onLongClick = rename?.let { { menu = true } },
-            onLongClickLabel = rename?.let { stringResource(R.string.room_actions) },
+            onLongClick = if (rename != null || delete != null) ({ menu = true }) else null,
+            onLongClickLabel = if (rename != null || delete != null) stringResource(R.string.room_actions) else null,
             shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
             leadingContent = {
                 Icon(
@@ -315,16 +329,28 @@ private fun RoomRow(
         ) {
             Text(room.room.name, maxLines = 1)
         }
-        if (rename != null) {
+        if (rename != null || delete != null) {
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.room_rename)) },
-                    leadingIcon = { Icon(Icons.Outlined.Edit, null) },
-                    onClick = {
-                        menu = false
-                        rename()
-                    },
-                )
+                if (rename != null) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.room_rename)) },
+                        leadingIcon = { Icon(Icons.Outlined.Edit, null) },
+                        onClick = {
+                            menu = false
+                            rename()
+                        },
+                    )
+                }
+                if (delete != null) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.room_delete_room)) },
+                        leadingIcon = { Icon(Icons.Outlined.Delete, null) },
+                        onClick = {
+                            menu = false
+                            delete()
+                        },
+                    )
+                }
             }
         }
     }
@@ -402,6 +428,45 @@ private fun RenameRoomDialog(session: Session, room: Room, close: () -> Unit) {
             ) { Text(stringResource(R.string.room_rename)) }
         },
         dismissButton = { TextButton(onClick = close) { Text(stringResource(R.string.room_cancel)) } },
+    )
+}
+
+/** For everyone, and for good; the list drops the room once the room list has it gone. */
+@Composable
+private fun DeleteRoomDialog(session: Session, room: Room, close: () -> Unit, deleted: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    var problem by remember { mutableStateOf<String?>(null) }
+    AlertDialog(
+        onDismissRequest = { if (!busy) close() },
+        icon = { Icon(Icons.Outlined.Delete, null) },
+        title = { Text(stringResource(R.string.room_delete_title, room.name)) },
+        text = {
+            androidx.compose.foundation.layout.Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.room_delete_body))
+                problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !busy,
+                onClick = {
+                    busy = true
+                    scope.launch {
+                        try {
+                            session.client.deleteRoom(room.id)
+                            deleted()
+                            close()
+                        } catch (error: Exception) {
+                            problem = explain(error)
+                        } finally {
+                            busy = false
+                        }
+                    }
+                },
+            ) { Text(stringResource(R.string.room_delete)) }
+        },
+        dismissButton = { TextButton(enabled = !busy, onClick = close) { Text(stringResource(R.string.room_cancel)) } },
     )
 }
 

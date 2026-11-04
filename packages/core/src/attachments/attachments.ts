@@ -267,6 +267,13 @@ function sees(item: AttachmentRecord, viewer: string | undefined): boolean {
   return item.privateTo === undefined || item.privateTo === viewer;
 }
 
+/** Drops every attachment of a room, bytes and listing, inside a commit, for a room being deleted. */
+export async function purgeRoomAttachments(tx: Tx, roomId: string): Promise<void> {
+  const state = await tx.doc(AttachmentsDoc, roomId, null);
+  for (const item of state.items) if (!item.removed) await dropBytes(tx, roomId, item);
+  state.items = [];
+}
+
 async function dropBytes(tx: Tx, roomId: string, item: AttachmentRecord): Promise<void> {
   for (let n = 0; n < item.chunks; n++)
     (await tx.doc(AttachmentChunkDoc, chunkKey(roomId, item.id, n), null)).data = "";

@@ -1,5 +1,7 @@
+import { rmSync } from "node:fs";
 import { join } from "node:path";
 import {
+  BACKGROUND_CONTEXT,
   type Context,
   createToolSearchTool,
   currentTurn,
@@ -224,7 +226,7 @@ type Server = Approving & {
 export default defineNudgeExtension({
   name: "mcp",
   version: VERSION,
-  apiVersion: "1.0",
+  apiVersion: "1.1",
   description:
     "Tools from MCP servers, found with tool_search; calls that change things are approved",
   settings: Type.Object({
@@ -497,6 +499,21 @@ export default defineNudgeExtension({
             untrusted: toolName(name, tool),
           };
         },
+      },
+      // A deleted room's servers go as if removed: connections closed, programs stopped, keys,
+      // sign-ins and their home directories deleted.
+      onRoomDeleted: async (roomId) => {
+        const removed = await documents().commit(async (tx) => {
+          const state = await tx.doc(RoomServersDoc, roomId, null);
+          const ids = state.servers.map((server) => server.id);
+          state.servers = [];
+          return ids;
+        }, BACKGROUND_CONTEXT);
+        for (const id of removed) rooms.removed(roomId, id);
+        for (const name of secrets.names(roomId)) secrets.delete(roomId, name);
+        if (dataDir !== undefined)
+          rmSync(join(dataDir, "rooms", roomId), { recursive: true, force: true });
+        void panels.changed(roomId);
       },
       close: () => pool.close(),
     };

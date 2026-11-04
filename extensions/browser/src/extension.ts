@@ -1,9 +1,10 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   type Api,
   type Approval,
+  BACKGROUND_CONTEXT,
   type Context,
   defineDoc,
   defineNudgeExtension,
@@ -29,7 +30,7 @@ import type { BrowserSession } from "./browser.ts";
 import type { PinnedAction } from "./gate.ts";
 import { type LiveInput, type LiveOutput, startLiveView } from "./live.ts";
 import { LoginStore } from "./logins.ts";
-import { holdBrowser, withBrowser } from "./pool.ts";
+import { closeBrowser, holdBrowser, withBrowser } from "./pool.ts";
 import { type Viewer, viewersOf } from "./viewers.ts";
 
 type SiteNote = { notes: string; at: number };
@@ -67,7 +68,7 @@ type ConfirmPayload = { task: string; action: string; step?: PinnedAction };
 export default defineNudgeExtension({
   name: "browser",
   version: "0.1.0",
-  apiVersion: "1.0",
+  apiVersion: "1.1",
   description: "Browse the web with a headed browser driven by its own model",
   settings: Type.Object({
     /** `provider/model` from the providers Nudge knows, such as `openai/gpt-5-mini`. */
@@ -239,6 +240,20 @@ export default defineNudgeExtension({
       `Browsing stopped (${result.outcome}${result.error ? `: ${result.error}` : ""}) after ${result.steps} steps.${result.answer ? `\n${result.answer}` : ""}`;
 
     return {
+      // A deleted room's browsers close, and their profiles, saved logins and site notes go.
+      onRoomDeleted: async (_roomId: string, conversationIds: readonly number[]) => {
+        const scopes = conversationIds.map(scopeOf);
+        await documents().commit(async (tx) => {
+          const doc = await tx.doc(SiteNotesDoc);
+          for (const scope of scopes) delete doc.rooms[scope];
+        }, BACKGROUND_CONTEXT);
+        for (const scope of scopes) {
+          const profileDir = join(profiles(), scope);
+          await closeBrowser(profileDir);
+          rmSync(profileDir, { recursive: true, force: true });
+          logins.forgetAll(scope);
+        }
+      },
       models: [{ provider: provider!, modelId: id.join("/") }],
       // What it found on the web is data, not instructions (ADR 20).
       tools: [

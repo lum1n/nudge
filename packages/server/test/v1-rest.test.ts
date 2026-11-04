@@ -203,6 +203,22 @@ describe("v1 HTTP", () => {
     expect(rooms.json.rooms.map((room: Room) => room.name)).toEqual(["Hall", "Rome"]);
   });
 
+  it("deletes shared rooms for members and admins, never the lobby or a personal room", async () => {
+    const remove = (token: string | undefined, room: string) =>
+      call("DELETE", `/rooms/${room}`, { token });
+    await nudge.rooms.createShared({ id: "club", name: "Club", members: ["bo"] }, context);
+    await call("POST", "/rooms/personal", { token: tokens.Bo });
+    expect((await remove(tokens.Cy, "trip")).status).toBe(404);
+    expect((await remove(tokens.Bo, "lobby")).status).toBe(403);
+    expect((await remove(tokens.Bo, "personal-bo")).status).toBe(403);
+    expect((await remove(tokens.Bo, "trip")).status).toBe(204);
+    expect((await remove(tokens.Bo, "trip")).status).toBe(404);
+    // Ann is an admin, though not in the club.
+    expect((await remove(tokens.Ann, "club")).status).toBe(204);
+    const rooms = await call("GET", "/admin/rooms", { token: tokens.Ann, schema: RoomsResponse });
+    expect(rooms.json.rooms.map((room: Room) => room.id)).toEqual(["lobby", "personal-bo"]);
+  });
+
   it("keeps the caller's personal details apart from their profile", async () => {
     expect(
       await call("GET", "/me/personal", { token: tokens.Bo, schema: PersonalDetails }),

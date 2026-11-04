@@ -258,7 +258,7 @@ export function accExtension(options: AccOptions = {}) {
   return defineNudgeExtension({
     name: "acc",
     version: VERSION,
-    apiVersion: "1.0",
+    apiVersion: "1.1",
     description:
       "Start, watch and steer coding agents (Claude Code, Codex, Cursor, Copilot, pi, opencode) on your machines over SSH.",
     settings: Settings,
@@ -1039,6 +1039,13 @@ export function accExtension(options: AccOptions = {}) {
           trust: async (_payload, run) => {
             asked.trusts.take(run.room.id, run.approval.id);
           },
+        },
+        // A deleted room stops following its sessions, which keep running, and its requests go.
+        onRoomDeleted: async (roomId: string) => {
+          for (const follow of sessions.followed(roomId))
+            await sessions.unfollow(follow.host, follow.id);
+          asked.starts.forgetRoom(roomId);
+          asked.trusts.forgetRoom(roomId);
         },
         close: async () => {
           stop.abort();

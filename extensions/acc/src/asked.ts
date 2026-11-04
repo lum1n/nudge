@@ -23,6 +23,15 @@ export class Asked<T> {
     return value;
   }
 
+  /** Forgets every request asked in a room, such as a deleted one's. */
+  forgetRoom(roomId: string): void {
+    const entries = this.load();
+    const kept = Object.fromEntries(
+      Object.entries(entries).filter(([key]) => !key.startsWith(`${roomId}/`)),
+    );
+    if (Object.keys(kept).length < Object.keys(entries).length) this.save(kept);
+  }
+
   private load(): Record<string, T> {
     if (this.entries !== undefined) return this.entries;
     try {

@@ -244,6 +244,29 @@ def test_renames_a_room(server) -> None:
     run(test())
 
 
+def test_deletes_a_shared_room(server) -> None:
+    async def test() -> None:
+        async with Client(server.url, server.assistant, MemoryTokens(server.bo)) as bo:
+            rooms = bo.room_list()
+            await rooms.wait_for(
+                lambda u: u.view is not None and any(r.room.id == "trip" for r in u.view.rooms),
+                TIMEOUT,
+            )
+            with pytest.raises(NudgeError.Status) as refused:
+                await bo.delete_room("lobby")
+            assert refused.value.status == 403
+            await bo.delete_room("trip")
+            await rooms.wait_for(
+                lambda u: u.view is not None and all(r.room.id != "trip" for r in u.view.rooms),
+                TIMEOUT,
+            )
+            with pytest.raises(NudgeError.Status) as refused:
+                await bo.delete_room("trip")
+            assert refused.value.status == 404
+
+    run(test())
+
+
 def test_refusals(server) -> None:
     async def test() -> None:
         async with Client(server.url, server.assistant, MemoryTokens(server.bo)) as bo:

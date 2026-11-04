@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, extname, join } from "node:path";
 import {
@@ -102,7 +102,7 @@ const MIME_TYPES: Record<string, string> = {
 export default defineNudgeExtension({
   name: "terminal",
   version: "0.1.0",
-  apiVersion: "1.0",
+  apiVersion: "1.1",
   description: "Run shell commands in a sandboxed workspace of the room's own",
   settings: Type.Object({
     network: Type.Boolean({
@@ -507,6 +507,14 @@ export default defineNudgeExtension({
             denied.approval.id,
             denied.approval.decidedBy?.displayName ?? "someone",
           ),
+      },
+      // A deleted room's workspaces and command logs go. Commands still running there stop with
+      // its conversations, which deleting the room aborts. The desktop's home is the desktop's.
+      onRoomDeleted: (_roomId: string, conversationIds: readonly number[]) => {
+        for (const conversationId of conversationIds) {
+          rmSync(files(conversationId).workspace, { recursive: true, force: true });
+          log.forget(conversationId);
+        }
       },
       // The room's terminal, for the people in the room: the commands the assistant ran, their
       // output as it comes, and those waiting for approval. Approve and deny with the room's API.

@@ -187,6 +187,7 @@ export function a2aExtension(options: A2AOptions = {}) {
   return defineNudgeExtension({
     name: "a2a",
     version: VERSION,
+    apiVersion: "1.1",
     description:
       "Talks with other AI agents over the Agent2Agent (A2A) protocol: agents an admin lets in call this assistant, each in a room of its own, and it messages the agents its admins added.",
     settings: Settings,
@@ -277,6 +278,7 @@ class A2A {
         },
       },
       onRoomEvent: (event: RoomEvent) => this.roomEvent(event),
+      onRoomDeleted: (roomId: string) => this.roomDeleted(roomId, BACKGROUND_CONTEXT),
       close: () => {
         this.closed = true;
       },
@@ -333,6 +335,29 @@ class A2A {
       return plain(client);
     }, context);
     return removed;
+  }
+
+  /**
+   * A room was deleted: an outside agent whose room it was loses its token and tasks, and the
+   * calls made from it stop being checked on and are forgotten, with its conversations.
+   */
+  private async roomDeleted(roomId: string, context: Context): Promise<void> {
+    const before = await this.state(context);
+    const nudge = this.nudge();
+    for (const call of Object.values(before.calls)) {
+      if (call.roomId !== roomId || call.timerId === undefined) continue;
+      const timerId = Number(call.timerId) as TaskId;
+      if ((await nudge.harness.abortTask(timerId, context)) === "marked")
+        await nudge.harness.waitForTask(timerId, context);
+    }
+    for (const client of Object.values(before.clients))
+      if (client.roomId === roomId) await this.removeClient(client.id, context);
+    await this.commit((state) => {
+      for (const call of Object.values(state.calls))
+        if (call.roomId === roomId) delete state.calls[call.id];
+      for (const [id, conversation] of Object.entries(state.conversations))
+        if (conversation.roomId === roomId) delete state.conversations[id];
+    }, context);
   }
 
   /** The client whose bearer token the request has. */

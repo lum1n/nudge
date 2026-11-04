@@ -124,6 +124,25 @@ describe("scripts", () => {
     expect((await scripts())?.[0]?.runs).toBe(2);
   });
 
+  it("forgets the scripts of a deleted room", async () => {
+    await nudge.rooms.createShared({ id: "trip", name: "Trip", members: [] }, context);
+    const script = {
+      name: "ferry",
+      description: "Ferry times",
+      code: "return 1;",
+      createdAt: 1,
+      updatedAt: 1,
+      runs: 0,
+    };
+    await nudge.harness.commit(async (tx) => {
+      (await tx.doc(ScriptsDoc, "trip", null)).items.push({ ...script });
+      (await tx.doc(ScriptsDoc, LOBBY, null)).items.push({ ...script });
+    }, context);
+    await nudge.deleteRoom("trip", context);
+    expect((await nudge.harness.snapshot(ScriptsDoc, "trip", context))?.items).toEqual([]);
+    expect(await scripts()).toHaveLength(1);
+  });
+
   it("keeps tools that change things out of scripts", async () => {
     const saved = await ask("save_script", {
       name: "spam",

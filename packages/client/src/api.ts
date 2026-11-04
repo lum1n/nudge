@@ -198,6 +198,14 @@ export class Api {
     return this.request("PATCH", roomPath(room), { name } satisfies RenameRoomRequest);
   }
 
+  /**
+   * Deletes a shared room for everyone, with its messages, memory and attachments; its members
+   * and admins may. Never the lobby or a personal room.
+   */
+  deleteRoom(room: string): Promise<void> {
+    return this.request("DELETE", roomPath(room));
+  }
+
   /** The caller's personal room, made on first use. */
   personalRoom(): Promise<Room> {
     return this.request("POST", "/rooms/personal");

@@ -51,7 +51,10 @@ const READ_PATH = /^(POST|PUT|PATCH|DELETE) \/\S*$/;
  * connectors change, whoever changed them.
  */
 export class Panels {
-  private readonly viewers = new Map<string, Set<{ send(data: string): void; admin: boolean }>>();
+  private readonly viewers = new Map<
+    string,
+    Set<{ send(data: string): void; close(): void; admin: boolean }>
+  >();
 
   constructor(
     private readonly documents: () => ExtensionDocuments,
@@ -102,10 +105,22 @@ export class Panels {
     }
   }
 
+  /** Forgets a deleted room's connectors and their keys, and closes its open panels. */
+  async deleteRoom(roomId: string): Promise<void> {
+    await this.documents().commit(async (tx) => {
+      (await tx.doc(ConnectorsDoc, roomId, null)).connectors = [];
+    }, BACKGROUND_CONTEXT);
+    for (const name of this.secrets.names(roomId)) this.secrets.delete(roomId, name);
+    const viewers = this.viewers.get(roomId);
+    this.viewers.delete(roomId);
+    for (const viewer of viewers ?? []) viewer.close();
+  }
+
   readonly roomSocket: RoomSocketHandler = async ({ room, admin }, socket) => {
     const viewer = {
       admin,
       send: (data: string) => socket.send(data),
+      close: () => socket.close(1000, "The room was deleted"),
     };
     const reply = (output: PanelOutput) => socket.send(JSON.stringify(output));
     let viewers = this.viewers.get(room.id);

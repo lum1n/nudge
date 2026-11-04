@@ -163,6 +163,24 @@ describe("the room page", () => {
     expect(text(await render("trip", { admin: false }))).toContain("Lofoten trip Rename");
   });
 
+  it("offers to delete a shared room only, never the lobby or a personal room", async () => {
+    hold(view());
+    expect(text(await render("trip", { admin: false }))).toContain("Rename Delete room");
+    hold(view({ room: { id: "lobby", kind: "lobby", name: "Lobby", members: [] } }));
+    expect(text(await render("lobby", { admin: true }))).not.toContain("Delete room");
+    hold(
+      view({
+        room: {
+          id: "personal-ann",
+          kind: "personal",
+          name: "Ann's room",
+          members: [{ id: "ann", displayName: "Ann" }],
+        },
+      }),
+    );
+    expect(text(await render("personal-ann", { admin: true }))).not.toContain("Delete room");
+  });
+
   it("shows the chat: who said what, the answer as markdown, and hidden values as chips", async () => {
     hold(view());
     const html = await render();

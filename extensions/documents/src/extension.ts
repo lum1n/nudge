@@ -17,6 +17,7 @@ import {
   readsOnly,
   returnsUntrusted,
   roomOf,
+  type RoomSocket,
   type RoomSocketHandler,
   section,
   type SessionDocFamilyToken,
@@ -119,7 +120,7 @@ export function roomDocuments(assistant: object): RoomDocuments | undefined {
 
 /** Keeps the files, encrypted, and their texts; serves the room's Documents page. */
 class Library {
-  private readonly viewers = new Map<string, Set<(data: string) => void>>();
+  private readonly viewers = new Map<string, Set<RoomSocket>>();
   private key: Buffer | undefined;
 
   constructor(
@@ -202,6 +203,21 @@ class Library {
     if (file !== undefined) await rm(file, { force: true });
   }
 
+  /** Forgets a deleted room's documents, texts and files, and closes its open pages. */
+  async purgeRoom(roomId: string): Promise<void> {
+    await this.documents.commit(async (tx) => {
+      const state = await tx.doc(DocumentsDoc, roomId, null);
+      for (const item of state.items)
+        (await tx.doc(DocumentTextDoc, `${roomId}/${item.id}`, null)).text = "";
+      state.items = [];
+    }, BACKGROUND_CONTEXT);
+    if (this.host.dataDir !== undefined)
+      await rm(join(this.host.dataDir, "files", roomId), { recursive: true, force: true });
+    const viewers = this.viewers.get(roomId);
+    this.viewers.delete(roomId);
+    for (const socket of viewers ?? []) socket.close(1000, "The room was deleted");
+  }
+
   async file(roomId: string, id: string): Promise<Buffer> {
     const file = this.path(roomId, id);
     if (file === undefined) throw new UnsupportedDocument("This assistant keeps no files");
@@ -217,18 +233,17 @@ class Library {
         type: "documents",
         documents: await this.list(roomId),
       } satisfies PanelOutput);
-      for (const send of viewers) send(frame);
+      for (const socket of viewers) socket.send(frame);
     } catch {
       // The next change sends it again.
     }
   }
 
   readonly roomSocket: RoomSocketHandler = async ({ room, player }, socket) => {
-    const send = (data: string) => socket.send(data);
     const reply = (output: PanelOutput) => socket.send(JSON.stringify(output));
     let viewers = this.viewers.get(room.id);
     if (viewers === undefined) this.viewers.set(room.id, (viewers = new Set()));
-    viewers.add(send);
+    viewers.add(socket);
     reply({ type: "documents", documents: await this.list(room.id) });
     let queue = Promise.resolve();
     return {
@@ -274,7 +289,7 @@ class Library {
         });
       },
       close: () => {
-        viewers.delete(send);
+        viewers.delete(socket);
         if (viewers.size === 0) this.viewers.delete(room.id);
       },
     };
@@ -350,7 +365,7 @@ export function searchTexts(
 export const documentsExtension = defineNudgeExtension({
   name: "documents",
   version: VERSION,
-  apiVersion: "1.0",
+  apiVersion: "1.1",
   description:
     "Documents and receipts per room: uploaded, their text extracted and searched on the host.",
   settings: Settings,
@@ -514,6 +529,7 @@ export const documentsExtension = defineNudgeExtension({
       // Documents come from anywhere: the model reads them as data (ADR 20).
       tools: [...[readsOnly(list), readsOnly(search), readsOnly(read)].map(returnsUntrusted), save],
       roomSocket: library.roomSocket,
+      onRoomDeleted: (roomId: string) => library.purgeRoom(roomId),
       sections: [
         section("documents", async (input, context) => {
           const room = await roomOf(input.read, input.conversationId, context).catch(

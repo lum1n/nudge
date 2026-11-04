@@ -497,6 +497,29 @@ async fn renames_a_room_keeping_its_id() {
 }
 
 #[tokio::test]
+async fn deletes_a_shared_room_never_the_lobby_or_a_personal_room() {
+    let Some(server) = faux_server().await else {
+        return;
+    };
+    let bo = Api::new(&server.url, "robin", tokens(Some(&server.bo))).unwrap();
+    let ann = Api::new(&server.url, "robin", tokens(Some(&server.ann))).unwrap();
+    assert_eq!(
+        ann.delete_room("lobby").await.unwrap_err().status(),
+        Some(403)
+    );
+    let personal = bo.personal_room().await.unwrap();
+    assert_eq!(
+        bo.delete_room(&personal.id).await.unwrap_err().status(),
+        Some(403)
+    );
+    bo.delete_room("trip").await.unwrap();
+    assert_eq!(
+        bo.delete_room("trip").await.unwrap_err().status(),
+        Some(404)
+    );
+}
+
+#[tokio::test]
 async fn approves_a_browsers_sign_in_by_qr_code() {
     let Some(server) = faux_server().await else {
         return;
