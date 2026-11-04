@@ -302,9 +302,13 @@ function Room() {
   );
 }
 
-/** The room's name, which its members may change; the lobby's only an admin. */
+/**
+ * The room's name, which its members may change; the lobby's only an admin. A shared room's
+ * members may delete it.
+ */
 function RoomName({ view }: { view: RoomView }) {
   const { assistant, room } = Route.useParams();
+  const navigate = useNavigate();
   const admin = useQuery(meQuery(assistant)).data?.admin ?? false;
   const [draft, setDraft] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -335,6 +339,19 @@ function RoomName({ view }: { view: RoomView }) {
     }
   }
 
+  async function remove() {
+    if (!confirm(m.room.confirmDelete(view.room.name))) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      await clientFor(assistant).api.deleteRoom(room);
+      await navigate({ to: "/$assistant", params: { assistant } });
+    } catch (caught) {
+      setError((caught as Error).message);
+      setBusy(false);
+    }
+  }
+
   if (draft === undefined)
     return (
       <div className="flex items-baseline gap-2">
@@ -349,6 +366,17 @@ function RoomName({ view }: { view: RoomView }) {
             {m.room.rename}
           </button>
         )}
+        {view.room.kind === "shared" && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void remove()}
+            className="text-sm text-stone-500 hover:text-red-700 disabled:opacity-50"
+          >
+            {m.room.delete}
+          </button>
+        )}
+        {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
       </div>
     );
   return (

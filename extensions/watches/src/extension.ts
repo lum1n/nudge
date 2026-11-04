@@ -1,4 +1,5 @@
 import {
+  BACKGROUND_CONTEXT,
   type Context,
   type Conversation,
   type ConversationId,
@@ -120,7 +121,7 @@ export function foundPrompt(watch: Pick<Watch, "id" | "what">, found: readonly F
 export const watchesExtension = defineNudgeExtension({
   name: "watches",
   version: VERSION,
-  apiVersion: "1.0",
+  apiVersion: "1.1",
   description:
     "Watches: the assistant checks something on a schedule and tells the room only when something new turns up.",
   settings: Settings,
@@ -250,8 +251,20 @@ export const watchesExtension = defineNudgeExtension({
       },
     });
 
+    /** A deleted room's watches stop checking and are forgotten. */
+    const onRoomDeleted = async (roomId: string) => {
+      const context = BACKGROUND_CONTEXT;
+      const nudge = host.assistant();
+      const items = (await nudge.harness.snapshot(WatchesDoc, roomId, context))?.items ?? [];
+      for (const watch of items) await stopWatch(host, watch, context);
+      await nudge.harness.commit(async (tx) => {
+        (await tx.doc(WatchesDoc, roomId, null)).items = [];
+      }, context);
+    };
+
     return {
       tasks: [timer],
+      onRoomDeleted,
       // What to watch is kept as the model wrote it, with placeholders.
       tools: [keepsPlaceholders(add), list, remove],
       sections: [

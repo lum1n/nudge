@@ -207,6 +207,20 @@ describe("places", () => {
     expect(all).toContain("⟦PLACE:home⟧");
   });
 
+  it("drops a deleted room's reminders, and the phone stops watching for them", async () => {
+    await say("Save Storgata 5 as home");
+    await say("Remind me when I get home to water the plants");
+    const before = (await nudge.harness.snapshot(PlacesDoc, ann.id, context))!;
+    expect(before.reminders).toHaveLength(1);
+
+    await nudge.deleteRoom("trip", context);
+    const after = (await nudge.harness.snapshot(PlacesDoc, ann.id, context))!;
+    expect(after.reminders).toEqual([]);
+    expect(after.version).toBeGreaterThan(before.version);
+    // The place itself is Ann's, not the room's.
+    expect(after.places.map((place) => place.name)).toEqual(["home"]);
+  });
+
   it("says a reminder in the open where she shares her location", async () => {
     await nudge.personal.shareLocation(ann.id, "trip", true, context);
     await say("Save Storgata 5 as home");

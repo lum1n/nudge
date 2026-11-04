@@ -17,7 +17,14 @@ import {
   fauxToolCall,
 } from "@nudge/core/testing";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { documentsExtension, extractText, type PanelOutput, searchTexts } from "../src/index.ts";
+import {
+  DocumentsDoc,
+  documentsExtension,
+  DocumentTextDoc,
+  extractText,
+  type PanelOutput,
+  searchTexts,
+} from "../src/index.ts";
 
 const context = BACKGROUND_CONTEXT;
 
@@ -166,13 +173,19 @@ describe("documents", () => {
   };
 
   /** The room's Documents page, through the extension's socket, one input at a time. */
-  const openPage = async () => {
+  const openPage = async (roomId = LOBBY) => {
     const frames: PanelOutput[] = [];
-    const room = (await nudge.rooms.get(LOBBY, context))!;
+    let closed = false;
+    const room = (await nudge.rooms.get(roomId, context))!;
     const player = (await nudge.players.get("ann", context))!;
     const session = await nudge.roomSocket("documents")!(
       { room, player, admin: false },
-      { send: (data) => frames.push(JSON.parse(data) as PanelOutput), close: () => {} },
+      {
+        send: (data) => frames.push(JSON.parse(data) as PanelOutput),
+        close: () => {
+          closed = true;
+        },
+      },
     );
     let ref = 0;
     const send = async (input: object) => {
@@ -193,7 +206,7 @@ describe("documents", () => {
           { type: "documents" }
         >
       ).documents;
-    return { send, listed, session };
+    return { send, listed, session, closed: () => closed };
   };
 
   it("takes uploads, keeps the files encrypted, and lets the model find what's in them", async () => {
@@ -246,6 +259,28 @@ describe("documents", () => {
     expect(await readdir(files)).toEqual(["d2"]);
     expect(page.listed().map((d) => d.id)).toEqual(["d2"]);
     page.session.close();
+  });
+
+  it("forgets a deleted room's documents and files, and closes its pages", async () => {
+    await nudge.rooms.createShared({ id: "trip", name: "Trip", members: ["ann"] }, context);
+    const page = await openPage("trip");
+    const notes = Buffer.from("Ring rørleggeren om lekkasjen");
+    expect(
+      await page.send({
+        type: "upload",
+        name: "notes.txt",
+        mime: "text/plain",
+        data: notes.toString("base64"),
+      }),
+    ).toMatchObject({ type: "ok", id: "d1" });
+    const files = join(dir, "a.sqlite.extensions", "documents", "files");
+    expect(await readdir(files)).toEqual(["trip"]);
+
+    await nudge.deleteRoom("trip", context);
+    expect((await nudge.harness.snapshot(DocumentsDoc, "trip", context))?.items).toEqual([]);
+    expect((await nudge.harness.snapshot(DocumentTextDoc, "trip/d1", context))?.text).toBe("");
+    expect(await readdir(files)).toEqual([]);
+    expect(page.closed()).toBe(true);
   });
 
   it("files an attachment the turn's person may see as a document", async () => {

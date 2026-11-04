@@ -13,6 +13,9 @@ export const room = {
   open: "Room",
   waitingForApproval: " waiting for approval",
   rename: "Rename",
+  delete: "Delete room",
+  confirmDelete: (name: string) =>
+    `Delete “${name}”? The room, its messages, memory and attachments are deleted for everyone. This can't be undone.`,
   name: "Room name",
   links: {
     activity: "Activity",

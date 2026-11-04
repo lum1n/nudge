@@ -1,4 +1,5 @@
 import {
+  BACKGROUND_CONTEXT,
   type Context,
   currentTurn,
   defineNudgeExtension,
@@ -74,7 +75,7 @@ function visible(trigger: Trigger): boolean {
 export const triggersExtension = defineNudgeExtension({
   name: NAME,
   version: VERSION,
-  apiVersion: "1.0",
+  apiVersion: "1.1",
   description:
     "Triggers: a secret web address per room that lets outside events, such as Home Assistant or GitHub, start a turn.",
   settings: Settings,
@@ -292,10 +293,22 @@ export const triggersExtension = defineNudgeExtension({
       return Response.json({ accepted: true }, { status: 202 });
     };
 
+    /** Turns off a deleted room's triggers: their addresses stop working and their secrets go. */
+    const onRoomDeleted = async (roomId: string) => {
+      const removed = await host.documents().commit(async (tx) => {
+        const state = await tx.doc(TriggersDoc);
+        const ids = state.items.filter((item) => item.roomId === roomId).map((item) => item.id);
+        if (ids.length > 0) state.items = state.items.filter((item) => item.roomId !== roomId);
+        return ids;
+      }, BACKGROUND_CONTEXT);
+      for (const id of removed) host.secrets.delete(SECRETS_SCOPE, id);
+    };
+
     return {
       // Instructions are kept as the model wrote them, with placeholders.
       tools: [keepsPlaceholders(add), list, remove],
       routes: [hook],
+      onRoomDeleted,
       sections: [
         section("triggers", async (input, context) => {
           const room = await roomOf(input.read, input.conversationId, context).catch(

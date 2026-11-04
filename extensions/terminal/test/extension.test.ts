@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BACKGROUND_CONTEXT, createNudge, LOBBY, type ModelContext, type Nudge } from "@nudge/core";
@@ -123,6 +123,32 @@ describe("terminal extension", () => {
     expect(json(requests[1])).toContain("⟦EMAIL1⟧");
     expect(json(requests[1])).toContain("(exit code 0)");
     for (const request of requests) expect(json(request)).not.toContain(EMAIL);
+  });
+
+  it("deletes a deleted room's workspace and the commands it ran", async () => {
+    const { faux, reply, call, open } = setup({}, true);
+    faux.setResponses([call("ls"), reply(fauxAssistantMessage([fauxText("Listed.")]))]);
+    nudge = await open();
+    await nudge.players.ensure("owner", "Vegard", context);
+    const room = await nudge.rooms.createShared(
+      { id: "trip", name: "Trip", members: ["owner"] },
+      context,
+    );
+    const author = { playerId: "owner", displayName: "Vegard" };
+    const settled = await (
+      await nudge.submit("trip", { text: "ls", author }, context)
+    ).wait(context);
+    expect(settled.status).toBe("done");
+    const scope = `conversation-${room.conversationId}`;
+    const workspaceDir = ran[0]!.options.workspace;
+    expect(workspaceDir.endsWith(scope)).toBe(true);
+    mkdirSync(workspaceDir, { recursive: true });
+    const logFile = join(workspaceDir, "..", "..", "commands", `${scope}.json`);
+    expect(existsSync(logFile)).toBe(true);
+
+    await nudge.deleteRoom("trip", context);
+    expect(existsSync(workspaceDir)).toBe(false);
+    expect(existsSync(logFile)).toBe(false);
   });
 
   it("never runs what the policy refuses", async () => {

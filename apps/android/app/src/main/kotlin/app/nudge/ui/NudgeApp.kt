@@ -161,6 +161,17 @@ private fun SignedIn(model: AppModel, session: Session) {
                     selected = if (listVisible && navigator.scaffoldValue[ListDetailPaneScaffoldRole.Detail] != PaneAdaptedValue.Hidden) shown?.ref else null,
                     open = { open(Destination.of(it)) },
                     settings = { settings = true },
+                    // Leave a room deleted from the list if it is open, and its panels with it.
+                    deleted = { room ->
+                        scope.launch {
+                            while (Destination.of(navigator.currentDestination?.contentKey)?.ref == room) {
+                                if (!navigator.navigateBack()) {
+                                    navigator.navigateTo(ListDetailPaneScaffoldRole.List)
+                                    break
+                                }
+                            }
+                        }
+                    },
                 )
             }
         },

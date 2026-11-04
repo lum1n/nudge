@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -253,6 +253,38 @@ describe("acc", () => {
       request_id: "r1",
       option_id: "yes",
     });
+  });
+
+  it("stops following a deleted room's sessions and forgets what it asked there", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "nudge-acc-"));
+    dirs.push(dir);
+    const data = join(dir, "nudge.sqlite.extensions", "acc");
+    const read = (file: string) => JSON.parse(readFileSync(join(data, file), "utf8")) as unknown;
+    const startIn = async (nudge: Nudge, room: string) => {
+      await nudge.players.ensure(by.playerId, by.displayName, context);
+      await nudge.rooms.createShared({ id: room, name: room, members: [by.playerId] }, context);
+      const text = "Start claude on devbox in ~/proj to make the tests pass";
+      await (await nudge.submit(room, { text, author: by }, context)).wait(context);
+    };
+
+    const acc = new FakeAcc();
+    const first = await open(acc, { database: join(dir, "nudge.sqlite") });
+    await startIn(first.nudge, "trip");
+    expect(read("follows.json")).toMatchObject([{ id: "claude-s1", roomId: "trip" }]);
+    await first.nudge.deleteRoom("trip", context);
+    expect(read("follows.json")).toEqual([]);
+
+    const other = mkdtempSync(join(tmpdir(), "nudge-acc-"));
+    dirs.push(other);
+    const second = await open(new FakeAcc(), {
+      database: join(other, "nudge.sqlite"),
+      approveStart: true,
+    });
+    const starts = join(other, "nudge.sqlite.extensions", "acc", "starts.json");
+    await startIn(second.nudge, "club");
+    expect(Object.keys(JSON.parse(readFileSync(starts, "utf8")) as object)).toHaveLength(1);
+    await second.nudge.deleteRoom("club", context);
+    expect(JSON.parse(readFileSync(starts, "utf8"))).toEqual({});
   });
 
   it("pins a host's key, refuses another until it is trusted, and keeps one key of its own", async () => {

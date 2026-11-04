@@ -13,6 +13,7 @@ import {
   fauxText,
   fauxToolCall,
 } from "@nudge/core/testing";
+import { existsSync, mkdirSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import desktop from "../src/extension.ts";
 import { fakeDesktop } from "./fake-desktop.ts";
@@ -27,6 +28,7 @@ const fake = fakeDesktop(
 // The reply's Send button, which needs the room's approval.
 fake.desktop.describe = (ref) =>
   ref === "e9" ? 'button "Send" [e9]' : `button "Button ${ref}" [${ref}]`;
+const closed: string[] = [];
 const opened: { homeDir: string; apps: Readonly<Record<string, readonly string[]>> }[] = [];
 vi.mock("../src/pool.ts", () => ({
   withDesktop: (
@@ -38,6 +40,9 @@ vi.mock("../src/pool.ts", () => ({
     return use(fake.desktop);
   },
   closeAllDesktops: async () => {},
+  closeDesktop: async (homeDir: string) => {
+    closed.push(homeDir);
+  },
 }));
 // Tests run where Xvfb may be missing; the pool is faked anyway.
 vi.mock("../src/session.ts", async (original) => ({
@@ -224,6 +229,38 @@ describe("desktop extension", () => {
     await answered;
     fake.desktop.click = click;
     expect(output).toBe('Starting the desktop…\nClicking "Button e5"…\n');
+  });
+
+  it("closes a deleted room's desktop and deletes its home", async () => {
+    const { faux, reply, open } = setup();
+    faux.setResponses([
+      reply(
+        fauxAssistantMessage([fauxToolCall("use_desktop", { task: "Open the notes" })], {
+          stopReason: "toolUse",
+        }),
+      ),
+      reply(fauxAssistantMessage([fauxText("Opened.")])),
+      reply(fauxAssistantMessage([fauxText("Done.")])),
+    ]);
+    nudge = await open();
+    await nudge.players.ensure("owner", "Vegard", context);
+    const room = await nudge.rooms.createShared(
+      { id: "trip", name: "Trip", members: ["owner"] },
+      context,
+    );
+    const author = { playerId: "owner", displayName: "Vegard" };
+    const settled = await (
+      await nudge.submit("trip", { text: "Open the notes", author }, context)
+    ).wait(context);
+    expect(settled.status).toBe("done");
+    const scope = `conversation-${room.conversationId}`;
+    const homeDir = opened.at(-1)!.homeDir;
+    expect(homeDir.endsWith(scope)).toBe(true);
+    mkdirSync(homeDir, { recursive: true });
+
+    await nudge.deleteRoom("trip", context);
+    expect(closed).toContain(homeDir);
+    expect(existsSync(homeDir)).toBe(false);
   });
 
   it("explains a desktop model the assistant does not know", async () => {

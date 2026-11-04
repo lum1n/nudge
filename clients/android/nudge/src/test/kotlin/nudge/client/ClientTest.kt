@@ -253,6 +253,24 @@ class ClientTest {
     }
 
     @Test
+    fun deletesASharedRoomNeverTheLobby() = runBlocking {
+        val member = client(MemoryTokens(bo))
+        try {
+            member.deleteRoom("lobby")
+            error("not refused")
+        } catch (e: NudgeException.Status) {
+            assertEquals(403.toUShort(), e.status)
+        }
+        member.deleteRoom("trip")
+        try {
+            member.deleteRoom("trip")
+            error("not gone")
+        } catch (e: NudgeException.Status) {
+            assertEquals(404.toUShort(), e.status)
+        }
+    }
+
+    @Test
     fun refusalsAndRevocation() = runBlocking {
         val admin = client(MemoryTokens(ann))
         val member = client(MemoryTokens(bo))

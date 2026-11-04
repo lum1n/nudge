@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -7,6 +8,7 @@ import {
   LOBBY,
   type ModelContext,
   type Nudge,
+  SecretStore,
   untrustedData,
 } from "@nudge/core";
 import {
@@ -27,6 +29,7 @@ import mcp, {
   sandboxWarnings,
   toolName,
 } from "../src/index.ts";
+import { addServer, RoomServersDoc } from "../src/rooms.ts";
 import { fakeOAuthServer } from "./fake-oauth.ts";
 
 const context = BACKGROUND_CONTEXT;
@@ -109,11 +112,11 @@ describe("mcp", () => {
     return { faux, requests, outputs, call, done, say, nudge };
   }
 
-  /** A client of the MCP panel of the lobby, as the server would connect it. */
-  async function panel(nudge: Nudge) {
+  /** A client of the MCP panel of a room, the lobby by default, as the server would connect it. */
+  async function panel(nudge: Nudge, roomId: string = LOBBY) {
     const frames: PanelOutput[] = [];
     const waiters: (() => void)[] = [];
-    const room = (await nudge.rooms.get(LOBBY, context))!;
+    const room = (await nudge.rooms.get(roomId, context))!;
     const session = await nudge.roomSocket("mcp")!(
       { room, player: { id: "ann", displayName: "Ann", createdAt: 0 }, admin: false },
       {
@@ -250,6 +253,54 @@ describe("mcp", () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(servers()).toEqual([]);
     close();
+  });
+
+  it("drops a deleted room's servers, with their keys, connections and home directories", async () => {
+    const { faux, outputs, call, done, nudge } = await open({});
+    const { admin } = await players(nudge);
+    await nudge.rooms.createShared(
+      { id: "trip", name: "Trip", members: [admin.playerId] },
+      context,
+    );
+    await nudge.harness.commit(
+      (tx) =>
+        addServer(
+          tx,
+          "trip",
+          {
+            name: "notes",
+            useFor: "Keeping notes",
+            command: process.execPath,
+            args: [FAKE],
+            keys: [{ in: "env", name: "TOKEN" }],
+          },
+          admin.playerId,
+          Date.now(),
+        ),
+      context,
+    );
+    const { send, close } = await panel(nudge, "trip");
+    expect(await send({ type: "setKey", server: "m1", key: "TOKEN", value: "s3cret" })).toEqual({
+      type: "ok",
+      ref: "r1",
+    });
+    close();
+    // Listing its tools starts the program.
+    faux.setResponses([call("mcp_tools", { server: "notes" }), done]);
+    const settled = await (
+      await nudge.submit("trip", { text: "Which tools?", author: admin }, context)
+    ).wait(context);
+    expect(settled.status).toBe("done");
+    expect(inside(outputs.at(-1), "mcp_tools")).toContain("lookup");
+    const data = join(dir, "a.sqlite.extensions", "mcp");
+    expect(existsSync(join(data, "rooms", "trip", "m1"))).toBe(true);
+
+    await nudge.deleteRoom("trip", context);
+    expect((await nudge.harness.snapshot(RoomServersDoc, "trip", context))?.servers ?? []).toEqual(
+      [],
+    );
+    expect(new SecretStore(join(data, "secrets")).names("trip")).toEqual([]);
+    expect(existsSync(join(data, "rooms", "trip"))).toBe(false);
   });
 
   it("signs in to a remote server with OAuth from the panel", async () => {

@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -23,7 +23,7 @@ import {
 } from "./agent.ts";
 import { foundApps } from "./apps.ts";
 import { type LiveInput, startLiveView } from "./live.ts";
-import { closeAllDesktops, holdDesktop, withDesktop } from "./pool.ts";
+import { closeAllDesktops, closeDesktop, holdDesktop, withDesktop } from "./pool.ts";
 import { type DesktopOptions, desktopProblem, type PinnedAction } from "./session.ts";
 import { type Viewer, viewersOf } from "./viewers.ts";
 
@@ -42,7 +42,7 @@ type ConfirmPayload = { task: string; action: string; step?: PinnedAction };
 export default defineNudgeExtension({
   name: "desktop",
   version: "0.1.0",
-  apiVersion: "1.0",
+  apiVersion: "1.1",
   description: "Use desktop apps on a virtual Linux desktop, read as text by its own model",
   settings: Type.Object({
     /** The apps the agent may start, by name: the program and its arguments. Nothing else runs. */
@@ -311,6 +311,14 @@ export default defineNudgeExtension({
       // A reload or the assistant closing: the desktops close once their running tasks are done,
       // and open again, with the new settings, on the next task.
       close: () => (dataDir || temp ? closeAllDesktops(homes()) : undefined),
+      // A deleted room's desktops close, after any task on them, and their homes go.
+      onRoomDeleted: async (_roomId: string, conversationIds: readonly number[]) => {
+        for (const conversationId of conversationIds) {
+          const homeDir = join(homes(), scopeOf(conversationId));
+          await closeDesktop(homeDir);
+          rmSync(homeDir, { recursive: true, force: true });
+        }
+      },
     };
   },
 });

@@ -27,6 +27,18 @@ describe("LoginStore", () => {
     expect(again.list("room-1")).toHaveLength(1);
   });
 
+  it("forgets every login of a room, on disk too, and keeps the others", () => {
+    const at = dir();
+    const store = new LoginStore(at);
+    store.save("room-1", { host: "a.no", password: "Hemmelig123!", savedAt: 1 });
+    store.save("room-1", { host: "b.no", password: "x", savedAt: 2 });
+    store.save("room-2", { host: "a.no", password: "y", savedAt: 3 });
+    store.forgetAll("room-1");
+    const again = new LoginStore(at);
+    expect(again.list("room-1")).toEqual([]);
+    expect(again.list("room-2")).toHaveLength(1);
+  });
+
   it("replaces a host's login, forgets one, and refuses a wrong key", () => {
     const at = dir();
     const store = new LoginStore(at);

@@ -37,7 +37,7 @@ const AUTH_SCHEMA = Type.Object({
 export default defineNudgeExtension({
   name: "connectors",
   version: "0.1.0",
-  apiVersion: "1.0",
+  apiVersion: "1.1",
   description: "Call APIs the room adds and teaches it about",
   setup: ({ secrets, dataDir, now, documents }): ExtensionParts => {
     // Each room's connectors panel: keys, the private network, read paths, sharing.
@@ -320,6 +320,7 @@ export default defineNudgeExtension({
         returnsUntrusted(readsOnly(docsTool)),
       ],
       roomSocket: panels.roomSocket,
+      onRoomDeleted: (roomId: string) => panels.deleteRoom(roomId),
       sections: [
         section("connectors", async (input, context) => {
           const room = await roomOf(input.read, input.conversationId, context);

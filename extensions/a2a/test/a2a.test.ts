@@ -416,6 +416,54 @@ describe("a2a", { timeout: 30_000 }, () => {
     });
   });
 
+  it("forgets a deleted room's calls and conversations, and the agent whose room it was", async () => {
+    const homeScript: Script = (_request, last) =>
+      last.startsWith("Vegard (") && /book Friday/.test(last)
+        ? fauxAssistantMessage(
+            [fauxToolCall("message_agent", { agent: "Team", text: "Book Friday with us." })],
+            { stopReason: "toolUse" },
+          )
+        : fauxAssistantMessage([fauxText("Okay.")]);
+    await start(homeScript);
+    const { client, token } = await letIn("Robin");
+    expect(
+      (
+        await call(HOME, "robin", "POST", "/ext/a2a/agents", homeAdmin, {
+          url: `${AWAY}/v1/a/team/ext/a2a`,
+          token,
+        })
+      ).status,
+    ).toBe(201);
+    await home.rooms.createShared(
+      { id: "plans", name: "Plans", members: [vegard.playerId] },
+      context,
+    );
+    // Booking waits for away's people, so the call goes on in the background.
+    await say(home, "Please book Friday", vegard, "plans");
+    const before = (await home.harness.snapshot(A2ADoc, context))!;
+    const made = Object.values(before.calls)[0]!;
+    expect(made).toMatchObject({ roomId: "plans", status: "open" });
+    expect(Object.keys(before.conversations)).toHaveLength(1);
+
+    await home.deleteRoom("plans", context);
+    const after = (await home.harness.snapshot(A2ADoc, context))!;
+    expect(after.calls).toEqual({});
+    expect(after.conversations).toEqual({});
+    const timer = await home.harness.getTask(Number(made.timerId) as never, context);
+    expect(timer?.state.status).toBe("terminal");
+    expect(Object.keys(after.agents)).toEqual(["g1"]);
+
+    // Away deletes the room the agent spoke in: its token and tasks go with it.
+    expect(Object.keys((await away.harness.snapshot(A2ADoc, context))!.tasks)).toHaveLength(1);
+    await away.deleteRoom(client.roomId, context);
+    const there = (await away.harness.snapshot(A2ADoc, context))!;
+    expect(there.clients).toEqual({});
+    expect(there.tasks).toEqual({});
+    expect(
+      (await call(AWAY, "team", "POST", "/ext/a2a/rpc", token, { jsonrpc: "2.0", id: 1 })).status,
+    ).toBe(401);
+  });
+
   it("takes no call from an agent's room, a retry once, and no more than the hourly limit", async () => {
     await start(quiet, { awaySettings: { maxMessagesPerHour: 1 } });
     const { client, token } = await letIn();

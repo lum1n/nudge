@@ -24,7 +24,7 @@ import {
 } from "@nudge/core/testing";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import connectors from "../src/extension.ts";
-import { addConnector, updateConnector } from "../src/model.ts";
+import { addConnector, ConnectorsDoc, updateConnector } from "../src/model.ts";
 import type { PanelInput, PanelOutput } from "../src/panel.ts";
 import { fixture, start } from "./fixture.ts";
 
@@ -535,6 +535,60 @@ describe("the connectors panel", () => {
       )!;
     return { frames, send, latest, close: () => session.close() };
   }
+
+  it("forgets a deleted room's connectors and keys, and closes its panels", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "nudge-connectors-delete-"));
+    try {
+      const { options, secretsDir } = setup(dir);
+      const nudge = await createNudge(options, context);
+      const room = await nudge.rooms.createShared(
+        { id: "trip", name: "Trip", members: [] },
+        context,
+      );
+      await nudge.harness.commit(
+        (tx) =>
+          addConnector(
+            tx,
+            "trip",
+            {
+              name: "Keyed",
+              baseUrl: "https://api.example/",
+              useFor: "Testing",
+              auth: { in: "header", name: "x-api-key" },
+            },
+            "Vegard",
+            0,
+          ),
+        context,
+      );
+      new SecretStore(secretsDir).set(LOBBY, "c1", "sk-lobby");
+      let closed = false;
+      const player = { id: "ann", displayName: "Ann", createdAt: 0 };
+      const session = await nudge.roomSocket("connectors")!(
+        { room, player, admin: true },
+        {
+          send: () => {},
+          close: () => {
+            closed = true;
+          },
+        },
+      );
+      session.receive(JSON.stringify({ type: "setKey", connector: "c1", value: "sk-trip" }));
+      await vi.waitFor(() => expect(new SecretStore(secretsDir).get("trip", "c1")).toBe("sk-trip"));
+
+      await nudge.deleteRoom("trip", context);
+      expect((await nudge.harness.snapshot(ConnectorsDoc, "trip", context))?.connectors).toEqual(
+        [],
+      );
+      expect(new SecretStore(secretsDir).get("trip", "c1")).toBeUndefined();
+      // Another room's key stays.
+      expect(new SecretStore(secretsDir).get(LOBBY, "c1")).toBe("sk-lobby");
+      expect(closed).toBe(true);
+      await nudge.close(context);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 
   it("sets keys, read paths and the private network; only admins share keyless connectors", async () => {
     const dir = await mkdtemp(join(tmpdir(), "nudge-connectors-panel-"));

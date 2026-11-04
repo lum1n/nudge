@@ -159,7 +159,7 @@ export function peersExtension(
   return defineNudgeExtension({
     name: "peers",
     version: VERSION,
-    apiVersion: "1.0",
+    apiVersion: "1.1",
     description:
       "Linked assistants on other servers talk to each other: this one asks, plans or hands over requests in a thread of a few rounds, and each side's people approve what changes things.",
     settings: Settings,
@@ -282,6 +282,7 @@ class Peers {
         },
       },
       onRoomEvent: (event: RoomEvent) => this.roomEvent(event),
+      onRoomDeleted: (roomId: string) => this.roomDeleted(roomId, BACKGROUND_CONTEXT),
       problems: () =>
         channelOf(host.assistant()) === undefined
           ? ["Peers talks through federation: add the federation extension to this assistant."]
@@ -435,6 +436,53 @@ class Peers {
     }, context);
     if (link !== undefined) await this.sendUnlink(link);
     return link;
+  }
+
+  /**
+   * A room here was deleted: a link it was the room of ends, and the other side hears so; the
+   * threads it started stop and are forgotten, their other side told they ended; and the
+   * threads that ran in it are forgotten.
+   */
+  private async roomDeleted(roomId: string, context: Context): Promise<void> {
+    const before = await this.state(context);
+    const started = Object.values(before.threads).filter(
+      (thread) => thread.originRoomId === roomId,
+    );
+    const nudge = this.nudge();
+    for (const thread of started) {
+      if (thread.taskId === undefined) continue;
+      const taskId = Number(thread.taskId) as TaskId;
+      if ((await nudge.harness.abortTask(taskId, context)) === "marked")
+        await nudge.harness.waitForTask(taskId, context);
+    }
+    const linkIds = Object.values(before.links)
+      .filter((link) => link.roomId === roomId)
+      .map((link) => link.id);
+    const ended = await this.commit((state) => {
+      const ended: { thread: Thread; link: Link }[] = [];
+      for (const thread of Object.values(state.threads)) {
+        const inRoom = linkIds.includes(thread.linkId) && thread.direction === "in";
+        if (thread.originRoomId !== roomId && !inRoom) continue;
+        const link = state.links[thread.linkId];
+        if (thread.status === "open" && link !== undefined && !linkIds.includes(link.id))
+          ended.push(plain({ thread, link }));
+        delete state.threads[thread.id];
+      }
+      for (const link of Object.values(state.links))
+        if (link.askedIn === roomId) delete link.askedIn;
+      return ended;
+    }, context);
+    for (const { thread, link } of ended) {
+      const channel = this.channel();
+      await channel.send(link.place, link.keys, {
+        kind: "nudge.peer.end",
+        from: channel.self,
+        audience: link.place,
+        threadId: thread.id,
+        issuedAt: channel.issuedAt(),
+      } satisfies Static<typeof EndClaim>);
+    }
+    for (const id of linkIds) await this.unlink(id, context);
   }
 
   // What other assistants send.

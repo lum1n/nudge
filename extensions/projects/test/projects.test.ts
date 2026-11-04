@@ -404,6 +404,44 @@ describe("projects", () => {
     expect(await pending()).toEqual([]);
   }, 30_000);
 
+  it("stops a deleted room's agents and drops its project", async () => {
+    const acc = new FakeAcc();
+    acc.onExec = (script) =>
+      script.includes("have()") ? { stdout: "have: git\nrepo: cloned\n" } : undefined;
+    const { nudge, by, say, project } = await open(acc);
+    await say(LOBBY, 'CALL project_create {"name": "Gone"}');
+    const room = (await nudge.rooms.list(context)).find((r) => r.name === "Gone")!;
+    await say(
+      room.id,
+      `CALL project_plan ${JSON.stringify({
+        brief: "Goes away.",
+        repo: "o/gone",
+        milestones: [{ title: "M", tasks: [{ title: "T" }, { title: "U" }] }],
+      })}`,
+    );
+    await say(room.id, "CALL project_start {}");
+    const [plan] = await nudge.approvals.list(room.id, context);
+    await nudge.approvals.decide(room.id, plan!.id, { approve: true, by }, context);
+    await say(room.id, "CALL project_request_vm {}");
+    const vm = (await nudge.approvals.list(room.id, context)).find((a) => a.kind === "vm")!;
+    await nudge.approvals.decide(
+      room.id,
+      vm.id,
+      { approve: true, by, inputs: { vm: "proj-gone-ab12", sshHost: "proj-gone-ab12.exe.xyz" } },
+      context,
+    );
+    await until(async () => (await project(room.id))?.tasks[0]?.status === "running");
+    const session = (await project(room.id))!.tasks[0]!.session!;
+
+    await nudge.deleteRoom(room.id, context);
+    expect(await project(room.id)).toBeUndefined();
+    const log = acc.logs.get(session.id)!;
+    expect(log.batches.flat()).toContainEqual({ type: "exited", code: 0 });
+    // Ticks go on, but no agent starts for the room's other task.
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(acc.logs.size).toBe(1);
+  }, 30_000);
+
   it("pauses at the budget's warning level", async () => {
     const acc = new FakeAcc();
     const { nudge, by, say, project } = await open(acc);

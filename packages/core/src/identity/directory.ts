@@ -143,6 +143,11 @@ export type DirectoryState = {
    * such as a watch's checks. Tools and sections there see the room.
    */
   sides?: Record<string, SideConversation>;
+  /**
+   * Ids of deleted rooms, with when they went. They are never given out again, so a new room
+   * can't inherit what anything still keeps under the old one's id.
+   */
+  deletedRooms?: Record<string, number>;
 };
 
 export type SideConversation = { roomId: string; createdAt: number };

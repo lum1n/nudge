@@ -12,6 +12,9 @@ export const room: Messages["room"] = {
   open: "Rom",
   waitingForApproval: " venter på godkjenning",
   rename: "Gi nytt navn",
+  delete: "Slett rommet",
+  confirmDelete: (name: string) =>
+    `Slette «${name}»? Rommet, meldingene, minnet og vedleggene slettes for alle. Det kan ikke angres.`,
   name: "Navn på rommet",
   links: {
     activity: "Aktivitet",

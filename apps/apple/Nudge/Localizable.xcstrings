@@ -1074,6 +1074,16 @@
         }
       }
     },
+    "Couldn't delete the room" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kunne ikke slette rommet"
+          }
+        }
+      }
+    },
     "Couldn't load it: %@" : {
       "localizations" : {
         "nb" : {
@@ -1194,12 +1204,32 @@
         }
       }
     },
+    "Delete “%@”?" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slette «%@»?"
+          }
+        }
+      }
+    },
     "Deletes %@ from your exe.dev account, with its assistants, their history and the backups on it." : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sletter %@ fra exe.dev-kontoen din, med assistentene, historikken deres og sikkerhetskopiene på den."
+          }
+        }
+      }
+    },
+    "Delete…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slett …"
           }
         }
       }
@@ -4500,6 +4530,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rommets skrivebord"
+          }
+        }
+      }
+    },
+    "The room, its messages, memory and attachments are deleted for everyone. This can't be undone." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rommet, meldingene, minnet og vedleggene slettes for alle. Det kan ikke angres."
           }
         }
       }

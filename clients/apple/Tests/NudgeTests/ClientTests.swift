@@ -464,6 +464,23 @@ final class ClientTests: XCTestCase {
         }
     }
 
+    func testDeletesASharedRoomNeverTheLobby() async throws {
+        let member = try client(MemoryTokens(server.bo))
+        do {
+            try await member.deleteRoom(room: "lobby")
+            XCTFail("not refused")
+        } catch NudgeError.Status(let status, _) {
+            XCTAssertEqual(status, 403)
+        }
+        try await member.deleteRoom(room: "trip")
+        do {
+            try await member.deleteRoom(room: "trip")
+            XCTFail("not gone")
+        } catch NudgeError.Status(let status, _) {
+            XCTAssertEqual(status, 404)
+        }
+    }
+
     func testRefusalsAndRevocation() async throws {
         let admin = try client(MemoryTokens(server.ann))
         let member = try client(MemoryTokens(server.bo))

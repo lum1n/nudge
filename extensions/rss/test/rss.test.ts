@@ -15,6 +15,7 @@ import {
 } from "@nudge/core/testing";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { discoverFeed, parseFeed, rssExtension } from "../src/index.ts";
+import { FeedsDoc } from "../src/model.ts";
 
 const context = BACKGROUND_CONTEXT;
 /** A public address as a literal, so checking it needs no DNS. */
@@ -96,10 +97,10 @@ describe("rss", () => {
     await nudge.close(context);
   });
 
-  const call = async (tool: string, args: Parameters<typeof fauxToolCall>[1]) => {
+  const call = async (tool: string, args: Parameters<typeof fauxToolCall>[1], room = LOBBY) => {
     next = [tool, args];
     const author = { playerId: "owner", displayName: "Vegard" };
-    await (await nudge.submit(LOBBY, { text: "go", author }, context)).wait(context);
+    await (await nudge.submit(room, { text: "go", author }, context)).wait(context);
     const last = requests.at(-1)!.messages.findLast((m) => m.role === "toolResult");
     return last?.role === "toolResult"
       ? last.content.map((p) => (p.type === "text" ? p.text : "")).join("")
@@ -152,6 +153,17 @@ describe("rss", () => {
       `Removed feed f1: Været (${SITE}/atom).`,
     );
     expect(await call("list_feeds", {})).toBe(`s1: Byavisa (${SITE}/rss)`);
+  });
+
+  it("forgets the feeds of a deleted room", async () => {
+    await nudge.players.ensure("owner", "Vegard", context);
+    await nudge.rooms.createShared({ id: "trip", name: "Trip", members: ["owner"] }, context);
+    expect(await call("add_feed", { url: `${SITE}/atom` }, "trip")).toMatch(/^Added feed f1/);
+    await call("add_feed", { url: `${SITE}/atom` });
+    await nudge.deleteRoom("trip", context);
+    expect(await nudge.harness.snapshot(FeedsDoc, "trip", context)).toMatchObject({ feeds: [] });
+    // Other rooms keep theirs.
+    expect((await nudge.harness.snapshot(FeedsDoc, LOBBY, context))?.feeds).toHaveLength(1);
   });
 
   it("keeps feeds off local addresses", async () => {

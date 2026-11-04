@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CommandResult } from "./sandbox.ts";
 
@@ -122,6 +122,16 @@ export class TerminalLog {
       viewers.delete(viewer);
       if (viewers.size === 0) this.viewers.delete(conversationId);
     };
+  }
+
+  /** Forgets a conversation's commands, its file too, and shows its viewers none. */
+  forget(conversationId: number): void {
+    this.rooms.set(conversationId, { commands: [], next: 1 });
+    const file = this.file(conversationId);
+    if (file !== undefined) rmSync(file, { force: true });
+    for (const viewer of this.viewers.get(conversationId) ?? [])
+      viewer.send(this.frameFor(conversationId, viewer));
+    this.rooms.delete(conversationId);
   }
 
   /** What `playerId` sees of a room's commands, oldest first. */

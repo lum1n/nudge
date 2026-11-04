@@ -10,6 +10,7 @@ import {
   nudges,
   pair,
   reload,
+  deleteRoom,
   renameRoom,
   revoke,
   room,
@@ -126,7 +127,7 @@ describe("admin commands on the assistant's database", () => {
     ]);
   });
 
-  it("creates, lists and renames shared rooms", async () => {
+  it("creates, lists, renames and deletes shared rooms", async () => {
     await printed(() => invite({ ...local(), name: "Ann" }));
     await printed(() => invite({ ...local(), name: "Bo" }));
     const created = await printed(() => room({ ...local(), name: "Trip", members: ["ann", "bo"] }));
@@ -143,6 +144,13 @@ describe("admin commands on the assistant's database", () => {
     expect(await printed(() => room({ ...local(), members: [] }))).toContain(
       `${id}\tshared\tLofoten\tann, bo`,
     );
+
+    expect(await printed(() => deleteRoom({ ...local(), room: id }))).toEqual([
+      `Deleted room "${id}".`,
+    ]);
+    const after = await printed(() => room({ ...local(), members: [] }));
+    expect(after.some((line) => line.startsWith(`${id}\t`))).toBe(false);
+    await expect(printed(() => deleteRoom({ ...local(), room: "lobby" }))).rejects.toThrow(/lobby/);
   });
 
   it("says when nothing is scheduled or spent", async () => {

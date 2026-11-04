@@ -120,6 +120,9 @@
     <string name="room_rename">Rename</string>
     <string name="room_create">Create</string>
     <string name="room_rename_title">Rename room</string>
+    <string name="room_delete_room">Delete…</string>
+    <string name="room_delete_title">Delete “%1$s”?</string>
+    <string name="room_delete_body">The room, its messages, memory and attachments are deleted for everyone. This can\'t be undone.</string>
     <string name="room_pick">Pick a room</string>
 
     <!-- About this room. -->

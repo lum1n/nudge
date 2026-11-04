@@ -164,6 +164,23 @@ describe("watches", () => {
     expect(checks).toBe(after);
   });
 
+  it("stops and forgets a deleted room's watches", async () => {
+    await nudge.rooms.createShared({ id: "trip", name: "Trip", members: [] }, context);
+    await (
+      await nudge.submit("trip", { text: "Watch for GLC listings, often", author: by }, context)
+    ).wait(context);
+    await until(
+      async () =>
+        ((await nudge.harness.snapshot(WatchesDoc, "trip", context))?.items[0]?.checks ?? 0) >= 1,
+    );
+
+    await nudge.deleteRoom("trip", context);
+    expect((await nudge.harness.snapshot(WatchesDoc, "trip", context))?.items).toEqual([]);
+    const after = checks;
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    expect(checks).toBe(after);
+  });
+
   it("answers a model check's news itself, also when the reply has a message", async () => {
     extra = { message: "Posted as it is" };
     await say("Watch for new GLC 2027 listings under 800 000 kr on finn, often");

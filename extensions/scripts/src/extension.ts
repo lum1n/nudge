@@ -1,4 +1,5 @@
 import {
+  BACKGROUND_CONTEXT,
   canRead,
   type Context,
   createCodemodeTool,
@@ -260,7 +261,7 @@ async function callNested(
 export const scriptsExtension = defineNudgeExtension({
   name: "scripts",
   version: VERSION,
-  apiVersion: "1.0",
+  apiVersion: "1.1",
   description:
     "Scripts: the assistant saves small programs for checks it repeats, and runs them again without spending a model turn.",
   settings: Settings,
@@ -444,6 +445,13 @@ export const scriptsExtension = defineNudgeExtension({
       keepEnded: { [ScriptRun.definition.name]: keepRuns },
       // Scripts are kept as the model wrote them, with placeholders; the code runs with the values.
       tools: [exec, keepsPlaceholders(save), run, list, show, remove],
+      // A deleted room's scripts go with it. Their runs belong to its conversation or its
+      // watches, which deleting the room stops.
+      onRoomDeleted: async (roomId: string) => {
+        await host.documents().commit(async (tx) => {
+          (await tx.doc(ScriptsDoc, roomId, null)).items = [];
+        }, BACKGROUND_CONTEXT);
+      },
       sections: [
         section("scripts", async (input, context) => {
           const room = await roomOf(input.read, input.conversationId, context).catch(

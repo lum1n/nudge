@@ -468,6 +468,11 @@ class Client:
         too."""
         return await self.ffi.rename_room(room, name)
 
+    async def delete_room(self, room: str) -> None:
+        """Deletes a shared room, with its messages, memory and attachments, for everyone. Its
+        members or an admin may; never the lobby or a personal room."""
+        await self.ffi.delete_room(room)
+
     async def personal_room(self) -> Room:
         """The caller's personal room, made on first use."""
         return await self.ffi.personal_room()

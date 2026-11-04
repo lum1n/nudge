@@ -493,6 +493,25 @@ export function restRoutes(options: RestOptions): Hono {
     }
   });
 
+  // Members delete their shared rooms; admins any shared room. Never the lobby or a personal room.
+  api.delete("/rooms/:room", async (c) => {
+    const id = c.req.param("room");
+    const me = c.var.credential.player.id;
+    const found = await c.var.nudge.rooms.get(id, context);
+    if (
+      found === undefined ||
+      (!canUse(found, me) && !(await c.var.nudge.players.isAdmin(me, context)))
+    )
+      throw new HttpError(404, `No room "${id}"`);
+    try {
+      await c.var.nudge.deleteRoom(id, context, { playerId: me });
+      return c.body(null, 204);
+    } catch (error) {
+      if (error instanceof NotAllowed) throw new HttpError(403, error.message);
+      throw error;
+    }
+  });
+
   api.post("/rooms/:room/messages", async (c) => {
     const room = await usableRoom(c);
     const body = await readJson(c, MessageRequest);

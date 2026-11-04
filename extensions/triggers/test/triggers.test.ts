@@ -187,6 +187,19 @@ describe("triggers", () => {
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(nudges()).toHaveLength(1);
   });
+
+  it("turns off a deleted room's triggers and forgets them", async () => {
+    await nudge.rooms.createShared({ id: "trip", name: "Trip", members: [] }, context);
+    const path = await make();
+    await nudge.harness.commit(async (tx) => {
+      const state = await tx.doc(TriggersDoc);
+      state.items[0]!.roomId = "trip";
+    }, context);
+    await nudge.deleteRoom("trip", context);
+    expect((await nudge.harness.snapshot(TriggersDoc, context))!.items).toEqual([]);
+    expect(await call(path, { body: "x" })).toBe(404);
+    expect(nudges()).toHaveLength(0);
+  });
 });
 
 describe("what a call brings", () => {

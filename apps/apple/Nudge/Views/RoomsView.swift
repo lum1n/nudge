@@ -3,7 +3,8 @@ import SwiftUI
 
 /// The player's rooms beside the open one: a sidebar on the Mac and the iPad, a stack on the
 /// iPhone. The home's rooms come first, then those of each assistant joined from it. A room's
-/// context menu renames it, or opens it in a window of its own where the device has several.
+/// context menu renames it, deletes a shared one, or opens it in a window of its own where the
+/// device has several.
 struct RoomsView: View {
     @Environment(AppModel.self) private var model
     @Environment(WindowState.self) private var window
@@ -13,6 +14,8 @@ struct RoomsView: View {
     /// Where a new shared room is being made.
     @State private var creating: Session?
     @State private var renaming: (session: Session, room: Room)?
+    @State private var deleting: (session: Session, room: Room)?
+    @State private var deleteProblem: String?
     @State private var settings = false
     @State private var problem: String?
 
@@ -33,13 +36,13 @@ struct RoomsView: View {
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                 }
-                RoomRows(session: session) { renaming = (session, $0) }
+                RoomRows(session: session, rename: { renaming = (session, $0) }, delete: { deleting = (session, $0) })
                 if session.roomList.value?.status == .live && model.sessions.allSatisfy({ rooms(of: $0).isEmpty }) {
                     Text("No rooms yet.").foregroundStyle(.secondary)
                 }
                 ForEach(model.places, id: \.account.keychainAccount) { place in
                     Section {
-                        RoomRows(session: place) { renaming = (place, $0) }
+                        RoomRows(session: place, rename: { renaming = (place, $0) }, delete: { deleting = (place, $0) })
                     } header: {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(place.account.assistantName)
@@ -81,6 +84,22 @@ struct RoomsView: View {
                 Button("OK") { problem = nil }
             } message: {
                 Text(problem ?? "")
+            }
+            .confirmationDialog(
+                "Delete “\(deleting?.room.name ?? "")”?",
+                isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+                titleVisibility: .visible
+            ) {
+                Button("Delete", role: .destructive) {
+                    if let deleting { Task { await delete(deleting.room, at: deleting.session) } }
+                }
+            } message: {
+                Text("The room, its messages, memory and attachments are deleted for everyone. This can't be undone.")
+            }
+            .alert("Couldn't delete the room", isPresented: Binding(get: { deleteProblem != nil }, set: { if !$0 { deleteProblem = nil } })) {
+                Button("OK") { deleteProblem = nil }
+            } message: {
+                Text(deleteProblem ?? "")
             }
             #if os(macOS)
             .navigationSplitViewColumnWidth(min: 220, ideal: 260)
@@ -128,6 +147,14 @@ struct RoomsView: View {
             problem = explain(error)
         }
     }
+
+    private func delete(_ room: Room, at: Session) async {
+        do {
+            try await model.deleteRoom(room.id, at: at)
+        } catch {
+            deleteProblem = explain(error)
+        }
+    }
 }
 
 /// One signed-in assistant's rooms, newest news first, each tagged with where it is.
@@ -138,6 +165,7 @@ private struct RoomRows: View {
     @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
     let session: Session
     let rename: (Room) -> Void
+    let delete: (Room) -> Void
 
     var body: some View {
         ForEach(rooms, id: \.room.id) { room in
@@ -151,6 +179,10 @@ private struct RoomRows: View {
                     // Only admins rename the lobby.
                     if room.room.kind != .lobby || session.me?.admin == true {
                         Button("Rename…", systemImage: "pencil") { rename(room.room) }
+                    }
+                    // Never the lobby or a personal room.
+                    if room.room.kind == .shared {
+                        Button("Delete…", systemImage: "trash", role: .destructive) { delete(room.room) }
                     }
                 }
         }

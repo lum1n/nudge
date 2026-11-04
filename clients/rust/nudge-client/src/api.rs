@@ -188,6 +188,13 @@ impl Api {
             .await
     }
 
+    /// Deletes a shared room, with its messages, memory and attachments, for everyone. Its
+    /// members or an admin may; never the lobby or a personal room.
+    pub async fn delete_room(&self, room: &str) -> Result<(), ApiError> {
+        self.request_empty(Method::DELETE, &["rooms", room], &[], NO_BODY)
+            .await
+    }
+
     /// The caller's personal room, made on first use.
     pub async fn personal_room(&self) -> Result<Room, ApiError> {
         self.request(Method::POST, &["rooms", "personal"], &[], NO_BODY)

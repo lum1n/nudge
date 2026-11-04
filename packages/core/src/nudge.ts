@@ -26,6 +26,7 @@ import {
   Approvals,
   ApprovalsDoc,
   type ApprovalsState,
+  purgeRoomApprovals,
 } from "./approvals/approvals.ts";
 import {
   AttachmentRefused,
@@ -34,6 +35,7 @@ import {
   type AttachmentUpload,
   formatSize,
   MODEL_IMAGE_MAX_BYTES,
+  purgeRoomAttachments,
 } from "./attachments/attachments.ts";
 import { type Change, Changes } from "./changes.ts";
 import { createBuiltinExtension } from "./extensions/builtin.ts";
@@ -55,7 +57,7 @@ import { Looks } from "./identity/appearance.ts";
 import { type LocationUpdate, Personal } from "./identity/personal.ts";
 import { Profiles } from "./identity/profiles.ts";
 import { Rooms } from "./identity/rooms.ts";
-import { Memory } from "./memory/memory.ts";
+import { Memory, purgeRoomMemory } from "./memory/memory.ts";
 import { Nudges } from "./nudges/nudges.ts";
 import { RedactingModels, type RedactionOptions } from "./models/redacting-models.ts";
 import {
@@ -714,6 +716,51 @@ export class Nudge {
         throw new NotAllowed(`Only the room's members may rename "${roomId}"`);
     }
     return this.rooms.rename(roomId, name, context);
+  }
+
+  /**
+   * Deletes a shared room for good: stops its work and pending nudges, drops its memory,
+   * attachments and approvals, then its directory entry, and tells every extension. Whoever may
+   * rename it may delete it; without `by`, the host deletes it. The lobby and personal rooms
+   * can't be deleted. Pi Durable can't delete a conversation, so its transcripts stay in storage,
+   * unreachable, and the room's id is never given out again.
+   */
+  async deleteRoom(
+    roomId: string,
+    context: Context,
+    by?: { readonly playerId: string },
+  ): Promise<void> {
+    const room = await this.room(roomId, context);
+    if (room.kind === "lobby") throw new NotAllowed("The lobby can't be deleted");
+    if (room.kind === "personal") throw new NotAllowed("A personal room can't be deleted");
+    if (
+      by !== undefined &&
+      !(await this.players.isAdmin(by.playerId, context)) &&
+      !room.members.includes(by.playerId)
+    )
+      throw new NotAllowed(`Only the room's members may delete "${roomId}"`);
+    for (const nudge of await this.nudges.list(context, [roomId]))
+      await this.nudges.cancel(nudge.id, context);
+    const conversationIds = [room.conversationId, ...(await this.rooms.sides(roomId, context))];
+    for (const id of conversationIds) {
+      const conversation = await this.harness.conversation(id as ConversationId, context);
+      await conversation?.abort(context);
+    }
+    await this.rooms.delete(roomId, context, async (tx) => {
+      await purgeRoomMemory(tx, roomId);
+      await purgeRoomAttachments(tx, roomId);
+      await purgeRoomApprovals(tx, roomId);
+    });
+    for (const kind of ["memory", "nudges", "approvals"] as const)
+      this.changes.emit({ kind, roomId });
+    for (const installed of this.installed) {
+      if (installed.onRoomDeleted === undefined) continue;
+      try {
+        await installed.onRoomDeleted(roomId, conversationIds);
+      } catch (error) {
+        this.report(error);
+      }
+    }
   }
 
   /** Whether the room's conversation uses `name`; the built-in extension always. */

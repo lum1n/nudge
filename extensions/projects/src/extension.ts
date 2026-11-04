@@ -290,7 +290,7 @@ export function projectsExtension(options: ProjectsOptions = {}) {
   return defineNudgeExtension({
     name: "projects",
     version: VERSION,
-    apiVersion: "1.0",
+    apiVersion: "1.1",
     description:
       "Take a software project from idea to merged code: the assistant plans it with you, then supervises coding agents on an exe.dev VM, with gates for the plan, secrets and merges.",
     settings: Settings,
@@ -1295,6 +1295,26 @@ export function projectsExtension(options: ProjectsOptions = {}) {
         })().catch(report);
       };
 
+      /**
+       * Drops a deleted room's project: every agent still on a task stops as project_finish stops them, Nudge forgets
+       * its VM's host, and its secrets and document go. The VM itself stays at exe.dev.
+       */
+      const roomDeleted = async (roomId: string): Promise<void> => {
+        const project = await snapshot(roomId);
+        if (project !== undefined) {
+          const api = accApi(host.assistant());
+          for (const { session } of project.tasks)
+            if (session !== undefined) await api?.stop(session.host, session.id).catch(report);
+          if (project.vm !== undefined) await api?.removeHost(project.vm.name).catch(report);
+        }
+        for (const name of host.secrets.names(scope(roomId)))
+          host.secrets.delete(scope(roomId), name);
+        await documents().commit(async (tx) => {
+          delete (await tx.doc(ProjectDoc, roomId, null)).project;
+        }, context);
+        void panels.changed(roomId);
+      };
+
       let unhook: (() => void)[] = [];
       let timer: ReturnType<typeof setInterval> | undefined;
       let ticking = false;
@@ -1521,6 +1541,7 @@ export function projectsExtension(options: ProjectsOptions = {}) {
             });
           },
         },
+        onRoomDeleted: roomDeleted,
         close: () => {
           closed = true;
           if (timer !== undefined) clearInterval(timer);

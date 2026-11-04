@@ -239,6 +239,11 @@ export async function requestApproval(
   return approval;
 }
 
+/** Drops every approval of a room inside a commit, for a room being deleted. */
+export async function purgeRoomApprovals(tx: Tx, roomId: string): Promise<void> {
+  (await tx.doc(ApprovalsDoc, roomId, null)).items = [];
+}
+
 export class ApprovalNotFound extends Error {
   override name = "ApprovalNotFound";
 }

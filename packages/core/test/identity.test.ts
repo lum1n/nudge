@@ -8,6 +8,7 @@ import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/provid
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createNudge,
+  defineNudgeExtension,
   DirectoryDoc,
   LAST_USED_EVERY_MS,
   LOBBY,
@@ -15,6 +16,7 @@ import {
   PAIRING_TTL_MS,
   addressOf,
   parseAddress,
+  requestApproval,
 } from "../src/index.ts";
 
 const context = BACKGROUND_CONTEXT;
@@ -239,6 +241,91 @@ describe("players and rooms", () => {
     ]);
     await expect(nudge.renameRoom("trip", " ", context)).rejects.toThrow(/name/);
     await expect(nudge.renameRoom("nowhere", "X", context)).rejects.toThrow(/nowhere/);
+    await nudge.close(context);
+  });
+
+  it("deletes shared rooms for their members and admins, with what they keep", async () => {
+    const { options } = setup(":memory:");
+    const heard: string[] = [];
+    const nudge = await createNudge(
+      {
+        ...options,
+        extensions: [
+          defineNudgeExtension({
+            name: "listener",
+            version: "1.0.0",
+            apiVersion: "1.1",
+            setup: () => ({
+              onRoomDeleted: (roomId, conversations) =>
+                void heard.push(`${roomId}:${conversations.length}`),
+            }),
+          }),
+        ],
+      },
+      context,
+    );
+    const ann = (await nudge.players.invite("Ann", context)).player;
+    const bo = (await nudge.players.invite("Bo", context)).player;
+    const cy = (await nudge.players.invite("Cy", context)).player;
+    await nudge.rooms.ensurePersonal(bo.id, context);
+    await nudge.rooms.createShared({ id: "trip", name: "Trip", members: [bo.id] }, context);
+    await nudge.rooms.createShared({ id: "club", name: "Club", members: [bo.id] }, context);
+    await nudge.memory.remember("trip", "Leaves on 3 May", context);
+    await nudge.nudges.schedule(
+      "trip",
+      { message: "Pack", fireAt: Date.now() + 3_600_000 },
+      context,
+    );
+    await nudge.addAttachment(
+      "trip",
+      { name: "a.txt", mime: "text/plain", bytes: Buffer.from("hi"), by: bo.id },
+      context,
+    );
+    await nudge.harness.commit(
+      (tx) =>
+        requestApproval(
+          tx,
+          "trip",
+          { extension: "mailer", kind: "send", summary: "Send a mail", payload: {} },
+          Date.now(),
+        ),
+      context,
+    );
+    const side = await nudge.rooms.createSide("trip", context);
+    const changes: string[] = [];
+    nudge.changes.subscribe((change) => changes.push(change.kind));
+
+    await expect(nudge.deleteRoom("trip", context, { playerId: cy.id })).rejects.toThrow(/members/);
+    await expect(nudge.deleteRoom(LOBBY, context, { playerId: ann.id })).rejects.toThrow(/lobby/);
+    await expect(nudge.deleteRoom("personal-bo", context, { playerId: bo.id })).rejects.toThrow(
+      /personal/,
+    );
+    await nudge.deleteRoom("trip", context, { playerId: bo.id });
+    // Ann, the first player, is an admin, though not a member.
+    await nudge.deleteRoom("club", context, { playerId: ann.id });
+
+    expect(changes).toContain("rooms");
+    // The trip's own conversation and its side one.
+    expect(heard).toEqual(["trip:2", "club:1"]);
+    expect((await nudge.rooms.list(context)).map((room) => room.id)).toEqual([
+      LOBBY,
+      "personal-bo",
+    ]);
+    expect(await nudge.rooms.sides("trip", context)).toEqual([]);
+    expect((await nudge.harness.snapshot(DirectoryDoc, context))?.sides?.[String(side)]).toBe(
+      undefined,
+    );
+    expect(await nudge.memory.list("trip", context)).toEqual([]);
+    expect(await nudge.nudges.list(context, ["trip"])).toEqual([]);
+    expect(await nudge.approvals.list("trip", context)).toEqual([]);
+    expect(await nudge.attachments.list("trip", context)).toEqual([]);
+    await expect(nudge.deleteRoom("trip", context)).rejects.toThrow(/trip/);
+    // The id is never given out again, so a new room starts with nothing of the old one's.
+    const again = await nudge.rooms.createShared({ name: "Trip", members: [bo.id] }, context);
+    expect(again.id).toBe("trip-2");
+    await expect(
+      nudge.rooms.createShared({ id: "trip", name: "Trip", members: [bo.id] }, context),
+    ).rejects.toThrow(/deleted/);
     await nudge.close(context);
   });
 
