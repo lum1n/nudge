@@ -78,6 +78,9 @@ jobs:
 
   apple:
     runs-on: macos-26
+    # GitHub's macos-26 runners stop at Xcode 26.6, and the app needs 27.1 (#57). Until they have
+    # it, a failure here shows but doesn't hold back a release.
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v7
       - uses: maxim-lobanov/setup-xcode@v1
