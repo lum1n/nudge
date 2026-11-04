@@ -5,6 +5,7 @@ import {
   LOBBY,
   type ModelContext,
   type Nudge,
+  requestApproval,
 } from "@nudge/core";
 import {
   createModels,
@@ -308,6 +309,99 @@ describe("projects", () => {
     expect(JSON.stringify(requests)).not.toContain(STRIPE);
     const approvals = await nudge.harness.snapshot(ApprovalsDoc, room.id, context);
     expect(JSON.stringify(approvals)).not.toContain(STRIPE);
+  }, 30_000);
+
+  it("asks for the same VM again when it won't take the key", async () => {
+    const acc = new FakeAcc();
+    acc.refuseKeys = true;
+    const { nudge, by, say, project, requests } = await open(acc);
+    await say(LOBBY, 'CALL project_create {"name": "Keyless"}');
+    const room = (await nudge.rooms.list(context)).find((r) => r.name === "Keyless")!;
+    await say(room.id, "CALL project_request_vm {}");
+    let [approval] = await nudge.approvals.list(room.id, context);
+    // The app fills the inputs in, so it says why the key is missing.
+    await nudge.approvals.decide(
+      room.id,
+      approval!.id,
+      {
+        approve: true,
+        by,
+        inputs: {
+          vm: "proj-keyless-ab12",
+          sshHost: "proj-keyless-ab12.exe.xyz",
+          sshKeyError: "exe.dev: Cannot create a new key",
+        },
+      },
+      context,
+    );
+    // Setting up stops at the first refusal and says how to fix it, with the key as it is.
+    await until(() =>
+      requests.some((r) =>
+        lastUser(r).includes("ssh exe.dev ssh-key add --vm=proj-keyless-ab12 'ssh-ed25519 "),
+      ),
+    );
+    expect((await project(room.id))?.vm?.ready).toBe(false);
+
+    await say(room.id, "CALL project_request_vm {}");
+    [approval] = (await nudge.approvals.list(room.id, context)).filter(
+      (a) => a.status === "pending",
+    );
+    expect(approval?.summary).toContain("again");
+    expect(approval?.clientAction).toMatchObject({ type: "exe.new", name: "proj-keyless-ab12" });
+    acc.refuseKeys = false;
+    acc.onExec = () => ({ stdout: "have: git" });
+    await nudge.approvals.decide(
+      room.id,
+      approval!.id,
+      {
+        approve: true,
+        by,
+        inputs: { vm: "proj-keyless-ab12", sshHost: "proj-keyless-ab12.exe.xyz" },
+      },
+      context,
+    );
+    await until(async () => (await project(room.id))?.vm?.ready === true);
+    await say(room.id, "CALL project_request_vm {}");
+    expect(
+      (await nudge.approvals.list(room.id, context)).filter((a) => a.status === "pending"),
+    ).toEqual([]);
+  }, 30_000);
+
+  it("keeps a secret to one card, and answers old duplicates with it", async () => {
+    const acc = new FakeAcc();
+    const { nudge, by, say } = await open(acc);
+    await say(LOBBY, 'CALL project_create {"name": "Twice"}');
+    const room = (await nudge.rooms.list(context)).find((r) => r.name === "Twice")!;
+    // A duplicate from before asks were kept to one.
+    await nudge.harness.commit(
+      (tx) =>
+        requestApproval(
+          tx,
+          room.id,
+          {
+            extension: "projects",
+            kind: "secret",
+            summary: "Give the project's GH_TOKEN: old",
+            payload: { name: "GH_TOKEN", account: false },
+          },
+          0,
+        ),
+      context,
+    );
+    const ask = `CALL project_request_secret ${JSON.stringify({ name: "GH_TOKEN", why: "PRs" })}`;
+    await say(room.id, ask);
+    await say(room.id, ask);
+    const pending = async () =>
+      (await nudge.approvals.list(room.id, context)).filter((a) => a.status === "pending");
+    // The old one, and one new card for both asks.
+    expect(await pending()).toHaveLength(2);
+    await nudge.approvals.decide(
+      room.id,
+      (await pending())[1]!.id,
+      { approve: true, by, inputs: { value: "ghp_x" } },
+      context,
+    );
+    expect(await pending()).toEqual([]);
   }, 30_000);
 
   it("pauses at the budget's warning level", async () => {

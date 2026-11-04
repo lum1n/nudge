@@ -175,6 +175,7 @@ private fun SignedIn(model: AppModel, session: Session) {
                         RoomScreen(
                             at, room.room, model.dictation,
                             exeToken = { model.servers.exeToken },
+                            exeKey = { runCatching { model.servers.exeKey() }.getOrNull() },
                             back = if (listVisible) null else ({ scope.launch { navigator.navigateBack() } }),
                             lists = { open(Destination.of(room, Extra.LISTS)) },
                             info = { open(Destination.of(room, Extra.INFO)) },

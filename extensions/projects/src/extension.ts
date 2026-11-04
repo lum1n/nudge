@@ -12,6 +12,7 @@ import {
   FIRE_ENTRY,
   type FireEntryData,
   readsOnly,
+  ApprovalsDoc,
   requestApproval,
   roomOf,
   type RoomSocketHandler,
@@ -22,7 +23,7 @@ import {
   Type,
   type UiCard,
 } from "@nudge/core";
-import { type AccApi, accApi } from "@nudge/ext-acc";
+import { type AccApi, accApi, accErrorCode } from "@nudge/ext-acc";
 import { randomBytes } from "node:crypto";
 import { projectCard } from "./card.ts";
 import {
@@ -488,6 +489,18 @@ export function projectsExtension(options: ProjectsOptions = {}) {
         return `Wrote ${Object.keys(values).length} secrets to the VM.`;
       };
 
+      /**
+       * What to do when the VM won't take the assistant's key. The key is in the text as the
+       * extension has it: the model must pass it on as it is, never retype it.
+       */
+      const keyRefused = (vm: string): string =>
+        `The VM ${vm} doesn't accept the assistant's SSH key, so exe.dev hasn't let it in. ` +
+        "Fix it with project_request_vm: launching the VM again from the Nudge app adds the key to the VM " +
+        "that is there (the person may need to sign in to exe.dev again in the app first). Or someone runs " +
+        `this on a computer signed in to exe.dev, copying it as it is:\n` +
+        `ssh exe.dev ssh-key add --vm=${vm} '${acc().publicKey()}'\n` +
+        "If you show that line, copy it exactly from here; never type the key out yourself. Then run project_bootstrap.";
+
       /** Sets the VM up: secrets, agent CLIs, the repo. Tries the connection a few times. */
       const bootstrap = async (roomId: string): Promise<string> => {
         const project = await snapshot(roomId);
@@ -504,6 +517,8 @@ export function projectsExtension(options: ProjectsOptions = {}) {
           } catch (error) {
             lastError = error;
             if (error instanceof ProjectError) throw error;
+            if (accErrorCode((error as Error).cause) === "AuthRejected")
+              throw new ProjectError(keyRefused(project.vm!.name));
             await new Promise((resolve) => setTimeout(resolve, options.tickMs ?? 10_000));
           }
         }
@@ -638,7 +653,14 @@ export function projectsExtension(options: ProjectsOptions = {}) {
         waiting: string,
       ) => {
         const approval = await api.commit(
-          (tx) => requestApproval(tx, roomId, { extension: "projects", ...draft }, host.now()),
+          // The same ask again, as a model may in a loop, finds the card already waiting.
+          (tx) =>
+            requestApproval(
+              tx,
+              roomId,
+              { extension: "projects", once: true, ...draft },
+              host.now(),
+            ),
           ctx,
         );
         return { ...text(`${waiting} (${approval.id}).`), details: { approval: approval.id } };
@@ -778,12 +800,13 @@ export function projectsExtension(options: ProjectsOptions = {}) {
         name: "project_request_vm",
         description:
           "Ask for the project's exe.dev VM. Someone launches it from the Nudge app on their phone, which " +
-          "holds the exe.dev login; the agents then run there.",
+          "holds the exe.dev login; the agents then run there. Ask again when the VM won't take the assistant's key: " +
+          "launching it again adds the key to the VM there.",
         parameters: Type.Object({}),
         execute: async (_args, api, ctx) => {
           const { room, project } = await here(api, ctx);
           if (project === undefined) return text("There is no project in this room.", true);
-          if (project.vm !== undefined)
+          if (project.vm?.ready === true)
             return text(`The project has the VM ${project.vm.name} already.`, true);
           let key: string;
           try {
@@ -791,14 +814,18 @@ export function projectsExtension(options: ProjectsOptions = {}) {
           } catch (error) {
             return text((error as Error).message, true);
           }
-          const name = vmName(project.name, random());
+          // Again for a VM that isn't set up: the app takes the one there and adds the key to it.
+          const name = project.vm?.name ?? vmName(project.name, random());
           return ask(
             api,
             ctx,
             room.id,
             {
               kind: "vm",
-              summary: `Launch the exe.dev VM "${name}" for "${project.name}". The assistant's agents log in to it with its own key.`,
+              summary:
+                project.vm === undefined
+                  ? `Launch the exe.dev VM "${name}" for "${project.name}". The assistant's agents log in to it with its own key.`
+                  : `Launch the exe.dev VM "${name}" for "${project.name}" again, to give the assistant's key access to it.`,
               payload: { name },
               inputs: [
                 { name: "vm", label: "VM", secret: false },
@@ -1390,12 +1417,27 @@ export function projectsExtension(options: ProjectsOptions = {}) {
                 `The VM ${vm} (${user}@${sshHost}) is the project's machine; it is being set up now.` +
                 (keyProblem === undefined
                   ? ""
-                  : ` The app couldn't add the assistant's key to exe.dev (${keyProblem}); if setting up fails, add this key there: ${acc().publicKey()}`),
+                  : ` The app couldn't add the assistant's key to exe.dev (${keyProblem}), so setting up will likely fail.`),
             };
           },
           secret: async (payload, run) => {
             const { name, account } = payload as { name: string; account: boolean };
             const value = run.inputs.value!;
+            // Other cards asking for it, from before asks were kept to one, are answered too.
+            await run.commit(async (tx) => {
+              const state = await tx.doc(ApprovalsDoc, run.room.id, null);
+              for (const item of state.items)
+                if (
+                  item.status === "pending" &&
+                  item.extension === "projects" &&
+                  item.kind === "secret" &&
+                  (item.payload as { name?: string }).name === name
+                ) {
+                  item.status = "done";
+                  item.decidedAt = host.now();
+                  item.result = `Given with ${run.approval.id}.`;
+                }
+            });
             host.secrets.set(account ? ACCOUNT : scope(run.room.id), name, value);
             await host.protect(value, "SECRET").catch(report);
             if (!account)

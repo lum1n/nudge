@@ -89,13 +89,36 @@ if ! have gh; then
       sudo_ apt-get update -q >/dev/null 2>&1 && apt_ gh
   } || echo "missing: gh"
 fi
-have node || apt_ nodejs npm || echo "missing: node"
+# exe.dev's image ships claude and codex; Node is only needed to install them.
+if ! have claude || ! have codex; then have node || apt_ nodejs npm || echo "missing: node"; fi
 if have npm; then
   npm config set prefix "$HOME/.npm-global" >/dev/null 2>&1
   have claude || npm install -g -s @anthropic-ai/claude-code >/dev/null 2>&1 || echo "missing: claude"
   have codex || npm install -g -s @openai/codex >/dev/null 2>&1 || echo "missing: codex"
 fi
-if have gh && [ -n "\${GH_TOKEN:-}" ]; then gh auth setup-git >/dev/null 2>&1 && echo "gh: git uses GH_TOKEN"; fi
+if have gh && [ -n "\${GH_TOKEN:-}" ]; then
+  # Agents' shells don't read the env file, so gh keeps the token itself.
+  printf '%s' "$GH_TOKEN" | env -u GH_TOKEN gh auth login --with-token >/dev/null 2>&1 && echo "gh: logged in"
+  gh auth setup-git >/dev/null 2>&1 && echo "gh: git uses GH_TOKEN"
+fi
+if [ -n "\${CLAUDE_CODE_OAUTH_TOKEN:-}" ] && have python3; then
+  # Nor does Claude Code see the env file when ACC starts it; it reads its settings' env.
+  python3 - <<'PY' && echo "claude: token in settings"
+import json, os
+path = os.path.expanduser("~/.claude/settings.json")
+os.makedirs(os.path.dirname(path), exist_ok=True)
+try:
+    settings = json.load(open(path))
+except Exception:
+    settings = {}
+settings.setdefault("env", {})["CLAUDE_CODE_OAUTH_TOKEN"] = os.environ["CLAUDE_CODE_OAUTH_TOKEN"]
+old = os.umask(0o077)
+with open(path + ".tmp", "w") as f:
+    json.dump(settings, f, indent=2)
+os.umask(old)
+os.replace(path + ".tmp", path)
+PY
+fi
 git config --global user.name >/dev/null 2>&1 || git config --global user.name "Nudge"
 git config --global user.email >/dev/null 2>&1 || git config --global user.email "nudge@users.noreply.github.com"
 for tool in git gh node claude codex; do have "$tool" && echo "have: $tool"; done

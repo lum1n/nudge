@@ -1260,13 +1260,20 @@ impl ExeClient {
 
     /// Does an approval's client action, and returns the inputs to approve it with
     /// (`NudgeClient::decide`). On an error the approval stays pending, to try again or deny.
+    /// `private_key` is the app's exe.dev key when it signed in with it: a project's key is then
+    /// added with a one-off token signed with it, which exe.dev takes where the app's own token
+    /// can't add keys.
     pub async fn run_client_action(
         &self,
         action: crate::ClientAction,
+        private_key: Option<String>,
     ) -> Result<std::collections::HashMap<String, String>, NudgeError> {
         let exe = self.exe.clone();
         let action = p::ClientAction::from(action);
-        Ok(run(async move { exe.run_client_action(&action).await }).await?)
+        let key_token = private_key
+            .map(|key| nudge_client::mint_exe_key_token(&key))
+            .transpose()?;
+        Ok(run(async move { exe.run_client_action(&action, key_token.as_deref()).await }).await?)
     }
 }
 

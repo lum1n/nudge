@@ -54,6 +54,7 @@ import nudge.ffi.ExeClient
 fun PendingApprovalCard(
     approval: Approval,
     exeToken: String?,
+    exeKey: () -> String?,
     decide: suspend (approve: Boolean, inputs: Map<String, String>?) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -66,7 +67,9 @@ fun PendingApprovalCard(
     /** What the client action gave, once it ran: trying again then only approves. */
     var actionInputs by remember(approval.id) { mutableStateOf<Map<String, String>?>(null) }
     val action = approval.clientAction
-    val missing = approval.inputs.any { !it.optional && values[it.name].isNullOrBlank() }
+    // With a client action, the app fills the inputs in itself, such as the VM it made.
+    val shown = if (action == null) approval.inputs else emptyList()
+    val missing = shown.any { !it.optional && values[it.name].isNullOrBlank() }
     val blocked = action != null && actionInputs == null && exeToken == null
 
     fun send(approve: Boolean) {
@@ -92,7 +95,7 @@ fun PendingApprovalCard(
                 val done = actionInputs ?: when {
                     action == null -> emptyMap()
                     exeToken == null -> return@launch
-                    else -> ExeClient(exeToken).use { it.runClientAction(action) }.also { actionInputs = it }
+                    else -> ExeClient(exeToken).use { it.runClientAction(action, exeKey()) }.also { actionInputs = it }
                 }
                 progress = R.string.approval_approving
                 val inputs = typed + done
@@ -126,7 +129,7 @@ fun PendingApprovalCard(
                 )
             }
             Text(withHidden(approval.summary))
-            approval.inputs.forEach { input ->
+            shown.forEach { input ->
                 OutlinedTextField(
                     value = values[input.name].orEmpty(),
                     onValueChange = { values[input.name] = it },
