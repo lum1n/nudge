@@ -1,28 +1,21 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "%@" : {
+    "" : {
 
     },
-    "%@ (optional)" : {
+    "(removed)" : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ (valgfritt)"
+            "value" : "(fjernet)"
           }
         }
       }
     },
-    "%@ of %@" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ av %2$@"
-          }
-        }
-      }
+    "%@" : {
+
     },
     "%@ · %@" : {
       "localizations" : {
@@ -30,6 +23,26 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@ · %2$@"
+          }
+        }
+      }
+    },
+    "%@ · %@%%" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@%%"
+          }
+        }
+      }
+    },
+    "%@ (optional)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (valgfritt)"
           }
         }
       }
@@ -104,12 +117,32 @@
         }
       }
     },
+    "%@ of %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ av %2$@"
+          }
+        }
+      }
+    },
     "%@ on %@" : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ på %2$@"
+          }
+        }
+      }
+    },
+    "%@ pressed “%@”" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ pressed “%2$@”"
           }
         }
       }
@@ -140,16 +173,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%u å godkjenne"
-          }
-        }
-      }
-    },
-    "(removed)" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "(fjernet)"
           }
         }
       }
@@ -554,6 +577,9 @@
         }
       }
     },
+    "At most %@ at a time" : {
+
+    },
     "At most %@ GB on disk (%@ now)" : {
       "localizations" : {
         "en" : {
@@ -584,22 +610,22 @@
         }
       }
     },
-    "Autonomy" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Selvstendighet"
-          }
-        }
-      }
-    },
     "Attach photos or files" : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Legg ved bilder eller filer"
+          }
+        }
+      }
+    },
+    "Autonomy" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selvstendighet"
           }
         }
       }
@@ -963,6 +989,9 @@
           }
         }
       }
+    },
+    "Choose…" : {
+
     },
     "Clear" : {
       "localizations" : {
@@ -1514,306 +1543,6 @@
         }
       }
     },
-    "In review" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Til gjennomgang"
-          }
-        }
-      }
-    },
-    "Independent" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Selvstendig"
-          }
-        }
-      }
-    },
-    "Launch VM %@" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lag VM-en %@"
-          }
-        }
-      }
-    },
-    "Makes the calls itself, also on bigger tasks, and finishes the job." : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tar avgjørelsene selv, også på større oppgaver, og gjør jobben ferdig."
-          }
-        }
-      }
-    },
-    "Making the VM…" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lager VM-en…"
-          }
-        }
-      }
-    },
-    "Merged" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Flettet"
-          }
-        }
-      }
-    },
-    "No agents at work" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ingen agenter i arbeid"
-          }
-        }
-      }
-    },
-    "No project in this room" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ingen prosjekter i dette rommet"
-          }
-        }
-      }
-    },
-    "No projects here" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ingen prosjekter her"
-          }
-        }
-      }
-    },
-    "No tasks yet" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ingen oppgaver ennå"
-          }
-        }
-      }
-    },
-    "None yet" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ingen ennå"
-          }
-        }
-      }
-    },
-    "Pause" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sett på pause"
-          }
-        }
-      }
-    },
-    "Paused" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "På pause"
-          }
-        }
-      }
-    },
-    "Planned" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Planlagt"
-          }
-        }
-      }
-    },
-    "Planning" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Planlegger"
-          }
-        }
-      }
-    },
-    "Project" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Prosjekt"
-          }
-        }
-      }
-    },
-    "Pull request" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pull request"
-          }
-        }
-      }
-    },
-    "Pull request #%lld" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pull request #%lld"
-          }
-        }
-      }
-    },
-    "Ready" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Klar"
-          }
-        }
-      }
-    },
-    "Repository" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kodelager"
-          }
-        }
-      }
-    },
-    "Resume" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fortsett"
-          }
-        }
-      }
-    },
-    "Running" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kjører"
-          }
-        }
-      }
-    },
-    "Says what it will do and waits before longer work or changes." : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sier hva den skal gjøre og venter før lengre arbeid eller endringer."
-          }
-        }
-      }
-    },
-    "Secrets" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hemmeligheter"
-          }
-        }
-      }
-    },
-    "Skipped" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hoppet over"
-          }
-        }
-      }
-    },
-    "Spend" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Forbruk"
-          }
-        }
-      }
-    },
-    "Style" : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stil"
-          }
-        }
-      }
-    },
-    "The answer first, in as few words as do the job." : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Svaret først, med så få ord som trengs."
-          }
-        }
-      }
-    },
-    "The answer, then the context that helps act on it." : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Svaret, så sammenhengen som hjelper deg å handle."
-          }
-        }
-      }
-    },
-    "The answer, then the reasons, sources and trade-offs." : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Svaret, så grunner, kilder og avveininger."
-          }
-        }
-      }
-    },
     "exe.dev asks for your email and sends you a link. Open it, then come back: the app is signed in once exe.dev has your key." : {
       "localizations" : {
         "nb" : {
@@ -2054,12 +1783,12 @@
         }
       }
     },
-    "Images sent in this room will reach the model's provider as they are, with whatever they show: faces, addresses, card numbers. It is on for everyone here." : {
+    "Images" : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bilder som sendes i dette rommet, når modellens leverandør som de er, med det de viser: ansikter, adresser, kortnumre. Det gjelder for alle her."
+            "value" : "Bilder"
           }
         }
       }
@@ -2074,12 +1803,12 @@
         }
       }
     },
-    "Images" : {
+    "Images sent in this room will reach the model's provider as they are, with whatever they show: faces, addresses, card numbers. It is on for everyone here." : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bilder"
+            "value" : "Bilder som sendes i dette rommet, når modellens leverandør som de er, med det de viser: ansikter, adresser, kortnumre. Det gjelder for alle her."
           }
         }
       }
@@ -2104,6 +1833,16 @@
         }
       }
     },
+    "In review" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Til gjennomgang"
+          }
+        }
+      }
+    },
     "In the network as %@" : {
       "localizations" : {
         "nb" : {
@@ -2120,6 +1859,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "I dette rommet"
+          }
+        }
+      }
+    },
+    "Independent" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selvstendig"
           }
         }
       }
@@ -2404,6 +2153,16 @@
         }
       }
     },
+    "Launch VM %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lag VM-en %@"
+          }
+        }
+      }
+    },
     "Learned: %@" : {
       "localizations" : {
         "nb" : {
@@ -2564,6 +2323,26 @@
         }
       }
     },
+    "Makes the calls itself, also on bigger tasks, and finishes the job." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tar avgjørelsene selv, også på større oppgaver, og gjør jobben ferdig."
+          }
+        }
+      }
+    },
+    "Making the VM…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lager VM-en…"
+          }
+        }
+      }
+    },
     "Maps" : {
       "localizations" : {
         "nb" : {
@@ -2630,6 +2409,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Minne"
+          }
+        }
+      }
+    },
+    "Merged" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flettet"
           }
         }
       }
@@ -2854,6 +2643,16 @@
         }
       }
     },
+    "No agents at work" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen agenter i arbeid"
+          }
+        }
+      }
+    },
     "No connectors here" : {
       "localizations" : {
         "nb" : {
@@ -2934,6 +2733,26 @@
         }
       }
     },
+    "No project in this room" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen prosjekter i dette rommet"
+          }
+        }
+      }
+    },
+    "No projects here" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen prosjekter her"
+          }
+        }
+      }
+    },
     "No rooms yet." : {
       "localizations" : {
         "nb" : {
@@ -2974,6 +2793,16 @@
         }
       }
     },
+    "No tasks yet" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen oppgaver ennå"
+          }
+        }
+      }
+    },
     "None made yet." : {
       "localizations" : {
         "nb" : {
@@ -2990,6 +2819,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ingen lastet opp ennå."
+          }
+        }
+      }
+    },
+    "None yet" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingen ennå"
           }
         }
       }
@@ -3354,6 +3193,26 @@
         }
       }
     },
+    "Pause" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sett på pause"
+          }
+        }
+      }
+    },
+    "Paused" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "På pause"
+          }
+        }
+      }
+    },
     "People in a room can still turn it on or off there." : {
       "localizations" : {
         "nb" : {
@@ -3414,6 +3273,26 @@
         }
       }
     },
+    "Planned" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Planlagt"
+          }
+        }
+      }
+    },
+    "Planning" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Planlegger"
+          }
+        }
+      }
+    },
     "Private message" : {
       "localizations" : {
         "nb" : {
@@ -3444,6 +3323,16 @@
         }
       }
     },
+    "Project" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prosjekt"
+          }
+        }
+      }
+    },
     "Provider" : {
       "localizations" : {
         "nb" : {
@@ -3454,12 +3343,45 @@
         }
       }
     },
+    "Pull request" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pull request"
+          }
+        }
+      }
+    },
+    "Pull request #%@" : {
+
+    },
+    "Pull request #%lld" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pull request #%lld"
+          }
+        }
+      }
+    },
     "queued" : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "i kø"
+          }
+        }
+      }
+    },
+    "Ready" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Klar"
           }
         }
       }
@@ -3614,6 +3536,26 @@
         }
       }
     },
+    "Repository" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kodelager"
+          }
+        }
+      }
+    },
+    "Resume" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fortsett"
+          }
+        }
+      }
+    },
     "Retry" : {
       "localizations" : {
         "nb" : {
@@ -3670,6 +3612,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rom"
+          }
+        }
+      }
+    },
+    "Running" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kjører"
           }
         }
       }
@@ -3784,12 +3736,32 @@
         }
       }
     },
+    "Says what it will do and waits before longer work or changes." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sier hva den skal gjøre og venter før lengre arbeid eller endringer."
+          }
+        }
+      }
+    },
     "Secret access key" : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hemmelig tilgangsnøkkel"
+          }
+        }
+      }
+    },
+    "Secrets" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hemmeligheter"
           }
         }
       }
@@ -3804,12 +3776,12 @@
         }
       }
     },
-    "Send images to the model?" : {
+    "Send images" : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sende bilder til modellen?"
+            "value" : "Send bilder"
           }
         }
       }
@@ -3824,12 +3796,12 @@
         }
       }
     },
-    "Send images" : {
+    "Send images to the model?" : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Send bilder"
+            "value" : "Sende bilder til modellen?"
           }
         }
       }
@@ -4144,6 +4116,16 @@
         }
       }
     },
+    "Skipped" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hoppet over"
+          }
+        }
+      }
+    },
     "Someone else: it is their home, and they are its admin" : {
       "localizations" : {
         "nb" : {
@@ -4190,6 +4172,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Talemodell"
+          }
+        }
+      }
+    },
+    "Spend" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forbruk"
           }
         }
       }
@@ -4304,6 +4296,16 @@
         }
       }
     },
+    "Style" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stil"
+          }
+        }
+      }
+    },
     "Such as en, nb or de" : {
       "localizations" : {
         "nb" : {
@@ -4350,6 +4352,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ta med mitt eget minne dit"
+          }
+        }
+      }
+    },
+    "The answer first, in as few words as do the job." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Svaret først, med så få ord som trengs."
+          }
+        }
+      }
+    },
+    "The answer, then the context that helps act on it." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Svaret, så sammenhengen som hjelper deg å handle."
+          }
+        }
+      }
+    },
+    "The answer, then the reasons, sources and trade-offs." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Svaret, så grunner, kilder og avveininger."
           }
         }
       }
@@ -4474,22 +4506,12 @@
         }
       }
     },
-    "The newest was made %@." : {
+    "The model gets each attachment's name, type and size, not the picture." : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Den nyeste ble laget %@."
-          }
-        }
-      }
-    },
-    "The model sees these images as they are." : {
-      "localizations" : {
-        "nb" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Modellen ser disse bildene som de er."
+            "value" : "Modellen får navnet, typen og størrelsen på hvert vedlegg, ikke bildet."
           }
         }
       }
@@ -4504,12 +4526,22 @@
         }
       }
     },
-    "The model gets each attachment's name, type and size, not the picture." : {
+    "The model sees these images as they are." : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Modellen får navnet, typen og størrelsen på hvert vedlegg, ikke bildet."
+            "value" : "Modellen ser disse bildene som de er."
+          }
+        }
+      }
+    },
+    "The newest was made %@." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Den nyeste ble laget %@."
           }
         }
       }

@@ -1,3 +1,4 @@
+import Nudge
 import SwiftUI
 
 /// One window's own state: the room it shows, whether it is on screen, and the links opened in

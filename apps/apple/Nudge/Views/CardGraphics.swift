@@ -390,8 +390,7 @@ struct CardDiagramView: View {
         let places = diagram.layout()
         let across = diagram.direction == "right"
         let ranks = (places.values.map(\.rank).max() ?? 0) + 1
-        var perRank: [Int: Int] = [:]
-        for place in places.values { perRank[place.rank, default: 0] += 1 }
+        let perRank = places.values.reduce(into: [Int: Int]()) { $0[$1.rank, default: 0] += 1 }
         let widest = perRank.values.max() ?? 1
         let span = { (count: Int, box: CGFloat, between: CGFloat) in CGFloat(count) * box + CGFloat(count - 1) * between }
         let spread = across ? span(widest, boxHeight, gap) : span(widest, boxWidth, gap)
