@@ -256,6 +256,25 @@ export async function serve(options: ServeOptions): Promise<number> {
       testKey,
       backupKey: theBackupKey,
       ...(updates === undefined ? {} : { updates: updates.control }),
+      models: (assistant) => {
+        const catalog = buildModels(config?.providers ?? []);
+        return catalog.getProviders().map((provider) => {
+          const source = keys.source(provider.id, assistant);
+          return {
+            id: provider.id,
+            name: provider.name,
+            models: catalog
+              .getModels(provider.id)
+              .map((model) => ({ id: model.id, name: model.name })),
+            key:
+              source === undefined
+                ? { provider: provider.id, source: "none" }
+                : source.from === "env"
+                  ? { provider: provider.id, source: "env", variables: [...source.variables] }
+                  : { provider: provider.id, source: source.from },
+          };
+        });
+      },
       backups: backupControl(configPath, async () => {
         config = await loadConfig(configPath);
         stopBackups();

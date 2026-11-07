@@ -241,6 +241,8 @@ export class Nudge {
   readonly presence = new Presence();
   private readonly timeZone: string;
   private readonly models: RedactingModels;
+  /** The model the assistant answers with now; rooms made later start on it, see `setModel`. */
+  private currentModel: ModelRef;
   private readonly now: () => number;
   private readonly unlock: () => Promise<void>;
   private readonly registry: Registry;
@@ -274,6 +276,7 @@ export class Nudge {
     this.harness = harness;
     this.displayName = parts.displayName;
     this.models = parts.models;
+    this.currentModel = agent.model ?? { provider: "", modelId: "" };
     this.now = now;
     this.unlock = parts.unlock;
     this.registry = parts.registry;
@@ -326,7 +329,7 @@ export class Nudge {
     this.appearance = new Looks(harness);
     this.rooms = new Rooms(
       harness,
-      (room) => ({ ...agent, extensions: this.selection(room) }),
+      (room) => ({ ...agent, model: this.currentModel, extensions: this.selection(room) }),
       now,
       changed,
     );
@@ -982,6 +985,34 @@ export class Nudge {
   async setImagesToModel(roomId: string, allowed: boolean, context: Context): Promise<Room> {
     await this.room(roomId, context);
     return this.rooms.setImagesToModel(roomId, allowed, context);
+  }
+
+  /**
+   * Switches the model the assistant answers with, without a restart: the next request in every
+   * room goes to the new model, and rooms made later start on it. A request in flight keeps the
+   * model it started with. The config file is the host's to update; what is stored here is the
+   * running truth until then.
+   */
+  async setModel(model: ModelRef, context: Context): Promise<void> {
+    if (this.models.getModel(model.provider, model.modelId) === undefined)
+      throw new Error(`No model "${model.provider}/${model.modelId}" in the catalog`);
+    if (
+      this.currentModel.provider === model.provider &&
+      this.currentModel.modelId === model.modelId
+    )
+      return;
+    // Rooms made from now on start with the new model; every existing conversation is
+    // reconfigured in place, so no socket drops and no client has to reconnect.
+    this.currentModel = model;
+    const directory = await this.harness.snapshot(DirectoryDoc, context);
+    const conversationIds = [
+      ...Object.values(directory?.rooms ?? {}).map((room) => room.conversationId),
+      ...Object.keys(directory?.sides ?? {}).map(Number),
+    ];
+    for (const id of conversationIds) {
+      const conversation = await this.harness.conversation(id as ConversationId, context);
+      if (conversation !== undefined) await conversation.configure({ model }, context);
+    }
   }
 
   /** What an attachment's image part becomes in a request: the image, where the room lets it. */

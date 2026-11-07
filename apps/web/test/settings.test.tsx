@@ -90,6 +90,38 @@ describe("assistant settings: budget", () => {
   });
 });
 
+describe("assistant settings: model", () => {
+  it("shows an admin the model as the server has it", async () => {
+    const html = await render();
+    expect(html).toContain("Model");
+  });
+
+  it("lists the catalog's providers and models, and notes a missing key", async () => {
+    const html = await render({
+      seed: (queries) =>
+        queries.setQueryData(
+          ["robin", "server-assistant", "models"],
+          [
+            {
+              id: "anthropic",
+              name: "Anthropic",
+              models: [{ id: "claude", name: "Claude" }],
+              key: { provider: "anthropic", source: "none" },
+            },
+          ],
+        ),
+    });
+    expect(html).toContain("Anthropic");
+    expect(html).toContain("Claude");
+    expect(html).toContain("No key for this provider yet");
+  });
+
+  it("shows no model section to someone who isn't an admin", async () => {
+    const html = await render({ admin: false });
+    expect(html).not.toContain("The model the assistant answers with");
+  });
+});
+
 describe("assistant settings: spend and guests", () => {
   it("shows an admin each month's spend by person and by room, most first", async () => {
     const html = await render({

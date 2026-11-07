@@ -7,12 +7,13 @@ import {
   Assistants,
   BACKGROUND_CONTEXT,
   BackupError,
+  buildModels,
   openAssistant,
   ServerIdentity,
   ServerKeys,
   ServerOwners,
 } from "@nudge/core";
-import { createModels, fauxProvider } from "@nudge/core/testing";
+import { fauxProvider } from "@nudge/core/testing";
 import { type BackupState, ServerAssistant } from "@nudge/protocol";
 import type { Hono } from "hono";
 import { Value } from "typebox/value";
@@ -34,7 +35,7 @@ describe("the server API", () => {
   let bo: string;
   const backedUp: string[] = [];
   const faux = fauxProvider();
-  const models = createModels();
+  const models = buildModels();
   models.setProvider(faux.provider);
   const model = { provider: faux.provider.id, modelId: faux.getModel().id };
 
@@ -74,6 +75,17 @@ describe("the server API", () => {
       owners: new ServerOwners(undefined),
       identity: new ServerIdentity(undefined),
       fetch: (input, init) => homes(input, init),
+      models: () => [
+        {
+          id: faux.provider.id,
+          name: faux.provider.name,
+          models: models.getModels(faux.provider.id).map((found) => ({
+            id: found.id,
+            name: found.name,
+          })),
+          key: { provider: faux.provider.id, source: "none" },
+        },
+      ],
       backupBeforeDelete: async (config) => {
         backedUp.push(...config.assistants.map((a) => a.name));
         return "nudge-1.nudgebackup";
@@ -218,6 +230,25 @@ describe("the server API", () => {
     });
     expect(changed.json).toMatchObject({ displayName: "Robin Hood", instructions: "Be brief." });
     expect((await call("GET", "/a/robin/me", { token: ann })).status).toBe(200);
+    // The model alone switches live: the same instance keeps running.
+    const before = assistants.running.get("robin")!;
+    const switched = await call("PATCH", "/server/assistants/robin", {
+      token,
+      body: { model: { provider: "anthropic", modelId: "claude-sonnet-5" } },
+    });
+    expect(switched.status).toBe(200);
+    expect(switched.json.model).toEqual({ provider: "anthropic", modelId: "claude-sonnet-5" });
+    expect(assistants.running.get("robin")).toBe(before);
+    // An unknown model changes nothing.
+    expect(
+      (
+        await call("PATCH", "/server/assistants/robin", {
+          token,
+          body: { model: { provider: "anthropic", modelId: "nope" } },
+        })
+      ).status,
+    ).toBe(400);
+    expect(assistants.running.get("robin")).toBe(before);
     // The budget is replaced whole, `warnUsd` included, and comes back as it was set.
     const budget = { perPlayerUsd: 5, warnAt: 0.5, warnUsd: 40 };
     const budgeted = await call("PATCH", "/server/assistants/robin", { token, body: { budget } });
@@ -254,11 +285,24 @@ describe("the server API", () => {
     expect((await call("GET", "/a/pocket/me", { token: ann })).status).toBe(404);
   });
 
+  it("lists the models the catalog has, with where each key comes from", async () => {
+    const token = await signIn();
+    const listed = await call("GET", "/server/models", { token });
+    expect(listed.status).toBe(200);
+    expect(listed.json.providers[0]).toMatchObject({
+      id: faux.provider.id,
+      key: { provider: faux.provider.id, source: "none" },
+    });
+    expect(listed.json.providers[0].models[0]).toMatchObject({ id: faux.getModel().id });
+    expect((await call("GET", "/server/models", { token: bo })).status).toBe(401);
+  });
+
   it("keeps model keys it tested, and never shows them", async () => {
     const token = await signIn();
     expect((await call("GET", "/server/keys", { token })).json.keys).toEqual([
       { provider: "anthropic", source: "none" },
       { provider: "openai", source: "none" },
+      { provider: "opencode-go", source: "none" },
     ]);
     const bad = await call("PUT", "/server/keys/anthropic", { token, body: { key: "bad" } });
     expect(bad).toMatchObject({ status: 400, json: { error: expect.stringMatching(/x-api-key/) } });
@@ -272,6 +316,7 @@ describe("the server API", () => {
     expect(listed.json.keys).toEqual([
       { provider: "anthropic", source: "server" },
       { provider: "openai", source: "assistant" },
+      { provider: "opencode-go", source: "none" },
     ]);
     expect(JSON.stringify(listed.json)).not.toContain("good");
     expect((await call("DELETE", "/server/keys/anthropic", { token })).status).toBe(204);

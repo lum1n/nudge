@@ -6,6 +6,7 @@ import {
   type AssistantConfig,
   ConfigError,
   ConfigMissing,
+  DEFAULT_MODEL,
   type ExtensionConfig,
   loadConfig,
   type NudgeConfig,
@@ -84,9 +85,10 @@ export type AssistantsOptions = {
 /**
  * The assistants a server runs, kept in step with its config file. Creating, changing and deleting
  * one happens while the others keep running: a change reopens that assistant alone, so its open
- * sockets end and clients connect again. Every change opens the assistant first and writes the
- * file only once that worked, so a change that fails leaves both as they were. Changes run one at
- * a time.
+ * sockets end and clients connect again — except the model alone, which switches live on the
+ * running assistant (see `update`). Every change opens the assistant first and writes the file
+ * only once that worked, so a change that fails leaves both as they were. Changes run one at a
+ * time.
  *
  * `running` is the live map the HTTP server looks assistants up in.
  */
@@ -166,11 +168,33 @@ export class Assistants {
     });
   }
 
-  /** Changes an assistant's settings and reopens it with them. */
+  /**
+   * Changes an assistant's settings. A change that is only the model switches it live on the
+   * running assistant: no sockets end, clients don't reconnect, and the next answer in every
+   * room goes to the new model. Everything else reopens the assistant with its new settings.
+   */
   update(name: string, change: AssistantChange): Promise<Nudge> {
     return this.serially(async () => {
       const raw = await readRawConfig(this.configPath);
       const entry = this.entryOf(raw, name);
+      if (Object.keys(change).length === 1 && "model" in change) {
+        const running = this.running.get(name);
+        if (running !== undefined) {
+          const next = change.model ?? DEFAULT_MODEL;
+          try {
+            await running.setModel(next, this.options.context);
+          } catch (error) {
+            throw new ConfigError(`Nothing changed: ${(error as Error).message}`);
+          }
+          applyChange(entry, change);
+          const parsed = this.parse(raw).assistants.find((assistant) => assistant.name === name);
+          if (parsed !== undefined) this.opened.set(running, parsed);
+          await writeRawConfig(this.configPath, raw);
+          this.say(`${name}: model switched to ${next.provider}/${next.modelId}`);
+          return running;
+        }
+        // Not running, such as after an open that failed: reopen it with the new model.
+      }
       applyChange(entry, change);
       const nudge = await this.reopen(this.parse(raw), name);
       await writeRawConfig(this.configPath, raw);

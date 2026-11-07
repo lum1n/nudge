@@ -42,6 +42,8 @@ import {
   type ServerAssistant,
   type ServerAssistantsResponse,
   type ServerInfoResponse,
+  type ServerModelProvider,
+  type ServerModelsResponse,
   type ServerOwner as ShownOwner,
   type ServerKeyResponse,
   type ServerOwnersResponse,
@@ -67,7 +69,7 @@ import { HttpError, pairingLink, readJson, requestOrigin } from "./rest.ts";
 const context = BACKGROUND_CONTEXT;
 
 /** Providers every key list names, so an owner sees where to put the first key. */
-const WELL_KNOWN = ["anthropic", "openai"];
+const WELL_KNOWN = ["anthropic", "openai", "opencode-go"];
 
 /** What the server API runs on: the server's assistants, keys and owners. */
 export type ServerControl = {
@@ -86,6 +88,8 @@ export type ServerControl = {
   backupKey(): Promise<Buffer>;
   /** Self-update, for a server `nudge-server` runs; absent otherwise. */
   readonly updates?: UpdateControl;
+  /** The server's model catalog, with where each provider's key comes from; absent in tests. */
+  readonly models?: (assistant: string | undefined) => ServerModelProvider[];
   /** The server's own map (ADR 18); absent where the server wasn't given one. */
   readonly geo?: GeoControl;
   /** The server's Wired; absent where the server wasn't given one. */
@@ -384,6 +388,12 @@ export function serverRoutes(options: ServerRoutesOptions): Hono<Env> {
   app.get("/keys", async (c) => {
     const assistant = c.req.query("assistant");
     return c.json({ keys: keyList(control, assistant) } satisfies ProviderKeysResponse);
+  });
+
+  app.get("/models", async (c) => {
+    if (control.models === undefined) throw new HttpError(404, "This server has no model catalog");
+    const assistant = c.req.query("assistant");
+    return c.json({ providers: control.models(assistant) } satisfies ServerModelsResponse);
   });
 
   app.put("/keys/:provider", async (c) => {

@@ -12,6 +12,8 @@ import type {
   ServerAssistant,
   ServerAssistantsResponse,
   ServerInfoResponse,
+  ServerModelProvider,
+  ServerModelsResponse,
   ServerOwner,
   ServerOwnersResponse,
   ServerSessionResponse,
@@ -163,6 +165,12 @@ export class ServerApi {
   async keys(assistant?: string): Promise<ProviderKey[]> {
     const query = assistant === undefined ? "" : `?assistant=${encodeURIComponent(assistant)}`;
     return (await this.request<ProviderKeysResponse>("GET", `/keys${query}`)).keys;
+  }
+
+  /** Every model the server's catalog has, by provider, with where each key comes from. */
+  async models(assistant?: string): Promise<ServerModelProvider[]> {
+    const query = assistant === undefined ? "" : `?assistant=${encodeURIComponent(assistant)}`;
+    return (await this.request<ServerModelsResponse>("GET", `/models${query}`)).providers;
   }
 
   /** Keeps a provider's key on the server once it answered a tiny request (unless `test: false`). */

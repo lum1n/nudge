@@ -197,4 +197,10 @@ describe("what setup offers", () => {
       expect(provider.recommended).toBe(provider.models[0]!.id);
     }
   });
+
+  it("offers OpenCode Go, with the models its key reaches", () => {
+    const offered = offeredProviders().find((provider) => provider.id === "opencode-go");
+    expect(offered).toBeDefined();
+    expect(offered!.models.map((model) => model.id)).toContain("gpt-6-luna");
+  });
 });

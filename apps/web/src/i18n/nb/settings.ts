@@ -120,6 +120,27 @@ export const settings: Messages["settings"] = {
     notHere:
       "Denne serveren kan ikke endre hvordan assistenten svarer fra nettet. Kjør den med nudge serve.",
   },
+  model: {
+    title: "Modell",
+    intro:
+      "Modellen assistenten svarer med. Når du lagrer, byttes den med en gang: assistenten fortsetter å kjøre, og neste svar kommer fra den nye modellen.",
+    provider: "Tilbyder",
+    model: "Modell",
+    pickModel: "Velg en tilbyder og en modell.",
+    keyEnv: (variables: string) => `Nøkkel: serverens miljø (${variables}).`,
+    keyServer: "Nøkkel: satt på serveren.",
+    keyAssistant: "Nøkkel: satt for denne assistenten.",
+    keyNone: "Ingen nøkkel for denne tilbyderen ennå – legg inn en nedenfor.",
+    keyPlaceholder: "API-nøkkel",
+    keySave: "Lagre nøkkel",
+    keySaving: "Prøver nøkkelen…",
+    keyHint:
+      "Nøkkelen prøves med én liten forespørsel og holdes deretter kryptert på serveren; den vises aldri igjen.",
+    keySaved: "Nøkkelen er lagret.",
+    keyError: "Nøkkelen virket ikke.",
+    ownerOnly: "Bare en eier av denne serveren kan endre modellen.",
+    notHere: "Denne serveren kan ikke endre modellen fra nettet. Kjør den med nudge serve.",
+  },
   budget: {
     title: "Budsjett",
     intro:

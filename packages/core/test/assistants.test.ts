@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { createModels } from "@earendil-works/pi-ai/models";
+import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
 import { fauxProvider } from "@earendil-works/pi-ai/providers/faux";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -11,6 +12,7 @@ import {
   AssistantNotFound,
   Assistants,
   ConfigError,
+  DEFAULT_MODEL,
   LOBBY,
   openAssistant,
 } from "../src/index.ts";
@@ -24,8 +26,17 @@ describe("Assistants", () => {
   let assistants: Assistants | undefined;
   const lines: string[] = [];
   const faux = fauxProvider();
+  const pair = fauxProvider({
+    provider: "pair",
+    models: [
+      { id: "first", name: "First" },
+      { id: "second", name: "Second" },
+    ],
+  });
   const models = createModels();
   models.setProvider(faux.provider);
+  models.setProvider(pair.provider);
+  models.setProvider(anthropicProvider());
   const model = { provider: faux.provider.id, modelId: faux.getModel().id };
 
   const open = () =>
@@ -100,6 +111,42 @@ describe("Assistants", () => {
     expect((await config()).assistants[0]).toMatchObject({ instructions: "Be brief." });
     await assistants.update("robin", { instructions: null });
     expect((await config()).assistants[0]).not.toHaveProperty("instructions");
+  });
+
+  it("switches the model live on the running assistant, without reopening it", async () => {
+    assistants = await open();
+    const before = assistants.running.get("robin")!;
+    const next = { provider: "pair", modelId: "second" };
+    const after = await assistants.update("robin", { model: next });
+    expect(after).toBe(before);
+    expect(assistants.running.get("robin")).toBe(before);
+    expect((await config()).assistants[0]).toMatchObject({ model: next });
+    // Every existing conversation answers with the new model from its next request.
+    const lobby = await after.conversation(LOBBY, context);
+    expect((await lobby.agent(context)).model).toEqual(next);
+    // Rooms made from now on start on it too.
+    const room = await after.rooms.createShared({ id: "trip", name: "Trip", members: [] }, context);
+    const conversation = await after.conversation(room.id, context);
+    expect((await conversation.agent(context)).model).toEqual(next);
+    // `null` puts the assistant back on the default model, also live.
+    const back = await assistants.update("robin", { model: null });
+    expect(back).toBe(before);
+    expect((await (await back.conversation(LOBBY, context)).agent(context)).model).toEqual(
+      DEFAULT_MODEL,
+    );
+    expect((await config()).assistants[0]).not.toHaveProperty("model");
+  });
+
+  it("refuses an unknown model without touching the assistant or the config", async () => {
+    assistants = await open();
+    const before = assistants.running.get("robin")!;
+    await expect(
+      assistants.update("robin", { model: { provider: "pair", modelId: "nope" } }),
+    ).rejects.toBeInstanceOf(ConfigError);
+    expect(assistants.running.get("robin")).toBe(before);
+    expect((await config()).assistants[0]).toMatchObject({ model });
+    const lobby = await before.conversation(LOBBY, context);
+    expect((await lobby.agent(context)).model).toEqual(model);
   });
 
   it("sets the style and autonomy, refuses ones it doesn't know, and clears them", async () => {

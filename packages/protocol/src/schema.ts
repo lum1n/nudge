@@ -1298,6 +1298,27 @@ export const SetProviderKeyRequest = Type.Object({
 });
 export type SetProviderKeyRequest = Static<typeof SetProviderKeyRequest>;
 
+/** One model of a provider the server's catalog has, for the model picker. */
+export const ServerModel = Type.Object({
+  id: Type.String(),
+  name: Type.String(),
+});
+export type ServerModel = Static<typeof ServerModel>;
+
+/** A model provider of the server's catalog, with where its key comes from. */
+export const ServerModelProvider = Type.Object({
+  id: Type.String(),
+  name: Type.String(),
+  models: Type.Array(ServerModel),
+  key: ProviderKey,
+});
+export type ServerModelProvider = Static<typeof ServerModelProvider>;
+
+export const ServerModelsResponse = Type.Object({
+  providers: Type.Array(ServerModelProvider),
+});
+export type ServerModelsResponse = Static<typeof ServerModelsResponse>;
+
 /**
  * Someone who runs the server: a person who lives on one of its assistants (`assistant` and
  * `playerId`), or a person whose home is elsewhere (`address`), who signs in vouched for by it.
@@ -1823,6 +1844,9 @@ export const SCHEMAS = {
   ProviderKey,
   ProviderKeysResponse,
   SetProviderKeyRequest,
+  ServerModel,
+  ServerModelProvider,
+  ServerModelsResponse,
   ServerOwner,
   ServerOwnersResponse,
   AddOwnerRequest,

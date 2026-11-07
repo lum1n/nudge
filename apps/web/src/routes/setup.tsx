@@ -20,6 +20,7 @@ export const Route = createFileRoute("/setup")({ component: Setup });
 const KEY_PAGES: Record<string, string> = {
   anthropic: "https://console.anthropic.com/settings/keys",
   openai: "https://platform.openai.com/api-keys",
+  "opencode-go": "https://opencode.ai/console/settings",
 };
 
 type Step = "code" | "assistant" | "model" | "you" | "done";

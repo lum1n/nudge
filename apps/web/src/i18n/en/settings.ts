@@ -123,6 +123,27 @@ export const settings = {
     notHere:
       "This server can't change how the assistant answers from the web. Run it with nudge serve.",
   },
+  model: {
+    title: "Model",
+    intro:
+      "The model the assistant answers with. Saving switches it at once: the assistant keeps running, and the next answer comes from the new model.",
+    provider: "Provider",
+    model: "Model",
+    pickModel: "Pick a provider and a model.",
+    keyEnv: (variables: string) => `Key: the server's environment (${variables}).`,
+    keyServer: "Key: set on the server.",
+    keyAssistant: "Key: set for this assistant.",
+    keyNone: "No key for this provider yet — add one below.",
+    keyPlaceholder: "API key",
+    keySave: "Save key",
+    keySaving: "Trying the key…",
+    keyHint:
+      "The key is tried with one tiny request and then kept encrypted on the server, never shown again.",
+    keySaved: "Key saved.",
+    keyError: "The key didn't work.",
+    ownerOnly: "Only an owner of this server can change the model.",
+    notHere: "This server can't change the model from the web. Run it with nudge serve.",
+  },
   budget: {
     title: "Budget",
     intro:

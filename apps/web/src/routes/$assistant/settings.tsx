@@ -3,6 +3,7 @@ import type {
   AssistantStyle,
   BackupState,
   ExtensionSetup,
+  ModelChoice,
   RoomKind,
   ServerAssistant,
   SetBackupRemoteRequest,
@@ -58,6 +59,7 @@ function Settings() {
       <People />
       <Guests />
       <Manner />
+      <Model />
       <Budget />
       <SpendByMonth />
       <Clients />
@@ -762,6 +764,213 @@ function Manner() {
             )}
           </div>
           <p className="text-xs text-stone-500">{words.approvals}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={!dirty || saving}
+              onClick={() => void save()}
+              className="rounded bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-40"
+            >
+              {saving ? m.settings.saving : m.common.save}
+            </button>
+            {dirty && (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => {
+                  setDraft(undefined);
+                  setError(undefined);
+                }}
+                className="rounded border border-stone-300 px-3 py-1.5 text-sm"
+              >
+                {m.settings.discard}
+              </button>
+            )}
+            {error !== undefined && <span className="text-sm text-red-700">{error}</span>}
+            {saved && !dirty && error === undefined && (
+              <span className="text-sm text-emerald-700">{m.settings.saved}</span>
+            )}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * The model the assistant answers with, switched live on the running assistant: owners pick a
+ * provider and a model of it, and the next answer in every room comes from the new model. A
+ * provider with no key anywhere gets a field for the server's key first.
+ */
+function Model() {
+  const { assistant } = Route.useParams();
+  const queryClient = useQueryClient();
+  const { key, settings } = useServerAssistant(assistant);
+  const catalog = useQuery({
+    queryKey: [...key, "models"],
+    queryFn: () => asOwner(assistant, (api) => api.models(assistant)),
+    enabled: settings.data !== undefined,
+    retry: false,
+  });
+  const [draft, setDraft] = useState<ModelChoice>();
+  const [keyDraft, setKeyDraft] = useState<string>();
+  const [saving, setSaving] = useState(false);
+  const [savingKey, setSavingKey] = useState(false);
+  const [error, setError] = useState<string>();
+  const [saved, setSaved] = useState(false);
+  const [keySaved, setKeySaved] = useState(false);
+  const words = m.settings.model;
+
+  const savedModel = settings.data?.model;
+  const shown = draft ?? savedModel;
+  const dirty = draft !== undefined && stable(draft) !== stable(savedModel);
+  const providers = catalog.data ?? [];
+  const chosen = providers.find((provider) => provider.id === shown?.provider);
+  const keyNote =
+    chosen === undefined
+      ? undefined
+      : chosen.key.source === "env"
+        ? words.keyEnv(chosen.key.variables?.join(", ") ?? "")
+        : chosen.key.source === "server"
+          ? words.keyServer
+          : chosen.key.source === "assistant"
+            ? words.keyAssistant
+            : words.keyNone;
+
+  function pickProvider(provider: string) {
+    setSaved(false);
+    setKeySaved(false);
+    setError(undefined);
+    setDraft({
+      provider,
+      modelId: providers.find((found) => found.id === provider)?.models[0]?.id ?? "",
+    });
+  }
+
+  function pickModelId(modelId: string) {
+    setSaved(false);
+    setKeySaved(false);
+    setError(undefined);
+    setDraft({ provider: shown?.provider ?? providers[0]!.id, modelId });
+  }
+
+  async function save() {
+    if (shown === undefined || shown.modelId === "") {
+      setError(words.pickModel);
+      return;
+    }
+    setSaving(true);
+    setError(undefined);
+    try {
+      const next = await asOwner(assistant, (api) =>
+        api.updateAssistant(assistant, { model: shown }),
+      );
+      queryClient.setQueryData<ServerAssistant>(key, next);
+      setDraft(undefined);
+      setSaved(true);
+    } catch (caught) {
+      setError((caught as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveKey() {
+    const value = keyDraft?.trim();
+    if (shown === undefined || value === undefined || value === "") return;
+    setSavingKey(true);
+    setError(undefined);
+    setKeySaved(false);
+    try {
+      await asOwner(assistant, (api) => api.setKey(shown.provider, { key: value }));
+      setKeyDraft(undefined);
+      setKeySaved(true);
+      await queryClient.invalidateQueries({ queryKey: [...key, "models"] });
+    } catch (caught) {
+      setError((caught as Error).message);
+    } finally {
+      setSavingKey(false);
+    }
+  }
+
+  const noCatalog =
+    catalog.error instanceof ApiError && catalog.error.status === 404 ? words.notHere : undefined;
+  return (
+    <section className="mx-auto flex max-w-3xl flex-col gap-3 p-3 sm:p-4">
+      <div>
+        <h2 className="text-lg font-medium">{words.title}</h2>
+        <p className="text-sm text-stone-600">{words.intro}</p>
+      </div>
+      {settings.error ? (
+        <p className="text-sm text-stone-600">
+          {settings.error instanceof ApiError && settings.error.status === 403
+            ? words.ownerOnly
+            : settings.error.message}
+        </p>
+      ) : settings.data === undefined ? (
+        <p className="text-sm text-stone-600">{m.common.loading}</p>
+      ) : noCatalog !== undefined ? (
+        <p className="text-sm text-stone-600">{noCatalog}</p>
+      ) : (
+        <div className="flex flex-col gap-4 rounded border border-stone-200 bg-white p-4">
+          {catalog.error != null && <p className="text-sm text-red-700">{catalog.error.message}</p>}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="font-medium">{words.provider}</span>
+              <select
+                value={shown?.provider ?? ""}
+                onChange={(event) => pickProvider(event.target.value)}
+                className="rounded border border-stone-300 px-2 py-1"
+              >
+                {providers.map((provider) => (
+                  <option key={provider.id} value={provider.id}>
+                    {provider.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="font-medium">{words.model}</span>
+              <select
+                value={shown?.modelId ?? ""}
+                disabled={chosen === undefined}
+                onChange={(event) => pickModelId(event.target.value)}
+                className="rounded border border-stone-300 px-2 py-1"
+              >
+                {(chosen?.models ?? []).map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {keyNote !== undefined && <p className="text-xs text-stone-500">{keyNote}</p>}
+          {chosen?.key.source === "none" && (
+            <div className="flex flex-col gap-1 text-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="password"
+                  value={keyDraft ?? ""}
+                  onChange={(event) => setKeyDraft(event.target.value)}
+                  placeholder={words.keyPlaceholder}
+                  className="w-72 rounded border border-stone-300 px-2 py-1"
+                />
+                <button
+                  type="button"
+                  disabled={savingKey || (keyDraft?.trim().length ?? 0) === 0}
+                  onClick={() => void saveKey()}
+                  className="rounded bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-40"
+                >
+                  {savingKey ? words.keySaving : words.keySave}
+                </button>
+                {keySaved && !savingKey && error === undefined && (
+                  <span className="text-sm text-emerald-700">{words.keySaved}</span>
+                )}
+              </div>
+              <span className="text-xs text-stone-500">{words.keyHint}</span>
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
