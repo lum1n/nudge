@@ -154,9 +154,7 @@ function ProjectDetails({
             ) : (
               <>
                 <span className="font-mono">{project.secrets.join(", ")}</span>
-                <span className="block text-xs text-stone-500">
-                  {m.panels.project.secretsNote}
-                </span>
+                <span className="block text-xs text-stone-500">{m.panels.project.secretsNote}</span>
               </>
             )}
           </dd>
