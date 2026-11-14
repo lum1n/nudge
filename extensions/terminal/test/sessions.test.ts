@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -61,5 +61,24 @@ describe("the terminal's log", () => {
     log.output(1, long.id, "x".repeat(MAX_KEPT) + "end");
     expect(log.commands(1, "ann").at(-1)!.output).toHaveLength(MAX_KEPT);
     expect(log.commands(1, "ann").at(-1)!.output.endsWith("end")).toBe(true);
+  });
+
+  it("forgets a conversation's commands and file, and tells its viewers", () => {
+    const dir = mkdtempSync(join(tmpdir(), "nudge-terminal-log-"));
+    dirs.push(dir);
+    const log = new TerminalLog(dir, () => 1);
+    const frames: TerminalFrame[] = [];
+    log.watch(7, "ann", (frame) => frames.push(frame));
+    log.start(7, { command: "ls" });
+    log.start(8, { command: "pwd" });
+    expect(existsSync(join(dir, "conversation-7.json"))).toBe(true);
+
+    log.forget(7);
+
+    expect(frames.at(-1)).toEqual({ type: "commands", commands: [] });
+    expect(log.commands(7, "ann")).toEqual([]);
+    expect(log.commands(8, "ann")).toHaveLength(1);
+    expect(new TerminalLog(dir, () => 2).commands(7, "ann")).toEqual([]);
+    expect(() => log.forget(99)).not.toThrow();
   });
 });
