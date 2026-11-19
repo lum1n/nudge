@@ -144,6 +144,22 @@ pub struct ProviderKey {
     pub variables: Vec<String>,
 }
 
+/// One model of a provider the server's catalog has, for the model picker.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct ServerModel {
+    pub id: String,
+    pub name: String,
+}
+
+/// A model provider of the server's catalog, with where its key comes from.
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct ServerModelProvider {
+    pub id: String,
+    pub name: String,
+    pub models: Vec<ServerModel>,
+    pub key: ProviderKey,
+}
+
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
 pub struct ServerOwner {
     pub id: String,
@@ -792,6 +808,52 @@ impl ServerClient {
                 .await?
                 .into(),
         )
+    }
+
+    /// Switches the model alone, live on the running assistant: nothing reopens, no client
+    /// reconnects, and the next answer in every room comes from the new model. A model the
+    /// server's catalog doesn't know changes nothing (an error says so).
+    pub async fn set_model(
+        &self,
+        name: String,
+        model: ModelChoice,
+    ) -> Result<ServerAssistant, NudgeError> {
+        let change = p::UpdateAssistantRequest {
+            model: Some(Some(model.into())),
+            ..Default::default()
+        };
+        let api = self.api.clone();
+        Ok(
+            run(async move { api.update_assistant(&name, &change).await })
+                .await?
+                .into(),
+        )
+    }
+
+    /// Every model the server's catalog has, by provider, with where each key comes from. An
+    /// older server without a catalog answers 404.
+    pub async fn models(
+        &self,
+        assistant: Option<String>,
+    ) -> Result<Vec<ServerModelProvider>, NudgeError> {
+        let api = self.api.clone();
+        let providers = run(async move { api.models(assistant.as_deref()).await }).await?;
+        Ok(providers
+            .into_iter()
+            .map(|provider| ServerModelProvider {
+                id: provider.id,
+                name: provider.name,
+                models: provider
+                    .models
+                    .into_iter()
+                    .map(|model| ServerModel {
+                        id: model.id,
+                        name: model.name,
+                    })
+                    .collect(),
+                key: provider.key.into(),
+            })
+            .collect())
     }
 
     /// Deletes it for good, after a backup the server keeps for a while; returns its name.

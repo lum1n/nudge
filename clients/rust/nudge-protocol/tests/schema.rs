@@ -1043,6 +1043,23 @@ fn server_and_setup_bodies_match_the_schema() {
         variables: Some(vec!["ANTHROPIC_API_KEY".into()]),
     };
     check("ProviderKey", &key);
+    let provider = ServerModelProvider {
+        id: "opencode-go".into(),
+        name: "OpenCode Go".into(),
+        models: vec![ServerModel {
+            id: "kimi-k3".into(),
+            name: "Kimi K3".into(),
+        }],
+        key: key.clone(),
+    };
+    check("ServerModel", &provider.models[0]);
+    check("ServerModelProvider", &provider);
+    check(
+        "ServerModelsResponse",
+        &ServerModelsResponse {
+            providers: vec![provider],
+        },
+    );
     check(
         "ProviderKeysResponse",
         &ProviderKeysResponse { keys: vec![key] },
