@@ -82,12 +82,13 @@ import nudge.ffi.NewAssistant
 import nudge.ffi.ProviderKey
 import nudge.ffi.ServerAssistant
 import nudge.ffi.ServerInfo
+import nudge.ffi.ServerModelProvider
 
 /** The model a provider's new assistant starts with, until the owner picks another. */
-private val DEFAULT_MODELS = mapOf("anthropic" to "claude-sonnet-5", "openai" to "gpt-6.1-sol")
+private val DEFAULT_MODELS = mapOf("anthropic" to "claude-sonnet-5", "openai" to "gpt-6.1-sol", "opencode-go" to "gpt-6-luna")
 
 /** How a provider is written, for the ones people know by name. */
-private fun providerName(id: String) = mapOf("anthropic" to "Anthropic", "openai" to "OpenAI")[id]
+private fun providerName(id: String) = mapOf("anthropic" to "Anthropic", "openai" to "OpenAI", "opencode-go" to "OpenCode Go")[id]
     ?: id.replaceFirstChar { it.uppercase() }
 
 /** The servers this device owns (ADR 11), and making another on exe.dev. */
@@ -208,6 +209,10 @@ private fun ServerScreen(model: AppModel, server: String, address: String?, clos
             server,
             assistant,
             save = { settings -> client.updateAssistant(assistant.name, settings); reload() },
+            // Older servers have no catalog (404); the model id is typed then.
+            catalog = { runCatching { client.models(assistant.name) }.getOrNull() },
+            setKey = { provider, key -> client.setKey(provider, key, null); reload() },
+            setModel = { choice -> client.setModel(assistant.name, choice); reload() },
             delete = { client.deleteAssistant(assistant.name); reload() },
             close = { editing = null },
         )
@@ -552,7 +557,7 @@ private fun NewAssistantScreen(
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                 )
                 Text(stringResource(R.string.servers_model), style = MaterialTheme.typography.labelLarge)
-                listOf("anthropic", "openai").forEach { option ->
+                DEFAULT_MODELS.keys.forEach { option ->
                     Row(
                         Modifier.fillMaxWidth().selectable(selected = provider == option, onClick = {
                             provider = option
@@ -661,12 +666,17 @@ private fun AssistantScreen(
     server: String,
     assistant: ServerAssistant,
     save: suspend (AssistantSettings) -> Unit,
+    catalog: suspend () -> List<ServerModelProvider>?,
+    setKey: suspend (provider: String, key: String) -> Unit,
+    setModel: suspend (ModelChoice) -> Unit,
     delete: suspend () -> Unit,
     close: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     var displayName by remember { mutableStateOf(assistant.settings.displayName) }
-    var modelId by remember { mutableStateOf(assistant.settings.model.modelId) }
+    var chosenModel by remember { mutableStateOf(assistant.settings.model) }
+    var models by remember { mutableStateOf<List<ServerModelProvider>?>(null) }
+    LaunchedEffect(assistant.name) { models = catalog() }
     var instructions by remember { mutableStateOf(assistant.settings.instructions.orEmpty()) }
     var style by remember { mutableStateOf(assistant.settings.style) }
     var autonomy by remember { mutableStateOf(assistant.settings.autonomy) }
@@ -718,10 +728,16 @@ private fun AssistantScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             OutlinedTextField(value = displayName, onValueChange = { displayName = it }, label = { Text(stringResource(R.string.servers_name)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(
-                value = modelId, onValueChange = { modelId = it },
-                label = { Text(stringResource(R.string.servers_model_provider, assistant.settings.model.provider)) },
-                singleLine = true, modifier = Modifier.fillMaxWidth(),
+            ModelPicker(
+                catalog = models,
+                chosen = chosenModel,
+                pick = { chosenModel = it },
+                setKey = { provider, key -> setKey(provider, key); models = catalog() },
+            )
+            Text(
+                stringResource(R.string.servers_model_live),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             OutlinedTextField(
                 value = instructions, onValueChange = { instructions = it },
@@ -763,18 +779,23 @@ private fun AssistantScreen(
                 )
             }
             Button(
-                enabled = displayName.isNotBlank() && modelId.isNotBlank(),
+                enabled = displayName.isNotBlank() && chosenModel.modelId.isNotBlank(),
                 onClick = {
                     act {
-                        save(
-                            assistant.settings.copy(
-                                displayName = displayName.trim(),
-                                model = assistant.settings.model.copy(modelId = modelId.trim()),
-                                instructions = instructions.trim().ifEmpty { null },
-                                style = style,
-                                autonomy = autonomy,
-                            ),
+                        val model = chosenModel.copy(modelId = chosenModel.modelId.trim())
+                        val settings = assistant.settings.copy(
+                            displayName = displayName.trim(),
+                            model = model,
+                            instructions = instructions.trim().ifEmpty { null },
+                            style = style,
+                            autonomy = autonomy,
                         )
+                        when {
+                            settings == assistant.settings -> Unit
+                            // The model alone switches live; anything else reopens the assistant.
+                            settings == assistant.settings.copy(model = model) -> setModel(model)
+                            else -> save(settings)
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),

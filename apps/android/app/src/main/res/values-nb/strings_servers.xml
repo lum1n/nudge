@@ -112,6 +112,12 @@
     <string name="servers_delete_assistant_body">Rommene, historikken og minnet forsvinner. Serveren tar vare på en sikkerhetskopi i 30 dager. Skriv %1$s for å slette den.</string>
     <string name="servers_delete_assistant_confirm">Slett</string>
     <string name="servers_model_provider">Modell (%1$s)</string>
+    <string name="servers_model_live">Endrer du bare modellen, byttes den med en gang: assistenten fortsetter å kjøre, og neste svar kommer fra den nye modellen. Andre endringer starter den på nytt.</string>
+    <string name="servers_model_key_env">Nøkkel: miljøet til serveren (%1$s).</string>
+    <string name="servers_model_key_server">Nøkkel: satt på serveren.</string>
+    <string name="servers_model_key_assistant">Nøkkel: satt for denne assistenten.</string>
+    <string name="servers_model_key_none">Ingen %1$s-nøkkel ennå. Legg til en for å bruke den.</string>
+    <string name="servers_model_save_key">Lagre nøkkel</string>
     <string name="servers_instructions">Instruksjoner</string>
     <string name="servers_instructions_supporting">Sagt til modellen før hver samtale</string>
     <string name="servers_style">Stil</string>

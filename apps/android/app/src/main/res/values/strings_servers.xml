@@ -112,6 +112,12 @@
     <string name="servers_delete_assistant_body">Its rooms, history and memory go. The server keeps a backup for 30 days. Type %1$s to delete it.</string>
     <string name="servers_delete_assistant_confirm">Delete</string>
     <string name="servers_model_provider">Model (%1$s)</string>
+    <string name="servers_model_live">Changing only the model switches it at once: the assistant keeps running, and the next answer comes from the new model. Other changes restart it.</string>
+    <string name="servers_model_key_env">Key: the server\'s environment (%1$s).</string>
+    <string name="servers_model_key_server">Key: set on the server.</string>
+    <string name="servers_model_key_assistant">Key: set for this assistant.</string>
+    <string name="servers_model_key_none">No %1$s key yet. Add one to use it.</string>
+    <string name="servers_model_save_key">Save key</string>
     <string name="servers_instructions">Instructions</string>
     <string name="servers_instructions_supporting">Said to the model before every conversation</string>
     <string name="servers_style">Style</string>

@@ -2,11 +2,11 @@ import Nudge
 import SwiftUI
 
 /// The model a provider's new assistant starts with, until the owner picks another.
-private let defaultModels = ["anthropic": "claude-sonnet-5", "openai": "gpt-6.1-sol"]
+private let defaultModels = ["anthropic": "claude-sonnet-5", "openai": "gpt-6.1-sol", "opencode-go": "gpt-6-luna"]
 
 /// How a provider is written, for the ones people know by name.
 private func providerName(_ id: String) -> String {
-    ["anthropic": "Anthropic", "openai": "OpenAI"][id] ?? id.prefix(1).uppercased() + id.dropFirst()
+    ["anthropic": "Anthropic", "openai": "OpenAI", "opencode-go": "OpenCode Go"][id] ?? id.prefix(1).uppercased() + id.dropFirst()
 }
 
 private func host(_ server: String) -> String {
@@ -362,7 +362,7 @@ private struct NewAssistantView: View {
                 }
                 Section("Model") {
                     Picker("Provider", selection: $provider) {
-                        ForEach(["anthropic", "openai"], id: \.self) { option in
+                        ForEach(["anthropic", "openai", "opencode-go"], id: \.self) { option in
                             Text(providerName(option) + (ready.contains(option) ? "" : " (add a key on the server first)"))
                                 .tag(option)
                         }
@@ -467,7 +467,9 @@ private struct AssistantView: View {
     let assistant: ServerAssistant
     let changed: () async throws -> Void
     @State private var displayName: String
-    @State private var modelId: String
+    @State private var chosenModel: ModelChoice
+    /// The server's model catalog; nil until read, and on an older server that has none.
+    @State private var catalog: [ServerModelProvider]?
     @State private var instructions: String
     /// Nil until picked: the server's default, concise and balanced.
     @State private var style: AssistantStyle?
@@ -482,7 +484,7 @@ private struct AssistantView: View {
         self.assistant = assistant
         self.changed = changed
         _displayName = State(initialValue: assistant.settings.displayName)
-        _modelId = State(initialValue: assistant.settings.model.modelId)
+        _chosenModel = State(initialValue: assistant.settings.model)
         _instructions = State(initialValue: assistant.settings.instructions ?? "")
         _style = State(initialValue: assistant.settings.style)
         _autonomy = State(initialValue: assistant.settings.autonomy)
@@ -493,12 +495,16 @@ private struct AssistantView: View {
             Section("Name") {
                 TextField("Name", text: $displayName)
             }
-            Section("Model (\(assistant.settings.model.provider))") {
-                TextField("Model", text: $modelId)
-                    .autocorrectionDisabled()
-                    #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                    #endif
+            Section {
+                ModelPicker(catalog: catalog, chosen: $chosenModel) { provider, key in
+                    let client = try model.servers.client(server)
+                    _ = try await client.setKey(provider: provider, key: key, assistant: nil)
+                    await loadCatalog()
+                }
+            } header: {
+                Text("Model")
+            } footer: {
+                Text("Changing only the model switches it at once: the assistant keeps running, and the next answer comes from the new model. Other changes restart it.")
             }
             Section {
                 TextField("Instructions", text: $instructions, axis: .vertical)
@@ -557,9 +563,10 @@ private struct AssistantView: View {
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") { Task { await save() } }
-                    .disabled(displayName.trimmed.isEmpty || modelId.trimmed.isEmpty)
+                    .disabled(displayName.trimmed.isEmpty || chosenModel.modelId.trimmed.isEmpty)
             }
         }
+        .task { await loadCatalog() }
         .alert("Delete \(assistant.settings.displayName)?", isPresented: $deleting) {
             TextField(assistant.name, text: $confirm)
                 .autocorrectionDisabled()
@@ -585,14 +592,32 @@ private struct AssistantView: View {
         }
     }
 
+    /// Older servers have no catalog (404); the model id is typed then.
+    private func loadCatalog() async {
+        catalog = try? await model.servers.client(server).models(assistant: assistant.name)
+    }
+
     private func save() async {
+        let picked = ModelChoice(provider: chosenModel.provider, modelId: chosenModel.modelId.trimmed)
         var settings = assistant.settings
         settings.displayName = displayName.trimmed
-        settings.model.modelId = modelId.trimmed
+        settings.model = picked
         settings.instructions = instructions.trimmed.isEmpty ? nil : instructions.trimmed
         settings.style = style
         settings.autonomy = autonomy
-        await act { _ = try await model.servers.client(server).updateAssistant(name: assistant.name, settings: settings) }
+        var onlyModel = assistant.settings
+        onlyModel.model = picked
+        await act {
+            let client = try model.servers.client(server)
+            if settings == assistant.settings {
+                return
+            } else if settings == onlyModel {
+                // The model alone switches live; anything else reopens the assistant.
+                _ = try await client.setModel(name: assistant.name, model: picked)
+            } else {
+                _ = try await client.updateAssistant(name: assistant.name, settings: settings)
+            }
+        }
     }
 
     /// Runs a change, then goes back to the server, read again.

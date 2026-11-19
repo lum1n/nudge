@@ -1717,6 +1717,27 @@ pub struct ProviderKeysResponse {
     pub keys: Vec<ProviderKey>,
 }
 
+/// One model of a provider the server's catalog has, for the model picker.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ServerModel {
+    pub id: String,
+    pub name: String,
+}
+
+/// A model provider of the server's catalog, with where its key comes from.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ServerModelProvider {
+    pub id: String,
+    pub name: String,
+    pub models: Vec<ServerModel>,
+    pub key: ProviderKey,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ServerModelsResponse {
+    pub providers: Vec<ServerModelProvider>,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SetProviderKeyRequest {
     pub key: String,

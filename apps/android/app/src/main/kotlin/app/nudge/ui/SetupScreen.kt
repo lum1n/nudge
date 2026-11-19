@@ -73,6 +73,7 @@ private enum class Step { ADDRESS, CODE, NAME, MODEL, YOU }
 private val KEY_PAGES = mapOf(
     "anthropic" to "https://console.anthropic.com/settings/keys",
     "openai" to "https://platform.openai.com/api-keys",
+    "opencode-go" to "https://opencode.ai/console/settings",
 )
 
 /**

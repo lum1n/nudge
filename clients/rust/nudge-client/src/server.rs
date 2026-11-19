@@ -154,6 +154,19 @@ impl ServerApi {
         Ok(response.keys)
     }
 
+    /// Every model the server's catalog has, by provider, with where each key comes from, for
+    /// every assistant or for `assistant`. A server without a catalog answers 404.
+    pub async fn models(
+        &self,
+        assistant: Option<&str>,
+    ) -> Result<Vec<ServerModelProvider>, ApiError> {
+        let query: Vec<(&str, &str)> = assistant.map(|a| ("assistant", a)).into_iter().collect();
+        let response: ServerModelsResponse = self
+            .request(Method::GET, &["models"], &query, NO_BODY)
+            .await?;
+        Ok(response.providers)
+    }
+
     /// Keeps a provider's key on the server once it answered a tiny request (unless `test` is
     /// `Some(false)`); a 400 has the provider's answer.
     pub async fn set_key(

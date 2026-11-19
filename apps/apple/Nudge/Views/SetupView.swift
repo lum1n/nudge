@@ -41,6 +41,7 @@ struct NewServerView: View {
 private let keyPages = [
     "anthropic": URL(string: "https://console.anthropic.com/settings/keys")!,
     "openai": URL(string: "https://platform.openai.com/api-keys")!,
+    "opencode-go": URL(string: "https://opencode.ai/console/settings")!,
 ]
 
 /// The setup wizard (ADR 11), as the web's: a server waiting to be set up, its one-time code, a
