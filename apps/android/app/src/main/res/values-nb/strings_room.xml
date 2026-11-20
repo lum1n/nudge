@@ -92,6 +92,10 @@
     <string name="room_approved_by_done">Godkjent av %1$s, utført</string>
     <string name="room_approved_failed">Godkjent, men det mislyktes</string>
     <string name="room_approved_by_failed">Godkjent av %1$s, men det mislyktes</string>
+    <string name="room_always_approve">Godkjenn alltid %1$s i dette rommet</string>
+    <string name="room_approved_auto">Godkjent automatisk (regel satt av %1$s)</string>
+    <string name="room_approved_auto_done">Godkjent automatisk (regel satt av %1$s), utført</string>
+    <string name="room_approved_auto_failed">Godkjent automatisk (regel satt av %1$s), men det mislyktes</string>
     <string name="room_only_you">Bare deg</string>
     <string name="room_hidden">" skjult "</string>
 
@@ -132,6 +136,9 @@
     <string name="room_info_fact_owner">Bare for %1$s</string>
     <string name="room_info_fact_by">Lagt til av %1$s</string>
     <string name="room_info_forget">Glem</string>
+    <string name="room_info_always_approved">Alltid godkjent</string>
+    <string name="room_info_always_approved_by">Satt av %1$s · %2$s</string>
+    <string name="room_info_always_approved_forget">Spør igjen før %1$s</string>
     <string name="room_info_remember">Husk i dette rommet…</string>
     <string name="room_info_location">Posisjon</string>
     <string name="room_info_location_profile">Slå på Del hvor jeg er i profilen din for å endre det.</string>

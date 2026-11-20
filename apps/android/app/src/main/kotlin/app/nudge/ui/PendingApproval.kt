@@ -11,6 +11,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.PanTool
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -22,6 +23,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -47,7 +49,9 @@ import nudge.ffi.ExeClient
  * A pending approval in the room, decided here: what it asks for typed in (a secret one hidden
  * while typed), and what the app does first with the device's exe.dev token ([exeToken]), such as
  * making a VM. What is typed is only held while the card shows, sent with the yes, and cleared
- * once sent. A failure is shown and the approval stays pending, to try again or deny.
+ * once sent. A failure is shown and the approval stays pending, to try again or deny. One that
+ * can be approved always in the room (`ruleLabel`, never with inputs or a client action) also
+ * offers that, saying what it covers (ADR 31).
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -55,7 +59,7 @@ fun PendingApprovalCard(
     approval: Approval,
     exeToken: String?,
     exeKey: () -> String?,
-    decide: suspend (approve: Boolean, inputs: Map<String, String>?) -> Unit,
+    decide: suspend (approve: Boolean, inputs: Map<String, String>?, always: Boolean) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     // Not saveable: values never go into the saved instance state.
@@ -71,8 +75,11 @@ fun PendingApprovalCard(
     val shown = if (action == null) approval.inputs else emptyList()
     val missing = shown.any { !it.optional && values[it.name].isNullOrBlank() }
     val blocked = action != null && actionInputs == null && exeToken == null
+    // What a standing yes would cover; the server only offers it without inputs or an action.
+    val rule = approval.ruleLabel?.takeIf { action == null && approval.inputs.isEmpty() }
 
-    fun send(approve: Boolean) {
+    /** [always], with a yes, leaves a standing rule in the room for [rule]. */
+    fun send(approve: Boolean, always: Boolean = false) {
         if (busy) return
         busy = true
         progress = when {
@@ -86,7 +93,7 @@ fun PendingApprovalCard(
         scope.launch {
             try {
                 if (!approve) {
-                    decide(false, null)
+                    decide(false, null, false)
                     return@launch
                 }
                 val typed = approval.inputs.mapNotNull { input ->
@@ -100,7 +107,7 @@ fun PendingApprovalCard(
                 progress = R.string.approval_approving
                 val inputs = typed + done
                 try {
-                    decide(true, inputs.ifEmpty { null })
+                    decide(true, inputs.ifEmpty { null }, always && rule != null)
                 } finally {
                     // Sent once, then gone from here, whatever the answer.
                     values.clear()
@@ -188,6 +195,13 @@ fun PendingApprovalCard(
                     enabled = !busy,
                     shapes = ButtonDefaults.shapes(),
                 ) { Text(stringResource(R.string.room_deny)) }
+            }
+            rule?.let { covers ->
+                TextButton(onClick = { send(true, always = true) }, enabled = !busy, shapes = ButtonDefaults.shapes()) {
+                    Icon(Icons.Outlined.DoneAll, null, Modifier.size(ButtonDefaults.IconSize))
+                    Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                    Text(stringResource(R.string.room_always_approve, covers))
+                }
             }
         }
     }

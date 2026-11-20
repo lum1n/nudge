@@ -61,6 +61,7 @@
     <string name="panels_terminal_denied">Denied</string>
     <string name="panels_terminal_denied_by">by %1$s</string>
     <string name="panels_terminal_approved_by">approved by %1$s</string>
+    <string name="panels_terminal_approved_by_rule">approved automatically (rule by %1$s)</string>
 
     <!-- Connectors. -->
     <string name="panels_connectors">Connectors</string>

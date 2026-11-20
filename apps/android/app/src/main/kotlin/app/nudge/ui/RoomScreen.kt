@@ -158,8 +158,8 @@ fun RoomScreen(
                         state?.approvals?.filter { it.status == ApprovalStatus.PENDING }?.forEach { approval ->
                             Box(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
                                 // Its own errors show on the card, which stays to try again.
-                                PendingApprovalCard(approval, exeToken(), exeKey) { approve, inputs ->
-                                    client.decide(roomId, approval.id, approve, inputs)
+                                PendingApprovalCard(approval, exeToken(), exeKey) { approve, inputs, always ->
+                                    client.decide(roomId, approval.id, approve, inputs, always)
                                 }
                             }
                         }
@@ -373,6 +373,8 @@ private fun Timeline(
 @Composable
 private fun Activity(state: RoomState, loadEarlier: () -> Unit, openBrowser: () -> Unit) {
     val items = state.timeline.activity.asReversed()
+    // Approvals a standing rule approved, among those the room view has (ADR 31).
+    val auto = state.approvals.filter { it.auto }.map { it.id }.toSet()
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
@@ -386,7 +388,7 @@ private fun Activity(state: RoomState, loadEarlier: () -> Unit, openBrowser: () 
                 )
             }
         }
-        items(items, key = { it.itemId }) { item -> ActivityRow(item, openBrowser) }
+        items(items, key = { it.itemId }) { item -> ActivityRow(item, openBrowser, auto) }
         if (state.canLoadEarlier || state.loadingEarlier) {
             item(key = "earlier") {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {

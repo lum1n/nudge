@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -18,6 +20,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -30,6 +33,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -53,16 +57,20 @@ import java.text.DateFormat
 import java.util.Date
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import nudge.client.ObservedRoom
 import nudge.client.ObservedTerminal
 import nudge.client.TerminalCommand
 import nudge.client.TerminalState
+import nudge.client.observeRoomState
 import nudge.client.observeTerminal
+import nudge.ffi.Approval
 import nudge.ffi.NudgeClient
 import nudge.ffi.PanelStatus
 
 /**
  * The room's terminal, live: the commands the assistant runs in the room's sandboxed workspace,
- * their output as it comes, newest first, and Approve and Deny for those that wait.
+ * their output as it comes, newest first, and Approve and Deny for those that wait. The room's
+ * approvals say which can be approved always in the room, and which a standing rule approved.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -75,11 +83,19 @@ fun TerminalScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
     }
     val terminal by observed.collectAsStateWithLifecycle()
     val state = terminal?.state?.collectAsStateWithLifecycle()?.value ?: TerminalState()
+    val observedRoom = remember(client, roomId) { MutableStateFlow<ObservedRoom?>(null) }
+    DisposableEffect(client, roomId) {
+        val room = client.observeRoomState(roomId)
+        observedRoom.value = room
+        onDispose { room.close() }
+    }
+    val room by observedRoom.collectAsStateWithLifecycle()
+    val approvals = room?.state?.collectAsStateWithLifecycle()?.value?.approvals.orEmpty().associateBy { it.id }
     val scope = rememberCoroutineScope()
     var problem by remember { mutableStateOf<String?>(null) }
-    fun decide(approval: String, approve: Boolean) = scope.launch {
+    fun decide(approval: String, approve: Boolean, always: Boolean) = scope.launch {
         try {
-            client.decide(roomId, approval, approve)
+            client.decide(roomId, approval, approve, null, always)
             problem = null
         } catch (error: Exception) {
             problem = explain(error)
@@ -119,7 +135,9 @@ fun TerminalScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
                     (problem ?: state.error)?.let { item { Text(it, color = MaterialTheme.colorScheme.error) } }
                     // Newest first: what runs now is what one comes here for.
                     items(commands.asReversed(), key = { it.id }) { command ->
-                        CommandCard(command) { approve -> command.approval?.let { decide(it, approve) } }
+                        CommandCard(command, command.approval?.let(approvals::get)) { approve, always ->
+                            command.approval?.let { decide(it, approve, always) }
+                        }
                     }
                 }
             }
@@ -129,7 +147,7 @@ fun TerminalScreen(client: NudgeClient, roomId: String, close: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun CommandCard(command: TerminalCommand, decide: (Boolean) -> Unit) {
+private fun CommandCard(command: TerminalCommand, approval: Approval?, decide: (approve: Boolean, always: Boolean) -> Unit) {
     Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SelectionContainer {
@@ -140,7 +158,7 @@ private fun CommandCard(command: TerminalCommand, decide: (Boolean) -> Unit) {
                 )
             }
             Text(
-                statusLine(command),
+                statusLine(command, auto = approval?.auto == true),
                 style = MaterialTheme.typography.labelMedium,
                 color = when (command.status) {
                     "failed", "stopped" -> MaterialTheme.colorScheme.error
@@ -150,8 +168,16 @@ private fun CommandCard(command: TerminalCommand, decide: (Boolean) -> Unit) {
             )
             if (command.status == "waiting" && command.approval != null) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { decide(true) }, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.room_approve)) }
-                    OutlinedButton(onClick = { decide(false) }, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.room_deny)) }
+                    Button(onClick = { decide(true, false) }, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.room_approve)) }
+                    OutlinedButton(onClick = { decide(false, false) }, shapes = ButtonDefaults.shapes()) { Text(stringResource(R.string.room_deny)) }
+                }
+                // Once the room view has the approval: what a standing yes would cover.
+                approval?.ruleLabel?.takeIf { approval.inputs.isEmpty() && approval.clientAction == null }?.let { covers ->
+                    TextButton(onClick = { decide(true, true) }, shapes = ButtonDefaults.shapes()) {
+                        Icon(Icons.Outlined.DoneAll, null, Modifier.size(ButtonDefaults.IconSize))
+                        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                        Text(stringResource(R.string.room_always_approve, covers))
+                    }
                 }
             }
             if (command.output.isNotEmpty()) Output(command.output, follow = command.status == "running")
@@ -176,7 +202,8 @@ private fun Output(text: String, follow: Boolean) {
     }
 }
 
-private fun statusLine(command: TerminalCommand): String {
+/** [auto]: a standing rule approved it, set by `decidedBy`. */
+private fun statusLine(command: TerminalCommand, auto: Boolean): String {
     val state = when (command.status) {
         "waiting" -> text(R.string.panels_terminal_waiting)
         "running" -> text(R.string.panels_terminal_running)
@@ -187,7 +214,7 @@ private fun statusLine(command: TerminalCommand): String {
         else -> command.status
     }
     val decided = command.decidedBy?.let {
-        if (command.status == "denied") " " + text(R.string.panels_terminal_denied_by, it) else " · " + text(R.string.panels_terminal_approved_by, it)
+        if (command.status == "denied") " " + text(R.string.panels_terminal_denied_by, it) else " · " + text(if (auto) R.string.panels_terminal_approved_by_rule else R.string.panels_terminal_approved_by, it)
     } ?: ""
     val ending = command.ending?.let { ": $it" } ?: ""
     val time = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(command.startedAt.toLong()))

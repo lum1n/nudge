@@ -302,10 +302,13 @@ fun PendingRow(message: PendingMessage, retry: () -> Unit, dismiss: () -> Unit) 
     }
 }
 
-/** One thing in a room's activity: a nudge or watch that fired, an ended approval, or an answer's tools. */
+/**
+ * One thing in a room's activity: a nudge or watch that fired, an ended approval, or an answer's
+ * tools. [auto] has the ids of approvals a standing rule approved.
+ */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ActivityRow(item: TimelineItem, openBrowser: () -> Unit) {
+fun ActivityRow(item: TimelineItem, openBrowser: () -> Unit, auto: Set<String> = emptySet()) {
     when (item) {
         is TimelineItem.Nudge -> if (item.privateTo != null && item.text.isEmpty()) {
             PrivateLine(stringResource(R.string.room_nudge_for, "${item.privateTo?.displayName}"))
@@ -327,7 +330,7 @@ fun ActivityRow(item: TimelineItem, openBrowser: () -> Unit) {
             PrivateLine(stringResource(R.string.room_approval_for_ended, "${item.privateTo?.displayName}"))
         } else {
             // Ended: nothing left to decide.
-            ApprovalCard(item.summary, item.status, item.decidedBy) {}
+            ApprovalCard(item.summary, item.status, item.decidedBy, auto = item.approvalId in auto) {}
         }
         is TimelineItem.Answer -> Answer(item, openBrowser, openActivity = {})
         is TimelineItem.User, is TimelineItem.Marker -> {}
@@ -453,10 +456,13 @@ private fun Tool(tool: ToolPart) {
     }
 }
 
-/** An action the assistant wants to take, waiting for a member to approve it. */
+/**
+ * An action the assistant wants to take, waiting for a member to approve it. [auto]: a standing
+ * rule approved it, set by [decidedBy].
+ */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ApprovalCard(summary: String, status: ApprovalStatus, decidedBy: String?, decide: (Boolean) -> Unit) {
+fun ApprovalCard(summary: String, status: ApprovalStatus, decidedBy: String?, auto: Boolean = false, decide: (Boolean) -> Unit) {
     Surface(
         shape = MaterialTheme.shapes.extraLarge,
         color = if (status == ApprovalStatus.PENDING) {
@@ -493,8 +499,15 @@ fun ApprovalCard(summary: String, status: ApprovalStatus, decidedBy: String?, de
                     ApprovalStatus.DONE -> R.string.room_approved_done to R.string.room_approved_by_done
                     ApprovalStatus.FAILED, ApprovalStatus.PENDING -> R.string.room_approved_failed to R.string.room_approved_by_failed
                 }
+                // A standing rule only ever approves, as its owner.
+                val ruled = when (status) {
+                    ApprovalStatus.APPROVED -> R.string.room_approved_auto
+                    ApprovalStatus.DONE -> R.string.room_approved_auto_done
+                    ApprovalStatus.FAILED -> R.string.room_approved_auto_failed
+                    else -> null
+                }?.takeIf { auto }
                 Text(
-                    decidedBy?.let { stringResource(named, it) } ?: stringResource(plain),
+                    decidedBy?.let { stringResource(ruled ?: named, it) } ?: stringResource(plain),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -13,6 +13,7 @@ import androidx.compose.material.icons.outlined.Api
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.DesktopWindows
+import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Engineering
@@ -62,6 +63,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import nudge.client.ObservedRoom
 import nudge.client.observeRoomState
+import nudge.ffi.ApprovalRule
 import nudge.ffi.ModelMessage
 import nudge.ffi.ModelRole
 import nudge.ffi.NudgeClient
@@ -71,7 +73,8 @@ import nudge.ffi.RoomKind
 
 /**
  * About a room: its documents, connectors, MCP servers, browser, desktop and terminal, who is in it, what the
- * assistant remembers here, its nudges, which extensions it uses, and what the model saw. Opens in
+ * assistant remembers here, its nudges, what it approves without asking, which extensions it uses,
+ * and what the model saw. Opens in
  * the third pane, or full screen on a phone.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -98,6 +101,7 @@ fun RoomInfoScreen(
     val room by observed.collectAsStateWithLifecycle()
     val state = room?.state?.collectAsStateWithLifecycle()?.value
     var extensions by remember { mutableStateOf<List<RoomExtension>?>(null) }
+    var rules by remember { mutableStateOf<List<ApprovalRule>>(emptyList()) }
     var personal by remember { mutableStateOf<PersonalDetails?>(null) }
     var modelView by remember { mutableStateOf<List<ModelMessage>?>(null) }
     var newFact by remember { mutableStateOf("") }
@@ -115,6 +119,7 @@ fun RoomInfoScreen(
 
     LaunchedEffect(roomId) { run { extensions = client.roomExtensions(roomId) } }
     LaunchedEffect(roomId) { personal = runCatching { client.personal() }.getOrNull() }
+    LaunchedEffect(roomId) { run { rules = client.approvalRules(roomId) } }
 
     Scaffold(
         containerColor = groupedBackground(),
@@ -300,6 +305,40 @@ fun RoomInfoScreen(
                                     TextButton(onClick = { run { client.cancelNudge(nudge.id) } }) { Text(stringResource(R.string.room_cancel)) }
                                 },
                             ) { Text(nudge.message) }
+                        }
+                    },
+                )
+            }
+
+            // What the room approves without asking (ADR 31); anyone here may stop one.
+            if (rules.isNotEmpty()) {
+                group(
+                    text(R.string.room_info_always_approved),
+                    rules.map { rule ->
+                        { shapes ->
+                            SegmentedListItem(
+                                shapes = shapes,
+                                leadingContent = { Icon(Icons.Outlined.DoneAll, null) },
+                                supportingContent = {
+                                    Text(
+                                        stringResource(
+                                            R.string.room_info_always_approved_by,
+                                            rule.by.displayName,
+                                            DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(rule.createdAt.toLong())),
+                                        ),
+                                    )
+                                },
+                                trailingContent = {
+                                    IconButton(onClick = {
+                                        run {
+                                            client.forgetApprovalRule(roomId, rule.key)
+                                            rules = rules.filter { it.key != rule.key }
+                                        }
+                                    }) {
+                                        Icon(Icons.Outlined.Close, stringResource(R.string.room_info_always_approved_forget, rule.label))
+                                    }
+                                },
+                            ) { Text(rule.label.replaceFirstChar { it.uppercase() }) }
                         }
                     },
                 )

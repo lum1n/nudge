@@ -60,6 +60,7 @@
     <string name="panels_terminal_denied">Avslått</string>
     <string name="panels_terminal_denied_by">av %1$s</string>
     <string name="panels_terminal_approved_by">godkjent av %1$s</string>
+    <string name="panels_terminal_approved_by_rule">godkjent automatisk (regel satt av %1$s)</string>
 
     <!-- Connectors. -->
     <string name="panels_connectors">Koblinger</string>
