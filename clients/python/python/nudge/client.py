@@ -17,6 +17,7 @@ from typing import Generic, TypeVar
 from nudge import _ffi
 from nudge._ffi import (
     Approval,
+    ApprovalRule,
     ConnectionStatus,
     DevicePlatform,
     ExtensionSetup,
@@ -527,8 +528,19 @@ class Client:
         kind."""
         return await self.ffi.set_room_extension(room, extension, enabled)
 
-    async def decide(self, room: str, approval_id: str, approve: bool) -> Approval:
-        return await self.ffi.decide(room, approval_id, approve)
+    async def decide(
+        self, room: str, approval_id: str, approve: bool, *, always: bool = False
+    ) -> Approval:
+        """With `always` and a yes, also approves that kind of action (the approval's
+        `rule_label`) without asking from now on in the room."""
+        return await self.ffi.decide(room, approval_id, approve, None, always)
+
+    async def approval_rules(self, room: str) -> list[ApprovalRule]:
+        """What the room approves without asking, oldest first."""
+        return await self.ffi.approval_rules(room)
+
+    async def forget_approval_rule(self, room: str, key: str) -> None:
+        await self.ffi.forget_approval_rule(room, key)
 
     async def cancel_nudge(self, nudge_id: str) -> None:
         await self.ffi.cancel_nudge(nudge_id)
