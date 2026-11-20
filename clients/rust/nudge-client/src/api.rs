@@ -370,17 +370,36 @@ impl Api {
         approval: &str,
         approve: bool,
         inputs: Option<std::collections::HashMap<String, String>>,
+        always: bool,
     ) -> Result<Approval, ApiError> {
         // What's typed into an approval's inputs is only sent, with a yes.
         let body = DecideRequest {
             approve,
             inputs: inputs.filter(|_| approve),
+            always: always && approve,
         };
         self.request(
             Method::POST,
             &["rooms", room, "approvals", approval],
             &[],
             Some(&body),
+        )
+        .await
+    }
+
+    /// What the room approves without asking, oldest first.
+    pub async fn approval_rules(&self, room: &str) -> Result<ApprovalRulesResponse, ApiError> {
+        self.request(Method::GET, &["rooms", room, "approval-rules"], &[], NO_BODY)
+            .await
+    }
+
+    /// Stops approving `key` without asking in the room.
+    pub async fn forget_approval_rule(&self, room: &str, key: &str) -> Result<(), ApiError> {
+        self.request_empty(
+            Method::DELETE,
+            &["rooms", room, "approval-rules"],
+            &[("key", key)],
+            NO_BODY,
         )
         .await
     }

@@ -372,6 +372,37 @@ pub struct Approval {
         deserialize_with = "lenient_action"
     )]
     pub client_action: Option<ClientAction>,
+    /// Offered when the action may be approved always in the room: what that covers. Approve
+    /// with `always` to set it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rule: Option<ApprovalRuleOffer>,
+    /// Approved by a standing rule rather than by someone answering it; `decided_by` set it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto: Option<bool>,
+}
+
+/// What "always approve" would cover for an approval.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ApprovalRuleOffer {
+    pub label: String,
+}
+
+/// A standing yes in a room: approvals it covers run without asking, except in a turn that read
+/// untrusted data.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApprovalRule {
+    pub key: String,
+    /// What is always approved, such as "terminal commands that run git".
+    pub label: String,
+    pub by: Player,
+    pub created_at: f64,
+}
+
+/// `GET /rooms/<id>/approval-rules`, oldest first.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ApprovalRulesResponse {
+    pub rules: Vec<ApprovalRule>,
 }
 
 /// Something approving an approval takes, such as a password; the value is sent with the yes and
@@ -853,6 +884,9 @@ pub struct DecideRequest {
     /// The approval's inputs by name, when approving; ignored when denying. Never stored.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub inputs: Option<std::collections::HashMap<String, String>>,
+    /// With a yes, approve this kind of action without asking from now on in the room.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub always: bool,
 }
 
 /// A press on a tool's card (ADR 27); it reaches the room as the caller's message.

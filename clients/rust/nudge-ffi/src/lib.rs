@@ -947,21 +947,36 @@ impl NudgeClient {
     }
 
     /// Approves or denies. `inputs` are the approval's inputs by name, sent only with a yes and
-    /// never kept: clear the fields once it is sent.
-    #[uniffi::method(default(inputs = None))]
+    /// never kept: clear the fields once it is sent. `always`, with a yes on an approval that has
+    /// a `rule_label`, approves that kind of action without asking from then on in the room.
+    #[uniffi::method(default(inputs = None, always = false))]
     pub async fn decide(
         &self,
         room: String,
         approval_id: String,
         approve: bool,
         inputs: Option<HashMap<String, String>>,
+        always: bool,
     ) -> Result<Approval, NudgeError> {
         let api = self.client.api().clone();
         Ok(
-            run(async move { api.decide(&room, &approval_id, approve, inputs).await })
+            run(async move { api.decide(&room, &approval_id, approve, inputs, always).await })
                 .await?
                 .into(),
         )
+    }
+
+    /// What the room approves without asking, oldest first.
+    pub async fn approval_rules(&self, room: String) -> Result<Vec<ApprovalRule>, NudgeError> {
+        let api = self.client.api().clone();
+        let response = run(async move { api.approval_rules(&room).await }).await?;
+        Ok(response.rules.into_iter().map(Into::into).collect())
+    }
+
+    /// Stops approving `key` (an `ApprovalRule`'s) without asking in the room.
+    pub async fn forget_approval_rule(&self, room: String, key: String) -> Result<(), NudgeError> {
+        let api = self.client.api().clone();
+        Ok(run(async move { api.forget_approval_rule(&room, &key).await }).await?)
     }
 
     /// Presses `button` on the card tool call `call_id` showed (ADR 27). `values_json` is a JSON

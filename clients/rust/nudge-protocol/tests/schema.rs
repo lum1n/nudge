@@ -250,6 +250,10 @@ fn room_view() -> RoomView {
                 image: Some("ubuntu:24.04".into()),
                 ssh_key: Some("ssh-ed25519 AAAA nudge".into()),
             }),
+            rule: Some(ApprovalRuleOffer {
+                label: "payments".into(),
+            }),
+            auto: Some(true),
         }],
         memory: vec![Fact {
             id: "f1".into(),
@@ -506,6 +510,18 @@ fn http_bodies_match_the_schema() {
         &DecideRequest {
             approve: true,
             inputs: Some([("token".to_owned(), "s3cret".to_owned())].into()),
+            always: true,
+        },
+    );
+    check(
+        "ApprovalRulesResponse",
+        &ApprovalRulesResponse {
+            rules: vec![ApprovalRule {
+                key: "terminal/run/git".into(),
+                label: "terminal commands that run git".into(),
+                by: ann(),
+                created_at: 1.0,
+            }],
         },
     );
     check(

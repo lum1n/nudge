@@ -220,6 +220,35 @@ pub struct Approval {
     /// this client doesn't know, which can still be denied.
     #[uniffi(default = None)]
     pub client_action: Option<ClientAction>,
+    /// Set when it may be approved always in the room: what that covers, such as "terminal
+    /// commands that run git". Decide with `always` to set the rule.
+    #[uniffi(default = None)]
+    pub rule_label: Option<String>,
+    /// Approved by a standing rule rather than by someone answering it; `decided_by` set it.
+    #[uniffi(default = false)]
+    pub auto: bool,
+}
+
+/// A standing yes in a room: approvals it covers run without asking (`NudgeClient::approval_rules`).
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct ApprovalRule {
+    /// What `forget_approval_rule` takes.
+    pub key: String,
+    /// What is always approved, such as "terminal commands that run git".
+    pub label: String,
+    pub by: Player,
+    pub created_at: f64,
+}
+
+impl From<p::ApprovalRule> for ApprovalRule {
+    fn from(rule: p::ApprovalRule) -> Self {
+        ApprovalRule {
+            key: rule.key,
+            label: rule.label,
+            by: rule.by.into(),
+            created_at: rule.created_at,
+        }
+    }
 }
 
 /// Something approving an approval takes, such as a password.
@@ -786,6 +815,8 @@ impl From<p::Approval> for Approval {
                 })
                 .collect(),
             client_action: approval.client_action.map(Into::into),
+            rule_label: approval.rule.map(|rule| rule.label),
+            auto: approval.auto.unwrap_or(false),
         }
     }
 }
