@@ -40,6 +40,7 @@ import {
   useState,
 } from "react";
 import { clientFor, forgetToken, useConnection, useRoom, useRoomList } from "../../api.ts";
+import { AlwaysApproveButton } from "../../always-approve.tsx";
 import { decideWithInputs, inputsFilled, type InputValues } from "../../approval-inputs.ts";
 import { RoomAttachments, sizeLabel } from "../../attachments.ts";
 import { type Appearance, lookOf, NUDGE } from "../../avatar/appearance.ts";
@@ -255,6 +256,7 @@ function Room() {
             </Link>
           </div>
           <ApprovalsPanel approvals={view.approvals} />
+          <AlwaysApprovedPanel approvals={view.approvals} />
           <MemoryPanel view={view} />
           <LocationPanel view={view} />
           <PrivateValuesPanel />
@@ -1257,12 +1259,13 @@ function ApprovalRow({ approval }: { approval: Approval }) {
   // The app fills in what a client action needs; here there is nothing to type.
   const inputs = action === undefined ? (approval.inputs ?? []) : [];
 
-  async function decide(approve: boolean) {
+  /** `always`, with a yes, leaves a standing rule in the room (`approval.rule`). */
+  async function decide(approve: boolean, always = false) {
     setBusy(true);
     setError(undefined);
     try {
       await decideWithInputs(
-        (yes, given) => clientFor(assistant).api.decide(room, approval.id, yes, given),
+        (yes, given) => clientFor(assistant).api.decide(room, approval.id, yes, given, always),
         approve,
         inputs,
         values,
@@ -1277,7 +1280,7 @@ function ApprovalRow({ approval }: { approval: Approval }) {
 
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-baseline justify-between gap-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
         <span className="min-w-0 [overflow-wrap:anywhere]">{approval.summary}</span>
         {approval.status === "pending" ? (
           <span className="flex shrink-0 gap-2">
@@ -1291,6 +1294,13 @@ function ApprovalRow({ approval }: { approval: Approval }) {
                 {m.room.approvals.approve}
               </button>
             )}
+            {action === undefined && approval.rule !== undefined && (
+              <AlwaysApproveButton
+                rule={approval.rule.label}
+                disabled={busy || !inputsFilled(inputs, values)}
+                onClick={() => void decide(true, true)}
+              />
+            )}
             <button
               type="button"
               disabled={busy}
@@ -1303,7 +1313,11 @@ function ApprovalRow({ approval }: { approval: Approval }) {
         ) : (
           <span className="shrink-0 text-stone-500">
             {m.room.approvals.status[approval.status]}
-            {approval.decidedBy ? m.room.approvals.by(approval.decidedBy.displayName) : ""}
+            {approval.decidedBy
+              ? (approval.auto === true ? m.room.approvals.auto : m.room.approvals.by)(
+                  approval.decidedBy.displayName,
+                )
+              : ""}
           </span>
         )}
       </div>
@@ -1342,6 +1356,74 @@ function ApprovalRow({ approval }: { approval: Approval }) {
         ))}
       {error !== undefined && <p className="text-red-700">{error}</p>}
     </div>
+  );
+}
+
+/**
+ * What the room approves without asking, with who said so; hidden while nothing is. Loads again
+ * whenever an approval in the room is decided, since approving always is what adds a rule.
+ */
+function AlwaysApprovedPanel({ approvals }: { approvals: readonly Approval[] }) {
+  const { assistant, room } = Route.useParams();
+  const queryClient = useQueryClient();
+  const queryKey = useMemo(() => [assistant, "approval-rules", room], [assistant, room]);
+  const rules = useQuery({
+    queryKey,
+    queryFn: () => clientFor(assistant).api.approvalRules(room),
+  });
+  const [error, setError] = useState<string>();
+  const decided = approvals
+    .filter((item) => item.status !== "pending")
+    .map((item) => item.id)
+    .join(" ");
+  const seen = useRef(decided);
+  useEffect(() => {
+    if (seen.current === decided) return;
+    seen.current = decided;
+    void queryClient.invalidateQueries({ queryKey });
+  }, [decided, queryClient, queryKey]);
+
+  async function onForget(key: string) {
+    setError(undefined);
+    try {
+      await clientFor(assistant).api.forgetApprovalRule(room, key);
+    } catch (caught) {
+      setError((caught as Error).message);
+    }
+    await rules.refetch();
+  }
+
+  if ((rules.data ?? []).length === 0 && error === undefined) return null;
+  return (
+    <section className="flex flex-col gap-2 rounded border border-stone-200 bg-white p-3">
+      <h3 className="text-sm font-medium tracking-wide text-stone-500 uppercase">
+        {m.room.alwaysApproved.title}
+      </h3>
+      <ul className="flex flex-col gap-1">
+        {rules.data?.map((rule) => (
+          <li key={rule.key} className="flex items-baseline justify-between gap-2 text-sm">
+            <span className="min-w-0 [overflow-wrap:anywhere]">
+              {rule.label}
+              <span className="block text-xs text-stone-500">
+                {m.room.alwaysApproved.by(
+                  rule.by.displayName,
+                  new Date(rule.createdAt).toLocaleString(dateLocale()),
+                )}
+              </span>
+            </span>
+            <button
+              type="button"
+              title={m.room.alwaysApproved.forgetTitle(rule.label)}
+              onClick={() => void onForget(rule.key)}
+              className="shrink-0 text-stone-500 underline"
+            >
+              {m.room.alwaysApproved.forget}
+            </button>
+          </li>
+        ))}
+      </ul>
+      {error !== undefined && <p className="text-sm text-red-700">{error}</p>}
+    </section>
   );
 }
 

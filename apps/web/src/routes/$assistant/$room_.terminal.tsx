@@ -1,6 +1,7 @@
 import type { Approval } from "@nudge/client";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { AlwaysApproveButton } from "../../always-approve.tsx";
 import { clientFor, forgetToken, useRoom } from "../../api.ts";
 import { dateLocale, m } from "../../i18n/index.ts";
 import { type TerminalCommand, useTerminal } from "../../terminal.ts";
@@ -90,7 +91,11 @@ function CommandCard({ command, approval }: { command: TerminalCommand; approval
         <span className="shrink-0 text-xs text-stone-500">
           <span className={STATUS_CLASS[command.status]}>{label}</span>
           {command.decidedBy
-            ? ` · ${(command.status === "denied" ? words.deniedBy : words.approvedBy)(command.decidedBy)}`
+            ? ` · ${(command.status === "denied"
+                ? words.deniedBy
+                : approval?.auto === true
+                  ? words.approvedByRule
+                  : words.approvedBy)(command.decidedBy)}`
             : ""}
           {" · "}
           {new Date(command.startedAt).toLocaleTimeString(dateLocale())}
@@ -134,11 +139,12 @@ function Decide({ approval }: { approval: Approval }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
 
-  async function decide(approve: boolean) {
+  /** `always`, with a yes, leaves a standing rule in the room (`approval.rule`). */
+  async function decide(approve: boolean, always = false) {
     setBusy(true);
     setError(undefined);
     try {
-      await clientFor(assistant).api.decide(room, approval.id, approve);
+      await clientFor(assistant).api.decide(room, approval.id, approve, undefined, always);
     } catch (caught) {
       setError((caught as Error).message);
     } finally {
@@ -148,7 +154,7 @@ function Decide({ approval }: { approval: Approval }) {
 
   return (
     <div className="flex flex-col gap-1 border-b border-amber-300 bg-amber-50 px-3 py-2 text-sm">
-      <div className="flex items-baseline justify-between gap-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
         <span className="min-w-0 [overflow-wrap:anywhere]">{approval.summary}</span>
         <span className="flex shrink-0 gap-2">
           <button
@@ -159,6 +165,13 @@ function Decide({ approval }: { approval: Approval }) {
           >
             {m.room.approvals.approve}
           </button>
+          {approval.rule !== undefined && (
+            <AlwaysApproveButton
+              rule={approval.rule.label}
+              disabled={busy}
+              onClick={() => void decide(true, true)}
+            />
+          )}
           <button
             type="button"
             disabled={busy}

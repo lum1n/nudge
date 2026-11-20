@@ -9,6 +9,8 @@ import type {
   Appearance,
   AppearanceResponse,
   Approval,
+  ApprovalRule,
+  ApprovalRulesResponse,
   AssertResponse,
   AssistantsResponse,
   Attachment,
@@ -480,17 +482,39 @@ export class Api {
     return this.request("DELETE", `/ext/a2a/agents/${encodeURIComponent(id)}`);
   }
 
-  /** `inputs` are the approval's inputs by name, when approving; see `Approval.inputs`. */
+  /**
+   * `inputs` are the approval's inputs by name, when approving; see `Approval.inputs`. `always`,
+   * with a yes, also approves this kind of action in the room from now on; see `Approval.rule`.
+   */
   decide(
     room: string,
     approval: string,
     approve: boolean,
     inputs?: Readonly<Record<string, string>>,
+    always?: boolean,
   ): Promise<Approval> {
     return this.request("POST", `${roomPath(room)}/approvals/${encodeURIComponent(approval)}`, {
       approve,
       ...(inputs === undefined ? {} : { inputs }),
+      ...(always === true ? { always } : {}),
     });
+  }
+
+  /** What the room always approves without asking, oldest first. */
+  async approvalRules(room: string): Promise<ApprovalRule[]> {
+    const response = await this.request<ApprovalRulesResponse>(
+      "GET",
+      `${roomPath(room)}/approval-rules`,
+    );
+    return response.rules;
+  }
+
+  /** Stops always approving what the rule `key` covers in the room; it asks again. */
+  forgetApprovalRule(room: string, key: string): Promise<void> {
+    return this.request(
+      "DELETE",
+      `${roomPath(room)}/approval-rules?key=${encodeURIComponent(key)}`,
+    );
   }
 
   /**

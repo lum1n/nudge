@@ -155,6 +155,7 @@ export const panels = {
     },
     exit: (code: number) => `exit ${code}`,
     approvedBy: (name: string) => `approved by ${name}`,
+    approvedByRule: (name: string) => `approved automatically (rule by ${name})`,
     deniedBy: (name: string) => `denied by ${name}`,
   },
   connectors: {

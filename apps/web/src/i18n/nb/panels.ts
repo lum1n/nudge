@@ -156,6 +156,7 @@ export const panels: Messages["panels"] = {
     },
     exit: (code: number) => `avslutningskode ${code}`,
     approvedBy: (name: string) => `godkjent av ${name}`,
+    approvedByRule: (name: string) => `godkjent automatisk (regel satt av ${name})`,
     deniedBy: (name: string) => `avslått av ${name}`,
   },
   connectors: {

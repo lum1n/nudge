@@ -111,7 +111,7 @@ describe("nudge chat, in this process", () => {
     await type("/memory forget nope", "  ! No fact nope here");
     await type("/memory wipe", "  Usage: /memory add <text> | /memory forget <id>");
     await type("/nudges cancel nope", "  ! No nudge nope here");
-    await type("/approve", "  Usage: /approve <id> | /deny <id>");
+    await type("/approve", "  Usage: /approve <id> | /always <id> | /deny <id>");
     await type("/extensions on nope", "  ! ");
 
     await type("/private Blue Door 17", /will see (\S+) instead\./);

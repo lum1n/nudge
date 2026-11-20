@@ -34,7 +34,7 @@ const HELP =
   "/nudges lists scheduled nudges, /nudges cancel <id> cancels one, " +
   "/memory lists what the assistant remembers here, /memory add <text> and /memory forget <id> " +
   "change it, /approvals lists actions waiting for approval, /approve <id> and /deny <id> " +
-  "decide one, /extensions lists the extensions and whether they are on here, " +
+  "decide one, /always <id> approves one and that kind of action from then on here, /extensions lists the extensions and whether they are on here, " +
   "/extensions on|off|default <name> changes one, /connectors lists the APIs this room can " +
   "call, /connector-key <id> sets one's API key, /connector-first <id> on|off [use for] has " +
   "the assistant try one first, before anything else, for what it's for, /quit leaves.";
@@ -72,8 +72,12 @@ export async function chat(options: ChatOptions): Promise<void> {
     );
     for (const approval of waiting.reverse()) {
       announced.add(approval.id);
+      const always =
+        approval.rule === undefined
+          ? ""
+          : `, /always ${approval.id} to always approve ${approval.rule.label} here,`;
       console.log(
-        `  ? ${describeApproval(approval)} — /approve ${approval.id} or /deny ${approval.id}`,
+        `  ? ${describeApproval(approval)} — /approve ${approval.id}${always} or /deny ${approval.id}`,
       );
     }
     return waiting.length > 0;
@@ -205,18 +209,20 @@ export async function chat(options: ChatOptions): Promise<void> {
       } else if (line === "/approvals") {
         if (now().approvals.length === 0) console.log("  Nothing to approve here.");
         for (const approval of now().approvals) console.log(`  ${describeApproval(approval)}`);
-      } else if (/^\/(approve|deny)(\s|$)/.test(line)) {
-        const [, verb, id] = /^\/(approve|deny)\s+(\S+)$/.exec(line) ?? [];
+      } else if (/^\/(approve|deny|always)(\s|$)/.test(line)) {
+        const [, verb, id] = /^\/(approve|deny|always)\s+(\S+)$/.exec(line) ?? [];
         const asked = now().approvals.find((approval) => approval.id === id);
-        if (id === undefined) console.log("  Usage: /approve <id> | /deny <id>");
-        else if (verb === "approve" && asked?.clientAction !== undefined)
+        if (id === undefined) console.log("  Usage: /approve <id> | /always <id> | /deny <id>");
+        else if (verb !== "deny" && asked?.clientAction !== undefined)
           console.log(`  ${id} runs on your phone: approve it in the Nudge app.`);
-        else if (verb === "approve" && (asked?.inputs?.length ?? 0) > 0)
+        else if (verb !== "deny" && (asked?.inputs?.length ?? 0) > 0)
           console.log(
             `  ${id} asks for something to type in: approve it in the app or on the web.`,
           );
+        else if (verb === "always" && asked !== undefined && asked.rule === undefined)
+          console.log(`  ${id} can't be always approved; /approve ${id} approves it this once.`);
         else {
-          const decided = await session.decide(id, verb === "approve");
+          const decided = await session.decide(id, verb !== "deny", verb === "always");
           await shown((view) =>
             view.approvals.some((approval) => approval.id === id && approval.status !== "pending"),
           );

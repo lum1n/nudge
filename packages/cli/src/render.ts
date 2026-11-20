@@ -12,7 +12,12 @@ const bold = (text: string) => `\x1b[1m${text}\x1b[22m`;
 
 /** `a3 pending  Send a mail to Ann`, with who decided and what came of it once decided. */
 export function describeApproval(approval: Approval): string {
-  const who = approval.decidedBy === undefined ? "" : ` by ${approval.decidedBy.displayName}`;
+  const who =
+    approval.decidedBy === undefined
+      ? ""
+      : approval.auto === true
+        ? ` automatically (${approval.decidedBy.displayName}'s rule)`
+        : ` by ${approval.decidedBy.displayName}`;
   const result = approval.result === undefined ? "" : ` → ${approval.result.split("\n")[0]}`;
   return `${approval.id} ${approval.status}${who}  ${approval.summary}${result}`;
 }

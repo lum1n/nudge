@@ -1,4 +1,4 @@
-import { BACKGROUND_CONTEXT, createNudge, type Nudge } from "@nudge/core";
+import { BACKGROUND_CONTEXT, createNudge, type Nudge, requestApproval } from "@nudge/core";
 import { createModels, fauxAssistantMessage, fauxProvider } from "@nudge/core/testing";
 import { RoomView, ServerFrame } from "@nudge/protocol";
 import { RoomProjector } from "@nudge/protocol/project";
@@ -230,6 +230,38 @@ describe("NudgeClient against a server", () => {
     await eventually(() => !listed());
     await expect(client.api.deleteRoom("lobby")).rejects.toMatchObject({ status: 403 });
     rooms.release();
+  });
+
+  it("approves always, lists the room's rules and forgets one", async () => {
+    const { client } = clientFor(annToken);
+    expect(await client.api.approvalRules("trip")).toEqual([]);
+    const ruled = await nudge.harness.commit(
+      (tx) =>
+        requestApproval(
+          tx,
+          "trip",
+          {
+            extension: "test",
+            kind: "pay",
+            summary: "Pay 20 kr",
+            payload: { amount: 20 },
+            rule: { key: "kiosk", label: "payments at the kiosk" },
+          },
+          Date.now(),
+        ),
+      context,
+    );
+    const approved = await client.api.decide("trip", ruled.id, true, undefined, true);
+    expect(approved).toMatchObject({ rule: { label: "payments at the kiosk" } });
+    const rules = await client.api.approvalRules("trip");
+    expect(rules).toMatchObject([
+      { key: "test/pay/kiosk", label: "payments at the kiosk", by: { id: "ann" } },
+    ]);
+    await client.api.forgetApprovalRule("trip", rules[0]!.key);
+    expect(await client.api.approvalRules("trip")).toEqual([]);
+    await expect(client.api.forgetApprovalRule("trip", "test/pay/kiosk")).rejects.toMatchObject({
+      status: 404,
+    });
   });
 
   it("loads earlier items back to the start, joining the room view", async () => {

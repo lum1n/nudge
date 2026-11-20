@@ -131,6 +131,9 @@ export const room = {
     title: "Waiting for approval",
     approve: "Approve",
     deny: "Deny",
+    alwaysApprove: "Always approve",
+    /** On the Always approve button, with what the rule covers, as the server says it. */
+    alwaysApproveTitle: (rule: string) => `Always approve ${rule} in this room`,
     status: {
       pending: "pending",
       approved: "approved",
@@ -139,9 +142,17 @@ export const room = {
       failed: "failed",
     },
     by: (name: string) => ` by ${name}`,
+    /** After "approved", when a standing rule approved it rather than someone answering. */
+    auto: (name: string) => ` automatically (rule by ${name})`,
     optional: " (optional)",
     openAppToLaunch: (vm: string) => `Open the Nudge app on your phone to launch the VM ${vm}.`,
     openAppToDelete: (vm: string) => `Open the Nudge app on your phone to delete the VM ${vm}.`,
+  },
+  alwaysApproved: {
+    title: "Always approved",
+    by: (name: string, when: string) => `${name} · ${when}`,
+    forget: "Remove",
+    forgetTitle: (rule: string) => `Ask again before ${rule}`,
   },
   memory: {
     title: "Memory",

@@ -42,7 +42,8 @@ export interface ChatSession {
   remember(text: string): Promise<Fact>;
   forget(id: string): Promise<void>;
   /** Approves or denies one; an approved action runs before this resolves. */
-  decide(id: string, approve: boolean): Promise<Approval>;
+  /** `always`, with a yes, approves that kind of action without asking from now on here. */
+  decide(id: string, approve: boolean, always?: boolean): Promise<Approval>;
   extensions(): Promise<RoomExtension[]>;
   /** On, off, or with `undefined` back to the default for the room's kind. */
   setExtension(name: string, enabled: boolean | undefined): Promise<RoomExtension>;
@@ -231,9 +232,14 @@ class LocalSession implements ChatSession {
       throw new UsageError(`No fact ${id} here`);
   }
 
-  async decide(id: string, approve: boolean): Promise<Approval> {
+  async decide(id: string, approve: boolean, always = false): Promise<Approval> {
     const by = { playerId: this.author.playerId, displayName: this.author.displayName };
-    const approval = await this.nudge.approvals.decide(this.room.id, id, { approve, by }, context);
+    const approval = await this.nudge.approvals.decide(
+      this.room.id,
+      id,
+      { approve, by, ...(always ? { always: true } : {}) },
+      context,
+    );
     return this.hubs.viewer(this.author.playerId).strings(toApproval(approval));
   }
 
@@ -422,8 +428,8 @@ class RemoteSession implements ChatSession {
     await this.notFound(this.client.api.forget(this.room, id), `No fact ${id} here`);
   }
 
-  decide(id: string, approve: boolean): Promise<Approval> {
-    return this.client.api.decide(this.room, id, approve);
+  decide(id: string, approve: boolean, always = false): Promise<Approval> {
+    return this.client.api.decide(this.room, id, approve, undefined, always);
   }
 
   extensions(): Promise<RoomExtension[]> {

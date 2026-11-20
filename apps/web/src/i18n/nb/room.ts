@@ -121,6 +121,8 @@ export const room: Messages["room"] = {
     title: "Venter på godkjenning",
     approve: "Godkjenn",
     deny: "Avslå",
+    alwaysApprove: "Godkjenn alltid",
+    alwaysApproveTitle: (rule) => `Godkjenn alltid ${rule} i dette rommet`,
     status: {
       pending: "venter",
       approved: "godkjent",
@@ -129,9 +131,16 @@ export const room: Messages["room"] = {
       failed: "mislyktes",
     },
     by: (name) => ` av ${name}`,
+    auto: (name) => ` automatisk (regel satt av ${name})`,
     optional: " (valgfritt)",
     openAppToLaunch: (vm) => `Åpne Nudge-appen på telefonen for å starte VM-en ${vm}.`,
     openAppToDelete: (vm) => `Åpne Nudge-appen på telefonen for å slette VM-en ${vm}.`,
+  },
+  alwaysApproved: {
+    title: "Alltid godkjent",
+    by: (name, when) => `${name} · ${when}`,
+    forget: "Fjern",
+    forgetTitle: (rule) => `Spør igjen før ${rule}`,
   },
   memory: {
     title: "Minne",
