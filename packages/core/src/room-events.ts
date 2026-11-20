@@ -49,6 +49,7 @@ const APPROVALS = "nudge.approvals";
  */
 export class RoomEvents {
   private readonly listeners = new Set<RoomEventListener>();
+  private readonly covered = new Set<(roomId: string, approval: Readonly<Approval>) => void>();
   private rooms = new Map<number, string>();
   /** Per conversation: the answer's text so far and what it answers. */
   private readonly answers = new Map<
@@ -159,9 +160,35 @@ export class RoomEvents {
     const seen = this.pending.get(roomId) ?? new Set<string>();
     const now = state === null ? new Set<string>() : pendingIds(state);
     this.pending.set(roomId, now);
-    return (state?.items ?? [])
-      .filter((approval) => approval.status === "pending" && !seen.has(approval.id))
+    const fresh = (state?.items ?? []).filter(
+      (approval) => approval.status === "pending" && !seen.has(approval.id),
+    );
+    // One a standing rule covers is approved at once, not announced; see `onCovered`.
+    for (const approval of fresh.filter((item) => item.autoBy !== undefined))
+      for (const listener of this.covered) {
+        try {
+          listener(roomId, structuredClone(approval));
+        } catch (error) {
+          this.report(error);
+        }
+      }
+    return fresh
+      .filter((approval) => approval.autoBy === undefined)
       .map((approval) => ({ type: "approval", roomId, approval: structuredClone(approval) }));
+  }
+
+  /**
+   * Hears of new approvals a standing rule covers, which aren't announced as events. Whoever
+   * approves them hands one back to `announce` when that fails, so people are asked after all.
+   */
+  onCovered(listener: (roomId: string, approval: Readonly<Approval>) => void): () => void {
+    this.covered.add(listener);
+    return () => this.covered.delete(listener);
+  }
+
+  /** Announces an approval people must decide after all, as when its rule could not approve it. */
+  announce(roomId: string, approval: Readonly<Approval>): void {
+    this.emit({ type: "approval", roomId, approval: structuredClone(approval) });
   }
 
   private emit(event: RoomEvent): void {

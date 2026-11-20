@@ -297,6 +297,17 @@ export class Nudge {
     this.spending = parts.spending;
     this.timeZone = parts.timeZone;
     this.events.subscribe((event) => this.deliver(event));
+    // Approvals a standing rule covers run at once; people are asked when that fails.
+    this.events.onCovered((roomId, approval) => {
+      void this.approvals
+        .approveByRule(roomId, approval.id, BACKGROUND_CONTEXT)
+        .then(async (ran) => {
+          if (ran) return;
+          const now = await this.approvals.get(roomId, approval.id, BACKGROUND_CONTEXT);
+          if (now?.status === "pending") this.events.announce(roomId, now);
+        })
+        .catch(this.report);
+    });
     this.players = new Players(harness, now);
     const changed = (change: Change) => this.changes.emit(change);
     this.profiles = new Profiles(

@@ -2,6 +2,7 @@ import { cardOf } from "@nudge/core/ui-card";
 import {
   addressOf,
   type Approval as CoreApproval,
+  type ApprovalRule as CoreApprovalRule,
   type ApprovalEntryData,
   type ConversationView,
   type EntryRecord,
@@ -20,6 +21,7 @@ import {
 import type {
   Appearance,
   Approval,
+  ApprovalRule,
   Attachment,
   Fact,
   RoomListNudge,
@@ -652,7 +654,13 @@ export function toApproval(approval: CoreApproval): Approval {
       ? {}
       : { inputs: approval.inputs.map((input) => ({ ...input })) }),
     ...(approval.clientAction === undefined ? {} : { clientAction: { ...approval.clientAction } }),
+    ...(approval.rule === undefined ? {} : { rule: { label: approval.rule.label } }),
+    ...(approval.auto === true ? { auto: true } : {}),
   };
+}
+
+export function toApprovalRule(rule: CoreApprovalRule): ApprovalRule {
+  return { key: rule.key, label: rule.label, by: player(rule.by), createdAt: rule.createdAt };
 }
 
 function player(owner: { readonly playerId: string; readonly displayName: string }): Player {

@@ -18,6 +18,7 @@ import {
   ATTACHMENT_MAX_BYTES,
   ATTACHMENTS_PER_MESSAGE,
   CLOSE,
+  ApprovalRulesResponse,
   ErrorResponse,
   ExtensionSetupsResponse,
   MeResponse,
@@ -550,6 +551,40 @@ describe("v1 HTTP", () => {
       body: { approve: true },
     });
     expect(again.status).toBe(409);
+
+    // Approving always sets a rule the room lists and anyone in it may forget.
+    const ruled = await nudge.harness.commit(
+      (tx) =>
+        requestApproval(
+          tx,
+          "trip",
+          {
+            extension: "test",
+            kind: "pay",
+            summary: "Pay 20 kr",
+            payload: { amount: 20 },
+            rule: { key: "kiosk", label: "payments at the kiosk" },
+          },
+          Date.now(),
+        ),
+      context,
+    );
+    const always = await call("POST", `/rooms/trip/approvals/${ruled.id}`, {
+      token: tokens.Ann,
+      body: { approve: true, always: true },
+    });
+    expect(always.json).toMatchObject({ rule: { label: "payments at the kiosk" } });
+    const rules = await call("GET", "/rooms/trip/approval-rules", { token: tokens.Bo });
+    expect(rules.json).toMatchObject({
+      rules: [{ key: "test/pay/kiosk", label: "payments at the kiosk", by: { id: "ann" } }],
+    });
+    expect(Value.Check(ApprovalRulesResponse, rules.json)).toBe(true);
+    const forget = (key: string) =>
+      call("DELETE", `/rooms/trip/approval-rules?key=${encodeURIComponent(key)}`, {
+        token: tokens.Bo,
+      });
+    expect((await forget("test/pay/kiosk")).status).toBe(204);
+    expect((await forget("test/pay/kiosk")).status).toBe(404);
 
     const scheduled = await nudge.nudges.schedule(
       "trip",

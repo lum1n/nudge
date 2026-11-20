@@ -76,12 +76,38 @@ export type Approval = {
   inputs?: ApprovalInput[];
   /** What the app does before it approves. */
   clientAction?: ClientAction;
+  /** What "always approve" would remember for it, when the extension offers that. */
+  rule?: ApprovalRuleOffer;
+  /**
+   * Set when it was asked for in a trusted turn and a standing rule covers it: the rule's owner,
+   * as whom the host approves it at once instead of asking.
+   */
+  autoBy?: Owner;
+  /** Approved by a standing rule, not by someone answering it. */
+  auto?: true;
+};
+
+/** What "always approve" remembers: a key that later approvals match, and how people see it. */
+export type ApprovalRuleOffer = {
+  /** `extension/kind`, or `extension/kind/narrower` when the extension narrows it. */
+  key: string;
+  /** What people are told is always approved, such as "terminal commands that start with git". */
+  label: string;
+};
+
+/** A standing yes in one room: approvals with its key run without asking (but see `requestApproval`). */
+export type ApprovalRule = ApprovalRuleOffer & {
+  /** Who said always; the approvals it covers are approved as them. */
+  by: Owner;
+  createdAt: number;
 };
 
 export type ApprovalsState = {
   /** Oldest first: pending ones and the most recent decided ones. */
   items: Approval[];
   next: number;
+  /** Standing rules, oldest first. Absent in rooms that never had one. */
+  rules?: ApprovalRule[];
 };
 
 /** Actions waiting for a person in the room to approve them, keyed by room id. */
@@ -123,6 +149,13 @@ export type ApprovalDraft = {
    * loop, gives back the one waiting instead of another.
    */
   readonly once?: boolean;
+  /**
+   * Offers "always approve" for this kind of action in the room. Approvals with the same key are
+   * then approved without asking, unless the turn asking read untrusted data (ADR 20). `key`
+   * narrows it within `extension/kind`, such as by MCP server and tool; `label` says what is
+   * always approved. Ignored for approvals that take inputs or a client action.
+   */
+  readonly rule?: { readonly key?: string; readonly label: string };
 };
 
 /** What an approved action's handler gets. */
@@ -234,14 +267,38 @@ export async function requestApproval(
     }));
   }
   if (draft.clientAction !== undefined) approval.clientAction = structuredClone(draft.clientAction);
+  if (
+    draft.rule !== undefined &&
+    approval.inputs === undefined &&
+    approval.clientAction === undefined
+  ) {
+    const narrower = draft.rule.key?.trim();
+    approval.rule = {
+      key: ruleKey(draft.extension, draft.kind, narrower),
+      label: redact(draft.rule.label.trim() || `${draft.extension}: ${draft.kind}`),
+    };
+    // A turn that read what strangers wrote could have been steered into asking: it asks.
+    const standing = state.rules?.find((rule) => rule.key === approval.rule?.key);
+    if (standing !== undefined && (turn.untrusted ?? []).length === 0)
+      approval.autoBy = { playerId: standing.by.playerId, displayName: standing.by.displayName };
+  }
   state.next += 1;
   state.items.push(structuredClone(approval));
   return approval;
 }
 
-/** Drops every approval of a room inside a commit, for a room being deleted. */
+/** The key of a rule: `extension/kind`, then the extension's narrower key, if any. */
+export function ruleKey(extension: string, kind: string, narrower?: string): string {
+  return narrower === undefined || narrower === ""
+    ? `${extension}/${kind}`
+    : `${extension}/${kind}/${narrower}`;
+}
+
+/** Drops every approval and rule of a room inside a commit, for a room being deleted. */
 export async function purgeRoomApprovals(tx: Tx, roomId: string): Promise<void> {
-  (await tx.doc(ApprovalsDoc, roomId, null)).items = [];
+  const state = await tx.doc(ApprovalsDoc, roomId, null);
+  state.items = [];
+  delete state.rules;
 }
 
 export class ApprovalNotFound extends Error {
@@ -264,9 +321,13 @@ export class MissingInputs extends Error {
 
 export type Decision = {
   readonly approve: boolean;
+  /** With a yes, also approve the approval's kind from now on in the room (its `rule`). */
+  readonly always?: boolean;
   readonly by: { readonly playerId: string; readonly displayName: string };
   /** The approval's inputs by name, when approving. Others are dropped. */
   readonly inputs?: Readonly<Record<string, string>>;
+  /** Approved by a standing rule (`approveByRule`), not by someone answering it. */
+  readonly auto?: boolean;
 };
 
 const INPUT_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -324,9 +385,10 @@ export class Approvals {
     const room = await this.rooms.get(roomId, context);
     if (room === undefined) throw new Error(`No room "${roomId}"`);
     const by = { playerId: decision.by.playerId, displayName: decision.by.displayName };
+    const auto = decision.auto === true;
     const admin = await this.isAdmin(by.playerId, context);
     let inputs: Record<string, string> = {};
-    const decided = await this.update(roomId, id, context, (item) => {
+    const decided = await this.update(roomId, id, context, (item, state) => {
       if (item.privateTo !== undefined && item.privateTo.playerId !== by.playerId)
         throw new ApprovalNotFound(`No approval ${id} in room "${roomId}"`);
       if (item.status !== "pending") throw new AlreadyDecided(`Approval ${id} is ${item.status}`);
@@ -336,6 +398,14 @@ export class Approvals {
       item.status = decision.approve ? "approved" : "denied";
       item.decidedBy = by;
       item.decidedAt = this.now();
+      delete item.autoBy;
+      if (auto) item.auto = true;
+      if (decision.approve && decision.always === true && item.rule !== undefined) {
+        const rule = item.rule;
+        const rules = (state.rules ?? []).filter((stored) => stored.key !== rule.key);
+        rules.push({ key: rule.key, label: rule.label, by, createdAt: this.now() });
+        state.rules = rules;
+      }
     });
     if (!decision.approve) {
       const denied = this.denial(decided.extension, decided.kind);
@@ -369,14 +439,58 @@ export class Approvals {
   }
 
   /**
+   * Approves a pending approval a standing rule covers (`autoBy`), as the rule's owner. When that
+   * fails, as when they are no longer an admin, the approval stays pending for people to decide;
+   * the rule stays too. Returns whether it ran.
+   */
+  async approveByRule(roomId: string, id: string, context: Context): Promise<boolean> {
+    const item = await this.get(roomId, id, context);
+    if (item?.status !== "pending" || item.autoBy === undefined) return false;
+    try {
+      await this.decide(roomId, id, { approve: true, by: item.autoBy, auto: true }, context);
+      return true;
+    } catch (error) {
+      if (!(error instanceof AlreadyDecided)) this.report(error);
+      // People decide it, so it says no more that a rule covers it.
+      await this.update(roomId, id, context, (stored) => {
+        delete stored.autoBy;
+      }).catch(this.report);
+      return false;
+    }
+  }
+
+  /** The room's standing rules, oldest first. */
+  async rules(roomId: string, context: Context): Promise<ApprovalRule[]> {
+    const state = await this.harness.snapshot(ApprovalsDoc, roomId, context);
+    return (state?.rules ?? []).map((rule) => JSON.parse(JSON.stringify(rule)) as ApprovalRule);
+  }
+
+  /** Stops approving `key` without asking in the room. Returns whether there was such a rule. */
+  async forgetRule(roomId: string, key: string, context: Context): Promise<boolean> {
+    const forgot = await this.harness.commit(async (tx) => {
+      const state = await tx.doc(ApprovalsDoc, roomId, null);
+      const rules = state.rules ?? [];
+      const kept = rules.filter((rule) => rule.key !== key);
+      if (kept.length === rules.length) return false;
+      if (kept.length === 0) delete state.rules;
+      else state.rules = kept;
+      return true;
+    }, context);
+    if (forgot) this.changed({ kind: "approvals", roomId });
+    return forgot;
+  }
+
+  /**
    * Approved actions that never finished, say because the host stopped mid-way, may or may not
-   * have happened; they are marked failed rather than run again. Runs at open.
+   * have happened; they are marked failed rather than run again. Pending ones a rule covers, left
+   * when the host stopped before approving them, are approved now. Runs at open.
    */
   async recover(context: Context): Promise<void> {
     for (const room of await this.rooms.list(context)) {
-      const stuck = (await readItems(this.harness, room.id, context)).filter(
-        (item) => item.status === "approved",
-      );
+      const items = await readItems(this.harness, room.id, context);
+      for (const item of items.filter((stored) => stored.status === "pending" && stored.autoBy))
+        await this.approveByRule(room.id, item.id, context);
+      const stuck = items.filter((item) => item.status === "approved");
       for (const item of stuck) {
         const failed = await this.update(room.id, item.id, context, (stored) => {
           stored.status = "failed";
@@ -441,7 +555,7 @@ export class Approvals {
     roomId: string,
     id: string,
     context: Context,
-    change: (item: Approval) => void,
+    change: (item: Approval, state: ApprovalsState) => void,
     /** More to change in the same commit. */
     also?: (tx: Tx) => Promise<void>,
   ): Promise<Approval> {
@@ -450,7 +564,7 @@ export class Approvals {
       const state = await tx.doc(ApprovalsDoc, roomId, null);
       const item = state.items.find((stored) => stored.id === id);
       if (item === undefined) throw new ApprovalNotFound(`No approval ${id} in room "${roomId}"`);
-      change(item);
+      change(item, state);
       const decided = state.items.filter((stored) => stored.status !== "pending");
       for (const old of decided.slice(0, Math.max(0, decided.length - KEEP_DECIDED)))
         state.items.splice(state.items.indexOf(old), 1);
@@ -472,7 +586,10 @@ export class Approvals {
       context,
     );
     if (conversation === undefined) return;
-    const who = approval.decidedBy?.displayName ?? "nobody";
+    const who =
+      approval.auto === true
+        ? `${approval.decidedBy?.displayName ?? "Someone"}'s standing rule (always approve ${approval.rule?.label ?? "this"})`
+        : (approval.decidedBy?.displayName ?? "nobody");
     const result =
       untrusted === undefined || approval.result === undefined
         ? (approval.result ?? "")

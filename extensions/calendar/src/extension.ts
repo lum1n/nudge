@@ -231,6 +231,10 @@ export function calendarExtension(options: CalendarOptions = {}) {
                     `Add "${args.title}" to the calendar ${calendar.name}: ${when(event, timeZone)}` +
                     (args.location === undefined ? "" : ` at ${args.location}`),
                   payload: payload as never,
+                  rule: {
+                    key: calendar.url,
+                    label: `adding events to the calendar ${calendar.name}`,
+                  },
                 },
                 host.now(),
               ),
@@ -286,6 +290,10 @@ export function calendarExtension(options: CalendarOptions = {}) {
                     `Remove "${event.title}" (${when(event, timeZone)}${event.recurring ? ", and every repeat" : ""}) ` +
                     `from the calendar ${calendar.name}`,
                   payload: payload as never,
+                  rule: {
+                    key: calendar.url,
+                    label: `removing events from the calendar ${calendar.name}`,
+                  },
                 },
                 host.now(),
               ),

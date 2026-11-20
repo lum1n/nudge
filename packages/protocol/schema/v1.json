@@ -2662,6 +2662,107 @@
               }
             }
           ]
+        },
+        "rule": {
+          "type": "object",
+          "required": [
+            "label"
+          ],
+          "properties": {
+            "label": {
+              "type": "string"
+            }
+          }
+        },
+        "auto": {
+          "type": "boolean"
+        }
+      }
+    },
+    "ApprovalRule": {
+      "type": "object",
+      "required": [
+        "key",
+        "label",
+        "by",
+        "createdAt"
+      ],
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "by": {
+          "type": "object",
+          "required": [
+            "id",
+            "displayName"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "displayName": {
+              "type": "string"
+            },
+            "address": {
+              "type": "string"
+            }
+          }
+        },
+        "createdAt": {
+          "type": "number"
+        }
+      }
+    },
+    "ApprovalRulesResponse": {
+      "type": "object",
+      "required": [
+        "rules"
+      ],
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "key",
+              "label",
+              "by",
+              "createdAt"
+            ],
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "by": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "displayName"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "type": "string"
+                  },
+                  "address": {
+                    "type": "string"
+                  }
+                }
+              },
+              "createdAt": {
+                "type": "number"
+              }
+            }
+          }
         }
       }
     },
@@ -3661,6 +3762,20 @@
                     }
                   }
                 ]
+              },
+              "rule": {
+                "type": "object",
+                "required": [
+                  "label"
+                ],
+                "properties": {
+                  "label": {
+                    "type": "string"
+                  }
+                }
+              },
+              "auto": {
+                "type": "boolean"
               }
             }
           }
@@ -5436,6 +5551,20 @@
                                 }
                               }
                             ]
+                          },
+                          "rule": {
+                            "type": "object",
+                            "required": [
+                              "label"
+                            ],
+                            "properties": {
+                              "label": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "auto": {
+                            "type": "boolean"
                           }
                         }
                       }
@@ -8453,6 +8582,9 @@
               "maxLength": 16384
             }
           }
+        },
+        "always": {
+          "type": "boolean"
         }
       }
     },
@@ -10115,6 +10247,178 @@
         }
       }
     },
+    "ServerModel": {
+      "type": "object",
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "ServerModelProvider": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "models",
+        "key"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "name"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "key": {
+          "type": "object",
+          "required": [
+            "provider",
+            "source"
+          ],
+          "properties": {
+            "provider": {
+              "type": "string"
+            },
+            "source": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "env"
+                },
+                {
+                  "type": "string",
+                  "const": "server"
+                },
+                {
+                  "type": "string",
+                  "const": "assistant"
+                },
+                {
+                  "type": "string",
+                  "const": "none"
+                }
+              ]
+            },
+            "variables": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "ServerModelsResponse": {
+      "type": "object",
+      "required": [
+        "providers"
+      ],
+      "properties": {
+        "providers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "models",
+              "key"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "models": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "name"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "key": {
+                "type": "object",
+                "required": [
+                  "provider",
+                  "source"
+                ],
+                "properties": {
+                  "provider": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "env"
+                      },
+                      {
+                        "type": "string",
+                        "const": "server"
+                      },
+                      {
+                        "type": "string",
+                        "const": "assistant"
+                      },
+                      {
+                        "type": "string",
+                        "const": "none"
+                      }
+                    ]
+                  },
+                  "variables": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "ServerOwner": {
       "type": "object",
       "required": [
@@ -11560,178 +11864,6 @@
         },
         "uploadError": {
           "type": "string"
-        }
-      }
-    },
-    "ServerModel": {
-      "type": "object",
-      "required": [
-        "id",
-        "name"
-      ],
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        }
-      }
-    },
-    "ServerModelProvider": {
-      "type": "object",
-      "required": [
-        "id",
-        "name",
-        "models",
-        "key"
-      ],
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "models": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": [
-              "id",
-              "name"
-            ],
-            "properties": {
-              "id": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              }
-            }
-          }
-        },
-        "key": {
-          "type": "object",
-          "required": [
-            "provider",
-            "source"
-          ],
-          "properties": {
-            "provider": {
-              "type": "string"
-            },
-            "source": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "const": "env"
-                },
-                {
-                  "type": "string",
-                  "const": "server"
-                },
-                {
-                  "type": "string",
-                  "const": "assistant"
-                },
-                {
-                  "type": "string",
-                  "const": "none"
-                }
-              ]
-            },
-            "variables": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          }
-        }
-      }
-    },
-    "ServerModelsResponse": {
-      "type": "object",
-      "required": [
-        "providers"
-      ],
-      "properties": {
-        "providers": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": [
-              "id",
-              "name",
-              "models",
-              "key"
-            ],
-            "properties": {
-              "id": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              },
-              "models": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "required": [
-                    "id",
-                    "name"
-                  ],
-                  "properties": {
-                    "id": {
-                      "type": "string"
-                    },
-                    "name": {
-                      "type": "string"
-                    }
-                  }
-                }
-              },
-              "key": {
-                "type": "object",
-                "required": [
-                  "provider",
-                  "source"
-                ],
-                "properties": {
-                  "provider": {
-                    "type": "string"
-                  },
-                  "source": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "const": "env"
-                      },
-                      {
-                        "type": "string",
-                        "const": "server"
-                      },
-                      {
-                        "type": "string",
-                        "const": "assistant"
-                      },
-                      {
-                        "type": "string",
-                        "const": "none"
-                      }
-                    ]
-                  },
-                  "variables": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          }
         }
       }
     }

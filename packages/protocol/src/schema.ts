@@ -256,8 +256,32 @@ export const Approval = Type.Object({
   inputs: Type.Optional(Type.Array(ApprovalInput)),
   /** What the app does before it approves; see `ClientAction`. */
   clientAction: Type.Optional(ClientAction),
+  /**
+   * Offered when the action may be approved always in the room: what that covers. Approve with
+   * `always` in `DecideRequest` to set it.
+   */
+  rule: Type.Optional(Type.Object({ label: Type.String() })),
+  /** Approved by a standing rule rather than by someone answering it; `decidedBy` set it. */
+  auto: Type.Optional(Type.Boolean()),
 });
 export type Approval = Static<typeof Approval>;
+
+/**
+ * A standing yes in a room: approvals it covers run without asking, except in a turn that read
+ * untrusted data. `DELETE /rooms/<id>/approval-rules?key=<key>` forgets it.
+ */
+export const ApprovalRule = Type.Object({
+  key: Type.String(),
+  /** What is always approved, such as "terminal commands that start with git". */
+  label: Type.String(),
+  by: Player,
+  createdAt: Type.Number(),
+});
+export type ApprovalRule = Static<typeof ApprovalRule>;
+
+/** `GET /rooms/<id>/approval-rules`, oldest first. */
+export const ApprovalRulesResponse = Type.Object({ rules: Type.Array(ApprovalRule) });
+export type ApprovalRulesResponse = Static<typeof ApprovalRulesResponse>;
 
 export const Fact = Type.Object({
   id: Type.String(),
@@ -958,6 +982,8 @@ export const DecideRequest = Type.Object({
   approve: Type.Boolean(),
   /** The approval's inputs by name, when approving; ignored when denying. Never stored. */
   inputs: Type.Optional(Type.Record(Type.String(), Type.String({ maxLength: 16_384 }))),
+  /** With a yes, approve this kind of action without asking from now on in the room (`rule`). */
+  always: Type.Optional(Type.Boolean()),
 });
 export type DecideRequest = Static<typeof DecideRequest>;
 
@@ -1732,6 +1758,8 @@ export const SCHEMAS = {
   ApprovalInput,
   ClientAction,
   Approval,
+  ApprovalRule,
+  ApprovalRulesResponse,
   Fact,
   RoomNudge,
   RoomView,

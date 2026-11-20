@@ -38,6 +38,23 @@ import { type Draft, type TerminalFrame, terminalLog } from "./sessions.ts";
 /** What a `run` approval holds: the command to run once approved, and where. */
 type RunPayload = { command: string; cwd?: string };
 
+/**
+ * "Always approve" for a simple command: the same program from then on, by its name. A command
+ * that chains, pipes, redirects or substitutes offers none, since a rule for its first word would
+ * cover whatever follows it.
+ */
+export function ruleFor(command: string): { rule?: { key: string; label: string } } {
+  const trimmed = command.trim();
+  if (/[;&|<>`$\n\\(){}]/.test(trimmed)) return {};
+  const program = /^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*([\w./+-]+)/.exec(trimmed)?.[1];
+  if (
+    program === undefined ||
+    /^(?:sudo|env|sh|bash|zsh|xargs|nohup|time|exec|eval)$/.test(program)
+  )
+    return {};
+  return { rule: { key: program, label: `terminal commands that run ${program}` } };
+}
+
 /** What a call's `details` says: the approval it waits for, or how the command ended. */
 type Details = Record<string, string | number | boolean | null>;
 
@@ -212,6 +229,7 @@ export default defineNudgeExtension({
             kind: "run",
             summary: `In the terminal (${reasons.join("; ")}): ${payload.command}`,
             payload,
+            ...ruleFor(payload.command),
           },
           now(),
         ),

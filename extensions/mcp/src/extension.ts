@@ -385,6 +385,10 @@ export default defineNudgeExtension({
                       (shown.length > 300 ? `${shown.slice(0, 300)}…` : shown) +
                       after,
                     payload: { server: server.name, tool: tool.name, args: params as never },
+                    rule: {
+                      key: `${server.name}/${tool.name}`,
+                      label: `${server.name}'s ${tool.title ?? tool.name}`,
+                    },
                   },
                   now(),
                 ),
@@ -726,6 +730,10 @@ function roomServerTools({ rooms, panels, now }: RoomParts): ToolRegistration[] 
                   (shown.length > 300 ? `${shown.slice(0, 300)}…` : shown) +
                   after,
                 payload: { server: server.id, tool: tool.name, args: params as never },
+                rule: {
+                  key: `${server.id}/${tool.name}`,
+                  label: `${server.name}'s ${tool.title ?? tool.name}`,
+                },
               },
               now(),
             ),

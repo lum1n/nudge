@@ -62,6 +62,8 @@ export {
   type ApprovalInput,
   ApprovalNotFound,
   type ApprovalOutcome,
+  type ApprovalRule,
+  type ApprovalRuleOffer,
   type ApprovalRun,
   Approvals,
   ApprovalsDoc,
@@ -71,6 +73,7 @@ export {
   MAX_PENDING,
   MissingInputs,
   requestApproval,
+  ruleKey,
 } from "./approvals/approvals.ts";
 export { consequentialLabel } from "./approvals/consequential.ts";
 export {

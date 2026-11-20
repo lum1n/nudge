@@ -346,6 +346,7 @@ export function mailExtension(options: MailOptions = {}) {
                       ? ""
                       : `\n\nWith ${attached.map(({ name }) => name).join(", ")}`),
                   payload: payload as never,
+                  rule: { key: account.id, label: `sending mail from ${account.from}` },
                 },
                 host.now(),
               ),

@@ -36,6 +36,7 @@ import {
   AdminCreateRoomRequest,
   type AdminPlayer,
   type AppearanceResponse,
+  type ApprovalRulesResponse,
   type AssistantsResponse,
   CreatePlayerRequest,
   CreateRoomRequest,
@@ -91,6 +92,7 @@ import {
 import {
   TimelinePager,
   toApproval,
+  toApprovalRule,
   toFact,
   toRoomListNudge,
   toPlayer,
@@ -758,6 +760,7 @@ export function restRoutes(options: RestOptions): Hono {
         c.req.param("approval"),
         {
           approve: body.approve,
+          ...(body.always === true ? { always: true } : {}),
           by: { playerId: player.id, displayName: player.displayName },
           ...(body.inputs === undefined ? {} : { inputs: body.inputs }),
         },
@@ -771,6 +774,24 @@ export function restRoutes(options: RestOptions): Hono {
       if (error instanceof AdminOnly) throw new HttpError(403, error.message);
       throw error;
     }
+  });
+
+  // Standing rules: approvals they cover run without asking (except in untrusted turns).
+  api.get("/rooms/:room/approval-rules", async (c) => {
+    const room = await usableRoom(c);
+    const rules = await c.var.nudge.approvals.rules(room.id, context);
+    return c.json(
+      viewerOf(c).strings({ rules: rules.map(toApprovalRule) }) satisfies ApprovalRulesResponse,
+    );
+  });
+
+  api.delete("/rooms/:room/approval-rules", async (c) => {
+    const room = await usableRoom(c);
+    const key = c.req.query("key");
+    if (key === undefined || key === "") throw new HttpError(400, "Which rule? Pass ?key=");
+    if (!(await c.var.nudge.approvals.forgetRule(room.id, key, context)))
+      throw new HttpError(404, `No rule "${key}"`);
+    return c.body(null, 204);
   });
 
   // A press on a tool's card (ADR 27) becomes the caller's message, as one sent would.

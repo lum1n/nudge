@@ -18,7 +18,9 @@ import {
   LOBBY,
   type Nudge,
   type NudgeOptions,
+  inTurn,
   requestApproval,
+  type RoomEvent,
   roomOf,
   Type,
 } from "../src/index.ts";
@@ -53,6 +55,7 @@ function mailer(sent: string[], refused: string[] = [], heldBack: (readonly stri
                     summary: `Send a mail to ${to}`,
                     payload: { to },
                     adminOnly: to === "everyone@example.com",
+                    rule: { label: "sending mail" },
                   },
                   now(),
                 ),
@@ -344,6 +347,124 @@ describe("approvals", () => {
     expect(item).toMatchObject({ status: "failed" });
     expect(item!.result).toMatch(/may or may not have happened/);
     expect(sent).toEqual([]);
+    await nudge.close(context);
+  });
+});
+
+describe("always approve", () => {
+  it("approves the same kind of action without asking once someone says always", async () => {
+    const sent: string[] = [];
+    const { options, requests, askToSend } = setup(sent);
+    const nudge = await createNudge(options, context);
+    const events: RoomEvent[] = [];
+    nudge.events.subscribe((event) => events.push(event));
+    askToSend("ann@example.com");
+    await say(nudge, "Mail Ann");
+    const [first] = await nudge.approvals.list(LOBBY, context);
+    expect(first?.rule).toEqual({ key: "mailer/send", label: "sending mail" });
+    await nudge.approvals.decide(LOBBY, "a1", { approve: true, always: true, by }, context);
+    expect(await nudge.approvals.rules(LOBBY, context)).toMatchObject([
+      { key: "mailer/send", label: "sending mail", by },
+    ]);
+    await nudge.harness.waitForIdle(context);
+
+    askToSend("bo@example.com");
+    await say(nudge, "Mail Bo");
+    await expect.poll(() => sent).toEqual(["ann@example.com", "bo@example.com"]);
+    await expect
+      .poll(async () => (await nudge.approvals.get(LOBBY, "a2", context))?.status)
+      .toBe("done");
+    expect(await nudge.approvals.get(LOBBY, "a2", context)).toMatchObject({
+      auto: true,
+      decidedBy: by,
+    });
+    // Only the first was announced; the second never waited for anyone.
+    expect(events.filter((event) => event.type === "approval").map((e) => e.type)).toHaveLength(1);
+    await nudge.harness.waitForIdle(context);
+    expect(requests.some((request) => /standing rule/.test(lastInput(request)))).toBe(true);
+    await nudge.close(context);
+  });
+
+  it("asks anyway in a turn that read untrusted data, and after the rule is forgotten", async () => {
+    const sent: string[] = [];
+    const { options } = setup(sent);
+    const nudge = await createNudge(options, context);
+    const ask = (untrusted?: string[]) =>
+      inTurn(untrusted === undefined ? {} : { untrusted }, () =>
+        nudge.harness.commit(
+          (tx) =>
+            requestApproval(
+              tx,
+              LOBBY,
+              {
+                extension: "mailer",
+                kind: "send",
+                summary: "Send a mail",
+                payload: { to: "x@example.com" },
+                rule: { label: "sending mail" },
+              },
+              0,
+            ),
+          context,
+        ),
+      );
+    await ask();
+    await nudge.approvals.decide(LOBBY, "a1", { approve: true, always: true, by }, context);
+    const untrusted = await ask(["mail_read"]);
+    expect(untrusted.autoBy).toBeUndefined();
+    expect(await nudge.approvals.forgetRule(LOBBY, "mailer/send", context)).toBe(true);
+    expect(await nudge.approvals.rules(LOBBY, context)).toEqual([]);
+    const after = await ask();
+    expect(after.autoBy).toBeUndefined();
+    await nudge.harness.waitForIdle(context);
+    expect((await nudge.approvals.get(LOBBY, "a2", context))?.status).toBe("pending");
+    expect((await nudge.approvals.get(LOBBY, "a3", context))?.status).toBe("pending");
+    await nudge.close(context);
+  });
+
+  it("asks people after all when the rule's owner may not approve it", async () => {
+    const sent: string[] = [];
+    const { options, askToSend } = setup(sent);
+    const nudge = await createNudge(options, context);
+    await nudge.players.invite("Vegard", context);
+    const ann = (await nudge.players.invite("Ann", context)).player;
+    const asAnn = { playerId: ann.id, displayName: ann.displayName };
+    const events: RoomEvent[] = [];
+    nudge.events.subscribe((event) => events.push(event));
+    askToSend("ann@example.com");
+    await say(nudge, "Mail Ann");
+    await nudge.approvals.decide(LOBBY, "a1", { approve: true, always: true, by: asAnn }, context);
+    // Only an admin may approve this one, and Ann isn't one.
+    askToSend("everyone@example.com");
+    await say(nudge, "Mail everyone");
+    await expect.poll(() => events.filter((event) => event.type === "approval").length).toBe(2);
+    const second = await nudge.approvals.get(LOBBY, "a2", context);
+    expect(second).toMatchObject({ status: "pending" });
+    expect(second?.autoBy).toBeUndefined();
+    expect(sent).toEqual(["ann@example.com"]);
+    await nudge.close(context);
+  });
+
+  it("approves at open what a rule covered when the host stopped", async () => {
+    const sent: string[] = [];
+    const { options } = setup(sent);
+    const nudge = await createNudge(options, context);
+    await nudge.harness.commit(async (tx) => {
+      await requestApproval(
+        tx,
+        LOBBY,
+        { extension: "mailer", kind: "send", summary: "Send a mail", payload: { to: "x" } },
+        0,
+      );
+      const state = await tx.doc(ApprovalsDoc, LOBBY, null);
+      state.items[0]!.autoBy = by;
+    }, context);
+    await nudge.approvals.recover(context);
+    expect(await nudge.approvals.get(LOBBY, "a1", context)).toMatchObject({
+      status: "done",
+      auto: true,
+    });
+    expect(sent).toEqual(["x"]);
     await nudge.close(context);
   });
 });

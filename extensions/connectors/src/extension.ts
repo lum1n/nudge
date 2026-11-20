@@ -261,6 +261,10 @@ export default defineNudgeExtension({
                   // The handler has no document access of its own, so the connector it needs
                   // (everything but the secret, which stays in its own store) travels with it.
                   payload: { roomId: room.id, connector, args },
+                  rule: {
+                    key: `${connector.id}/${args.method}`,
+                    label: `${args.method} calls to ${connector.name}`,
+                  },
                 },
                 now(),
               ),
