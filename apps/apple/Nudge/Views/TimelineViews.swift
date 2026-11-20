@@ -360,6 +360,8 @@ struct ApprovalCard: View {
     let summary: String
     let status: ApprovalStatus
     let decidedBy: String?
+    /// Approved by a standing rule, `decidedBy` being its owner, rather than by someone answering.
+    var auto = false
     let decide: (Bool) -> Void
 
     var body: some View {
@@ -387,6 +389,15 @@ struct ApprovalCard: View {
     }
 
     private var outcome: String {
+        if auto, status != .pending, status != .denied {
+            let approved = decidedBy.map { String(localized: "Approved automatically (\($0)'s rule)") }
+                ?? String(localized: "Approved automatically by a standing rule")
+            switch status {
+            case .done: return String(localized: "\(approved), done")
+            case .failed: return String(localized: "\(approved), but it failed")
+            default: return approved
+            }
+        }
         let by = decidedBy.map { " by \($0)" } ?? ""
         switch status {
         case .pending: return ""

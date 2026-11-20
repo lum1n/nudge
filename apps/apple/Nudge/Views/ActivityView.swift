@@ -19,8 +19,10 @@ struct ActivityView: View {
                         "Nothing yet", systemImage: "list.bullet.rectangle",
                         description: Text("Tool calls, nudges, watches and approvals show up here."))
                 }
+                // The room's approvals say which ones a standing rule approved; the timeline doesn't.
+                let auto = Set((state?.approvals ?? []).filter(\.auto).map(\.id))
                 ForEach(items, id: \.id) { item in
-                    ActivityRow(item: item)
+                    ActivityRow(item: item, autoApproved: auto)
                 }
                 if let state, state.canLoadEarlier || state.loadingEarlier {
                     Button {
@@ -45,6 +47,8 @@ struct ActivityView: View {
 /// One thing in the activity.
 struct ActivityRow: View {
     let item: TimelineItem
+    /// The approvals a standing rule approved, by id.
+    var autoApproved: Set<String> = []
 
     var body: some View {
         switch item {
@@ -66,9 +70,12 @@ struct ActivityRow: View {
             .glassEffect(.regular.tint(.orange.opacity(0.15)), in: .rect(cornerRadius: 18))
         case .approval(_, _, let summary, _, _, let privateTo?) where summary.isEmpty:
             PrivateLine(text: "An approval for \(privateTo.displayName) ended")
-        case .approval(_, _, let summary, let status, let decidedBy, _):
+        case .approval(_, let approvalId, let summary, let status, let decidedBy, _):
             // Ended: nothing left to decide.
-            ApprovalCard(summary: summary, status: status, decidedBy: decidedBy) { _ in }
+            ApprovalCard(
+                summary: summary, status: status, decidedBy: decidedBy,
+                auto: autoApproved.contains(approvalId)
+            ) { _ in }
         case .answer(_, let status, let error, let parts, _, _, _):
             AnswerView(status: status, error: error, parts: parts)
         case .user, .marker:

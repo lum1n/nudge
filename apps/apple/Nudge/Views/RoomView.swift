@@ -255,9 +255,10 @@ struct RoomView: View {
                 // Asked for by a tool and waiting: the activity shows them once decided.
                 ForEach(state?.approvals.filter { $0.status == .pending } ?? [], id: \.id) { approval in
                     // Its own errors show on the card, which stays to try again.
-                    PendingApprovalCard(approval: approval) { approve, inputs in
+                    PendingApprovalCard(approval: approval) { approve, inputs, always in
                         _ = try await client.decide(
-                            room: roomId, approvalId: approval.id, approve: approve, inputs: inputs)
+                            room: roomId, approvalId: approval.id, approve: approve, inputs: inputs,
+                            always: always)
                     }
                 }
                 if !empty {

@@ -2,7 +2,8 @@ import Nudge
 import SwiftUI
 
 /// About a room: its lists, documents, connectors, MCP servers, browser, desktop and project, who is in it,
-/// what the assistant remembers here, its nudges, which extensions it uses, and what the model saw.
+/// what the assistant remembers here, its nudges, what it always approves, which extensions it uses,
+/// and what the model saw.
 struct RoomInfoView: View {
     @Environment(\.dismiss) private var dismiss
     let client: NudgeClient
@@ -11,6 +12,8 @@ struct RoomInfoView: View {
     let observed: ObservedRoom?
     @State private var extensions: [RoomExtension]?
     @State private var personal: PersonalDetails?
+    /// What the room approves without asking; nil until loaded, or when the server can't say.
+    @State private var rules: [ApprovalRule]?
     @State private var newFact = ""
     /// Asking before images go to the model as they are.
     @State private var confirmingImages = false
@@ -151,6 +154,27 @@ struct RoomInfoView: View {
                         }
                     }
                 }
+                // Standing yeses, from "Always approve" on an approval: anyone here may remove one.
+                if let rules, !rules.isEmpty {
+                    Section {
+                        ForEach(rules, id: \.key) { rule in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(rule.label.prefix(1).uppercased() + rule.label.dropFirst())
+                                    Text("Set by \(rule.by.displayName)").font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Button("Remove", role: .destructive) { forget(rule) }
+                                    .buttonStyle(.glass)
+                                    .controlSize(.small)
+                            }
+                        }
+                    } header: {
+                        Text("Always approved")
+                    } footer: {
+                        Text("These run here without asking. A turn that read a web page, an email or other outside content still asks.")
+                    }
+                }
                 Section {
                     if let extensions {
                         ForEach(extensions, id: \.name) { ext in
@@ -190,6 +214,7 @@ struct RoomInfoView: View {
             }
             .task { await loadExtensions() }
             .task { personal = try? await client.personal() }
+            .task { rules = try? await client.approvalRules(room: roomId) }
         }
         #if os(macOS)
         .frame(minWidth: 460, minHeight: 520)
@@ -222,6 +247,13 @@ struct RoomInfoView: View {
 
     private func forget(_ fact: Fact) {
         run { try await client.forget(room: roomId, factId: fact.id) }
+    }
+
+    private func forget(_ rule: ApprovalRule) {
+        run {
+            try await client.forgetApprovalRule(room: roomId, key: rule.key)
+            rules?.removeAll { $0.key == rule.key }
+        }
     }
 
     private func cancel(_ nudge: RoomNudge) {

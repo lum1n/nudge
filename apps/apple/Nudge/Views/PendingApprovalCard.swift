@@ -5,10 +5,12 @@ import SwiftUI
 /// secure field), and what the app does first with this device's exe.dev token, such as making a
 /// VM. What is typed is only held while the card shows, sent with the yes, and cleared once sent.
 /// A failure shows on the card and the approval stays pending, to try again or deny.
+/// One that may be approved always (`ruleLabel`) also offers that, saying what it covers.
 struct PendingApprovalCard: View {
     let approval: Approval
-    /// Approves with the inputs, or denies; what it throws shows on the card.
-    let decide: (_ approve: Bool, _ inputs: [String: String]?) async throws -> Void
+    /// Approves with the inputs, or denies; with `always`, also approves that kind of action
+    /// in the room from then on. What it throws shows on the card.
+    let decide: (_ approve: Bool, _ inputs: [String: String]?, _ always: Bool) async throws -> Void
     @Environment(AppModel.self) private var model
     @State private var values: [String: String] = [:]
     /// What the client action gave, once it ran: trying again then only approves.
@@ -69,6 +71,20 @@ struct PendingApprovalCard: View {
                     Button("Deny", systemImage: "xmark", role: .destructive) { send(false) }
                         .buttonStyle(.glass)
                         .disabled(busy)
+                    if let rule = alwaysRule {
+                        // Says in full what a standing yes covers before anyone gives one.
+                        Menu {
+                            Button { send(true, always: true) } label: {
+                                Label("Always approve \(rule) in this room", systemImage: "checkmark.seal")
+                            }
+                        } label: {
+                            Label("Always…", systemImage: "checkmark.seal")
+                        }
+                        .menuIndicator(.hidden)
+                        .buttonStyle(.glass)
+                        .disabled(busy)
+                        .help("Always approve \(rule) in this room")
+                    }
                 }
             }
         }
@@ -77,6 +93,13 @@ struct PendingApprovalCard: View {
         .glassEffect(.regular.tint(.orange.opacity(0.25)), in: .rect(cornerRadius: 22))
         // Again each time it shows: the token may have been added in Settings meanwhile.
         .onAppear { hasExeToken = model.servers.exeToken != nil }
+    }
+
+    /// What "Always approve" would cover, when it may be offered: never with inputs or a client
+    /// action, since a person has to supply those each time.
+    private var alwaysRule: String? {
+        guard approval.inputs.isEmpty, approval.clientAction == nil else { return nil }
+        return approval.ruleLabel
     }
 
     /// An action on the device, and no exe.dev token here to do it with.
@@ -99,7 +122,7 @@ struct PendingApprovalCard: View {
         Binding(get: { values[name] ?? "" }, set: { values[name] = $0 })
     }
 
-    private func send(_ approve: Bool) {
+    private func send(_ approve: Bool, always: Bool = false) {
         guard !busy else { return }
         busy = true
         problem = nil
@@ -110,7 +133,7 @@ struct PendingApprovalCard: View {
             }
             do {
                 guard approve else {
-                    try await decide(false, nil)
+                    try await decide(false, nil, false)
                     return
                 }
                 var inputs = values.filter { !$0.value.isEmpty }
@@ -132,7 +155,7 @@ struct PendingApprovalCard: View {
                 progress = String(localized: "Approving…")
                 // Sent once, then gone from here, whatever the answer.
                 defer { values = [:] }
-                try await decide(true, inputs.isEmpty ? nil : inputs)
+                try await decide(true, inputs.isEmpty ? nil : inputs, always)
             } catch {
                 problem = explain(error)
             }

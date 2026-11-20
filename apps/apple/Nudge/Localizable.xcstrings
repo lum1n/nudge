@@ -4,6 +4,26 @@
     "" : {
 
     },
+    "%@, but it failed" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, men det mislyktes"
+          }
+        }
+      }
+    },
+    "%@, done" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, utført"
+          }
+        }
+      }
+    },
     "(removed)" : {
       "localizations" : {
         "nb" : {
@@ -367,12 +387,42 @@
         }
       }
     },
+    "Always approve %@ in this room" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Godkjenn alltid %@ i dette rommet"
+          }
+        }
+      }
+    },
+    "Always approved" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Godkjennes alltid"
+          }
+        }
+      }
+    },
     "Always use first" : {
       "localizations" : {
         "nb" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bruk alltid først"
+          }
+        }
+      }
+    },
+    "Always…" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alltid…"
           }
         }
       }
@@ -483,6 +533,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Godkjenn"
+          }
+        }
+      }
+    },
+    "Approved automatically (%@'s rule)" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Godkjent automatisk (regelen til %@)"
+          }
+        }
+      }
+    },
+    "Approved automatically by a standing rule" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Godkjent automatisk av en fast regel"
           }
         }
       }
@@ -3916,6 +3986,16 @@
         }
       }
     },
+    "Set by %@" : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Satt av %@"
+          }
+        }
+      }
+    },
     "Set up" : {
       "localizations" : {
         "nb" : {
@@ -4642,6 +4722,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Da når den og hjemmet ditt hverandre, uten noen åpen port hjemme."
+          }
+        }
+      }
+    },
+    "These run here without asking. A turn that read a web page, an email or other outside content still asks." : {
+      "localizations" : {
+        "nb" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disse kjører her uten å spørre. Et svar som har lest en nettside, en e-post eller annet innhold utenfra, spør likevel."
           }
         }
       }
