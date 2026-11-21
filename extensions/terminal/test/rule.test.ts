@@ -20,6 +20,12 @@ describe("always approving terminal commands", () => {
       "sudo ls",
       "bash -c 'ls'",
       "env rm x",
+      "/bin/sh -c 'rm -rf ~'",
+      "/usr/bin/sudo rm x",
+      "./bash -c 'ls'",
+      "timeout 5 rm x",
+      "nice rm x",
+      "command rm x",
     ])
       expect(ruleFor(command)).toEqual({});
   });
