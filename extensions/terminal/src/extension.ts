@@ -47,9 +47,12 @@ export function ruleFor(command: string): { rule?: { key: string; label: string 
   const trimmed = command.trim();
   if (/[;&|<>`$\n\\(){}]/.test(trimmed)) return {};
   const program = /^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*([\w./+-]+)/.exec(trimmed)?.[1];
+  // By its name, so `/bin/sh -c …` or `/usr/bin/sudo …` offers none either.
   if (
     program === undefined ||
-    /^(?:sudo|env|sh|bash|zsh|xargs|nohup|time|exec|eval)$/.test(program)
+    /^(?:sudo|doas|su|env|sh|bash|zsh|dash|ksh|fish|busybox|xargs|nohup|time|timeout|nice|command|setsid|stdbuf|exec|eval)$/.test(
+      program.slice(program.lastIndexOf("/") + 1),
+    )
   )
     return {};
   return { rule: { key: program, label: `terminal commands that run ${program}` } };
