@@ -389,8 +389,13 @@ impl Api {
 
     /// What the room approves without asking, oldest first.
     pub async fn approval_rules(&self, room: &str) -> Result<ApprovalRulesResponse, ApiError> {
-        self.request(Method::GET, &["rooms", room, "approval-rules"], &[], NO_BODY)
-            .await
+        self.request(
+            Method::GET,
+            &["rooms", room, "approval-rules"],
+            &[],
+            NO_BODY,
+        )
+        .await
     }
 
     /// Stops approving `key` without asking in the room.

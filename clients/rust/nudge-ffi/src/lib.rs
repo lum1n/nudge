@@ -959,11 +959,12 @@ impl NudgeClient {
         always: bool,
     ) -> Result<Approval, NudgeError> {
         let api = self.client.api().clone();
-        Ok(
-            run(async move { api.decide(&room, &approval_id, approve, inputs, always).await })
-                .await?
-                .into(),
-        )
+        Ok(run(async move {
+            api.decide(&room, &approval_id, approve, inputs, always)
+                .await
+        })
+        .await?
+        .into())
     }
 
     /// What the room approves without asking, oldest first.
