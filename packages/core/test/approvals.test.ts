@@ -19,11 +19,14 @@ import {
   type Nudge,
   type NudgeOptions,
   inTurn,
+  type ApprovalDraft,
   requestApproval,
   type RoomEvent,
   roomOf,
+  ruleKey,
   Type,
 } from "../src/index.ts";
+import { purgeRoomApprovals } from "../src/approvals/approvals.ts";
 
 const context = BACKGROUND_CONTEXT;
 const by = { playerId: "owner", displayName: "Vegard" };
@@ -465,6 +468,122 @@ describe("always approve", () => {
       auto: true,
     });
     expect(sent).toEqual(["x"]);
+    await nudge.close(context);
+  });
+});
+
+describe("approval rules", () => {
+  /** Asks for a `mailer/send` approval outside any turn, with `draft` laid over a plain one. */
+  const asker =
+    (nudge: Nudge) =>
+    (draft: Partial<ApprovalDraft> = {}) =>
+      nudge.harness.commit(
+        (tx) =>
+          requestApproval(
+            tx,
+            LOBBY,
+            {
+              extension: "mailer",
+              kind: "send",
+              summary: "Send a mail",
+              payload: { to: "x@example.com" },
+              ...draft,
+            },
+            0,
+          ),
+        context,
+      );
+
+  it("keys a rule by extension and kind, then the narrower key", () => {
+    expect(ruleKey("mcp", "call")).toBe("mcp/call");
+    expect(ruleKey("mcp", "call", "")).toBe("mcp/call");
+    expect(ruleKey("mcp", "call", "github/create_issue")).toBe("mcp/call/github/create_issue");
+  });
+
+  it("narrows the offer by key, falls back to a label, and offers none with inputs or a client action", async () => {
+    const nudge = await createNudge(setup([]).options, context);
+    const ask = asker(nudge);
+    expect((await ask({ rule: { key: " kiosk ", label: " payments " } })).rule).toEqual({
+      key: "mailer/send/kiosk",
+      label: "payments",
+    });
+    expect((await ask({ rule: { key: "  ", label: "  " } })).rule).toEqual({
+      key: "mailer/send",
+      label: "mailer: send",
+    });
+    const withInputs = await ask({
+      rule: { label: "sending mail" },
+      inputs: [{ name: "key", label: "Key", secret: true }],
+    });
+    expect(withInputs.rule).toBeUndefined();
+    const withAction = await ask({
+      rule: { label: "sending mail" },
+      clientAction: { type: "exe.new", name: "proj-1" },
+    });
+    expect(withAction.rule).toBeUndefined();
+    await nudge.close(context);
+  });
+
+  it("covers only approvals with the same key", async () => {
+    const sent: string[] = [];
+    const nudge = await createNudge(setup(sent).options, context);
+    const ask = asker(nudge);
+    await ask({ rule: { key: "kiosk", label: "the kiosk" } });
+    await nudge.approvals.decide(LOBBY, "a1", { approve: true, always: true, by }, context);
+    const other = await ask({ rule: { key: "bar", label: "the bar" } });
+    expect(other.autoBy).toBeUndefined();
+    const broader = await ask({ rule: { label: "sending mail" } });
+    expect(broader.autoBy).toBeUndefined();
+    const same = await ask({
+      payload: { to: "y@example.com" },
+      rule: { key: "kiosk", label: "the kiosk" },
+    });
+    expect(same.autoBy).toEqual(by);
+    await expect
+      .poll(async () => (await nudge.approvals.get(LOBBY, same.id, context))?.status)
+      .toBe("done");
+    expect(sent).toEqual(["x@example.com", "y@example.com"]);
+    expect((await nudge.approvals.get(LOBBY, other.id, context))?.status).toBe("pending");
+    expect((await nudge.approvals.get(LOBBY, broader.id, context))?.status).toBe("pending");
+    await nudge.close(context);
+  });
+
+  it("remembers nothing for a no, a yes this once, or an approval that offers no rule", async () => {
+    const nudge = await createNudge(setup([]).options, context);
+    const ask = asker(nudge);
+    await ask({ rule: { label: "sending mail" } });
+    await nudge.approvals.decide(LOBBY, "a1", { approve: false, always: true, by }, context);
+    await ask({ payload: { to: "y@example.com" }, rule: { label: "sending mail" } });
+    await nudge.approvals.decide(LOBBY, "a2", { approve: true, by }, context);
+    await ask({ payload: { to: "z@example.com" } });
+    await nudge.approvals.decide(LOBBY, "a3", { approve: true, always: true, by }, context);
+    expect(await nudge.approvals.rules(LOBBY, context)).toEqual([]);
+    await nudge.close(context);
+  });
+
+  it("keeps one rule per key, owned by whoever said always last", async () => {
+    const nudge = await createNudge(setup([]).options, context);
+    const ask = asker(nudge);
+    const bo = { playerId: "bo", displayName: "Bo" };
+    await ask({ rule: { label: "sending mail" } });
+    await ask({ payload: { to: "y@example.com" }, rule: { label: "sending mail" } });
+    await nudge.approvals.decide(LOBBY, "a1", { approve: true, always: true, by }, context);
+    await nudge.approvals.decide(LOBBY, "a2", { approve: true, always: true, by: bo }, context);
+    expect(await nudge.approvals.rules(LOBBY, context)).toMatchObject([
+      { key: "mailer/send", by: bo },
+    ]);
+    expect(await nudge.approvals.forgetRule(LOBBY, "mailer/nope", context)).toBe(false);
+    expect(await nudge.approvals.rules(LOBBY, context)).toHaveLength(1);
+    await nudge.close(context);
+  });
+
+  it("drops a room's rules with its approvals", async () => {
+    const nudge = await createNudge(setup([]).options, context);
+    await asker(nudge)({ rule: { label: "sending mail" } });
+    await nudge.approvals.decide(LOBBY, "a1", { approve: true, always: true, by }, context);
+    await nudge.harness.commit((tx) => purgeRoomApprovals(tx, LOBBY), context);
+    expect(await nudge.approvals.rules(LOBBY, context)).toEqual([]);
+    expect(await nudge.approvals.list(LOBBY, context)).toEqual([]);
     await nudge.close(context);
   });
 });

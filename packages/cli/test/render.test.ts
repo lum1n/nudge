@@ -6,10 +6,10 @@ import {
   fauxText,
   fauxToolCall,
 } from "@nudge/core/testing";
-import type { RoomView, TimelineItem } from "@nudge/protocol";
+import type { Approval, RoomView, TimelineItem } from "@nudge/protocol";
 import { Hubs } from "@nudge/server";
 import { describe, expect, it } from "vitest";
-import { ChatRenderer } from "../src/render.ts";
+import { ChatRenderer, describeApproval } from "../src/render.ts";
 
 const context = BACKGROUND_CONTEXT;
 // oxlint-disable-next-line no-control-regex
@@ -231,6 +231,26 @@ describe("ChatRenderer", () => {
     );
     expect(plain(out)).toBe(
       "  · retrying (overloaded)\n  ! failed: no credit\nNudge: Part\n  · stopped\n",
+    );
+  });
+});
+
+describe("describeApproval", () => {
+  const approval: Approval = {
+    id: "a3",
+    summary: "Send a mail to Ann",
+    status: "pending",
+    requestedAt: 0,
+  };
+
+  it("says who decided one, or that a standing rule did", () => {
+    expect(describeApproval(approval)).toBe("a3 pending  Send a mail to Ann");
+    const decidedBy = { id: "vegard", displayName: "Vegard" };
+    expect(
+      describeApproval({ ...approval, status: "done", decidedBy, result: "Sent.\nTo ann@" }),
+    ).toBe("a3 done by Vegard  Send a mail to Ann → Sent.");
+    expect(describeApproval({ ...approval, status: "done", decidedBy, auto: true })).toBe(
+      "a3 done automatically (Vegard's rule)  Send a mail to Ann",
     );
   });
 });
