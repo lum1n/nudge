@@ -600,7 +600,8 @@ class Client:
 
     async def update_personal(self, update: PersonalUpdate) -> PersonalDetails:
         """Changes the details `update` sets; an empty string clears one. `NudgeError.Status` 400
-        for one that isn't one, such as an e-mail address, 403 for a player whose home is elsewhere."""
+        for one that isn't one, such as an e-mail address, 403 for a player whose home is
+        elsewhere."""
         return await self.ffi.update_personal(update)
 
     async def share_location(

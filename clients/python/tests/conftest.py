@@ -1,6 +1,7 @@
 """A Nudge server on a faux model (`packages/server/scripts/faux-server.ts`, which runs the
 built packages: `pnpm build` first): assistant "robin", players Ann (the admin) and Bo, and
-their room "trip"; and assistant "team", whose admin Dee invited Ann from robin. Tests that need it are skipped, saying why, without node or the build."""
+their room "trip"; and assistant "team", whose admin Dee invited Ann from robin. Tests that need
+it are skipped, saying why, without node or the build."""
 
 from __future__ import annotations
 
